@@ -3,7 +3,7 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles } from '$lib/services/projectService.js';
+	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath } from '$lib/services/projectService.js';
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
@@ -667,23 +667,23 @@
         let audios = [];
 
         let documents = projectDocumentFiles.map(docXml => {
-            const fullPath = $project.baseDirectory ? `${$project.baseDirectory}/${docXml.relativePath}` : docXml.relativePath;
+            const fullPath = $project.baseDirectory ? normalizePath(`${$project.baseDirectory}/${docXml.relativePath}`) : docXml.relativePath;
             return { name: docXml.name, path: fullPath, relativePath: docXml.relativePath, file_type: 'doc' };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
         let tables = projectTableFiles.map(tableXml => {
-            const fullPath = $project.baseDirectory ? `${$project.baseDirectory}/${tableXml.relativePath}` : tableXml.relativePath;
+            const fullPath = $project.baseDirectory ? normalizePath(`${$project.baseDirectory}/${tableXml.relativePath}`) : tableXml.relativePath;
             return { name: tableXml.name, path: fullPath, relativePath: tableXml.relativePath, file_type: 'table' };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
         let images = projectImageFiles.map(imageXml => {
-            const fullPath = $project.baseDirectory ? `${$project.baseDirectory}/${imageXml.relativePath}` : imageXml.relativePath;
+            const fullPath = $project.baseDirectory ? normalizePath(`${$project.baseDirectory}/${imageXml.relativePath}`) : imageXml.relativePath;
             const assetUrl = fullPath ? convertFileSrc(fullPath) : null;
             return { name: imageXml.name, path: fullPath, relativePath: imageXml.relativePath, file_type: 'image', assetUrl };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
         let importedTranscripts = projectImportedTranscriptFiles.map(tsXml => {
-            const fullPath = $project.baseDirectory ? `${$project.baseDirectory}/${tsXml.relativePath}` : tsXml.relativePath;
+            const fullPath = $project.baseDirectory ? normalizePath(`${$project.baseDirectory}/${tsXml.relativePath}`) : tsXml.relativePath;
             return { name: tsXml.name, path: fullPath, relativePath: tsXml.relativePath, file_type: 'imported_transcript' };
         }).sort((a,b) => a.name.localeCompare(b.name));
 
@@ -751,7 +751,7 @@
 
             if (AUDIO_EXTENSIONS.has(extension) || VIDEO_EXTENSIONS.has(extension)) {
                 itemCategoryType = 'media_note'; 
-            } else if ($project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}/${f.relativePath}` === autoPath)) {
+            } else if ($project.importedTranscriptFiles?.some(f => f.relativePath && normalizePath(`${$project.baseDirectory}/${f.relativePath}`) === autoPath)) {
                 itemCategoryType = 'imported_transcript';
             } else if (lowerPath.endsWith('.pdf') || (lowerPath.endsWith('.json') && !itemCategoryType) || lowerPath.endsWith('.txt') || lowerPath.endsWith('.md')) {
                 itemCategoryType = 'document';
@@ -800,7 +800,7 @@
                     ];
                     for (const listInfo of projectFileListsForOthers) {
                         if (listInfo.files?.some(f => {
-                            const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
+                            const filePathToCheck = listInfo.isRelative ? normalizePath(`${$project.baseDirectory}/${f.relativePath}`) : f.path;
                             return filePathToCheck === path && (listInfo.exts ? listInfo.exts.has(extension) : true);
                         })) {
                             determinedItemType = listInfo.type;

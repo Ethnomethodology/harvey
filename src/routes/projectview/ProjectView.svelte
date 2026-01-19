@@ -23,7 +23,8 @@
         requestTranscription as requestTranscriptionService,
         refreshProjectFiles,
             silentlyRefreshProjectData,
-            loadTranscriptFile
+            loadTranscriptFile,
+            normalizePath
 	} from '$lib/services/projectService.js';
 	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
@@ -560,7 +561,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 
         if (tabName === 'data' && path) {
             const proj = get(project);
-            const isImportedTranscript = proj.importedTranscriptFiles.some(f => `${proj.baseDirectory}/${f.relativePath}` === path);
+            const isImportedTranscript = proj.importedTranscriptFiles.some(f => normalizePath(`${proj.baseDirectory}/${f.relativePath}`) === path);
             const isMediaNote = proj.files.some(f => f.path === path && (f.file_type === 'media'));
             if (isImportedTranscript) prepareImportedTranscriptView(path);
             else if (isMediaNote) prepareMediaNoteView(path);

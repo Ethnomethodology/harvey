@@ -401,7 +401,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                         const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = `${base}/${rel}`;
+                        absolutePath = normalizePath(`${base}/${rel}`);
                         if (!name) { // If name is not provided by backend, derive from relativePath
                             name = t.relativePath.split(/[\\/]/).pop();
                         }
@@ -540,7 +540,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                         const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = `${base}/${rel}`;
+                        absolutePath = normalizePath(`${base}/${rel}`);
                         if (!name) { // If name is not provided by backend, derive from relativePath
                             name = t.relativePath.split(/[\\/]/).pop();
                         }

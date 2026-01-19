@@ -15,7 +15,7 @@
     import AttachmentsPanel from './shared_panels/AttachmentsPanel.svelte';
     import RightBar from './shared_panels/RightBar.svelte';
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
-    import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
+    import { checkUnsavedChangesThenProceed, normalizePath } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
     import { slide } from 'svelte/transition';
 	import { refresher } from '$lib/stores/refresherStore.js';
@@ -56,7 +56,7 @@
             const extension = lowerPath.split('.').pop();
 
             if (lowerPath.endsWith('.pdf') ||
-                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
+                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => normalizePath(`${value.baseDirectory}/${f.relativePath}`) !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
                  lowerPath.endsWith('.txt') ||
                  lowerPath.endsWith('.md')) {
                 typeFromStore = 'documents';
