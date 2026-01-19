@@ -360,28 +360,33 @@ pub async fn create_new_document(
         .unwrap_or("Untitled")
         .to_string();
 
-    // Create a directory for the new document, using the derived stem
-    let doc_folder = project_base_dir
-        .join(HARVEY_FILES_DIR)
-        .join(DOCS_DIR)
-        .join(&document_stem); // Use document_stem here
-    fs::create_dir_all(&doc_folder)?;
+    let docs_root = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
 
-    let unique_path_str = get_unique_document_path(
-        doc_folder.to_string_lossy().to_string(),
-        document_stem.clone(), // Pass the derived stem as base_name
-        "json".to_string(),
-    )?;
+    // Find a unique folder name first
+    let mut counter = 0;
+    let mut unique_stem = document_stem.clone();
+    let mut doc_folder = docs_root.join(&unique_stem);
+
+    while doc_folder.exists() {
+        counter += 1;
+        unique_stem = format!("{}_{}", document_stem, counter);
+        doc_folder = docs_root.join(&unique_stem);
+    }
+
+    // Create the unique directory
+    fs::create_dir_all(&doc_folder).map_err(|e| CommandError::from(format!("Failed to create doc folder: {}", e)))?;
+
+    // Construct the file path inside the unique folder, matching the folder stem
+    let file_name = format!("{}.json", unique_stem);
+    let unique_path_buf = doc_folder.join(&file_name);
+    let unique_path_str = unique_path_buf.to_string_lossy().to_string();
 
     let initial_content = "{\"root\":{\"children\":[{\"children\":[],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"paragraph\",\"version\":1}],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"root\",\"version\":1}}";
-
-    let unique_path_buf = PathBuf::from(&unique_path_str);
-    let final_document_name = unique_path_buf.file_name().unwrap().to_string_lossy().into_owned();
 
     save_document_and_update_xml(
         project_xml_path.clone(),
         unique_path_str.clone(),
-        final_document_name.clone(),
+        file_name,
         initial_content.to_string(),
     )
     .await?;
