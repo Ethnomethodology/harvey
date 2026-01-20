@@ -1,0 +1,192 @@
+use crate::welcome::config::CommandError;
+use super::{TranscriptionEngine, TranscriptionOptions};
+use crate::projectview::shared_types::TranscriptSegment;
+use tauri::{AppHandle, Runtime};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
+use async_trait::async_trait;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::time::Duration;
+use tokio::time::sleep;
+use log::{debug, error, info, warn};
+use std::fs::{self, File};
+use std::io::BufReader;
+use serde::Deserialize;
+use tokio::sync::Mutex;
+
+pub struct WhisperCppEngine<R: Runtime> {
+    app_handle: AppHandle<R>,
+}
+
+impl<R: Runtime> WhisperCppEngine<R> {
+    pub fn new(app_handle: AppHandle<R>) -> Self {
+        Self { app_handle }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+struct WhisperJsonOutput {
+    transcription: Option<Vec<WhisperJsonSegment>>,
+}
+#[derive(Deserialize, Debug)]
+struct WhisperJsonSegment {
+    timestamps: WhisperJsonTimestamps,
+    text: String,
+}
+#[derive(Deserialize, Debug)]
+struct WhisperJsonTimestamps {
+    from: String,
+    to: String,
+}
+
+#[async_trait]
+impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
+    async fn transcribe(
+        &self,
+        audio_path: &Path,
+        options: &TranscriptionOptions,
+        job_id: &str,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<Vec<TranscriptSegment>, CommandError> {
+        let sidecar_name = "whisper-cli";
+        let lang_arg = options.language_code.as_deref().unwrap_or("auto");
+        
+        // Prepare output path
+        // whisper-cli appends .json to the output filename provided via -of
+        // We use a temp base name in the output directory
+        let temp_base_name = format!("whisper_{}_temp", job_id);
+        let output_base_path = options.output_dir.join(&temp_base_name);
+        let output_base_path_str = output_base_path.to_string_lossy().to_string();
+        let expected_json_path = output_base_path.with_extension("json");
+
+        let mut args: Vec<String> = vec![
+            "-m".into(), options.model_path.clone(),
+            "-f".into(), audio_path.to_string_lossy().to_string(),
+            "-l".into(), lang_arg.to_string(),
+            "-oj".into(), // Output JSON
+            "-of".into(), output_base_path_str.clone(),
+        ];
+
+        if options.translate {
+            args.push("--translate".into());
+        }
+
+        info!("[WhisperCppEngine][{}] Executing sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+
+        let shell_scope = self.app_handle.shell();
+        let (mut rx, child) = shell_scope.sidecar(sidecar_name)
+            .map_err(|e| CommandError::from(format!("Failed to create sidecar command: {}", e)))?
+            .args(args)
+            .spawn()
+            .map_err(|e| CommandError::from(format!("Failed to spawn whisper-cli sidecar: {}", e)))?;
+
+        info!("[WhisperCppEngine][{}] Spawned sidecar (PID: {:?})", job_id, child.pid());
+
+        let shared_child = Arc::new(Mutex::new(Some(child)));
+        let cancel_flag_clone = cancel_flag.clone();
+        let shared_child_clone = shared_child.clone();
+        let job_id_clone = job_id.to_string();
+
+        // Cancellation monitor task
+        tokio::spawn(async move {
+            loop {
+                if cancel_flag_clone.load(Ordering::Relaxed) {
+                    warn!("[WhisperCppEngine][{}] Cancellation requested. Killing process...", job_id_clone);
+                    if let Some(child) = shared_child_clone.lock().await.take() {
+                        let _ = child.kill();
+                    }
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        let mut process_error: Option<String> = None;
+        let mut exit_code: Option<i32> = None;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => { debug!("[WhisperCppEngine][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end()); },
+                CommandEvent::Stderr(line) => { debug!("[WhisperCppEngine][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end()); },
+                CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+                CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+                _ => {}
+            }
+        }
+
+        if cancel_flag.load(Ordering::Relaxed) {
+            if expected_json_path.exists() { let _ = fs::remove_file(&expected_json_path); }
+            return Err(CommandError::from(format!("Transcription cancelled for job {}.", job_id)));
+        }
+
+        if process_error.is_some() || exit_code != Some(0) {
+            if expected_json_path.exists() { let _ = fs::remove_file(&expected_json_path); }
+            return Err(CommandError::from(format!("Whisper process failed. Exit: {:?}, Err: {:?}", exit_code, process_error)));
+        }
+
+        // Wait for file
+        let mut attempts = 0;
+        while !expected_json_path.exists() && attempts < 20 {
+            if cancel_flag.load(Ordering::Relaxed) { return Err(CommandError::from("Cancelled while waiting for output file.")); }
+            sleep(Duration::from_millis(200)).await;
+            attempts += 1;
+        }
+
+        if !expected_json_path.exists() {
+            return Err(CommandError::from(format!("Output JSON not found at {:?}", expected_json_path)));
+        }
+
+        // Parse JSON
+        let segments = parse_whisper_json(&expected_json_path)?;
+        
+        // Cleanup temp file
+        let _ = fs::remove_file(&expected_json_path);
+
+        Ok(segments)
+    }
+}
+
+fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
+    let file = File::open(json_path).map_err(|e| CommandError::from(format!("Failed to open JSON: {}", e)))?;
+    let reader = BufReader::new(file);
+    let output: WhisperJsonOutput = serde_json::from_reader(reader)
+        .map_err(|e| CommandError::from(format!("Failed to parse JSON: {}", e)))?;
+
+    let mut segments = Vec::new();
+    if let Some(transcription) = output.transcription {
+        for (idx, w_seg) in transcription.iter().enumerate() {
+            let start_time = parse_ts(&w_seg.timestamps.from)
+                .map_err(|e| CommandError::from(format!("Segment {}: Invalid start time: {}", idx, e)))?;
+            let end_time = parse_ts(&w_seg.timestamps.to)
+                .map_err(|e| CommandError::from(format!("Segment {}: Invalid end time: {}", idx, e)))?;
+            
+            if end_time < start_time { continue; }
+
+            segments.push(TranscriptSegment {
+                start_time,
+                end_time,
+                speaker: "Unknown".to_string(),
+                text: w_seg.text.trim().to_string(),
+            });
+        }
+    }
+    Ok(segments)
+}
+
+fn parse_ts(ts_str: &str) -> Result<f64, String> {
+    let parts: Vec<&str> = ts_str.split(|c| c == ':' || c == ',' || c == '.').collect();
+    if parts.len() == 4 { // hh:mm:ss:ms
+        let h: f64 = parts[0].parse().map_err(|_| "h".to_string())?;
+        let m: f64 = parts[1].parse().map_err(|_| "m".to_string())?;
+        let s: f64 = parts[2].parse().map_err(|_| "s".to_string())?;
+        let ms: f64 = parts[3].parse().map_err(|_| "ms".to_string())?;
+        Ok(h * 3600.0 + m * 60.0 + s + ms / 1000.0)
+    } else if parts.len() == 3 && ts_str.contains(':') { // mm:ss.ms
+         let m: f64 = parts[0].parse().map_err(|_| "m2".to_string())?;
+         let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
+         let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
+         Ok(m * 60.0 + s + ms / 1000.0)
+    }
+     else { Err(format!("Invalid timestamp format: {}", ts_str)) }
+}
