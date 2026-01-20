@@ -60,12 +60,37 @@ pub fn get_project_xml_path_from_item(item_path: &Path) -> Result<PathBuf, Comma
                     })?;
                 info!( "[get_project_xml_path] Project base name guess: {}", project_base_name );
                 let xml_name = format!("{}.harvey.xml", project_base_name);
-                let xml_path = project_base_dir.join(xml_name);
+                let xml_path = project_base_dir.join(&xml_name);
                 info!( "[get_project_xml_path] Checking for XML file at: {}", xml_path.display() );
                 if xml_path.exists() && xml_path.is_file() {
                     info!( "[get_project_xml_path] SUCCESS: Found project XML file: {}", xml_path.display() );
                     return Ok(xml_path);
                 } else {
+                    warn!( "[get_project_xml_path] Inferred XML path not found: {}. Searching directory for any .harvey.xml file...", xml_path.display() );
+                    
+                    let mut candidates = Vec::new();
+                    if let Ok(entries) = fs::read_dir(project_base_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.is_file() {
+                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if name.ends_with(".harvey.xml") {
+                                        candidates.push(path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if candidates.len() == 1 {
+                        let found_path = candidates.remove(0);
+                        info!( "[get_project_xml_path] SUCCESS: Found single alternative XML file: {}", found_path.display() );
+                        return Ok(found_path);
+                    } else if candidates.len() > 1 {
+                         error!( "[get_project_xml_path] Multiple .harvey.xml files found in {}. Ambiguous which one to use. Candidates: {:?}", project_base_dir.display(), candidates );
+                         return Err(CommandError::from(format!( "Ambiguous project XML: Multiple .harvey.xml files found in {}. Please ensure only one project file exists or rename the folder to match.", project_base_dir.display() )));
+                    }
+
                     error!( "[get_project_xml_path] XML file NOT found or not a file at inferred path: {}", xml_path.display() );
                      return Err(CommandError::from(format!( "Inferred project XML path not found: {}", xml_path.display() )));
                 }

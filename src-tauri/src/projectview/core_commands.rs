@@ -9,18 +9,14 @@ use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 #[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
-use csv;
-
+use serde_json::{self, json};
+use serde::Serialize;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
-
 };
 use quick_xml;
-// use tauri_plugin_os::platform; // For OS detection
 use chrono::Utc;
-use serde_json;
-use serde::Serialize;
 use super::db_handler::{self, delete_annotations_from_db};
 use super::shared_types::GroupData; // Added for group commands
 use rusqlite::Connection; // Added for opening DB connection in commands
@@ -744,6 +740,21 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     info!("[Backend Load XML] Project Name: {}", project_name);
     info!("[Backend Load XML] Project UUID: {}", project_data.project_uuid); // Log the UUID being used
 
+    // Identity Check / Self-Healing:
+    // Register this project in the SQLite DB. This handles cases where:
+    // 1. It's a fresh import (DB didn't know about it).
+    // 2. The project folder was moved (DB has old path).
+    // 3. The XML was overwritten (DB needs to align with new UUID).
+    if let Err(e) = db_handler::add_project_to_db(
+        &project_data.project_uuid,
+        &project_name,
+        &base_directory,
+        &xml_path.to_string_lossy()
+    ) {
+        error!("[Backend Load XML] Failed to register project identity in DB: {}", e);
+        // We continue, as this might be a soft failure, but metadata loading might fail later.
+    }
+
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
 
@@ -1072,6 +1083,92 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.imported_transcript_files.files.len(),
         project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
     );
+
+    // --- SYNC: Ensure DB is consistent with XML (Self-Healing) ---
+    let project_id_sync = project_data.project_uuid.clone();
+
+    // Sync Documents: language_code
+    for doc in &project_data.document_files.files {
+        if let Ok(Some(mut meta_db)) = db_handler::load_asset_metadata(&project_id_sync, &doc.relative_path) {
+            if meta_db.language_code != doc.language_code {
+                meta_db.language_code = doc.language_code.clone();
+                let file_meta_to_save = FileMetadata {
+                    file_name: meta_db.file_name,
+                    file_path: meta_db.file_path,
+                    last_modified: meta_db.last_modified,
+                    title: meta_db.title.unwrap_or_default(),
+                    description: meta_db.description.unwrap_or_default(),
+                    summary: meta_db.summary.unwrap_or_default(),
+                    duration_seconds: meta_db.duration_seconds,
+                    width: meta_db.width,
+                    height: meta_db.height,
+                    frame_rate: meta_db.frame_rate,
+                    bit_rate: meta_db.bit_rate,
+                    audio_codec: meta_db.audio_codec,
+                    video_codec: meta_db.video_codec,
+                    created_at: meta_db.creation_time,
+                    original_import_path: meta_db.original_import_path,
+                    speaker_names: meta_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+                    waveform_data: meta_db.waveform_data,
+                    language_code: meta_db.language_code,
+                    properties: meta_db.properties,
+                };
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &doc.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
+            }
+        }
+    }
+
+    // Sync Tables: language_code and has_headers (properties)
+    for table in &project_data.table_files.files {
+        if let Ok(Some(mut meta_db)) = db_handler::load_asset_metadata(&project_id_sync, &table.relative_path) {
+            let mut changed = false;
+            
+            if meta_db.language_code != table.language_code {
+                 meta_db.language_code = table.language_code.clone();
+                 changed = true;
+            }
+
+            let props_json = meta_db.properties.clone();
+            let mut props_map: serde_json::Map<String, serde_json::Value> = props_json
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+            
+            let db_has_headers = props_map.get("has_headers").and_then(|v| v.as_bool());
+            
+            if let Some(xml_val) = table.has_headers {
+                 if db_has_headers != Some(xml_val) {
+                     props_map.insert("has_headers".to_string(), json!(xml_val));
+                     meta_db.properties = Some(serde_json::to_string(&props_map).unwrap());
+                     changed = true;
+                 }
+            }
+
+            if changed {
+                let file_meta_to_save = FileMetadata {
+                    file_name: meta_db.file_name,
+                    file_path: meta_db.file_path,
+                    last_modified: meta_db.last_modified,
+                    title: meta_db.title.unwrap_or_default(),
+                    description: meta_db.description.unwrap_or_default(),
+                    summary: meta_db.summary.unwrap_or_default(),
+                    duration_seconds: meta_db.duration_seconds,
+                    width: meta_db.width,
+                    height: meta_db.height,
+                    frame_rate: meta_db.frame_rate,
+                    bit_rate: meta_db.bit_rate,
+                    audio_codec: meta_db.audio_codec,
+                    video_codec: meta_db.video_codec,
+                    created_at: meta_db.creation_time,
+                    original_import_path: meta_db.original_import_path,
+                    speaker_names: meta_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+                    waveform_data: meta_db.waveform_data,
+                    language_code: meta_db.language_code,
+                    properties: meta_db.properties,
+                };
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &table.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
+            }
+        }
+    }
 
     if was_uuid_generated {
         match save_project_xml(&xml_path, &project_data) {
