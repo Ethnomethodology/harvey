@@ -462,7 +462,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if !$panelStateStore.transcriptionPanelCollapsed}
                 <div
-                    class="w-[15%] h-full bg-white dark:bg-surface-2 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
+                    class="w-64 h-full bg-white dark:bg-surface-2 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                     transition:slide="{{ duration: 300, axis: 'x' }}"
                 >
                     <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} on:requestLoadItem={handleRequestLoadItem} />
@@ -470,7 +470,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             {/if}
 
             <!-- Middle Panel: MediaPlayer and EditableTranscript -->
-            <div class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
+            <div class="flex-1 h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
                 <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-surface-1 flex flex-col">
                     <MediaPlayer
                         bind:this={mediaPlayerRef}
@@ -506,7 +506,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
         <!-- Vertical Waveform Panel (Conditional) -->
         {#if currentWaveformLayout === 'vertical'}
-            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
+            <div bind:clientWidth={verticalWaveformWidthPx} class="w-16 h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
                 
                 {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                     <VerticalWaveform
@@ -530,7 +530,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         {/if}
 
         <!-- Right Panel: RichTextPreview -->
-        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-surface-1 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-border">
+        <div class="flex-1 h-full bg-white dark:bg-surface-1 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-border">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
@@ -594,10 +594,5 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
     /* Ensure Tailwind JIT picks up these dynamic classes */
-    .w-\[40\%\] { width: 40%; }
-    .w-\[5\%\] { width: 5%; }
-    .w-\[47\.5\%\] { width: 47.5%; }
-    .w-\[42\.5\%\] { width: 42.5%; }
-    .w-\[50\%\] { width: 50%; }
     .h-\[100px\] { height: 100px; }
 </style>

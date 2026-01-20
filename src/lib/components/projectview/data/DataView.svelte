@@ -184,7 +184,7 @@
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->
-		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-64' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<DataLeftPanel
                 on:requestmediaselection={forwardEvent}
                 on:requestviewchange={ (event) => handleViewChangeRequest(event.detail) }
@@ -253,6 +253,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    .w-\[15\%\] { width: 15%; } /* For DataLeftPanel */
     .w-\[20\.588\%\] { width: 20.58825%; } /* For new InfoPanel, same as old LeftInfoPanel width */
 </style>
