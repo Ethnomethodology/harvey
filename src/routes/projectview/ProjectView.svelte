@@ -24,7 +24,8 @@
         refreshProjectFiles,
             silentlyRefreshProjectData,
             loadTranscriptFile,
-            normalizePath
+            normalizePath,
+            clearProjectDataStore
 	} from '$lib/services/projectService.js';
 	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
@@ -383,6 +384,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 		}
 
 		if (canProceed) {
+            await clearProjectDataStore();
 			const appWindow = getCurrentWindow();
 			await appWindow.unmaximize();
 			await appWindow.setSize(new LogicalSize(800, 600));
