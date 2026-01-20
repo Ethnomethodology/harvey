@@ -12,6 +12,7 @@ use crate::projectview::db_handler::init_db as init_projectview_db;
 // --- Declare top-level modules ---
 mod welcome;
 mod projectview; 
+pub mod utils;
 
 // Define the state for managing download cancellation flags
 #[derive(Default)]
@@ -76,7 +77,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
             
-            use tauri::{Manager, Emitter};
+            use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 
             // log::info!("[SETUP] Preparing to set up global shortcuts..."); // Removed
@@ -201,6 +202,8 @@ pub fn run() {
             projectview::tag_handler::get_tag_info,
             projectview::tag_handler::update_tag,
             projectview::tag_handler::delete_tag,
+            projectview::tag_handler::remove_tag_globally,
+            projectview::tag_handler::rename_tag_in_highlights,
             projectview::tag_handler::remove_tag_from_highlight,
 
             // --- Project view TRANSCRIPTION commands ---
@@ -255,6 +258,7 @@ pub fn run() {
             
 
             // --- Project view TABLE commands ---
+            projectview::table_handler::create_new_table,
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
             projectview::table_handler::set_table_headers,

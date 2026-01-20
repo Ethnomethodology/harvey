@@ -77,14 +77,14 @@
 
 {#if showModal}
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={closeModal}>
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" on:click|stopPropagation>
+    <div class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-lg" on:click|stopPropagation>
         <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Comments</h2>
 
         <div class="space-y-4 max-h-96 overflow-y-auto pr-2">
             {#each comments.filter(c => !c.parentId) as comment}
                 <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 relative group">
                     {#if editingCommentId === comment.id}
-                        <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-border" rows="3"></textarea>
+                        <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-surface-2 text-black dark:text-white border-gray-300 dark:border-border" rows="3" autocomplete="off" autocorrect="off"></textarea>
                         <div class="mt-2 flex justify-end gap-2">
                             <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
                             <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
@@ -116,7 +116,7 @@
                 {#each comments.filter(r => r.parentId === comment.id) as reply}
                     <div class="ml-8 p-3 rounded-lg bg-gray-200 dark:bg-gray-600 relative group">
                         {#if editingCommentId === reply.id}
-                            <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-border" rows="2"></textarea>
+                            <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-border" rows="2" autocomplete="off" autocorrect="off"></textarea>
                             <div class="mt-2 flex justify-end gap-2">
                                 <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-300 dark:bg-gray-500 hover:bg-gray-400 dark:hover:bg-gray-400">Cancel</button>
                                 <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
@@ -164,6 +164,8 @@
                 class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-border"
                 placeholder={replyingToCommentId ? 'Add a reply...' : 'Add a comment...'}
                 rows="3"
+                autocomplete="off"
+                autocorrect="off"
             ></textarea>
             <div class="mt-2 flex justify-end gap-2">
                 <button on:click={closeModal} class="px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>

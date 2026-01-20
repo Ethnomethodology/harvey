@@ -92,7 +92,7 @@
     aria-labelledby="addFieldModalTitle"
   >
     <div
-      class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-100"
+      class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-100"
       on:click|stopPropagation
     >
       <h2 id="addFieldModalTitle" class="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Add Custom Field Definition</h2>

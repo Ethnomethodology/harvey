@@ -4,6 +4,7 @@ use crate::welcome::config::{
     ModelInfo, ProjectInfo, add_or_update_project_in_config, read_config, write_config, // Keep these config functions
     PROJECT_FILE_EXTENSION, CommandError, get_default_download_location,
 };
+use crate::utils::canonicalize_path;
 use crate::DownloadCancellationState;
 use chrono::{Utc, DateTime};
 use log; // Use log crate
@@ -15,7 +16,6 @@ use std::{
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{PathBuf, Path},
-    process::Command,
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
@@ -23,6 +23,7 @@ use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
 use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
+#[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
@@ -275,13 +276,13 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     log::info!("create_project: Wrote project XML content with UUID.");
 
     // Canonicalize paths *after* file/dir creation
-    let absolute_xml_path = fs::canonicalize(&xml_path)?
+    let absolute_xml_path = canonicalize_path(&xml_path)?
         .to_str()
         .ok_or("Failed to convert project XML path to string")?
         .to_string();
     log::info!("create_project: Canonicalized XML path: {}", absolute_xml_path);
 
-    let absolute_root_path = fs::canonicalize(&project_dir_path)?
+    let absolute_root_path = canonicalize_path(&project_dir_path)?
         .to_str()
         .ok_or("Failed to convert project root path to string")?
         .to_string();
@@ -314,25 +315,19 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     log::info!("---- create_project: End ----");
     Ok(absolute_xml_path)
 }
-#[command] pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
+#[command]
+#[allow(unused_variables)]
+pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
     log::info!("---- locate_in_finder: Start. Path='{}' ----", project_xml_path);
 
-    let mut cleaned_path = project_xml_path;
-
-    // On Windows, remove the \\?\ prefix if present
-    if cfg!(windows) && cleaned_path.starts_with("\\\\?\\") {
-        cleaned_path = cleaned_path.trim_start_matches("\\\\?\\").to_string();
-        log::info!(r"locate_in_finder: Removed \\?\\ prefix. Cleaned path: '{}'", cleaned_path);
-    }
-
-    let path = PathBuf::from(cleaned_path);
+    let path = PathBuf::from(project_xml_path);
     if !path.exists() {
         log::error!("locate_in_finder: Error - Project file not found.");
         return Err("Project file not found.".into());
     }
     let dir_to_open = path.parent().ok_or("Could not get parent directory from path.")?;
     log::info!("locate_in_finder: Directory to open: {:?}", dir_to_open);
-    let absolute_dir_path = fs::canonicalize(dir_to_open)?;
+    let absolute_dir_path = dunce::canonicalize(dir_to_open)?;
 
     #[cfg(target_os = "windows")]
     {
@@ -357,11 +352,201 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     log::info!("---- locate_in_finder: End ----");
     Ok(())
 }
-#[command] pub async fn rename_project(project_xml_path: String, new_name: String) -> Result<(), CommandError> { /* ... */ log::info!("---- rename_project: Start. Path='{}', NewName='{}' ----", project_xml_path, new_name); let trimmed_new_name = new_name.trim(); if trimmed_new_name.is_empty() { log::error!("rename_project: Error - New name is empty."); return Err("New project name cannot be empty.".into()); } if trimmed_new_name.contains('/') || trimmed_new_name.contains('\\') || trimmed_new_name.contains(':') { log::error!("rename_project: Error - New name contains invalid chars."); return Err("New project name cannot contain path separators or colons.".into()); } log::info!("rename_project: Validating old path..."); let old_xml_path = PathBuf::from(&project_xml_path); if !old_xml_path.exists() { log::error!("rename_project: Error - Original XML file not found at '{}'.", project_xml_path); return Err("Original project XML file not found.".into()); } log::info!("rename_project: Old path exists: {:?}", old_xml_path); let old_project_dir = old_xml_path.parent().ok_or("Could not get parent directory from old path.")?; log::info!("rename_project: Old project dir: {:?}", old_project_dir); let base_dir = old_project_dir.parent().ok_or("Could not get base directory.")?; log::info!("rename_project: Base dir: {:?}", base_dir); let new_project_dir = base_dir.join(trimmed_new_name); log::info!("rename_project: New project dir target: {:?}", new_project_dir); let new_xml_filename = format!("{}.{}", trimmed_new_name, PROJECT_FILE_EXTENSION); let new_xml_path = new_project_dir.join(&new_xml_filename); log::info!("rename_project: New XML path target: {:?}", new_xml_path); let new_xml_path_str = new_xml_path.to_str().ok_or("Failed to convert new project XML path to string")?.to_string(); log::info!("rename_project: New XML path string: {}", new_xml_path_str); log::info!("rename_project: Checking if target directory exists and differs..."); if new_project_dir.exists() && new_project_dir != old_project_dir { log::info!("rename_project: Target directory '{}' exists and is different. Checking if same entry...", new_project_dir.display()); let are_same_entry = || -> std::io::Result<bool> { #[cfg(unix)] { use std::os::unix::fs::MetadataExt; log::info!("rename_project: Comparing inodes (Unix)..."); let meta1 = fs::metadata(&old_project_dir)?; let meta2 = fs::metadata(&new_project_dir)?; Ok(meta1.dev() == meta2.dev() && meta1.ino() == meta2.ino()) } #[cfg(windows)] { log::info!("rename_project: Comparing canonical paths (Windows)..."); let canon1 = fs::canonicalize(&old_project_dir)?; let canon2 = fs::canonicalize(&new_project_dir)?; Ok(canon1 == canon2) } #[cfg(not(any(unix, windows)))] { log::info!("rename_project: Comparing canonical paths (Other OS)..."); let canon1 = fs::canonicalize(&old_project_dir)?; let canon2 = fs::canonicalize(&new_project_dir)?; Ok(canon1 == canon2) } }; match are_same_entry() { Ok(true) => { log::info!("rename_project: Target is the same directory (case change?). Proceeding."); } Ok(false) => { log::error!("rename_project: Error - A different directory with name '{}' already exists.", trimmed_new_name); return Err(format!("A different directory with name '{}' exists.", trimmed_new_name).into()); } Err(e) => { log::error!("rename_project: Error - Could not compare existing directory effectively: {}", e); return Err(format!("Could not reliably check if '{}' is the same directory.", trimmed_new_name).into()); } } } else { log::info!("rename_project: Target directory doesn't exist or is the same as old one."); } if old_project_dir != new_project_dir { log::info!("rename_project: === Attempting FOLDER rename: {:?} -> {:?} ===", old_project_dir, new_project_dir); fs::rename(&old_project_dir, &new_project_dir).map_err(|e| { log::error!("rename_project: *** FOLDER RENAME FAILED: {} ***", e); CommandError::from(format!("Failed to rename project folder: {}", e)) })?; log::info!("rename_project: === FOLDER rename successful. ==="); } else { log::info!("rename_project: Folder name same, skipping folder rename."); } let original_xml_filename_osstr = old_xml_path.file_name().ok_or("Could not get old XML filename.")?; let xml_path_in_potentially_new_dir = new_project_dir.join(original_xml_filename_osstr); log::info!("rename_project: Path of XML inside new/current dir: {:?}", xml_path_in_potentially_new_dir); if xml_path_in_potentially_new_dir.exists() && xml_path_in_potentially_new_dir != new_xml_path { log::info!("rename_project: === Attempting XML FILE rename: {:?} -> {:?} ===", xml_path_in_potentially_new_dir, new_xml_path); fs::rename(&xml_path_in_potentially_new_dir, &new_xml_path).map_err(|e| { log::error!("rename_project: *** XML FILE RENAME FAILED: {} ***", e); CommandError::from(format!("Failed to rename project XML file: {}", e)) })?; log::info!("rename_project: === XML FILE rename successful. ==="); } else if !xml_path_in_potentially_new_dir.exists() { log::warn!("rename_project: Expected XML {:?} not found after folder rename. Checking target {:?}...", xml_path_in_potentially_new_dir, new_xml_path); if !new_xml_path.exists() { log::error!("rename_project: XML file missing after rename attempt. Target {:?} does not exist.", new_xml_path); return Err("Project XML file missing after rename.".into()); } else { log::info!("rename_project: XML file already exists at target {:?}. No file rename needed.", new_xml_path); } } else { log::info!("rename_project: XML filename same or matches target. Skipping file rename."); } log::info!("rename_project: === Attempting read XML from final path: {:?} ===", new_xml_path); let original_xml_content = fs::read(&new_xml_path).map_err(|e| { log::error!("rename_project: *** FAILED READ XML from {:?}: {} ***", new_xml_path, e); CommandError::from(format!("Failed read XML after rename: {}", e)) })?; log::info!("rename_project: Read {} bytes from XML.", original_xml_content.len()); log::info!("rename_project: === Parsing and updating XML content ==="); let mut reader = Reader::from_reader(BufReader::new(Cursor::new(original_xml_content))); let mut writer = Writer::new(Cursor::new(Vec::new())); let mut buf = Vec::new(); let mut in_name_tag = false; let mut name_updated = false; let mut depth = 0; loop { match reader.read_event_into(&mut buf) { Ok(Event::Start(ref e)) => { let tag_name = e.name(); writer.write_event(Event::Start(e.clone()))?; if depth == 1 && tag_name.as_ref() == b"name" { in_name_tag = true; writer.write_event(Event::Text(BytesText::new(trimmed_new_name)))?; name_updated = true; } depth += 1; } Ok(Event::End(ref e)) => { depth -= 1; if depth == 1 && e.name().as_ref() == b"name" { in_name_tag = false; } writer.write_event(Event::End(e.clone()))?; } Ok(Event::Text(_)) if in_name_tag => {} Ok(Event::Eof) => { log::info!("XML Parse - Reached EOF."); break; } Ok(event) => { writer.write_event(event)?; } Err(e) => { log::error!("rename_project: *** Error parsing XML: {} at pos {} ***", e, reader.buffer_position()); return Err(format!("Error parsing XML: {}", e).into()); } } buf.clear(); } if !name_updated { log::error!("rename_project: Error - Did not find top-level <name> tag in XML."); /* Consider if this should be a hard error */ } let updated_xml_bytes = writer.into_inner().into_inner(); log::info!("rename_project: === XML content updated ({} bytes). Writing back to {:?} ===", updated_xml_bytes.len(), new_xml_path); fs::write(&new_xml_path, updated_xml_bytes).map_err(|e| { log::error!("rename_project: *** FAILED WRITE updated XML to {:?}: {} ***", new_xml_path, e); CommandError::from(format!("Failed write updated XML: {}", e)) })?; log::info!("rename_project: Successfully wrote updated XML content."); log::info!("rename_project: === Updating config.xml entry ==="); let mut config = read_config().map_err(|e| { log::error!("rename_project: *** FAILED READ config.xml: {} ***", e); e })?; log::info!("rename_project: Config read. Searching for project path '{}'.", project_xml_path); let now = Utc::now(); let mut project_updated_in_config = false; if let Some(project) = config.projects.iter_mut().find(|p| p.path == project_xml_path) { log::info!("rename_project: Found project by original path. Updating name and path."); project.name = trimmed_new_name.to_string(); project.path = new_xml_path_str.clone(); project.last_opened_ts = now; project_updated_in_config = true; } else { log::error!("rename_project: Error - Could not find project in config to update using path '{}'. Config might be out of sync.", project_xml_path); /* Consider recovery or just warning */ } if project_updated_in_config { log::info!("rename_project: Project updated in config struct. Writing config.xml..."); write_config(&config).map_err(|e| { log::error!("rename_project: *** FAILED WRITE config.xml: {} ***", e); e })?; log::info!("rename_project: Config.xml written successfully."); } else { log::warn!("rename_project: No project entry updated in config. Skipping config write."); } log::info!("---- rename_project: End Successfully ----"); Ok(()) }
+#[command]
+pub async fn rename_project(project_xml_path: String, new_name: String) -> Result<(), CommandError> {
+    log::info!("---- rename_project: Start. Path='{}', NewName='{}' ----", project_xml_path, new_name);
+    let trimmed_new_name = new_name.trim();
+    if trimmed_new_name.is_empty() {
+        log::error!("rename_project: Error - New name is empty.");
+        return Err("New project name cannot be empty.".into());
+    }
+    if trimmed_new_name.contains('/') || trimmed_new_name.contains('\\') || trimmed_new_name.contains(':') {
+        log::error!("rename_project: Error - New name contains invalid chars.");
+        return Err("New project name cannot contain path separators or colons.".into());
+    }
+    log::info!("rename_project: Validating old path...");
+    let old_xml_path = PathBuf::from(&project_xml_path);
+    if !old_xml_path.exists() {
+        log::error!("rename_project: Error - Original XML file not found at '{}'.", project_xml_path);
+        return Err("Original project XML file not found.".into());
+    }
+    log::info!("rename_project: Old path exists: {:?}", old_xml_path);
+    let old_project_dir = old_xml_path.parent().ok_or("Could not get parent directory from old path.")?;
+    log::info!("rename_project: Old project dir: {:?}", old_project_dir);
+    let base_dir = old_project_dir.parent().ok_or("Could not get base directory.")?;
+    log::info!("rename_project: Base dir: {:?}", base_dir);
+    let new_project_dir = base_dir.join(trimmed_new_name);
+    log::info!("rename_project: New project dir target: {:?}", new_project_dir);
+    let new_xml_filename = format!("{}.{}", trimmed_new_name, PROJECT_FILE_EXTENSION);
+    let new_xml_path = new_project_dir.join(&new_xml_filename);
+    log::info!("rename_project: New XML path target: {:?}", new_xml_path);
+    let new_xml_path_str = new_xml_path.to_str().ok_or("Failed to convert new project XML path to string")?.to_string();
+    log::info!("rename_project: New XML path string: {}", new_xml_path_str);
+    log::info!("rename_project: Checking if target directory exists and differs...");
+    if new_project_dir.exists() && new_project_dir != old_project_dir {
+        log::info!("rename_project: Target directory '{}' exists and is different. Checking if same entry...", new_project_dir.display());
+        let are_same_entry = || -> std::io::Result<bool> {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                log::info!("rename_project: Comparing inodes (Unix)...");
+                let meta1 = fs::metadata(&old_project_dir)?;
+                let meta2 = fs::metadata(&new_project_dir)?;
+                Ok(meta1.dev() == meta2.dev() && meta1.ino() == meta2.ino())
+            }
+            #[cfg(windows)]
+            {
+                log::info!("rename_project: Comparing canonical paths (Windows)...");
+                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                Ok(canon1 == canon2)
+            }
+            #[cfg(not(any(unix, windows)))]
+            {
+                log::info!("rename_project: Comparing canonical paths (Other OS)...");
+                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                Ok(canon1 == canon2)
+            }
+        };
+        match are_same_entry() {
+            Ok(true) => {
+                log::info!("rename_project: Target is the same directory (case change?). Proceeding.");
+            }
+            Ok(false) => {
+                log::error!("rename_project: Error - A different directory with name '{}' already exists.", trimmed_new_name);
+                return Err(format!("A different directory with name '{}' exists.", trimmed_new_name).into());
+            }
+            Err(e) => {
+                log::error!("rename_project: Error - Could not compare existing directory effectively: {}", e);
+                return Err(format!("Could not reliably check if '{}' is the same directory.", trimmed_new_name).into());
+            }
+        }
+    } else {
+        log::info!("rename_project: Target directory doesn't exist or is the same as old one.");
+    }
+    if old_project_dir != new_project_dir {
+        log::info!("rename_project: === Attempting FOLDER rename: {:?} -> {:?} ===", old_project_dir, new_project_dir);
+        fs::rename(&old_project_dir, &new_project_dir).map_err(|e| {
+            log::error!("rename_project: *** FOLDER RENAME FAILED: {} ***", e);
+            CommandError::from(format!("Failed to rename project folder: {}", e))
+        })?;
+        log::info!("rename_project: === FOLDER rename successful. ===");
+    } else {
+        log::info!("rename_project: Folder name same, skipping folder rename.");
+    }
+    let original_xml_filename_osstr = old_xml_path.file_name().ok_or("Could not get old XML filename.")?;
+    let xml_path_in_potentially_new_dir = new_project_dir.join(original_xml_filename_osstr);
+    log::info!("rename_project: Path of XML inside new/current dir: {:?}", xml_path_in_potentially_new_dir);
+    if xml_path_in_potentially_new_dir.exists() && xml_path_in_potentially_new_dir != new_xml_path {
+        log::info!("rename_project: === Attempting XML FILE rename: {:?} -> {:?} ===", xml_path_in_potentially_new_dir, new_xml_path);
+        fs::rename(&xml_path_in_potentially_new_dir, &new_xml_path).map_err(|e| {
+            log::error!("rename_project: *** XML FILE RENAME FAILED: {} ***", e);
+            CommandError::from(format!("Failed to rename project XML file: {}", e))
+        })?;
+        log::info!("rename_project: === XML FILE rename successful. ===");
+    } else if !xml_path_in_potentially_new_dir.exists() {
+        log::warn!("rename_project: Expected XML {:?} not found after folder rename. Checking target {:?}...", xml_path_in_potentially_new_dir, new_xml_path);
+        if !new_xml_path.exists() {
+            log::error!("rename_project: XML file missing after rename attempt. Target {:?} does not exist.", new_xml_path);
+            return Err("Project XML file missing after rename.".into());
+        } else {
+            log::info!("rename_project: XML file already exists at target {:?}. No file rename needed.", new_xml_path);
+        }
+    } else {
+        log::info!("rename_project: XML filename same or matches target. Skipping file rename.");
+    }
+    log::info!("rename_project: === Attempting read XML from final path: {:?} ===", new_xml_path);
+    let original_xml_content = fs::read(&new_xml_path).map_err(|e| {
+        log::error!("rename_project: *** FAILED READ XML from {:?}: {} ***", new_xml_path, e);
+        CommandError::from(format!("Failed read XML after rename: {}", e))
+    })?;
+    log::info!("rename_project: Read {} bytes from XML.", original_xml_content.len());
+    log::info!("rename_project: === Parsing and updating XML content ===");
+    let mut reader = Reader::from_reader(BufReader::new(Cursor::new(original_xml_content)));
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut buf = Vec::new();
+    let mut in_name_tag = false;
+    let mut name_updated = false;
+    let mut depth = 0;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag_name = e.name();
+                writer.write_event(Event::Start(e.clone()))?;
+                if depth == 1 && tag_name.as_ref() == b"name" {
+                    in_name_tag = true;
+                    writer.write_event(Event::Text(BytesText::new(trimmed_new_name)))?;
+                    name_updated = true;
+                }
+                depth += 1;
+            }
+            Ok(Event::End(ref e)) => {
+                depth -= 1;
+                if depth == 1 && e.name().as_ref() == b"name" {
+                    in_name_tag = false;
+                }
+                writer.write_event(Event::End(e.clone()))?;
+            }
+            Ok(Event::Text(_)) if in_name_tag => {}
+            Ok(Event::Eof) => {
+                log::info!("XML Parse - Reached EOF.");
+                break;
+            }
+            Ok(event) => {
+                writer.write_event(event)?;
+            }
+            Err(e) => {
+                log::error!("rename_project: *** Error parsing XML: {} at pos {} ***", e, reader.buffer_position());
+                return Err(format!("Error parsing XML: {}", e).into());
+            }
+        }
+        buf.clear();
+    }
+    if !name_updated {
+        log::error!("rename_project: Error - Did not find top-level <name> tag in XML."); /* Consider if this should be a hard error */
+    }
+    let updated_xml_bytes = writer.into_inner().into_inner();
+    log::info!("rename_project: === XML content updated ({} bytes). Writing back to {:?} ===", updated_xml_bytes.len(), new_xml_path);
+    fs::write(&new_xml_path, updated_xml_bytes).map_err(|e| {
+        log::error!("rename_project: *** FAILED WRITE updated XML to {:?}: {} ***", new_xml_path, e);
+        CommandError::from(format!("Failed write updated XML: {}", e))
+    })?;
+    log::info!("rename_project: Successfully wrote updated XML content.");
+    log::info!("rename_project: === Updating config.xml entry ===");
+    let mut config = read_config().map_err(|e| {
+        log::error!("rename_project: *** FAILED READ config.xml: {} ***", e);
+        e
+    })?;
+    log::info!("rename_project: Config read. Searching for project path '{}'.", project_xml_path);
+    let now = Utc::now();
+    let mut project_updated_in_config = false;
+    if let Some(project) = config.projects.iter_mut().find(|p| p.path == project_xml_path) {
+        log::info!("rename_project: Found project by original path. Updating name and path.");
+        project.name = trimmed_new_name.to_string();
+        project.path = new_xml_path_str.clone();
+        project.last_opened_ts = now;
+        project_updated_in_config = true;
+    } else {
+        log::error!("rename_project: Error - Could not find project in config to update using path '{}'. Config might be out of sync.", project_xml_path); /* Consider recovery or just warning */
+    }
+    if project_updated_in_config {
+        log::info!("rename_project: Project updated in config struct. Writing config.xml...");
+        write_config(&config).map_err(|e| {
+            log::error!("rename_project: *** FAILED WRITE config.xml: {} ***", e);
+            e
+        })?;
+        log::info!("rename_project: Config.xml written successfully.");
+    } else {
+        log::warn!("rename_project: No project entry updated in config. Skipping config write.");
+    }
+    log::info!("---- rename_project: End Successfully ----");
+    Ok(())
+}
 #[command] pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_list: Start Command. Path='{}' ----", project_xml_path); let result = remove_project_from_config_internal(&project_xml_path); log::info!("---- remove_project_from_list: End Command ----"); result }
 fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_config_internal: Start. Path='{}' ----", project_xml_path); let mut config = read_config()?; let initial_len = config.projects.len(); config.projects.retain(|p| p.path != project_xml_path); if config.projects.len() < initial_len { log::info!("remove_project_from_config_internal: Removed project path {} from config.", project_xml_path); write_config(&config)?; log::info!("remove_project_from_config_internal: Config.xml updated."); } else { log::warn!("remove_project_from_config_internal: Project path {} not found in config. No changes.", project_xml_path); } log::info!("---- remove_project_from_config_internal: End ----"); Ok(()) }
 #[command] pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- open_project: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(&project_xml_path); if !path_buf.exists() || !path_buf.is_file() { log::error!("open_project: Error - XML file not found: {}", project_xml_path); return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path))); } log::info!("open_project: File exists."); let mut config = read_config()?; log::info!("open_project: Config read."); let project_index = config.projects.iter().position(|p| p.path == project_xml_path); log::info!("open_project: Project index in config: {:?}", project_index); let final_project_info: ProjectInfo; let mut config_needs_write = false; if let Some(index) = project_index { log::info!("open_project: Found project in config ('{}'). Updating timestamp.", config.projects[index].name); let now = Utc::now(); if config.projects[index].last_opened_ts != now { config.projects[index].last_opened_ts = now; config_needs_write = true; log::info!("open_project: Updated last_opened_ts for '{}'.", config.projects[index].name); } else { log::info!("open_project: Timestamp current for '{}'.", config.projects[index].name); } final_project_info = config.projects[index].clone(); } else { log::info!("open_project: Project not in config, importing..."); match import_project_internal(&project_xml_path) { Ok(imported_info) => { log::info!("open_project: Import successful."); final_project_info = imported_info; config_needs_write = true; /* Config was updated by import */ }, Err(e) => { log::error!("open_project: Import failed: {}", e); return Err(e); } } } if config_needs_write { log::info!("open_project: Config needs write. Writing..."); config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); write_config(&config)?; log::info!("open_project: Config.xml written."); } else { log::info!("open_project: Config up-to-date."); } log::info!("---- open_project: End Successfully ----"); Ok(final_project_info) }
-fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = fs::canonicalize(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read XML ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = from_str(&xml_content).map_err(|e| CommandError::from(format!("XML deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
+fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = canonicalize_path(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read XML ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = from_str(&xml_content).map_err(|e| CommandError::from(format!("XML deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
 #[command] pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project: Start Command Wrapper. Path='{}' ----", project_xml_path); let result = import_project_internal(&project_xml_path); log::info!("---- import_project: End Command Wrapper ----"); result }
 #[command]
 pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError> {
@@ -494,6 +679,17 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     config.downloaded_models.retain(|m| m.name != model_to_delete.name);
 
     if config.downloaded_models.len() < initial_len {
+        let remaining_models = &config.downloaded_models;
+        let has_transcription_models = remaining_models.iter().any(|m| !m.name.contains("opus-mt"));
+        let has_translation_models = remaining_models.iter().any(|m| m.name.contains("opus-mt"));
+
+        if !has_transcription_models {
+            config.verification_status.transcription_models_verified = false;
+        }
+        if !has_translation_models {
+            config.verification_status.translation_models_verified = false;
+        }
+
         write_config(&config)?;
         log::info!("Removed entry '{}' from config.", model_to_delete.name);
     } else {

@@ -7,6 +7,13 @@ import { listen } from '@tauri-apps/api/event';
 import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
+function normalizePath(path) {
+    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
+        return path.substring(4);
+    }
+    return path;
+}
+
 
 const DUAL_MODE_STORAGE_KEY = 'harvey-dual-mode';
 
@@ -1063,7 +1070,8 @@ export async function switchTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const normalizedPath = normalizePath(path);
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
         setTranscriptData(path, segments); // This will handle remapping speakers and updating the store
     } catch (e) {
@@ -1176,7 +1184,7 @@ listen('custom_transcription_job_completed', async (event) => {
                 try {
                     const service = await import('../services/projectService.js');
                     if (service.loadTranscriptFile) {
-                        
+
                         await service.loadTranscriptFile(activePathToLoad);
                     } else {
                         console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
@@ -1219,7 +1227,7 @@ listen('custom_transcription_job_completed', async (event) => {
                     updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
                     if (updatedMediaFile) {
-                        
+
                         const { emit } = await import('@tauri-apps/api/event');
                         emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
                     } else {
@@ -1324,7 +1332,7 @@ listen('translation_job_completed', async (event) => {
 
                     if (updatedMediaFile) {
                         console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
-                        selectMedia(updatedMediaFile);
+                        selectMedia(updatedMediaFile, newTranscriptPath);
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
                     }
@@ -1400,7 +1408,8 @@ export async function setSecondaryTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const normalizedPath = normalizePath(path);
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
 
         const primarySegments = get(transcriptStore).segments;

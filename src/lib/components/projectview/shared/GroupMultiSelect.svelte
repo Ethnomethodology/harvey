@@ -163,6 +163,8 @@
 					bind:value={searchTerm}
 					placeholder="Search or add new..."
 					class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-d-gray-500 rounded-md dark:bg-d-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+					autocomplete="off"
+					autocorrect="off"
 				/>
 			</div>
 			<ul>

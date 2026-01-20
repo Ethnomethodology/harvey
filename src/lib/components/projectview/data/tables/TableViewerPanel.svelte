@@ -34,11 +34,37 @@
 
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
     let searchTerm = '';
-    let searchMatches = [];
+    let cellMatches = []; // Changed from searchMatches to store cell components
     let currentMatchIndex = -1;
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
     let tableClipboard = null;
+    let searchInputRef = null;
+
+    let showOptionsMenu = false;
+    let areFiltersVisible = false; // Start with the assumption that filters are hidden
+
+    async function toggleFilters() {
+        if (!tabulatorInstance) return;
+        areFiltersVisible = !areFiltersVisible;
+        const columns = tabulatorInstance.getColumns();
+
+        await Promise.all(
+            columns.map(async (column) => {
+                const definition = column.getDefinition();
+                if (definition.field) { // Ensure it's a data column
+                    if (!areFiltersVisible) {
+                        // Clear the filter value before hiding
+                        tabulatorInstance.setHeaderFilterValue(definition.field, "");
+                    }
+                    await tabulatorInstance.updateColumnDefinition(definition.field, {
+                        headerFilter: areFiltersVisible ? customHeaderFilterEditor : null
+                    });
+                }
+            })
+        );
+        showOptionsMenu = false; // Hide menu after action
+    }
 
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
@@ -67,11 +93,15 @@
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
 
-        // Strip the internal ID before saving
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
-        await saveTableData(tablePath, dataToSave);
+        const columns = tabulatorInstance.getColumns();
+        const orderedHeaders = columns
+            .filter(column => column.getField()) // Ensure we only get data columns
+            .map(column => column.getDefinition().title);
+
+        await saveTableData(tablePath, dataToSave, orderedHeaders);
     }
 
     const debouncedSave = debounce(saveTableChanges, 750);
@@ -106,50 +136,59 @@
     async function deleteColumn(column) {
         const columnName = column.getField();
         try {
-            // Step 1: Capture the current layout BEFORE doing anything else.
-            updateTableLayoutSnapshot();
-            const layoutBeforeDelete = tableLayoutSnapshot;
-
-            // Step 2: Call the backend to delete the column from the file.
             await deleteTableColumn(tablePath, columnName);
-
-            // Step 3: Manually remove the deleted column from our captured layout.
-            if (layoutBeforeDelete.columns[columnName]) {
-                delete layoutBeforeDelete.columns[columnName];
-            }
-
-            // Step 4: Save the now-modified layout object.
-            const projectBaseDir = get(project)?.baseDirectory;
-            const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
-            if (relativeTablePath) {
-                await saveTableLayoutPrefs(relativeTablePath, layoutBeforeDelete);
-            }
-
-            // Step 5: Reload the table. It will now load the correct data AND the correct layout.
-            await initializeTable(tablePath, null, true);
-
+            await column.delete();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error deleting column "${columnName}":`, err);
+            // If the backend fails, we should probably reload to be safe
+            await initializeTable(tablePath, null, true);
         }
+    }
+
+    function getColumnContextMenu(column) {
+        const menu = [
+            { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
+            { separator: true },
+            { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
+            { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
+            { separator: true },
+            { label: "Cut Column", action: (e, column) => cutColumn(column) },
+            { label: "Copy Column", action: (e, column) => copyColumn(column) },
+        ];
+        if (tableClipboard && tableClipboard.type === 'column') {
+            menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
+            menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
+        }
+        menu.push({ separator: true });
+        menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
+        menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
+        menu.push({ separator: true });
+        menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
+        return menu;
     }
 
     async function insertColumn(column, position) {
         const newFieldName = getUniqueColumnName("NewColumn");
-        const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        const newColumnDef = {
+            title: newFieldName,
+            field: newFieldName,
+            editor: "textarea",
+            headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+        };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
-
-            // Force Tabulator to update the data model for the new column
+            await tabulatorInstance.updateColumnDefinition(newFieldName, {
+                headerContextMenu: getColumnContextMenu
+            });
             const rows = tabulatorInstance.getRows();
             rows.forEach(row => {
                 const cell = row.getCell(newFieldName);
                 if (cell) {
-                    cell.setValue("", true); // Set empty string, suppress cellEdited event
+                    cell.setValue("", true);
                 }
             });
-
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -161,9 +200,17 @@
             return;
         }
         const newFieldName = getUniqueColumnName(tableClipboard.header);
-        const newColumnDef = { title: tableClipboard.header, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        const newColumnDef = {
+            title: tableClipboard.header,
+            field: newFieldName,
+            editor: "textarea",
+            headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+        };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+            await tabulatorInstance.updateColumnDefinition(newFieldName, {
+                headerContextMenu: getColumnContextMenu
+            });
             const rows = tabulatorInstance.getRows();
             rows.forEach((row, index) => {
                 if (tableClipboard.values[index] !== undefined) {
@@ -232,18 +279,16 @@
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
-        const currentColumnDefs = tabulatorInstance.getColumnDefinitions();
+        const columns = tabulatorInstance.getColumns(); // This gets columns in their current display order
         const newSnapshotColumns = {};
-        currentColumnDefs.forEach((colDef, index) => {
-            if (colDef.field) {
-                const columnComponent = tabulatorInstance.getColumn(colDef.field);
-                if (columnComponent) {
-                    newSnapshotColumns[colDef.field] = {
-                        order: index,
-                        visible: columnComponent.isVisible(),
-                        width: columnComponent.getWidth(),
-                    };
-                }
+        columns.forEach((column, index) => {
+            const definition = column.getDefinition();
+            if (definition.field) {
+                newSnapshotColumns[definition.field] = {
+                    order: index,
+                    visible: column.isVisible(),
+                    width: column.getWidth(),
+                };
             }
         });
         tableLayoutSnapshot.columns = newSnapshotColumns;
@@ -304,6 +349,7 @@
         if (!tabulatorInstance || !rows || rows.length === 0) return;
 
         let currentHighlights = get(project).currentTableHighlights || [];
+        const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
 
         rows.forEach(row => {
             const rowData = row.getData();
@@ -313,8 +359,15 @@
             currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
 
             if (color) {
-                // Add new highlight
-                const text = Object.values(rowData).filter(val => val !== null && val !== undefined).join(' | ');
+                // Construct the text in the correct order, starting with the 1-indexed row number.
+                const rowNumber = rowIndex + 1;
+                const textParts = [rowNumber.toString()];
+                orderedColumns.forEach(column => {
+                    const value = rowData[column.getField()];
+                    textParts.push(value !== null && value !== undefined ? value : "");
+                });
+                const text = textParts.join(' | ');
+
                 const newHighlight = {
                     id: `row-${rowIndex}`,
                     color: color,
@@ -390,7 +443,7 @@
             const colDef = {
                 title: header,
                 field: header,
-                headerFilter: customHeaderFilterEditor, // Use custom editor
+                headerFilter: areFiltersVisible ? customHeaderFilterEditor : null, // Use custom editor
                 headerFilterPlaceholder: "Filter...", // Add a placeholder
                 headerFilterFunc: function(headerValue, rowValue, rowData, filterParams){
                     // headerValue is the value from the header filter input
@@ -419,29 +472,17 @@
                         cellElement.classList.remove('highlighted-cell');
                     }
                     cell.getElement().style.whiteSpace = "pre-wrap";
-                    return cell.getValue();
-                },
-                headerContextMenu: (column) => {
-                    const menu = [
-                        { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
-                        { separator: true },
-                        { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
-                        { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
-                        { separator: true },
-                        { label: "Cut Column", action: (e, column) => cutColumn(column) },
-                        { label: "Copy Column", action: (e, column) => copyColumn(column) },
-                    ];
-                    if (tableClipboard && tableClipboard.type === 'column') {
-                        menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
-                        menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
+
+                    const term = searchTerm.trim();
+                    const cellValue = cell.getValue();
+                    if (term && cellValue !== null && cellValue !== undefined) {
+                        const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+                        return String(cellValue).replace(regex, '<span class="search-match-highlight">$1</span>');
                     }
-                    menu.push({ separator: true });
-                    menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
-                    menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
-                    menu.push({ separator: true });
-                    menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
-                    return menu;
+                    return cellValue;
                 },
+                headerContextMenu: getColumnContextMenu,
                 contextMenu: (e, cell) => {
                     e.preventDefault();
                     return [];
@@ -663,27 +704,88 @@
 
     function handleSearch() {
         if (!tabulatorInstance) return;
-        const term = searchTerm.trim();
-        tabulatorInstance.setFilter(term ? columnFields.map(field => ({ field, type: 'like', value: term })) : []);
-        searchMatches = tabulatorInstance.getRows("active");
+
+        // Clear existing highlights and reset matches
+        cellMatches.forEach(cell => {
+            const el = cell.getElement();
+            if (el) el.classList.remove('search-match-focus');
+        });
+        cellMatches = [];
         currentMatchIndex = -1;
-        if (searchMatches.length > 0) navigateToMatch(0);
+        tabulatorInstance.redraw(true); // Redraw to clear old highlights from formatter
+
+        const term = searchTerm.trim().toLowerCase();
+
+        if (!term) {
+            tabulatorInstance.clearFilter();
+            return;
+        }
+
+        // Filter rows first
+        tabulatorInstance.setFilter((data) => {
+            for (const key in data) {
+                if (key === 'harvey_internal_id') continue;
+                const value = data[key];
+                if (value !== null && value !== undefined && String(value).toLowerCase().includes(term)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        // After filtering, find all matching cells in the active (visible) rows
+        const activeRows = tabulatorInstance.getRows('active');
+        activeRows.forEach(row => {
+            row.getCells().forEach(cell => {
+                const cellValue = cell.getValue();
+                if (cellValue !== null && cellValue !== undefined && String(cellValue).toLowerCase().includes(term)) {
+                    cellMatches.push(cell);
+                }
+            });
+        });
+
+        // Redraw the table to apply the search term highlighting via the formatter
+        tabulatorInstance.redraw(true);
+
+        if (cellMatches.length > 0) {
+            navigateToMatch(0);
+        }
+
+        // Restore focus to the search input after the search is complete
+        if (searchInputRef) {
+            searchInputRef.focus();
+        }
     }
 
     async function navigateToMatch(index) {
-        if (!tabulatorInstance || !searchMatches[index]) return;
+        if (!tabulatorInstance || !cellMatches[index]) return;
+
+        // Clear any previous programmatically created ranges to ensure only one cell is selected
+        const ranges = tabulatorInstance.getRanges();
+        if (ranges) {
+            ranges.forEach(range => range.remove());
+        }
+
         currentMatchIndex = index;
-        await searchMatches[index].scrollTo().catch(err => console.error("Scroll failed", err));
-        tabulatorInstance.deselectRow();
-        searchMatches[index].select();
+        const currentCell = cellMatches[currentMatchIndex];
+
+        // Scroll to the row of the current cell first to ensure it is visible
+        await currentCell.getRow().scrollTo().catch(err => console.error("Scroll to row failed", err));
+
+        // Use Tabulator's built-in range selection to highlight the active cell
+        tabulatorInstance.addRange(currentCell, currentCell);
     }
 
     function goToNextMatch() {
-        if (currentMatchIndex < searchMatches.length - 1) navigateToMatch(currentMatchIndex + 1);
+        if (cellMatches.length === 0) return;
+        const nextIndex = (currentMatchIndex + 1) % cellMatches.length;
+        navigateToMatch(nextIndex);
     }
 
     function goToPreviousMatch() {
-        if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
+        if (cellMatches.length === 0) return;
+        const prevIndex = (currentMatchIndex - 1 + cellMatches.length) % cellMatches.length;
+        navigateToMatch(prevIndex);
     }
 
     let showEditHeaderModal = false;
@@ -816,9 +918,16 @@
          <div class="flex items-center space-x-2">
             <input
               type="search"
+              bind:this={searchInputRef}
               bind:value={searchTerm}
               on:input={handleSearch}
-              on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
+              on:keydown={e => {
+                  if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goToNextMatch();
+                  }
+              }}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-dark-bg-tertiary px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
@@ -827,18 +936,49 @@
               title="Previous Match"
               class="ui-button-icon disabled:opacity-50 disabled:cursor-not-allowed"
               on:click={goToPreviousMatch}
-              disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
+              disabled={cellMatches.length === 0}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/></svg>
             </button>
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+                {#if cellMatches.length > 0}
+                    {currentMatchIndex + 1} of {cellMatches.length}
+                {:else if searchTerm}
+                    0 of 0
+                {/if}
+            </span>
             <button
               title="Next Match"
               class="ui-button-icon disabled:opacity-50 disabled:cursor-not-allowed"
               on:click={goToNextMatch}
-              disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
+              disabled={cellMatches.length === 0}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
             </button>
+             <div class="relative">
+                <button
+                  title="More Options"
+                  class="ui-button-icon"
+                  on:click={() => showOptionsMenu = !showOptionsMenu}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                    <path d="M9.5 3a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                  </svg>
+                </button>
+                {#if showOptionsMenu}
+                  <div
+                    class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-20"
+                    on:mouseleave={() => showOptionsMenu = false}
+                  >
+                    <button
+                      class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      on:click={toggleFilters}
+                    >
+                      {areFiltersVisible ? 'Hide' : 'Show'} Filters
+                    </button>
+                  </div>
+                {/if}
+              </div>
          </div>
          {/if}
     </div>
@@ -921,5 +1061,13 @@
         }
         :global(html.dark .tabulator-cell.highlighted-cell) {
             color: #111827 !important;
+        }
+        :global(.search-match-highlight) {
+            background-color: #ffdd77;
+            font-weight: bold;
+        }
+        :global(html.dark .search-match-highlight) {
+            background-color: #ffdd77;
+            color: #111827;
         }
 </style>

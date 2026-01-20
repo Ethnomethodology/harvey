@@ -90,6 +90,18 @@ import {
 
 import notificationStore from '$lib/stores/notificationStore.js';
 
+export function normalizePath(path) {
+    if (typeof path !== 'string') {
+        return path;
+    }
+    // On Windows, paths may start with the `\\?\` prefix. This removes it.
+    let normalized = path.startsWith('\\\\?\\') ? path.substring(4) : path;
+
+    // Normalize backslashes to forward slashes for consistent path handling.
+    normalized = normalized.replace(/\\/g, '/');
+
+    return normalized;
+}
 
 /**
  * Updates the name and description for a specific tag.
@@ -127,6 +139,34 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     } catch (error) {
         console.error(`[ProjectService] Error saving table layout preferences for ${tablePath}:`, error);
         throw error;
+    }
+}
+
+export async function loadHighlightsForFile(filePath, itemType) {
+    if (!filePath || !itemType) {
+        console.warn('[ProjectService] loadHighlightsForFile called with missing filePath or itemType.');
+        return;
+    }
+
+    // Determine the correct loading function based on itemType
+    if (itemType === 'doc' && filePath.toLowerCase().endsWith('.pdf')) {
+        await loadPdfAnnotationsFromFile(filePath);
+    } else if (itemType === 'images') {
+        await loadImageAnnotations(filePath);
+    } else if (itemType === 'tables' || itemType === 'table') {
+        await loadTableHighlights(filePath);
+    } else if (itemType === 'imported_transcript') {
+        // Assuming there's a function to load highlights for imported transcripts
+        // If not, this part needs to be implemented. For now, let's log it.
+        console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
+    } else { // 'doc' (non-PDF), etc.
+        const metadata = await loadDocumentMetadata(filePath);
+        if (metadata && metadata.highlights) {
+            const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
+            setDocumentHighlights(metadata.highlights);
+        } else {
+            console.log(`[ProjectService] No highlights found for document type '${itemType}'.`);
+        }
     }
 }
 
@@ -336,39 +376,45 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
         
+        const normalizedBaseDirectory = normalizePath(loadedData.base_directory);
 
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
+              // Normalize the node's own path
+              if (node.path) {
+                node.path = normalizePath(node.path);
+              }
+
               if (node.file_type === 'media') {
                 // Ensure node.associated_transcripts is an array before mapping
                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
                     let name = t.name; // Preserve existing name if available
-                    if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
+                    if (normalizedBaseDirectory && typeof normalizedBaseDirectory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
-                        const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
-                                   ? loadedData.base_directory.slice(0, -1)
-                                   : loadedData.base_directory;
+                        const base = normalizedBaseDirectory.endsWith('/') || normalizedBaseDirectory.endsWith('\\')
+                                   ? normalizedBaseDirectory.slice(0, -1)
+                                   : normalizedBaseDirectory;
                         const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = `${base}/${rel}`;
+                        absolutePath = normalizePath(`${base}/${rel}`);
                         if (!name) { // If name is not provided by backend, derive from relativePath
                             name = t.relativePath.split(/[\\/]/).pop();
                         }
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
-                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${normalizedBaseDirectory}, Relative path: ${t.relativePath}`);
                         if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
                             name = t.relativePath;
                         }
                     }
                     return {
-                        path: absolutePath, // This will be null if construction failed
+                        path: normalizePath(absolutePath), // Normalize absolutePath here
                         relativePath: t.relativePath, // Always preserve the original relativePath
                         language_code: t.language_code, // Pass the language code
                         name: name // Add the name property
@@ -387,7 +433,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             name: loadedData.project_name,
             id: loadedData.project_uuid,
             xmlPath: loadedData.project_xml_path,
-            baseDirectory: loadedData.base_directory,
+            baseDirectory: normalizedBaseDirectory,
             files: loadedData.files || [],
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
@@ -398,7 +444,10 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             error: null,
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
-        project.update((current) => ({ ...current, ...dataToSet }));
+        project.update((current) => ({
+            ...current,
+            ...dataToSet
+        }));
 
         // Update project groups list
         try {
@@ -491,7 +540,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                         const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = `${base}/${rel}`;
+                        absolutePath = normalizePath(`${base}/${rel}`);
                         if (!name) { // If name is not provided by backend, derive from relativePath
                             name = t.relativePath.split(/[\\/]/).pop();
                         }
@@ -570,7 +619,10 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
             error: null,
             statusMessage: 'File list updated.'
         };
-        project.update((current) => ({ ...current, ...dataToSet }));
+        project.update((current) => ({
+            ...current,
+            ...dataToSet,
+        }));
 
     } catch (error) {
         console.error('[ProjectService] Failed to silently refresh project data:', error);
@@ -969,7 +1021,8 @@ export async function loadTranscriptFile(transcriptFilePath) {
     const filename = transcriptFilePath.split(/[\\/]/).pop();
     project.update(p => ({ ...p, statusMessage: `Loading transcript ${filename}...` }));
     try {
-        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath });
+        const normalizedPath = normalizePath(transcriptFilePath);
+        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
         const currentProject = get(project);
         const projectBaseDir = currentProject.baseDirectory;
@@ -1318,6 +1371,36 @@ export async function convertAndSaveTranscriptAsDoc() {
                 });
                 console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`);        const docFilename = await basename(targetFullPath);
         await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
+
+        const relativePath = targetFullPath.substring(projectBaseDir.length + 1).replace(/\\/g, '/');
+        const fileMetadata = {
+            file_name: docFilename,
+            file_path: targetFullPath,
+            last_modified: new Date().toISOString(),
+            title: "",
+            description: "",
+            summary: "",
+            duration_seconds: null,
+            width: null,
+            height: null,
+            frame_rate: null,
+            bit_rate: null,
+            audio_codec: null,
+            video_codec: null,
+            created_at: new Date().toISOString(),
+            original_import_path: null,
+            speaker_names: null,
+            waveform_data: null,
+        };
+
+        await invoke('update_asset_metadata_command', {
+            projectXmlPathStr: projectXmlPath,
+            assetRelativePath: relativePath,
+            metadataPayload: fileMetadata,
+            customFieldsPayload: null,
+            assetType: 'document',
+        });
+
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
         return targetFullPath;
@@ -1371,7 +1454,7 @@ export async function saveCurrentPdfAnnotations() {
         // Do not throw here to avoid unhandled promise rejections if the caller doesn't catch.
     }
 }
-export async function saveTableData(tablePath, tableData) {
+export async function saveTableData(tablePath, tableData, orderedHeaders) {
     if (!tablePath) {
         throw new Error("Cannot save, no table path specified.");
     }
@@ -1383,7 +1466,7 @@ export async function saveTableData(tablePath, tableData) {
     project.update(p => ({ ...p, statusMessage: `Saving table ${filename}...` }));
 
     try {
-        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData });
+        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData, headers: orderedHeaders });
         project.update(p => ({ ...p, isDocumentDirty: false, statusMessage: `Table saved: ${filename}` }));
     } catch (error) {
         const errorMessage = error?.message || String(error);
@@ -1678,7 +1761,7 @@ export async function loadImageAnnotations(imageAbsPath) {
 
     let relativeImagePath = imageAbsPath;
     if (imageAbsPath.startsWith(projectBaseDir)) {
-        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\/]/, '');
     }
     relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
@@ -1716,7 +1799,7 @@ export async function saveImageAnnotations() {
 
     let relativeImagePath = imagePath;
     if (imagePath.startsWith(projectBaseDir)) {
-        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\/]/, '');
     }
     relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 

@@ -1,13 +1,12 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
-	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
-	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import { configStatus, updateConfigStatus, setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
 
 	let isPanelOpen = false;
-	let isLoading = true;
 	let error = '';
 	let showInstallModal = false;
 	let installLogs = [];
@@ -21,8 +20,7 @@
 		error = '';
 		try {
 			await invoke('delete_virtual_env');
-			await checkStatus(); // Re-check status after deletion
-			await updateConfigStatus();
+			setPythonLibrariesInstalled(false);
 		} catch (e) {
 			console.error('Error deleting virtual environment:', e);
 			error = `Failed to delete environment: ${e.payload || e}`;
@@ -31,32 +29,10 @@
 		}
 	}
 
-	async function checkStatus() {
-		try {
-			isLoading = true;
-			const status = await invoke('check_python_libraries_installed');
-            arePythonLibsInstalled.set(status);
-		} catch (e) {
-			console.error('Error checking Python library status:', e);
-			error = `Failed to check dependency status: ${e.payload || e}`;
-			arePythonLibsInstalled.set(false);
-		} finally {
-			isLoading = false;
-		}
-	}
-
 	onMount(async () => {
-        await checkStatus();
-
-        // Temporary diagnostic code
-        invoke('list_venv_lib_contents')
-            .then(contents => console.log('Venv lib contents:', contents))
-            .catch(err => console.error('Error listing venv lib contents:', err));
-
         unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
-            await checkStatus(); // Re-check status after installation attempt
-            await updateConfigStatus();
+            await updateConfigStatus(true);
         });
     });
 
@@ -92,26 +68,28 @@
 	});
 </script>
 
-<div class="border-y border-gray-200">
+<div class="border-y border-gray-200 dark:border-gray-700">
 	<button
 		on:click={() => (isPanelOpen = !isPanelOpen)}
 		class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
 	>
 		<div class="flex items-center">
-			<h3 class="block text-sm font-medium text-gray-700">Libraries</h3>
+			<h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">Libraries</h3>
 		</div>
 		<div class="flex items-center">
-			{#if isLoading}
-				<span class="text-xs text-gray-500 mr-2">Checking...</span>
-			{:else if $arePythonLibsInstalled}
-				<span class="text-sm font-medium text-green-600 mr-2">Installed</span>
+			{#if !$configStatus.isInitialized}
+				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
+			{:else if $configStatus.python_libraries_installed}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Installed</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 mr-2">Installation Required</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2"
+					>Installation Required</span
+				>
 			{/if}
 			<svg
 				class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen
 					? 'rotate-180'
-					: ''}"
+					: ''} text-gray-500 dark:text-gray-400"
 				xmlns="http://www.w3.org/2000/svg"
 				fill="none"
 				viewBox="0 0 24 24"
@@ -125,24 +103,28 @@
 </div>
 
 {#if isPanelOpen}
-	<div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
-		        <p class="mb-4">
-		                    To enable advanced features like identifying different speakers (diarization) and translating transcripts, Harvey needs to install a few extra components.
-		                </p>		<div class="flex items-center">
-			{#if $arePythonLibsInstalled}
-				<p class="text-green-600 mr-4">Libraries are installed.</p>
-                <button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
-                    {#if isDeleting}Deleting...{:else}Delete{/if}
-                </button>
+	<div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
+		<p class="mb-4">
+			To enable advanced features like identifying different speakers (diarization) and translating
+			transcripts, Harvey needs to install a few extra components.
+		</p>
+		<div class="flex items-center">
+			{#if !$configStatus.isInitialized}
+				<p class="text-gray-500 dark:text-gray-400">Checking...</p>
+			{:else if $configStatus.python_libraries_installed}
+				<p class="text-green-600 dark:text-green-400 mr-4">Libraries are installed.</p>
+				<button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
+					{#if isDeleting}Deleting...{:else}Delete{/if}
+				</button>
 			{:else}
-				<p class="text-red-600 mr-4">Required libraries are not installed.</p>
-                <button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling || isDeleting}>
-                    {#if isInstalling}Installing...{:else}Install{/if}
-                </button>
+				<p class="text-red-600 dark:text-red-400 mr-4">Required libraries are not installed.</p>
+				<button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling || isDeleting}>
+					{#if isInstalling}Installing...{:else}Install{/if}
+				</button>
 			{/if}
 		</div>
 		{#if error}
-			<p class="text-red-600 mt-4">{error}</p>
+			<p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
 		{/if}
 	</div>
 {/if}

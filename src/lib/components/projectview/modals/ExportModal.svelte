@@ -6,6 +6,7 @@
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 	import { activeLayout } from '$lib/stores/layoutStore.js'; // Re-added
 	import { open } from '@tauri-apps/plugin-dialog';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	// --- REMOVED: No fs functions imported for path manipulation ---
 
 	export let showModal = false;
@@ -203,7 +204,7 @@
 {#if showModal}
 	<div
 		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
@@ -211,7 +212,7 @@
 		tabindex="-1"
 	>
 		<div
-			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 			role="document"
 		>
@@ -229,23 +230,20 @@
 						bind:value={exportFileName}
 						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="e.g., MyMeetingTranscript"
+						autocomplete="off"
+						autocorrect="off"
 					/>
 				</div>
 
 				<!-- Format Dropdown -->
 				 <div>
 					<label for="export-format" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Format:</label>
-					<select
-						id="export-format"
+					<Dropdown
+						containerClasses="w-full"
+						options={exportFormats}
 						bind:value={exportFormat}
-						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
-					>
-						{#each exportFormats as formatOption (formatOption.value)}
-							<option value="{formatOption.value}" disabled={formatOption.disabled}>
-								{formatOption.label}
-							</option>
-						{/each}
-					</select>
+						placeholder="Select a Format"
+					/>
 					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md' && exportFormat !== 'ass'}
 						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. All listed formats are available.</p>
 					 {:else if exportFormat === 'md'}
@@ -298,6 +296,8 @@
 							class="input-field flex-grow bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 cursor-not-allowed"
 							readonly
 							placeholder="Select directory..."
+							autocomplete="off"
+							autocorrect="off"
 						/>
 						<button type="button" on:click={selectExportDirectory} class="btn-secondary flex-shrink-0 text-xs px-3 py-1.5">
 							Browse

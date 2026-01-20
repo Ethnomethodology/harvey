@@ -3,11 +3,12 @@
 	import { get } from 'svelte/store';
 	import { project, HARVEY_FILES_DIR, MEDIA_DIR_NAME } from '$lib/stores/projectStore.js';
 	import { transcriptStore, selectMedia } from '$lib/stores/transcriptStore.js';
-	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
+	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem, normalizePath } from '$lib/services/projectService.js';
 	import TreeNode from './TreeNode.svelte';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { createEventDispatcher } from 'svelte';
+    import { sep } from '@tauri-apps/api/path';
 
     const dispatch = createEventDispatcher();
 
@@ -32,24 +33,42 @@
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
 
-    $: uniqueProjectFileTree = (() => {
-        const mediaPathPrefix = `${$project.baseDirectory}/${HARVEY_FILES_DIR}/${MEDIA_DIR_NAME}`;
+        $: uniqueProjectFileTree = (() => {
+        const normalizedBaseDirectory = normalizePath($project.baseDirectory);
+        const mediaPathPrefix = normalizePath(`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`);
         const seen = new Set();
-        return projectFileTree.filter(node => {
-            const key = node.path || node.relativePath;
+        console.log('[LeftPanel] Filtering projectFileTree...');
+        console.log('[LeftPanel] normalizedBaseDirectory:', normalizedBaseDirectory);
+        console.log('[LeftPanel] mediaPathPrefix:', mediaPathPrefix);
+        const filtered = projectFileTree.filter(node => {
+            const normalizedNodePath = normalizePath(node.path);
+            const key = normalizedNodePath || normalizePath(node.relativePath);
+            
             if (seen.has(key)) {
                 return false;
             }
             seen.add(key);
-            // Only include nodes that are directories or whose path starts with the mediaPathPrefix
-            // and are of type 'media' or 'directory_media_stem' or 'transcript'
-            const isMediaFileOrDirectory = node.file_type === 'media' || node.file_type === 'directory_media_stem' || node.file_type === 'transcript';
-            const isWithinMediaPath = node.path && node.path.startsWith(mediaPathPrefix);
-            const isRootMediaDirectory = node.path === mediaPathPrefix;
 
-            // Include the root media directory itself, and any media files/directories/transcripts within it
+            const isMediaFileOrDirectory = node.file_type === 'media' || node.file_type === 'directory_media_stem' || node.file_type === 'transcript';
+            const isWithinMediaPath = normalizedNodePath && normalizedNodePath.startsWith(mediaPathPrefix);
+            const isRootMediaDirectory = normalizedNodePath === mediaPathPrefix;
+
+            console.log('---');
+            console.log('[LeftPanel] Node:', node.name, '(', node.file_type, ')');
+            console.log('[LeftPanel]   node.path:', node.path);
+            console.log('[LeftPanel]   normalizedNodePath:', normalizedNodePath);
+            console.log('[LeftPanel]   mediaPathPrefix:', mediaPathPrefix);
+            console.log('[LeftPanel]   normalizedNodePath.startsWith(mediaPathPrefix):', normalizedNodePath.startsWith(mediaPathPrefix));
+            console.log('[LeftPanel]   isMediaFileOrDirectory:', isMediaFileOrDirectory);
+            console.log('[LeftPanel]   isWithinMediaPath:', isWithinMediaPath);
+            console.log('[LeftPanel]   isRootMediaDirectory:', isRootMediaDirectory);
+            console.log('[LeftPanel]   Result:', (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory)));
+            console.log('---');
+
             return (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory));
         });
+        console.log('[LeftPanel] uniqueProjectFileTree (filtered):', filtered);
+        return filtered;
     })();
 
     // --- Function to handle opening a data ---
@@ -205,7 +224,7 @@
 	<!-- Media Files Accordion Header -->
 	<div class="border-b border-gray-300 dark:border-border flex-shrink-0">
 		<div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
 			on:click="{() => toggleSection('files')}"
 			aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
@@ -243,7 +262,7 @@
 	<!-- Shortcuts Accordion Header -->
 	<div class="flex-shrink-0 border-gray-300 dark:border-border {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
          <div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
 			on:click="{() => toggleSection('shortcuts')}"
 			aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"

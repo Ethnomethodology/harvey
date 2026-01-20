@@ -15,9 +15,10 @@
     import AttachmentsPanel from './shared_panels/AttachmentsPanel.svelte';
     import RightBar from './shared_panels/RightBar.svelte';
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
-    import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
+    import { checkUnsavedChangesThenProceed, normalizePath } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
     import { slide } from 'svelte/transition';
+	import { refresher } from '$lib/stores/refresherStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -55,7 +56,7 @@
             const extension = lowerPath.split('.').pop();
 
             if (lowerPath.endsWith('.pdf') ||
-                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
+                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => normalizePath(`${value.baseDirectory}/${f.relativePath}`) !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
                  lowerPath.endsWith('.txt') ||
                  lowerPath.endsWith('.md')) {
                 typeFromStore = 'documents';
@@ -151,8 +152,15 @@
 	import { listen } from '@tauri-apps/api/event';
 
 	let infoPanelRefreshKey = null;
+	let highlightsPanelRefreshKey = Date.now();
+
+	let unsubscribeRefresher;
 
 	onMount(async () => {
+		unsubscribeRefresher = refresher.subscribe(() => {
+			highlightsPanelRefreshKey = Date.now();
+		});
+
 		const unlisten = await listen('metadata_updated', (event) => {
 			console.log(`[DataView] Received metadata_updated event for path:`, event.payload);
 			// Check if the updated item is the one currently being viewed.
@@ -165,6 +173,9 @@
 
 		return () => {
 			unlisten();
+			if (unsubscribeRefresher) {
+				unsubscribeRefresher();
+			}
 		};
 	});
 
@@ -223,7 +234,7 @@
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
-                    <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
+                    <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
                     <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
                 {/if}

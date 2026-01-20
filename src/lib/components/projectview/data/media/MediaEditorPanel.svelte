@@ -515,21 +515,22 @@
     /* =================================================================== */
     /* STYLES FOR LAYOUT 1 (DEFAULT)                                       */
     /* =================================================================== */
+    /* Widths are now handled by Lexical state and inline styles to support resizing */
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(1)),
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
+        /* width: 5%; - controlled by JS */
     }
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(2)),
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
+        /* width: 15%; - controlled by JS */
     }
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(3)),
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
+        /* width: 15%; - controlled by JS */
     }
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(4)),
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
+        /* width: 65%; - controlled by JS */
     }
 
     /* =================================================================== */

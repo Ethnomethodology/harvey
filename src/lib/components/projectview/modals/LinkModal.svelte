@@ -81,7 +81,7 @@
   >
     <div
       bind:this={modalElement}
-      class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200"
+      class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200"
       role="document"
     >
       <h2 id="link-modal-title" class="text-lg font-semibold mb-3">
@@ -109,6 +109,8 @@
               // e.stopPropagation(); // Optional: Only if arrow keys etc cause issues outside input
             }
           }}
+          autocomplete="off"
+          autocorrect="off"
         />
       </div>
 

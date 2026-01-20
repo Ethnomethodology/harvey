@@ -5,6 +5,7 @@
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	// Props
 	export let fileName = '';
@@ -144,7 +145,7 @@
         on:keydown={handleKeydown}
 	>
 		<div
-			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+			class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
 			role="document"
             tabindex="-1"
             on:click|stopPropagation
@@ -166,28 +167,23 @@
 
 					<div class="space-y-1">
 						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
-						<select id="modalModelSelect" class="ui-select w-full" bind:value={modalSelectedModel}>
-							<option value="" disabled selected={!modalSelectedModel}>Select Model</option>
-							{#if downloadedModelsList.length > 0}
-							<optgroup label="Local Models">
-								{#each downloadedModelsList as model (model.name)}
-									<option value="{model.name}">{model.name}</option>
-								{/each}
-							</optgroup>
-							{/if}
-							{#if downloadedModelsList.length === 0}
-								<option value="" disabled>No models available</option>
-							{/if}
-						</select>
+						<Dropdown
+							containerClasses="w-full"
+							options={downloadedModelsList.map(m => ({ value: m.name, label: m.name }))}
+							bind:value={modalSelectedModel}
+							placeholder="Select a Model"
+							disabled={downloadedModelsList.length === 0}
+						/>
 					</div>
 
 					<div class="space-y-1">
 						<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
-						<select id="modalLanguageSelect" class="ui-select w-full" bind:value={modalSelectedLanguage}>
-							{#each languageOptions as lang (lang.value)}
-								<option value="{lang.value}">{lang.label}</option>
-							{/each}
-						</select>
+						<Dropdown
+							containerClasses="w-full"
+							options={languageOptions}
+							bind:value={modalSelectedLanguage}
+							placeholder="Select a Language"
+						/>
 					</div>
 
 					
@@ -217,7 +213,7 @@
 
 					<div class="pt-2">
 						<div class="flex items-center space-x-2">
-							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
+							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
 							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
 								Identify different speakers (diarize)
 							</label>

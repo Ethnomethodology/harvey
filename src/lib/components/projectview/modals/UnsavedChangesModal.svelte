@@ -43,7 +43,7 @@
         tabindex="0"
 	>
 		<div
-			class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200"
+			class="modal-content bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 		>
 			<h2 id="unsaved-title" class="text-xl font-semibold mb-4">Unsaved Changes</h2>

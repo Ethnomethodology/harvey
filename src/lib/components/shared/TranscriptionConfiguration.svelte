@@ -9,7 +9,7 @@
 		getDownloadedModels,
 		cancelDownload,
 	} from '$lib/services/configureActions';
-	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import { configStatus, setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
 
 	export let downloadLocation = '';
@@ -126,7 +126,7 @@
 				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
 				try {
 					downloadedModels = await getDownloadedModels();
-					await updateConfigStatus();
+					setTranscriptionModelsDownloaded(downloadedModels.length > 0);
 				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
 			});
 
@@ -186,7 +186,7 @@
 		try {
 			await deleteModel(model);
 			downloadedModels = await getDownloadedModels();
-			await updateConfigStatus();
+			setTranscriptionModelsDownloaded(downloadedModels.length > 0);
 		} catch (err) {
 			alert(`Failed to delete model ${modelName}: ${err.message || err}`);
 			try { downloadedModels = await getDownloadedModels(); } catch (refreshErr) { console.error("Failed to refresh models after delete error:", refreshErr); }
@@ -206,26 +206,26 @@
 	}
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex flex-col flex-grow overflow-y-auto">
 	{#if configError}
-		<p class="text-red-600 bg-red-100 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
+		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
 		</p>
 	{/if}
 
 	<div class="flex-grow space-y-3">
-		<div class="border-y border-gray-200">
+		<div class="border-y border-gray-200 dark:border-gray-700">
 			<button on:click={() => isModelsPanelOpen = !isModelsPanelOpen} class="w-full flex justify-between items-center py-3 text-left focus:outline-none">
-				<h3 class="block text-sm font-medium text-gray-700">
+				<h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">
 					Transcription Models
 				</h3>
                 <div class="flex items-center">
                     {#if downloadedCount > 0}
-                        <span class="text-sm font-medium text-green-600 mr-2">{downloadedCount} downloaded</span>
+                        <span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">{downloadedCount} downloaded</span>
                     {:else}
-                        <span class="text-sm font-medium text-red-600 mr-2">None downloaded</span>
+                        <span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2">None downloaded</span>
                     {/if}
-                    <svg class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isModelsPanelOpen ? 'rotate-180' : ''}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <svg class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isModelsPanelOpen ? 'rotate-180' : ''} text-gray-500 dark:text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </div>
@@ -234,53 +234,58 @@
 
 		{#if isModelsPanelOpen}
 			<div class="pt-4 space-y-3">
-				<p class="text-sm text-gray-600 px-1 mb-3">
-					Harvey uses <code>whisper.cpp</code> for transcription. To transcribe audio or video files, you must first download one of the available models.
+				<p class="text-sm text-gray-600 dark:text-gray-400 px-1 mb-3">
+					Harvey uses <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">whisper.cpp</code> for transcription. To transcribe audio or video files, you must first download one of the available models.
 				</p>
-				{#each availableModels as model (model.name)}
-					{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
+				{#if !$configStatus.python_libraries_installed}
+					<p class="text-orange-600 dark:text-orange-400 text-sm px-1">
+						Please install the required Python libraries first to enable model downloads.
+					</p>
+				{:else}
+					{#each availableModels as model (model.name)}
+						{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
 					{@const status = display.status}
 					{@const isDownloadEnabled = !isBusy && downloadLocation && downloadLocation.trim() !== '' && model.download_url}
 					{@const isDeleteEnabled = !isBusy}
 					{@const isCancelEnabled = status === 'downloading'}
-					<div class="bg-white p-4 rounded-lg shadow border border-gray-200 relative overflow-hidden">
+					<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 relative overflow-hidden">
 						{#if status === 'downloading'}
-							<div class="absolute top-0 left-0 bottom-0 bg-blue-100 bg-opacity-75 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
-							<div class="absolute top-0 left-0 bottom-0 border-r-2 border-blue-300 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
+							<div class="absolute top-0 left-0 bottom-0 bg-blue-100 dark:bg-blue-900/50 bg-opacity-75 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
+							<div class="absolute top-0 left-0 bottom-0 border-r-2 border-blue-300 dark:border-blue-600 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
 						{/if}
 						<div class="relative z-10">
 							<div class="flex justify-between items-start mb-2">
-								<p class="text-md font-semibold text-gray-800 truncate mr-4 pt-1" title={model.name}>
+								<p class="text-md font-semibold text-gray-800 dark:text-gray-100 truncate mr-4 pt-1" title={model.name}>
 									{model.name}
 								</p>
 								<div class="flex-shrink-0 flex items-center space-x-2">
 									{#if status === 'complete'}
 										<button class="btn-delete" on:click={() => handleDelete(model)} disabled={!isDeleteEnabled} title={isDeleteEnabled ? `Delete model ${model.name}` : 'Operation in progress...'}> Delete </button>
 									{:else if status === 'downloading' || status === 'cancelling'}
-										<span class="text-xs text-blue-700 font-medium w-36 text-right truncate tabular-nums" title={display.progressText || (status === 'cancelling' ? 'Cancelling...' : 'Starting...')}>
+										<span class="text-xs text-blue-700 dark:text-blue-300 font-medium w-36 text-right truncate tabular-nums" title={display.progressText || (status === 'cancelling' ? 'Cancelling...' : 'Starting...')}>
 											{#if status === 'cancelling'}Cancelling...{:else}{display.progressText || 'Starting...'}{/if}
 										</span>
 										<button class="btn-cancel" on:click={() => handleCancel(model.name)} disabled={!isCancelEnabled} title={isCancelEnabled ? 'Cancel download' : 'Cannot cancel'}> Cancel </button>
 									{:else if status === 'error'}
-										<span class="text-xs text-red-600 font-medium">Error</span>
+										<span class="text-xs text-red-600 dark:text-red-400 font-medium">Error</span>
 										<button class="btn-retry" on:click={() => handleDownload(model)} disabled={!isDownloadEnabled} title={!isDownloadEnabled ? 'Set location or download ongoing' : 'Download failed. Click to retry.'}> Retry </button>
 									{:else if status === 'cancelled'}
-										<span class="text-xs text-gray-500 font-medium">Cancelled</span>
+										<span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Cancelled</span>
 										<button class="btn-blue-small" on:click={() => handleDownload(model)} disabled={!isDownloadEnabled} title={!isDownloadEnabled ? 'Set location or download ongoing' : 'Download cancelled. Click to try again.'}> Download </button>
 									{:else}
 										 <button class="btn-blue-small" on:click={() => handleDownload(model)} title={!downloadLocation || downloadLocation.trim() === '' ? 'Set download location first' : !model.download_url ? 'Download URL missing' : isBusy ? 'Operation in progress...' : `Download model ${model.name}`} disabled={!isDownloadEnabled}> Download </button>
 									{/if}
 								</div>
 							</div>
-							<div class="text-sm text-gray-600 space-y-1 mt-1">
-								<p><span class="font-medium text-gray-700">Language:</span> {model.language || '-'} <span class="mx-2 text-gray-300">|</span> <span class="font-medium text-gray-700">Size:</span> {model.size || '-'}</p>
-								<p><span class="font-medium text-gray-700">Description:</span> {model.description || '-'}</p>
+							<div class="text-sm text-gray-600 dark:text-gray-300 space-y-1 mt-1">
+								<p><span class="font-medium text-gray-700 dark:text-gray-200">Language:</span> {model.language || '-'} <span class="mx-2 text-gray-300 dark:text-gray-600">|</span> <span class="font-medium text-gray-700 dark:text-gray-200">Size:</span> {model.size || '-'}</p>
+								<p><span class="font-medium text-gray-700 dark:text-gray-200">Description:</span> {model.description || '-'}</p>
 								{#if model.info_url}
-									<p><a href={model.info_url} on:click|preventDefault={() => openLink(model.info_url)} class="text-blue-600 hover:text-blue-800 hover:underline text-xs" title="Open model info page in browser"> Learn more... </a></p>
+									<p><a href={model.info_url} on:click|preventDefault={() => openLink(model.info_url)} class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline text-xs" title="Open model info page in browser"> Learn more... </a></p>
 								{/if}
 							</div>
 							{#if status === 'not_downloaded' && !isDownloadEnabled && !isBusy}
-								<p class="text-xs text-orange-600 mt-2">
+								<p class="text-xs text-orange-600 dark:text-orange-400 mt-2">
 									{#if !downloadLocation || downloadLocation.trim() === ''} Set a download location to enable download. {:else if !model.download_url} Download URL missing for this model. {/if}
 								</p>
 							{/if}
@@ -288,11 +293,12 @@
 					</div>
 				{/each}
 				{#if availableModels.length === 0}
-					<p class="text-center text-gray-500 pt-4">No models defined in the application.</p>
+					<p class="text-center text-gray-500 dark:text-gray-400 pt-4">No models defined in the application.</p>
+				{/if}
 				{/if}
 			</div>
 		{/if}
-		<DiarizationModelPanel />
+		<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
 	</div>
 </div>
 
@@ -310,10 +316,10 @@
          @apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
     }
 	.btn-delete {
-		@apply border-gray-300 text-red-700 bg-red-50 hover:bg-red-100 focus:ring-red-400;
+		@apply border-gray-300 dark:border-gray-600 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-800/20 focus:ring-red-400;
 	}
 	.btn-cancel {
-		@apply border-gray-300 text-gray-700 bg-gray-100 hover:bg-gray-200 focus:ring-indigo-500;
+		@apply border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-indigo-500;
 	}
     .btn-retry {
         @apply border-transparent text-white bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500;

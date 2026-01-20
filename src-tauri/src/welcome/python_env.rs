@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{Shell, ShellExt};
-use crate::welcome::config::{CommandError, get_config_dir};
+use crate::welcome::config::{CommandError, get_config_dir, read_config, write_config};
 use std::path::{PathBuf};
 use std::fs::{self};
 // use std::io;
@@ -15,44 +15,11 @@ pub fn get_env_path() -> Result<PathBuf, CommandError> {
     get_config_dir().map(|path| path.join(ENV_DIR))
 }
 
-fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
-    let target_triple = tauri::utils::platform::target_triple().unwrap();
-    let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
-    let binary_name = format!("micromamba-{}{}", target_triple, exe_suffix);
-    let resource_path = PathBuf::from("binaries").join(&binary_name);
 
-    let resource_micromamba_path = app.path()
-        .resolve(&resource_path, tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::Message(format!("Failed to resolve micromamba resource path: {}", e)))?;
-
-    let app_cache_dir = app.path().app_cache_dir()
-        .map_err(|e| CommandError::Message(format!("App cache directory not found: {}", e)))?;
-
-    if !app_cache_dir.exists() {
-        fs::create_dir_all(&app_cache_dir)
-            .map_err(|e| CommandError::Message(format!("Failed to create app cache directory: {}", e)))?;
-    }
-
-    let dest_binary_name = format!("micromamba{}", exe_suffix);
-    let dest_path = app_cache_dir.join(dest_binary_name);
-
-    if !dest_path.exists() {
-        log::info!("Copying micromamba from {:?} to {:?}", &resource_micromamba_path, &dest_path);
-        fs::copy(&resource_micromamba_path, &dest_path)
-            .map_err(|e| CommandError::Message(format!("Failed to copy micromamba: {}", e)))?;
-    }
-
-    Ok(dest_path)
-}
 
 pub fn get_python_path() -> Result<PathBuf, CommandError> {
     let env_path = get_env_path()?;
-    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
-
-    if target_triple == "aarch64-pc-windows-msvc" {
-        // For standalone python, the structure is different
-        Ok(env_path.join("Scripts").join("python.exe"))
-    } else if cfg!(windows) {
+    if cfg!(windows) {
         // Micromamba on windows
         Ok(env_path.join("python.exe"))
     } else {
@@ -110,17 +77,12 @@ async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchIn
 // --- Main Installation Logic ---
 
 pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
-    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
-
-    if target_triple == "aarch64-pc-windows-msvc" {
-        install_python_libraries_standalone(app, shell).await
-    } else {
-        install_python_libraries_micromamba(app, shell).await
-    }
+    install_python_libraries_micromamba(app, shell).await
 }
 
 
 
+#[allow(unused_variables)]
 async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
     let emitter = app.clone();
     emitter.emit("installation-log", LogPayload { message: "Starting installation... Cleaning up previous attempts.".into() }).unwrap();
@@ -132,47 +94,106 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         std::fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to remove existing env: {}", e)))?;
     }
 
-    let micromamba_path = get_micromamba_path(app)?;
-    log::info!("Using bundled micromamba at: {:?}", micromamba_path);
+    let config_dir = get_config_dir()?;
+    fs::create_dir_all(&config_dir)
+        .map_err(|e| CommandError::Message(format!("Failed to create config directory: {}", e)))?;
+
     emitter.emit("installation-log", LogPayload { message: "Found environment manager.".into() }).unwrap();
 
-    // Step 1: Create environment with Python and pip
-    emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
-
-    let create_args = vec![
-        "create", "-p", env_path.to_str().unwrap(),
-        "python=3.12", "pip", "pandoc", "ffmpeg", "--override-channels", "-c", "conda-forge", "-y",
-    ];
-
-    let (mut rx, _child) = shell.command(micromamba_path.to_str().unwrap())
-        .args(&create_args)
-        .env("PYTHONUNBUFFERED", "1")
+    // Clear micromamba cache to prevent issues with corrupted downloads
+    emitter.emit("installation-log", LogPayload { message: "Clearing micromamba cache...".into() }).unwrap();
+    let (mut rx_clean, _child_clean) = shell.sidecar("micromamba")?
+        .args(&["clean", "--all", "-y"])
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
         .spawn()?;
-    
-    let mut output_lines = Vec::new();
-    while let Some(event) = rx.recv().await {
+
+    while let Some(event) = rx_clean.recv().await {
         match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
-                output_lines.push(line_str);
-            }
-            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
-                output_lines.push(line_str);
-            }
+                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
+            },
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code != Some(0) {
-                    let full_log = output_lines.join("\n");
-                    let error_message = format!("Failed to create conda environment. Full log:\n{}", full_log);
-                    emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
-                    return Err(CommandError::Message(error_message));
+                    return Err(CommandError::Message(format!("Failed to clear micromamba cache: {:?}", payload.code)));
                 }
                 break;
             }
             _ => {}
         }
+    }
+    emitter.emit("installation-log", LogPayload { message: "Micromamba cache cleared.".into() }).unwrap();
+
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // Step 1: Create environment with Python and pip
+    emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
+
+    let create_args = vec![
+        "create".to_string(),
+        "-p".to_string(),
+        env_path.to_str().unwrap().to_string(),
+        "python=3.12".to_string(),
+        "pip".to_string(),
+        "ffmpeg".to_string(), // Always include ffmpeg
+        "--override-channels".to_string(),
+        "-c".to_string(),
+        "conda-forge".to_string(),
+        "-y".to_string(),
+        "--verbose".to_string(),
+    ];
+
+    let mut attempts = 0;
+    let max_attempts = 3;
+    let mut success = false;
+
+    while attempts < max_attempts {
+        attempts += 1;
+        emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
+
+        let (mut rx, _child) = shell.sidecar("micromamba")?
+            .args(&create_args)
+            .env("PYTHONUNBUFFERED", "1")
+            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
+            .spawn()?;
+
+        let mut output_lines = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                    let line_str = String::from_utf8_lossy(&line).to_string();
+                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                    output_lines.push(line_str);
+                }
+                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                    let line_str = String::from_utf8_lossy(&line).to_string();
+                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                    output_lines.push(line_str);
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    if payload.code != Some(0) {
+                        let full_log = output_lines.join("\n");
+                        let error_message = format!("Failed to create conda environment. Full log:\n{}", full_log);
+                        emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                        if attempts == max_attempts {
+                            return Err(CommandError::Message(error_message));
+                        }
+                        log::warn!("Micromamba create failed, retrying...");
+                        break;
+                    } else {
+                        success = true;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if success { break; }
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+
+    if !success {
+        return Err(CommandError::Message("Failed to create conda environment after multiple attempts.".to_string()));
     }
 
     // Step 2: Install packages using pip
@@ -180,7 +201,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     let strategy = get_pytorch_install_strategy(shell).await;
     let mut pip_packages = vec![
-        "torch==2.9.0", "torchvision==0.24.0", "torchaudio==2.9.0",
+        "torch==2.9.0", "torchaudio==2.9.0",
         "pyannote.audio==4.0.1", "pypandoc==1.15",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1", "torchcodec==0.8.0"
     ];
@@ -191,10 +212,25 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
-    let (mut rx_pip, _child_pip) = shell.command(micromamba_path.to_str().unwrap())
-        .args(&pip_args)
+    let mut pip_command = shell.sidecar("micromamba")?;
+    pip_command = pip_command.args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")
-        .spawn()?;
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+
+    if cfg!(target_os = "windows") {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
+                    .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?;
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", cleaned_sidecars_path.to_string_lossy(), existing_path);
+                pip_command = pip_command.env("PATH", new_path);
+            }
+        }
+    }
+
+    let (mut rx_pip, _child_pip) = pip_command.spawn()?;
 
     let mut pip_output_lines = Vec::new();
     while let Some(event) = rx_pip.recv().await {
@@ -223,96 +259,12 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     }
 
     emitter.emit("installation-log", LogPayload { message: "Successfully installed Python libraries.".into() }).unwrap();
-    emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
-    emitter.emit("installation-finished", ()).unwrap();
-    Ok(())
-}
 
-async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
-    let emitter = app.clone();
-    emitter.emit("installation-log", LogPayload { message: "Starting installation...".into() }).unwrap();
-
-    let env_path = get_env_path()?;
-    if env_path.exists() {
-        emitter.emit("installation-log", LogPayload { message: "Removing existing environment...".into() }).unwrap();
-        fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to remove old env: {}", e)))?;
-    }
-
-    // Step 1: Locate the bundled Python executable from build step
-    let bundled_python_dir = app.path()
-        .resolve("python", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::Message(format!("Failed to resolve bundled python path: {}", e)))?;
-    let python_exe = bundled_python_dir.join("python.exe");
-
-    if !python_exe.exists() {
-        return Err(CommandError::Message("Bundled python.exe not found".to_string()));
-    }
-    emitter.emit("installation-log", LogPayload { message: "Located bundled Python.".into() }).unwrap();
-
-    // Step 2: Create a virtual environment using the bundled Python
-    emitter.emit("installation-log", LogPayload { message: "Creating virtual environment...".into() }).unwrap();
-    let venv_args = ["-m", "venv", env_path.to_str().unwrap()];
-    let output = shell.command(python_exe.to_str().unwrap())
-        .args(&venv_args)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(CommandError::Message(format!("Failed to create venv: {}", stderr)));
-    }
-
-    // Step 3: Install packages using pip from the new venv
-    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
-
-    let pip_exe = get_python_path()?; // This now points to the python in the venv
-
-    // For Windows ARM64, install a specific torch version and exclude unavailable packages
-    let pip_packages = vec![
-        "pyannote.audio", "pypandoc==1.15",
-        "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
-    ];
-
-    let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
-    pip_args.extend(pip_packages.iter());
-
-    let mut command = shell.command(pip_exe.to_str().unwrap());
-
-    let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-    let sidecars_path = resource_dir.join("sidecars");
-
-    if sidecars_path.exists() {
-        let existing_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
-        command = command.env("PATH", new_path.clone());
-        log::info!("Temporarily setting PATH to: {}", new_path);
-    }
-
-    let (mut rx_pip, _child_pip) = command
-        .args(&pip_args)
-        .env("PYTHONUNBUFFERED", "1")
-        .spawn()?;
-
-    while let Some(event) = rx_pip.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
-            },
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                if payload.code != Some(0) {
-                    return Err(CommandError::Message("Failed to install pip packages.".into()));
-                }
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Step 4: Download pandoc binaries
+    // Step 3: Download pandoc binaries
     emitter.emit("installation-log", LogPayload { message: "Downloading Pandoc binaries...".into() }).unwrap();
+    let python_path = get_python_path()?;
     let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
-    let output = shell.command(pip_exe.to_str().unwrap())
+    let output = shell.command(python_path.to_str().unwrap())
         .args(&pandoc_args)
         .output()
         .await?;
@@ -320,110 +272,136 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
-        // This is a soft fail, so we don't return an error
     } else {
         emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
     }
-
 
     emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
     emitter.emit("installation-finished", ()).unwrap();
     Ok(())
 }
 
+
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    // Fallback to checking the system PATH
-    log::info!("Checking for FFmpeg in system PATH or sidecar directory.");
+    log::info!("Checking for FFmpeg...");
+
+    // Step 1: Check for ffmpeg in the sidecar directory.
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let ffmpeg_exe_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+        let sidecar_ffmpeg_path = resource_dir.join("sidecars").join(ffmpeg_exe_name);
+
+        if sidecar_ffmpeg_path.exists() {
+            log::info!("Found FFmpeg in sidecar directory: {:?}", sidecar_ffmpeg_path);
+            return Ok(true);
+        }
+        log::info!("FFmpeg not found in sidecar directory. Will check system PATH.");
+    } else {
+        log::warn!("Could not resolve resource directory. Will check system PATH.");
+    }
+
+    // Step 2: Fallback to checking the system PATH.
+    log::info!("Checking for FFmpeg in system PATH.");
     let shell = app.shell();
     let command = if cfg!(windows) { "where" } else { "which" };
     let output = shell.command(command).arg("ffmpeg").output().await?;
+
+    if output.status.success() {
+        log::info!("Found FFmpeg in system PATH.");
+    } else {
+        log::info!("FFmpeg not found in system PATH.");
+    }
+
     Ok(output.status.success())
 }
 
 pub async fn check_python_libraries_installed<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     shell: &Shell<R>,
 ) -> Result<bool, CommandError> {
-    let env_path = get_env_path()?;
-    if !env_path.exists() {
-        log::info!("Python env does not exist at {:?}", env_path);
-        return Ok(false);
-    }
-
-    let python_path = get_python_path()?;
-    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
-
-    let packages = if target_triple == "aarch64-pc-windows-msvc" {
-        vec!["torch", "torchaudio", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"]
-    } else {
-        vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"]
-    };
-
-    for package in &packages {
-        log::info!("Checking for package: {}", package);
-        let import_name = match *package {
-            "pyannote.audio" => "pyannote",
-            _ => package,
-        };
-
-        let mut command = shell.command(python_path.to_str().unwrap());
-
-        if cfg!(target_os = "macos") {
-            let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-            let sidecars_path = resource_dir.join("sidecars");
-            
-            let mut dyld_paths = Vec::new();
-            if sidecars_path.exists() {
-                dyld_paths.push(sidecars_path.to_string_lossy().to_string());
-            }
-
-            let env_lib_path = env_path.join("lib");
-            if env_lib_path.exists() {
-                dyld_paths.push(env_lib_path.to_string_lossy().to_string());
-            }
-
-            if !dyld_paths.is_empty() {
-                let dyld_path_str = dyld_paths.join(":");
-                log::info!("Setting DYLD_LIBRARY_PATH to: {}", dyld_path_str);
-                command = command.env("DYLD_LIBRARY_PATH", dyld_path_str);
-            }
-        } else if cfg!(target_os = "linux") {
-            let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-            let sidecars_path = resource_dir.join("sidecars");
-
-            let mut ld_paths = Vec::new();
-            if sidecars_path.exists() {
-                ld_paths.push(sidecars_path.to_string_lossy().to_string());
-            }
-
-            let env_lib_path = env_path.join("lib");
-            if env_lib_path.exists() {
-                ld_paths.push(env_lib_path.to_string_lossy().to_string());
-            }
-
-            if !ld_paths.is_empty() {
-                let ld_path_str = ld_paths.join(":
-");
-                log::info!("Setting LD_LIBRARY_PATH to: {}", ld_path_str);
-                command = command.env("LD_LIBRARY_PATH", ld_path_str);
-            }
-        }
-        
-        let output = command
-            .args(&["-c", &format!("import {}", import_name)])
-            .output()
-            .await?;
-        
-        if !output.status.success() {
-            log::warn!("Package '{}' not found.", package);
-            log::warn!("Import check stdout: {}", String::from_utf8_lossy(&output.stdout));
-            log::warn!("Import check stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let result: Result<bool, CommandError> = async {
+        let env_path = get_env_path()?;
+        if !env_path.exists() {
+            log::info!("Python env does not exist at {:?}", env_path);
             return Ok(false);
         }
+
+        let python_path = get_python_path()?;
+
+        let packages_to_check = vec![
+            ("torch", "torch"),
+            ("torchaudio", "torchaudio"),
+            ("torchcodec", "torchcodec"),
+            ("pyannote.audio", "pyannote.audio"),
+            ("transformers", "transformers"),
+            ("sacremoses", "sacremoses"),
+            ("sentencepiece", "sentencepiece"),
+            ("pypandoc", "pypandoc"),
+        ];
+
+        // Prepare Windows PATH once, before the loop
+        let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+            let env_bin_path = env_path.join("Library").join("bin");
+            if env_bin_path.exists() {
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", env_bin_path.to_string_lossy(), existing_path);
+                log::info!("Prepared PATH for verification: {}", new_path);
+                Some(new_path)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        for (package_name, import_name) in &packages_to_check {
+            log::info!("Checking for package: {}", package_name);
+
+            let mut command = shell.command(python_path.to_str().unwrap());
+
+            // Apply the pre-calculated PATH for Windows
+            if let Some(path_val) = &windows_path_env {
+                command = command.env("PATH", path_val.clone());
+            } else if cfg!(target_os = "macos") {
+                let env_lib_path = env_path.join("lib");
+                if env_lib_path.exists() {
+                    let existing_path = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
+                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+                    command = command.env("DYLD_LIBRARY_PATH", new_path);
+                }
+            } else if cfg!(target_os = "linux") {
+                let env_lib_path = env_path.join("lib");
+                if env_lib_path.exists() {
+                    let existing_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+                    command = command.env("LD_LIBRARY_PATH", new_path);
+                }
+            }
+
+            let output = command
+                .args(&["-c", &format!("import {}", import_name)])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                log::warn!("Package '{}' not found.", package_name);
+                log::warn!("Import check stdout: {}", String::from_utf8_lossy(&output.stdout));
+                log::warn!("Import check stderr: {}", String::from_utf8_lossy(&output.stderr));
+                return Ok(false);
+            }
+        }
+
+        log::info!("All required Python libraries are installed.");
+        Ok(true)
+    }.await;
+
+    match result {
+        Ok(status) => Ok(status),
+        Err(e) => {
+            log::error!("Error checking python libraries: {}", e);
+            Err(CommandError::Message("Required libraries are not installed.".to_string()))
+        }
     }
-    log::info!("All required Python libraries are installed.");
-    Ok(true)
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -474,6 +452,10 @@ pub async fn delete_virtual_env() -> Result<(), String> {
         std::fs::remove_dir_all(&env_path)
             .map_err(|e| format!("Failed to delete environment: {}", e))?;
         log::info!("Environment deleted successfully.");
+
+        let mut config = read_config().map_err(|e| e.to_string())?;
+        config.verification_status.python_libraries_verified = false;
+        write_config(&config).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

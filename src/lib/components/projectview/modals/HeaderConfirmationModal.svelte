@@ -59,7 +59,7 @@
 		aria-labelledby="header-modal-title"
 	>
 		<div
-			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 		>
 			<h2 id="header-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
@@ -109,7 +109,7 @@
 					   class:dark:border-gray-600={!hasHeaders}
 					   class:bg-blue-50={hasHeaders}
 					   class:dark:bg-blue-900={hasHeaders} class:dark:bg-opacity-20={hasHeaders}>
-					<input type="radio" bind:group={hasHeaders} name="header-option" value={true} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+					<input type="radio" bind:group={hasHeaders} name="header-option" value={true} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" autocomplete="off" autocorrect="off">
 					<div class="ml-3 text-sm">
 						<p class="font-medium text-gray-900 dark:text-gray-200">Yes, the first row is the header.</p>
 						<p class="text-gray-500 dark:text-gray-400">The first row will be used as column titles.</p>
@@ -122,7 +122,7 @@
 					   class:dark:border-gray-600={hasHeaders}
 					   class:bg-blue-50={!hasHeaders}
 					   class:dark:bg-blue-900={!hasHeaders} class:dark:bg-opacity-20={!hasHeaders}>
-					<input type="radio" bind:group={hasHeaders} name="header-option" value={false} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+					<input type="radio" bind:group={hasHeaders} name="header-option" value={false} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" autocomplete="off" autocorrect="off">
 					<div class="ml-3 text-sm">
 						<p class="font-medium text-gray-900 dark:text-gray-200">No, this file does not have a header row.</p>
 						<p class="text-gray-500 dark:text-gray-400">Generic headers (A, B, C...) will be generated, and the first row will be treated as data.</p>

@@ -195,6 +195,7 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             file_name,
             file_path: file_path.clone(),
             file_type: map_asset_type_to_icon_type(&final_asset_type).to_string(),
+            original_doc_type: final_asset_type,
         };
 
         highlight_infos.push(HighlightInfo {
@@ -230,6 +231,116 @@ pub fn delete_tag(project_id: &str, tag_id: i64) -> Result<(), CommandError> {
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
     db_handler::delete_tag(&conn, project_id, tag_id)
+}
+
+#[tauri::command]
+pub fn remove_tag_globally(
+    project_id: &str,
+    tag_name: String,
+) -> Result<(), CommandError> {
+    info!("[Tags] Removing tag globally '{}' for project_id: {}", tag_name, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let all_annotations = db_handler::get_all_annotations_for_project(&conn, project_id)?;
+
+    for (path, json_str, doc_type) in all_annotations {
+        let mut highlights: Vec<serde_json::Value> = if doc_type == "table" {
+            serde_json::from_str(&json_str)
+                .or_else(|_| serde_json::from_str::<String>(&json_str).and_then(|s| serde_json::from_str(&s)))
+                .unwrap_or_else(|_| Vec::new())
+        } else {
+            serde_json::from_str(&json_str).unwrap_or_else(|_| Vec::new())
+        };
+
+        if highlights.is_empty() {
+            continue;
+        }
+
+        let mut was_modified = false;
+        for highlight in highlights.iter_mut() {
+            if let Some(h_obj) = highlight.as_object_mut() {
+                if let Some(tags_val) = h_obj.get_mut("tags") {
+                    if let Some(tags_arr) = tags_val.as_array_mut() {
+                        let initial_len = tags_arr.len();
+                        tags_arr.retain(|t| t.as_str() != Some(&tag_name));
+                        if tags_arr.len() < initial_len {
+                            was_modified = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if was_modified {
+            if doc_type == "table" {
+                let inner_json = serde_json::to_string(&highlights)?;
+                let outer_json = serde_json::to_string(&inner_json)?;
+                db_handler::save_table_styles(project_id, &path, &outer_json)?;
+            } else {
+                let new_json_string = serde_json::to_string(&highlights)?;
+                db_handler::save_annotations_to_db(project_id, &path, &new_json_string, &doc_type)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn rename_tag_in_highlights(
+    project_id: &str,
+    old_name: String,
+    new_name: String,
+) -> Result<(), CommandError> {
+    info!("[Tags] Renaming tag globally from '{}' to '{}' for project_id: {}", old_name, new_name, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let all_annotations = db_handler::get_all_annotations_for_project(&conn, project_id)?;
+
+    for (path, json_str, doc_type) in all_annotations {
+        let mut highlights: Vec<serde_json::Value> = if doc_type == "table" {
+            serde_json::from_str(&json_str)
+                .or_else(|_| serde_json::from_str::<String>(&json_str).and_then(|s| serde_json::from_str(&s)))
+                .unwrap_or_else(|_| Vec::new())
+        } else {
+            serde_json::from_str(&json_str).unwrap_or_else(|_| Vec::new())
+        };
+
+        if highlights.is_empty() {
+            continue;
+        }
+
+        let mut was_modified = false;
+        for highlight in highlights.iter_mut() {
+            if let Some(h_obj) = highlight.as_object_mut() {
+                if let Some(tags_val) = h_obj.get_mut("tags") {
+                    if let Some(tags_arr) = tags_val.as_array_mut() {
+                        for tag in tags_arr.iter_mut() {
+                            if tag.as_str() == Some(&old_name) {
+                                *tag = serde_json::Value::String(new_name.clone());
+                                was_modified = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if was_modified {
+            if doc_type == "table" {
+                let inner_json = serde_json::to_string(&highlights)?;
+                let outer_json = serde_json::to_string(&inner_json)?;
+                db_handler::save_table_styles(project_id, &path, &outer_json)?;
+            } else {
+                let new_json_string = serde_json::to_string(&highlights)?;
+                db_handler::save_annotations_to_db(project_id, &path, &new_json_string, &doc_type)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -272,13 +383,22 @@ pub fn remove_tag_from_highlight(
 
     if let Some(json_str) = json_string_opt {
         // 2. Parse and modify the JSON
-        let mut highlights: Vec<serde_json::Value> = match serde_json::from_str(&json_str) {
-            Ok(v) => v,
-            Err(e) => {
+        let mut highlights: Vec<serde_json::Value> = if doc_type == "table" {
+            // Table styles can be double-encoded JSON. Try parsing twice.
+            serde_json::from_str(&json_str)
+                .or_else(|_| serde_json::from_str::<String>(&json_str).and_then(|s| serde_json::from_str(&s)))
+                .map_err(|e| {
+                    let err_msg = format!("Failed to parse table styles JSON from DB for file {}: {}", file_path, e);
+                    error!("[Tags] {}", err_msg);
+                    CommandError::Message(err_msg)
+                })?
+        } else {
+            // Other document types are single-encoded.
+            serde_json::from_str(&json_str).map_err(|e| {
                 let err_msg = format!("Failed to parse JSON from DB for file {}: {}", file_path, e);
                 error!("[Tags] {}", err_msg);
-                return Err(CommandError::Message(err_msg));
-            }
+                CommandError::Message(err_msg)
+            })?
         };
 
         let mut was_modified = false;
@@ -301,7 +421,15 @@ pub fn remove_tag_from_highlight(
 
         // 3. Save the modified JSON back to the DB
         if was_modified {
-            let new_json_string = serde_json::to_string(&highlights)?;
+            let new_json_string = if doc_type == "table" {
+                // For tables, re-serialize the inner Vec<Value>, then serialize that string again
+                // to maintain the double-encoding.
+                let inner_json = serde_json::to_string(&highlights)?;
+                serde_json::to_string(&inner_json)?
+            } else {
+                serde_json::to_string(&highlights)?
+            };
+
             conn.execute(
                 &format!(
                     "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",

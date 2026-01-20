@@ -6,7 +6,8 @@
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
-    import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
+    import { allTags, updateTag, deleteTag, fetchAllTags } from '$lib/stores/tagStore.js';
+    import { refresher } from '$lib/stores/refresherStore.js';
     import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
@@ -16,6 +17,7 @@
 
     let unsubscribePanelState;
 
+    let unsubscribeRefresher;
     onMount(() => {
         unsubscribePanelState = panelStateStore.subscribe(state => {
             console.log('panelStateStore subscription triggered in TagsView.svelte', state);
@@ -27,11 +29,29 @@
                 console.log('tabulatorInstance is null or undefined');
             }
         });
+
+        let isFirstRun = true;
+        unsubscribeRefresher = refresher.subscribe(async () => {
+            if (isFirstRun) {
+                isFirstRun = false;
+                return;
+            }
+            await fetchAllTags();
+            // If the selected tag was deleted, clear the view
+            if (selectedTag && !$allTags.some(t => t.id === selectedTag.id)) {
+                selectedTag = null;
+                tagInfo = null;
+                description = '';
+            }
+        });
     });
 
     onDestroy(() => {
         if (unsubscribePanelState) {
             unsubscribePanelState();
+        }
+        if (unsubscribeRefresher) {
+            unsubscribeRefresher();
         }
     });
 
@@ -371,7 +391,7 @@
                 highlightId: item.id,
                 tagToRemove: selectedTag.name,
                 filePath: item.source.file_path,
-                docType: item.source.file_type,
+                docType: item.source.original_doc_type || item.source.file_type,
             });
             // Refresh the view
             await handleSelectTag(selectedTag);
@@ -441,7 +461,7 @@
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
                         <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary">
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" autocomplete="off" autocorrect="off">
                     </div>
                     <div class="flex-grow overflow-auto border border-gray-300 dark:border-border rounded-md" bind:this={tableContainer}>
                     </div>

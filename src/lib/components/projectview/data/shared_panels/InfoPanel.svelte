@@ -9,7 +9,7 @@
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
-    import GroupMultiSelect from '$lib/components/projectview/shared/GroupMultiSelect.svelte';
+    import MultiSelect from '$lib/components/projectview/shared/MultiSelect.svelte';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js';
 
     const EDIT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
@@ -308,6 +308,55 @@
             await message(`An unexpected error occurred: ${err.message || err}.`, { title: 'Error', type: 'error' });
             isEditing = true;
         }
+    }
+
+    async function handleGroupsUpdate(event) {
+        const newGroupNames = event.detail.options;
+        const oldGroupNames = fileAssignedGroups.map(g => g.name);
+
+        const addedGroupNames = newGroupNames.filter(name => !oldGroupNames.includes(name));
+        const removedGroupNames = oldGroupNames.filter(name => !newGroupNames.includes(name));
+
+        const projectId = get(project).id;
+
+        for (const name of addedGroupNames) {
+            const group = allProjectGroupsForPanel.find(g => g.name === name);
+            if (group) {
+                try {
+                    await invoke('add_file_to_existing_group', {
+                        projectId: projectId,
+                        groupId: group.id,
+                        fileAssetRelativePath: currentAssetRelativePathForGroups
+                    });
+                } catch (err) {
+                    console.error(`Error adding file to group '${name}':`, err);
+                    message(`Failed to add group '${name}': ${err}`, { title: 'Group Error', type: 'error' });
+                }
+            }
+        }
+
+        for (const name of removedGroupNames) {
+            const group = fileAssignedGroups.find(g => g.name === name);
+            if (group) {
+                try {
+                    await invoke('remove_file_from_group', {
+                        projectId: projectId,
+                        groupId: group.id,
+                        fileAssetRelativePath: currentAssetRelativePathForGroups
+                    });
+                } catch (err) {
+                    console.error(`Error removing file from group '${name}':`, err);
+                    message(`Failed to remove group '${name}': ${err}`, { title: 'Group Error', type: 'error' });
+                }
+            }
+        }
+
+        await fetchFileAssignedGroups(projectId, currentAssetRelativePathForGroups);
+    }
+
+    function handleCreateGroup() {
+        createGroupModalFileToAssign = currentAssetRelativePathForGroups;
+        isCreateGroupModalOpen = true;
     }
 
     export let itemPath = null;
@@ -609,18 +658,14 @@
                         {#if isLoadingFileGroups}
                             <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
                         {:else if isEditing}
-                            <GroupMultiSelect
-                                fileAssetRelativePath={currentAssetRelativePathForGroups}
-                                projectId={get(project).id}
-                                allProjectGroups={allProjectGroupsForPanel}
-                                initiallyAssignedGroups={fileAssignedGroups}
+                            <MultiSelect
+                                itemType="group"
+                                allOptions={allProjectGroupsForPanel.map(g => g.name)}
+                                assignedOptions={fileAssignedGroups.map(g => g.name)}
                                 isEditable={isEditing}
-                                on:groupsUpdated={() => fetchFileAssignedGroups(get(project).id, currentAssetRelativePathForGroups)}
-                                on:createNewGroup={() => {
-                                    createGroupModalFileToAssign = currentAssetRelativePathForGroups;
-                                    isCreateGroupModalOpen = true;
-                                }}
-                                on:error={(e) => message(e.detail, { title: 'Group Error', type: 'error' })}
+                                placeholder="No groups assigned."
+                                on:update={handleGroupsUpdate}
+                                on:create={handleCreateGroup}
                             />
                         {:else}
                             {#if fileAssignedGroups && fileAssignedGroups.length > 0}
@@ -676,7 +721,7 @@
                     {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
                             <div class="flex justify-between items-center mb-1">
-                                <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
+                                <label for={`custom-field-edit-${field.key}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
                                 <button
                                     on:click={() => handleDeleteCustomField(field.key)}
                                     title={`Delete '${field.name || field.key}' definition`}
@@ -688,14 +733,14 @@
                             {#if field.type === 'small_text'}
                                 <input
                                     type="text"
-                                    id={`custom-field-edit-${index}`}
+                                    id={`custom-field-edit-${field.key}`}
                                     bind:value={editableMetadata.customFields[index].value}
                                     class="mt-0.5 block w-full border border-gray-300 dark:border-dark-bg-tertiary focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-dark-bg-secondary dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
                                     placeholder={`Enter value for ${field.name || field.key}`}
                                     autocorrect="off" autocomplete="off"/>
                             {:else if field.type === 'long_text'}
                                 <textarea
-                                    id={`custom-field-edit-${index}`}
+                                    id={`custom-field-edit-${field.key}`}
                                     rows="3"
                                     bind:value={editableMetadata.customFields[index].value}
                                     class="mt-0.5 block w-full border border-gray-300 dark:border-dark-bg-tertiary focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-dark-bg-secondary dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"

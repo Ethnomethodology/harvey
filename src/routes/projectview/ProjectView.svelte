@@ -2,6 +2,7 @@
 <script>
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { get } from 'svelte/store';
 	import { emit, listen } from '@tauri-apps/api/event';
 	import {
@@ -22,7 +23,8 @@
         requestTranscription as requestTranscriptionService,
         refreshProjectFiles,
             silentlyRefreshProjectData,
-            loadTranscriptFile
+            loadTranscriptFile,
+            normalizePath
 	} from '$lib/services/projectService.js';
 	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
@@ -39,9 +41,9 @@
     import { fetchAllTags } from '$lib/stores/tagStore.js';
     import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
-    import { getCurrentWindow } from '@tauri-apps/api/window';
+    import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
-    import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+    import { configStatus } from '$lib/stores/configStatusStore.js';
 
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
@@ -71,16 +73,14 @@
     let importMenuX = 0;
     let importMenuY = 0;
     let closeImportMenuListener = null;
-    let appWindow = null;
-    let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
 	let showHeaderConfirmationModal = false;
 	let showConfigurationModal = false;
 	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
-    let unlistenTranslationComplete = null;
     let unlistenSelectMedia = null;
+    let unlistenCloseRequested = null;
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
@@ -118,9 +118,9 @@ async function onConfirmTranscriptionStart(event) {
 $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded;
 
 	onMount(async () => {
-        appWindow = getCurrentWindow();
+		const appWindow = getCurrentWindow();
+		await appWindow.maximize();
 		await loadTranscriptionConfigData(); // Load model/cloud config
-        await updateConfigStatus(); // Update config status on mount
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
 		if (xmlPath && xmlPath.trim() !== '') {
@@ -156,16 +156,6 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             }
         });
 
-        unlistenTranslationComplete = await listen('translation_job_completed', (event) => {
-            if (event.payload && event.payload.status === 'done') {
-                const { newTranscriptPath } = event.payload;
-                silentlyRefreshProjectData(get(project).xmlPath).then(() => {
-                    if (newTranscriptPath) {
-                        loadTranscriptFile(newTranscriptPath);
-                    }
-                });
-            }
-        });
 
 		await tick();
 		if (transcribeModalRef) { registerTranscribeModal(transcribeModalRef); }
@@ -179,11 +169,10 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             }
         });
 
-        if (appWindow) {
-            removeCloseRequestListener = await appWindow.listen('tauri://close-requested', handleWindowCloseRequest);
-        } else {
-            console.error('[ProjectView] Could not get appWindow reference to attach close listener.');
-        }
+		unlistenCloseRequested = await appWindow.onCloseRequested(async (event) => {
+			event.preventDefault();
+			await handleCloseProject();
+		});
 	});
 
 	onDestroy(() => {
@@ -191,23 +180,27 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
         if (unlistenTranscriptionComplete) {
             unlistenTranscriptionComplete();
         }
-        if (unlistenTranslationComplete) {
-            unlistenTranslationComplete();
-        }
         if (unlistenSelectMedia) {
             unlistenSelectMedia();
         }
+		if (unlistenCloseRequested) {
+			unlistenCloseRequested();
+		}
 		window.removeEventListener('keydown', handleGlobalKeys);
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
-        if (removeCloseRequestListener) {
-            removeCloseRequestListener();
-            removeCloseRequestListener = null;
-        }
 	});
 
 	
 
 	function handleGlobalKeys(event) {
+        if (event.key === 'Backspace') {
+            const activeElement = document.activeElement;
+            if (activeElement.tagName.toLowerCase() !== 'input' && activeElement.tagName.toLowerCase() !== 'textarea' && !activeElement.isContentEditable) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         const proj = get(project);
         const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -364,35 +357,39 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
     function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } } 
     function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for conversion action: ${action}`); hideConversionPrompt(); } }
 
-    async function handleWindowCloseRequest() {
-        if (handlingCloseRequest) return;
-        handlingCloseRequest = true;
-        let canProceed = false;
-        try {
-            if (selectedTab === 'data') {
-                canProceed = await checkUnsavedChangesThenProceed(null, "closing the project window");
-            } else if (selectedTab === 'transcriptions') {
-                if (transcriptionsViewRef) {
-                    try {
-                        // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
-                        await transcriptionsViewRef.handleToggleEditMode();
-                        canProceed = true;
-                    } catch (e) {
-                        // If handleToggleEditMode throws, it means the user cancelled the save/discard.
-                        canProceed = false;
-                    }
-                } else {
-                    canProceed = true; // No transcriptionsViewRef, so no dirty state to manage
-                }
-            } else { canProceed = true; }
-        } catch (error) { canProceed = false; }
-        if (canProceed) {
-            if (removeCloseRequestListener) { removeCloseRequestListener(); removeCloseRequestListener = null; }
-            if (appWindow) { try { await appWindow.close(); } catch (error) { await message(`Error closing project window: ${error}`, {title: "Error", type: "error"});}}
-            else { await message("Internal error: Could not get window reference to close.", {title: "Error", type: "error"});}
-        }
-        handlingCloseRequest = false;
-    }
+    async function handleCloseProject() {
+		if (handlingCloseRequest) return;
+		handlingCloseRequest = true;
+		let canProceed = false;
+		try {
+			if (selectedTab === 'data') {
+				canProceed = await checkUnsavedChangesThenProceed(null, 'closing the project');
+			} else if (selectedTab === 'transcriptions') {
+				if (transcriptionsViewRef) {
+					try {
+						await transcriptionsViewRef.handleToggleEditMode();
+						canProceed = true;
+					} catch (e) {
+						canProceed = false;
+					}
+				} else {
+					canProceed = true;
+				}
+			} else {
+				canProceed = true;
+			}
+		} catch (error) {
+			canProceed = false;
+		}
+
+		if (canProceed) {
+			const appWindow = getCurrentWindow();
+			await appWindow.unmaximize();
+			await appWindow.setSize(new LogicalSize(800, 600));
+			await goto('/');
+		}
+		handlingCloseRequest = false;
+	}
 
 
 	async function handleTabClick(tabName) {
@@ -407,7 +404,6 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             }
             return;
         }
-        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
 
         let canProceed = true;
         // Check for unsaved changes in the transcriptions tab before switching away
@@ -420,6 +416,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 // Set up callbacks for the modal actions
                 onUnsavedSave: async () => {
                     hideUnsavedChangesPrompt();
+                    project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
                     try {
                         await transcriptionsViewRef.handleSaveTranscript();
                         // After successful save, proceed with tab switch
@@ -432,6 +429,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 },
                 onUnsavedDiscard: async () => {
                     hideUnsavedChangesPrompt();
+                    project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
                     // Discard changes and proceed with tab switch
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
                     await proceedTabSwitch(tabName);
@@ -454,6 +452,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             return;
         }
 
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
         // If no unsaved changes or user chose to save/discard, proceed
         await proceedTabSwitch(tabName);
     }
@@ -562,7 +561,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 
         if (tabName === 'data' && path) {
             const proj = get(project);
-            const isImportedTranscript = proj.importedTranscriptFiles.some(f => `${proj.baseDirectory}/${f.relativePath}` === path);
+            const isImportedTranscript = proj.importedTranscriptFiles.some(f => normalizePath(`${proj.baseDirectory}/${f.relativePath}`) === path);
             const isMediaNote = proj.files.some(f => f.path === path && (f.file_type === 'media'));
             if (isImportedTranscript) prepareImportedTranscriptView(path);
             else if (isMediaNote) prepareMediaNoteView(path);
@@ -837,6 +836,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 				tableViewRef={dataViewRef?.tableViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
+                on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'transcriptions'}
 			<TranscriptionsTopBar
@@ -844,9 +844,10 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 on:requestImport={handleImportMediaInSidebar}
 				on:cancelTranslationRequest={handleCancelTranslationRequest}
 				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
+                on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'tags'}
-			<SimpleTopBar on:requestImport={handleImportMediaInSidebar} />
+			<SimpleTopBar on:requestImport={handleImportMediaInSidebar} on:close={handleCloseProject} />
 		{/if}
 	</div>
 

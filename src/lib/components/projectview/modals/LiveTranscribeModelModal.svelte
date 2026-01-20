@@ -52,7 +52,7 @@
 
 {#if showModal}
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
+    <div class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md">
         <h2 class="text-lg font-semibold mb-4">Live Transcription Settings</h2>
 
         <div class="mb-4">
@@ -75,7 +75,7 @@
 
         <div class="mb-4">
             <label class="flex items-center">
-                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700" autocomplete="off" autocorrect="off">
                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Save transcription audio</span>
             </label>
         </div>

@@ -213,6 +213,8 @@
 					step="1"
 					bind:value={localCount}
 					class="input-field w-20 text-center"
+					autocomplete="off"
+					autocorrect="off"
 				/>
 				<button
 					type="button"
@@ -229,7 +231,7 @@
 				{#if renderedCount > 0}
 					<h3 class="text-sm font-medium text-gray-700 mb-2">Speaker Names:</h3>
 					<label class="inline-flex items-center space-x-2 mb-3">
-					  <input type="checkbox" bind:checked={addSecondNames} class="form-checkbox" />
+					  <input type="checkbox" bind:checked={addSecondNames} class="form-checkbox" autocomplete="off" autocorrect="off" />
 					  <span class="text-sm text-gray-700">Add names in 2nd language</span>
 					</label>
 					<div class="space-y-2">
@@ -243,6 +245,8 @@
 									bind:value={localNames[i]}
 									placeholder={`Speaker ${i + 1}`}
 									class="input-field flex-grow min-w-0"
+									autocomplete="off"
+									autocorrect="off"
 								/>
 								{#if addSecondNames}
 								  <input
@@ -250,6 +254,8 @@
 								  									  bind:value={localSecondNames[i]}
 								  									  placeholder={`Speaker ${i + 1} (2nd lang)`}
 								  									  class="input-field flex-grow min-w-0"
+																	  autocomplete="off"
+																	  autocorrect="off"
 								  								  />								{/if}
 							</div>
 						{/each}

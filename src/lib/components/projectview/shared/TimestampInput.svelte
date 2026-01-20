@@ -81,6 +81,8 @@
     on:keydown={handleKeydown}
     aria-label="Timestamp"
     placeholder="00:00.000"
+    autocomplete="off"
+    autocorrect="off"
 />
 
 <style>

@@ -1,16 +1,48 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
     import { get } from 'svelte/store';
-    import { onDestroy } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
+    import { refresher } from '$lib/stores/refresherStore.js';
 
     import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
-    import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
-    import { allTags as allTagsStore, addTag } from '$lib/stores/tagStore.js';
+    import { saveImageAnnotations, saveTableHighlights, loadHighlightsForFile } from '$lib/services/projectService.js';
+    import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
     export let itemPath = null;
     export let itemType = null;
+	export let refreshKey = null;
+
+    let unsubscribeRefresher;
+
+    onMount(() => {
+        let isFirstRun = true;
+        unsubscribeRefresher = refresher.subscribe(async () => {
+            if (isFirstRun) {
+                isFirstRun = false;
+                return;
+            }
+            if (itemPath) {
+                console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
+                await loadHighlightsForFile(itemPath, itemType);
+                await fetchAllTags(); // Also refresh the list of all available tags
+            }
+        });
+    });
+
+	$: if (refreshKey) {
+		if (itemPath) {
+			loadHighlightsForFile(itemPath, itemType);
+			fetchAllTags();
+		}
+	}
+
+    onDestroy(() => {
+        if (unsubscribeRefresher) {
+            unsubscribeRefresher();
+        }
+    });
 
     let showCommentsModal = false;
     let selectedHighlightId = null;

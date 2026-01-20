@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 use bzip2::read::BzDecoder;
 use tar::Archive;
-use serde_json::Value;
-use flate2::read::GzDecoder;
+
+
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -52,12 +52,11 @@ fn main() -> Result<()> {
         }
         fs::create_dir_all(&sidecars_dir)?;
 
-        let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
-        download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
-
-        if target_platform == "windows-arm64" {
-            println!("cargo:warning=Downloading ffmpeg for windows-arm64...");
-            download_and_unzip("ffmpeg-win-arm64", &sidecars_dir)?;
+        if target_triple.contains("windows") {
+            download_whisper_for_windows(&sidecars_dir)?;
+        } else {
+            let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
+            download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
         }
 
         rename_sidecar_binaries_for_tauri(&sidecars_dir)?;
@@ -67,11 +66,7 @@ fn main() -> Result<()> {
         println!("cargo:info=Skipping sidecar download: sidecars directory already exists for dev build.");
     }
 
-    if target_triple == "aarch64-pc-windows-msvc" {
-        bundle_python_standalone()?;
-    } else {
-        bundle_micromamba()?;
-    }
+    bundle_micromamba()?;
 
     // --- Copy Python scripts to target/debug/scripts for development (existing logic) ---
     let scripts_source_dir = manifest_dir.join("scripts");
@@ -125,15 +120,15 @@ fn bundle_micromamba() -> Result<()> {
         "aarch64-apple-darwin" => "osx-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win-64",
         "x86_64-unknown-linux-gnu" => "linux-64",
-        "aarch64-pc-windows-msvc" => {
-            println!("cargo:warning=Micromamba does not support windows-arm64 yet. Skipping download.");
-            return Ok(());
-        }
+        // For Windows ARM64, we download the x64 binary and run it via emulation.
+        "aarch64-pc-windows-msvc" => "win-64", 
         _ => anyhow::bail!("Unsupported target triple for Micromamba: {}", target_triple),
     };
 
     let generic_binary_name = "micromamba";
     let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
+
+    // The binary is named after the target triple, which is what Tauri expects.
     let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, target_triple, exe_suffix));
 
     if platform_path.exists() {
@@ -160,8 +155,9 @@ fn bundle_micromamba() -> Result<()> {
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
+        // The binary inside the tarball is named "micromamba.exe" on Windows
         if let Some(file_name) = path.file_name() {
-            if file_name.to_string_lossy() == "micromamba" {
+            if file_name.to_string_lossy().starts_with("micromamba") {
                 let mut decompressed_bytes = Vec::new();
                 entry.read_to_end(&mut decompressed_bytes)?;
                 fs::write(&platform_path, &decompressed_bytes)?;
@@ -186,6 +182,7 @@ fn get_target_platform_string() -> Result<String> {
         "x86_64-apple-darwin" => "macos-x86_64",
         "aarch64-apple-darwin" => "macos-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "windows-x86_64",
+        // For Windows ARM64, we use the x64 sidecars and run them via emulation.
         "aarch64-pc-windows-msvc" => "windows-arm64",
         "x86_64-unknown-linux-gnu" => "linux-x86_64",
         "aarch64-unknown-linux-gnu" => "linux-arm64",
@@ -202,11 +199,11 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
         ""
     };
 
-    let mut binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
+    let binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
 
-    if target_triple == "aarch64-pc-windows-msvc" {
-        binaries_to_rename.push("ffmpeg");
-    }
+    // if target_triple == "aarch64-pc-windows-msvc" {
+    //     binaries_to_rename.push("ffmpeg");
+    // }
 
     for bin_name in binaries_to_rename {
         let old_name = format!("{}{}", bin_name, exe_suffix);
@@ -232,76 +229,6 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
             );
         }
     }
-
-    Ok(())
-}
-
-
-
-fn bundle_python_standalone() -> Result<()> {
-    const PYTHON_VERSION: &str = "3.12.12";
-    const PYTHON_BUILD_TAG: &str = "20251010";
-
-    println!("cargo:info=Bundling standalone Python for Windows ARM64...");
-
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let python_dir = manifest_dir.join("python");
-    let tmp_tar_path = manifest_dir.join("python-bundle.tar.gz");
-
-    // --- Clean up previous builds ---
-    if python_dir.exists() {
-        fs::remove_dir_all(&python_dir)?;
-    }
-    if tmp_tar_path.exists() {
-        fs::remove_file(&tmp_tar_path)?;
-    }
-
-    // --- Find Download URL via GitHub API ---
-    let api_url = format!(
-        "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/{}",
-        PYTHON_BUILD_TAG
-    );
-
-    println!("cargo:info=Querying GitHub API: {}", api_url);
-
-    let agent = ureq::builder().build();
-    let response = agent.get(&api_url).call()?;
-    let json: Value = serde_json::from_reader(response.into_reader())?;
-
-    let assets = json["assets"].as_array().context("No assets found in release")?;
-    let target_platform_str = "aarch64-pc-windows-msvc";
-
-    let download_url = assets
-        .iter()
-        .find_map(|asset| {
-            let name = asset["name"].as_str()?;
-            if name.contains(PYTHON_VERSION) && name.contains(target_platform_str) && name.ends_with("install_only.tar.gz") {
-                asset["browser_download_url"].as_str().map(String::from)
-            } else {
-                None
-            }
-        })
-        .context("Could not find a matching Python bundle URL from the GitHub API.")?;
-
-    println!("cargo:info=Found download URL: {}", download_url);
-
-    // --- Download and Extract Python ---
-    println!("cargo:info=Downloading Python bundle...");
-    let download_response = agent.get(&download_url).call()?;
-    let mut bytes = Vec::new();
-    download_response.into_reader().read_to_end(&mut bytes)?;
-    fs::write(&tmp_tar_path, &bytes)?;
-
-    println!("cargo:info=Extracting Python bundle...");
-    let tar_gz = File::open(&tmp_tar_path)?;
-    let tar = GzDecoder::new(tar_gz);
-    let mut archive = Archive::new(tar);
-    archive.unpack(&manifest_dir)?; // Unpacks into a 'python' directory
-
-    // --- Clean up downloaded tarball ---
-    fs::remove_file(&tmp_tar_path)?;
-
-    println!("cargo:info=Self-contained Python has been bundled into {}", python_dir.display());
 
     Ok(())
 }
@@ -484,43 +411,43 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
 
 
 
-    // --- Post-extraction adjustments for FFmpeg on Windows ARM64 ---
+    // --- Post-extraction adjustments for FFmpeg on Windows ---
 
 
-    if asset_name == "ffmpeg-win-arm64" {
+    // if asset_name == "ffmpeg-win-arm64" || asset_name == "ffmpeg-windows-x86_64" {
 
 
-        let bin_dir = dest_dir.join("bin");
+    //     let bin_dir = dest_dir.join("bin");
 
 
-        if bin_dir.exists() && bin_dir.is_dir() {
+    //     if bin_dir.exists() && bin_dir.is_dir() {
 
 
-            for entry in fs::read_dir(bin_dir)? {
+    //         for entry in fs::read_dir(bin_dir)? {
 
 
-                let entry = entry?;
+    //             let entry = entry?;
 
 
-                let src_path = entry.path();
+    //             let src_path = entry.path();
 
 
-                let dest_path = dest_dir.join(src_path.file_name().unwrap());
+    //             let dest_path = dest_dir.join(src_path.file_name().unwrap());
 
 
-                fs::rename(&src_path, &dest_path)?;
+    //             fs::rename(&src_path, &dest_path)?;
 
 
-            }
+    //         }
 
 
-            fs::remove_dir_all(dest_dir.join("bin"))?;
+    //         fs::remove_dir_all(dest_dir.join("bin"))?;
 
 
-        }
+    //     }
 
 
-    }
+    // }
 
 
 
@@ -535,4 +462,65 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
 
         
 
-    
+
+fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
+    let asset_name = "whisper-blas-bin-x64.zip";
+    let url = format!(
+        "https://github.com/ggml-org/whisper.cpp/releases/latest/download/{}",
+        asset_name
+    );
+
+    println!("cargo:info=Downloading {} for Windows from {}", asset_name, url);
+
+    let agent = ureq::builder().build();
+    let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
+
+    if response.status() != 200 {
+        anyhow::bail!("Failed to download from {}: HTTP {}", url, response.status());
+    }
+
+    let mut bytes = Vec::new();
+    response.into_reader().read_to_end(&mut bytes)?;
+
+    let cursor = io::Cursor::new(bytes);
+    let mut archive = ZipArchive::new(cursor)?;
+
+    let temp_extract_dir = dest_dir.join("_temp_extract");
+    if temp_extract_dir.exists() {
+        fs::remove_dir_all(&temp_extract_dir)?;
+    }
+    fs::create_dir_all(&temp_extract_dir)?;
+
+    archive.extract(&temp_extract_dir)?;
+
+    // The files are inside a "Release" subdirectory in the archive.
+    let files_to_copy = vec![
+        "whisper-cli.exe",
+        "whisper-stream.exe",
+        "SDL2.dll",
+    ];
+
+    let release_dir = temp_extract_dir.join("Release");
+
+    if !release_dir.exists() {
+        anyhow::bail!("'Release' directory not found in the downloaded archive.");
+    }
+
+    for file_name in files_to_copy {
+        let src_path = release_dir.join(file_name);
+        let dest_path = dest_dir.join(file_name);
+
+        if src_path.exists() {
+            fs::rename(&src_path, &dest_path).with_context(|| {
+                format!("Failed to move {} to {}", src_path.display(), dest_path.display())
+            })?;
+            println!("cargo:info=Copied {} to {}", src_path.display(), dest_path.display());
+        } else {
+            anyhow::bail!("Expected file {} not found in the archive's 'Release' directory.", src_path.display());
+        }
+    }
+
+    fs::remove_dir_all(&temp_extract_dir)?;
+
+    Ok(())
+}

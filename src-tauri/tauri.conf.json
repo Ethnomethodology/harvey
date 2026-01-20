@@ -45,7 +45,8 @@
     ],
     "externalBin": [
       "sidecars/whisper-cli",
-      "sidecars/whisper-stream"
+      "sidecars/whisper-stream",
+      "binaries/micromamba"
     ],
     "licenseFile": "../LICENSE.md",
     "license": "MIT",

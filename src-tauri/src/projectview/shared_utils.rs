@@ -16,6 +16,22 @@ impl From<StripPrefixError> for CommandError {
 }
 
 
+/// Normalizes a path for consistent comparison, especially on Windows.
+/// Removes the `\\?\\` prefix and converts all backslashes to forward slashes.
+pub fn normalize_path_for_comparison(path: &Path) -> PathBuf {
+    let mut path_str = path.to_string_lossy().into_owned();
+
+    // Remove Windows long path prefix if present
+    if path_str.starts_with("\\\\?\\") {
+        path_str = path_str[4..].to_string();
+    }
+
+    // Convert all backslashes to forward slashes
+    path_str = path_str.replace('\\', "/");
+
+    PathBuf::from(path_str)
+}
+
 pub fn get_project_xml_path_from_item(item_path: &Path) -> Result<PathBuf, CommandError> {
     info!( "[get_project_xml_path] ENTER Function. Starting search from item: {}", item_path.display() );
     let mut current_path = item_path;

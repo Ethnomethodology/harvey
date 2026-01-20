@@ -60,6 +60,8 @@
             bind:value={title}
             class="w-full px-2 py-1 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter title"
+            autocomplete="off"
+            autocorrect="off"
         />
     </div>
 
@@ -70,6 +72,8 @@
             bind:value={description}
             class="w-full px-2 py-1 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 h-16 resize-y"
             placeholder="Enter description"
+            autocomplete="off"
+            autocorrect="off"
         ></textarea>
     </div>
 

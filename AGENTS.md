@@ -40,15 +40,28 @@ Core dependencies are installed automatically by the application on first launch
 
 No manual Python setup is required by the user for most platforms, as the application handles the creation and management of this environment using a bundled version of Micromamba.
 
-### Special Case: Windows ARM64
+## 3. Development Setup
 
-Due to the lack of Micromamba support for Windows on ARM64, the setup for this platform is different:
+Before running or building the application, install the frontend dependencies:
 
-1.  **Python Environment**: The build process (`build.rs`) automatically downloads and bundles a standalone version of Python from `astral-sh/python-build-standalone`. At runtime, the application creates a standard virtual environment from this bundled Python.
-2.  **FFmpeg**: This dependency is **not** bundled. The user must manually download and install FFmpeg from the official website and ensure that the `ffmpeg.exe` binary is available in their system's `PATH`. The application will detect if it's missing and prompt the user to install it.
-3.  **Python Libraries**: The list of Python libraries for Windows ARM64 is slightly different. Notably, it uses `pypandoc_binary` instead of `pypandoc`, and the `torch` libraries are installed without version constraints to pull the correct platform-specific wheels. This is all handled automatically by the application.
+```bash
+npm install
+```
 
-## 3. Building the Application
+## 4. Pre-Commit Checks
+
+Before submitting any changes, ensure the following checks pass:
+
+1.  **Svelte Check**:
+    ```bash
+    npm run check
+    ```
+2.  **Cargo Check**:
+    ```bash
+    cd src-tauri && cargo check
+    ```
+
+## 5. Building the Application
 
 After installing the dependencies inside the build environment, you can build the Tauri application:
 
@@ -56,7 +69,7 @@ After installing the dependencies inside the build environment, you can build th
 npm run tauri build
 ```
 
-## 3. Troubleshooting
+## 6. Troubleshooting
 
 If the build fails with an error like "The system library ... was not found," it almost always means the dependency was not installed correctly inside the build environment.
 

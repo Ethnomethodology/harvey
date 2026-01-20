@@ -25,4 +25,4 @@ pub mod tag_handler;
 pub mod utils;
 
 // Re-export specific commands if needed, for now, direct paths are used in lib.rs
-// Example: pub use core_commands::load_project_data;
+pub use table_handler::create_new_table;

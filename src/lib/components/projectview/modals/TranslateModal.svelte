@@ -9,6 +9,7 @@
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 
 	export let availableTranscripts = [];
+	export let activeTranscriptPath = null;
 
 	const dispatch = createEventDispatcher();
 
@@ -40,7 +41,11 @@
 			value: t.relativePath,
 			label: t.name || t.relativePath
 		}));
-		if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
+
+		const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
+		if (activeTranscript) {
+			selectedTranscript = activeTranscript.relativePath;
+		} else if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
 			selectedTranscript = availableTranscripts[0].relativePath;
 		}
 	} else {
@@ -131,7 +136,7 @@
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
             role="document"
             tabindex="-1"
             on:click|stopPropagation

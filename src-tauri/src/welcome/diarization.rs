@@ -1,6 +1,7 @@
 // src-tauri/src/welcome/diarization.rs
 use super::python_env::get_python_path;
 use std::fs;
+use crate::welcome::config::{read_config, write_config};
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
@@ -212,6 +213,7 @@ pub async fn delete_diarization_model() -> Result<(), String> {
     let entries = fs::read_dir(&hf_hub_path)
         .map_err(|e| format!("Failed to read HuggingFace hub directory: {}", e))?;
 
+    let mut model_deleted = false;
     for entry in entries {
         if let Ok(entry) = entry {
             if let Some(file_name) = entry.file_name().to_str() {
@@ -220,10 +222,18 @@ pub async fn delete_diarization_model() -> Result<(), String> {
                     if let Err(e) = fs::remove_dir_all(entry.path()) {
                         log::error!("Failed to delete directory '{:?}': {}", file_name, e);
                         // Don't return early, try to delete other matches
+                    } else {
+                        model_deleted = true;
                     }
                 }
             }
         }
+    }
+
+    if model_deleted {
+        let mut config = read_config().map_err(|e| e.to_string())?;
+        config.verification_status.diarization_model_verified = false;
+        write_config(&config).map_err(|e| e.to_string())?;
     }
 
     Ok(())

@@ -12,7 +12,7 @@
     import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
     import { project } from '$lib/stores/projectStore.js';
     import { page } from '$app/stores';
-    import { loadProjectDataAndUpdateStore } from '$lib/services/projectService.js';
+    import { loadProjectDataAndUpdateStore, normalizePath } from '$lib/services/projectService.js';
     import { tick } from 'svelte';
     import { Loader } from 'lucide-svelte'; // Import Loader component
   
@@ -32,8 +32,9 @@
       const xmlPathFromUrl = $page.url.searchParams.get('xmlPath');
       if (xmlPathFromUrl && xmlPathFromUrl.trim() !== '') {
           try {
-              console.info(`[+layout.svelte] Attempting to load project data for: ${xmlPathFromUrl}`); // INFO
-              await loadProjectDataAndUpdateStore(xmlPathFromUrl);
+              const normalizedXmlPath = normalizePath(xmlPathFromUrl);
+              console.info(`[+layout.svelte] Attempting to load project data for: ${normalizedXmlPath}`); // INFO
+              await loadProjectDataAndUpdateStore(normalizedXmlPath);
               console.info(`[+layout.svelte] Project data loading initiated for: ${xmlPathFromUrl}`); // INFO
   
               await tick(); // Allow store updates to process

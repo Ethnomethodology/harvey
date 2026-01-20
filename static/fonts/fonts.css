@@ -1,0 +1,28 @@
+/* static/fonts/fonts.css */
+
+/* Inter Regular */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./inter-v20-latin-400.ttf') format('truetype');
+}
+
+/* Inter Medium */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./inter-v20-latin-500.ttf') format('truetype');
+}
+
+/* Inter Semi-bold */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./inter-v20-latin-600.ttf') format('truetype');
+}
