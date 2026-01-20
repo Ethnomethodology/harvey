@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, Emitter};
-use tauri_plugin_shell::ShellExt;
 use std::fs;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use serde_json::{Value, json};
 use log::{info, error, debug, warn};
 use super::transcription_commands::save_transcript_json;
 use crate::welcome::config::{read_config, get_default_download_location, CommandError};
-use crate::welcome::python_env::get_python_path;
 use dashmap::DashMap;
 use crate::TranslationCancellationState;
+use crate::transcription::TranslationEngine;
+use crate::transcription::helsinki::HelsinkiTranslationEngine;
 
 
 // --- CancelGuard for ensuring cleanup ---
@@ -232,107 +232,17 @@ async fn run_translation_process<R: Runtime>(
 
     emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
 
-    let python_path = get_python_path()?;
-    let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::from(format!("Failed to resolve script path: {}", e)))?;
-    let input_json = serde_json::to_string(&texts_to_translate)?;
-
-    let python_args: Vec<String> = vec![
-        script_path.to_string_lossy().to_string(),
-        "--model-path".to_string(),
-        model_path.to_string_lossy().to_string(),
-        "--text".to_string(),
-        input_json,
-    ];
-
-    let shell_scope = app_handle.shell();
-    let (mut rx, child_process) = shell_scope.command(python_path.to_string_lossy().to_string())
-        .args(python_args)
-        .spawn()
-        .map_err(|e| CommandError::from(format!("Failed to spawn Python script: {}", e)))?;
-
-    let shared_child = Arc::new(tokio::sync::Mutex::new(Some(child_process)));
-    let child_pid = shared_child.lock().await.as_ref().map(|c| c.pid());
-    info!("[Translate Python CMD][{}] Spawned Python process (PID: {:?})", job_id, child_pid);
-
-    let mut python_stdout = Vec::new();
-    let mut python_stderr = Vec::new();
-    let mut python_exit_code: Option<i32> = None;
-    let mut python_error: Option<String> = None;
-    let mut cancellation_initiated = false;
-
-    loop {
-        tokio::select! {
-            biased;
-            maybe_event = rx.recv() => {
-                match maybe_event {
-                    Some(event) => match event {
-                        tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                            debug!("[Translate Python CMD][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
-                            python_stdout.extend_from_slice(&line);
-                        },
-                        tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                            debug!("[Translate Python CMD][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
-                            python_stderr.extend_from_slice(&line);
-                        },
-                        tauri_plugin_shell::process::CommandEvent::Error(msg) => {
-                            error!("[Translate Python CMD][error][{}] {}", job_id, msg);
-                            python_error = Some(msg);
-                            break;
-                        },
-                        tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                            info!("[Translate Python CMD][term][{}] Process terminated. Code: {:?}, Signal: {:?}", job_id, payload.code, payload.signal);
-                            python_exit_code = payload.code;
-                            if payload.signal.is_some() && python_exit_code.is_none() {
-                                python_exit_code = Some(-1); // Indicate abnormal termination
-                            }
-                            break;
-                        },
-                        _ => {}
-                    },
-                    None => {
-                        if python_exit_code.is_none() && python_error.is_none() {
-                            warn!("[Translate Python CMD][{}] Event channel closed unexpectedly before termination signal.", job_id);
-                            python_exit_code = Some(-1);
-                        }
-                        break;
-                    }
-                }
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
-                if cancel_flag.load(AtomicOrdering::Relaxed) && !cancellation_initiated {
-                    debug!("[Translate Python CMD][{}] Cancellation flag is true. Attempting to kill Python process.", job_id);
-                    if let Some(child_to_kill) = shared_child.lock().await.take() {
-                        let _ = child_to_kill.kill();
-                        debug!("[Translate Python CMD][{}] child.kill() called.", job_id);
-                    }
-                    cancellation_initiated = true;
-                    debug!("[Translate Python CMD][{}] cancellation_initiated set to true.", job_id);
-                    // Do not return here, continue the loop to wait for Terminated event
-                }
-            }
-        }
-    }
-
-    debug!("[Translate Python CMD][{}] Loop broken. Checking cancellation status.", job_id);
-    if cancellation_initiated {
-        warn!("[Translate Python CMD][{}] Process terminated due to cancellation. Returning cancellation error.", job_id);
-        return Err(CommandError::from(format!("Translation cancelled for job {}.", job_id)));
-    }
-
-    if python_error.is_some() || python_exit_code != Some(0) {
-        let stderr_output = String::from_utf8_lossy(&python_stderr);
-        error!("[Translate Python CMD][{}] Python script failed. Code: {:?}, Error: {:?}\nStderr:\n{}", job_id, python_exit_code, python_error, stderr_output);
-        return Err(CommandError::from(format!("Translation script failed. Code: {:?}. Error: {}. Stderr: {}", python_exit_code, python_error.unwrap_or_default(), stderr_output)));
-    }
-
-    let translated_output = String::from_utf8_lossy(&python_stdout);
+    let engine = HelsinkiTranslationEngine::new(app_handle.clone());
+    let translated_texts = engine.translate(
+        texts_to_translate.clone(),
+        &model_path,
+        &job_id,
+        cancel_flag.clone()
+    ).await?;
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
 
     emit_translation_progress(&app_handle, &job_id, 80.0, "Processing results...");
-
-    let translated_texts: Vec<String> = serde_json::from_str(&translated_output)?;
 
     if translated_texts.len() != texts_to_translate.len() {
         return Err(CommandError::from("Translation count mismatch."));

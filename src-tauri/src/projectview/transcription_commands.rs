@@ -28,6 +28,8 @@ use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
 use crate::welcome::python_env::get_python_path;
+use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
+use crate::transcription::whisper_cpp::WhisperCppEngine;
 
 // Helper to read the HuggingFace token
 fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String> {
@@ -1780,21 +1782,7 @@ pub(crate) fn find_model_file_cmd(model_dir: &Path) -> Result<PathBuf, CommandEr
 // Adapted from local_handler/transcription.rs
 // Made synchronous as read_config and find_model_file_cmd are sync.
 
-// --- Structs specific to parsing whisper output (can be kept local to where they are used) ---
-#[derive(serde::Deserialize, Debug)]
-struct WhisperJsonOutput {
-    transcription: Option<Vec<WhisperJsonSegment>>,
-}
-#[derive(serde::Deserialize, Debug)]
-struct WhisperJsonSegment {
-    timestamps: WhisperJsonTimestamps,
-    text: String,
-}
-#[derive(serde::Deserialize, Debug)]
-struct WhisperJsonTimestamps {
-    from: String,
-    to: String,
-}
+
 
 // --- Struct specific to parsing RTTM output (can be kept local) ---
 #[derive(Debug, Clone)]
@@ -1829,195 +1817,9 @@ pub(crate) fn resolve_whisper_model_path_cmd(
 
 // --- START: Adapted Helper Functions for execute_transcription_pass ---
 
-// Adapted from local_handler/transcription.rs
-async fn run_whisper_cpp_sidecar_cmd<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    media_path: &str, // Should be wav_media_path.to_string_lossy().to_string()
-    whisper_model_path_str: &str,
-    language: &str,
-    job_id: &str,
-    output_base_for_whisper: &str,
-    expected_whisper_json_output_path: &Path,
-    is_translation_pass: bool,
-    cancel_flag: Arc<AtomicBool>, // New argument
-) -> Result<PathBuf, CommandError> {
-    let sidecar_name = "whisper-cli";
-    let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
-    // debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass); // Original debug
 
-    let mut args: Vec<String> = vec![
-        "-m".into(), whisper_model_path_str.to_string(),
-        "-f".into(), media_path.to_string(),
-        "-l".into(), lang_arg.to_string(),
-        "-oj".into(), // Output JSON
-        "-of".into(), output_base_for_whisper.to_string(),
-    ];
 
-    if is_translation_pass {
-        args.push("--translate".into());
-    }
 
-    info!("[Whisper CPP CMD][{}] DEBUG: Executing whisper-cli. Language: '{}', Translate: {}. Full Args: {:?}", job_id, lang_arg, is_translation_pass, args);
-    // debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args); // Original debug
-
-    let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
-     .map_err(|e| {
-         error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);
-         CommandError::from(format!("Failed to execute whisper-cli sidecar: {}. Ensure it's bundled and executable.", e))
-     })?;
-    info!("[Whisper CPP CMD][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
-
-    // Simplified event handling (omitting cancellation for now)
-    let mut process_error: Option<String> = None;
-    let mut exit_code: Option<i32> = None;
-
-    let shared_child = Arc::new(Mutex::new(Some(child)));
-    let cancel_flag_clone = cancel_flag.clone();
-    let shared_child_clone_for_cancel = shared_child.clone();
-    let job_id_clone = job_id.to_string();
-
-    tokio::spawn(async move {
-        loop {
-            if cancel_flag_clone.load(AtomicOrdering::Relaxed) {
-                warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process from spawned task...", job_id_clone);
-                if let Some(child_to_kill) = shared_child_clone_for_cancel.lock().await.take() {
-                    let _ = child_to_kill.kill();
-                }
-                break;
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
-    });
-
-    loop {
-        tokio::select! {
-            biased;
-            maybe_event = rx.recv() => {
-                match maybe_event {
-                    Some(event) => match event {
-                        CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-                        CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-                        CommandEvent::Error(msg) => { process_error = Some(msg); break; },
-                        CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
-                        _ => {}
-                    },
-                    None => {
-                        if exit_code.is_none() && process_error.is_none() {
-                             warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id);
-                             exit_code = Some(-1); // Treat as error
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // Check cancel_flag one last time after loop exits to ensure consistent error reporting
-    if cancel_flag.load(AtomicOrdering::Relaxed) {
-        warn!("[Whisper CPP CMD][{}] Process terminated due to cancellation. Returning cancellation error.", job_id);
-        if expected_whisper_json_output_path.exists() {
-            if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
-                warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
-            } else {
-                info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
-            }
-        }
-        return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
-    }
-
-    if process_error.is_some() || exit_code != Some(0) {
-        // Cleanup even on non-cancellation error, as Whisper might leave partial files.
-        if expected_whisper_json_output_path.exists() { let _ = fs::remove_file(expected_whisper_json_output_path); }
-        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
-    }
-
-    // Wait for file to appear, with cancellation check
-    let mut attempts = 0;
-    while !expected_whisper_json_output_path.exists() && attempts < 10 { // Increased attempts slightly
-        if cancel_flag.load(AtomicOrdering::Relaxed) {
-            warn!("[Whisper CPP CMD][{}] Cancelled while waiting for output file.", job_id);
-            // No need to remove expected_whisper_json_output_path as it doesn't exist yet
-            return Err(CommandError::from(format!("Whisper C++ process cancelled (waiting for file) for job {}.", job_id)));
-        }
-        sleep(Duration::from_millis(300)).await;
-        attempts += 1;
-    }
-
-    if !expected_whisper_json_output_path.exists() {
-        error!("[Whisper CPP CMD][{}] Output JSON file NOT found after whisper-cli execution and wait: {:?}", job_id, expected_whisper_json_output_path);
-        return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
-    }
-
-    // Validate file size (optional, but good practice)
-    match expected_whisper_json_output_path.metadata() {
-        Ok(meta) if meta.len() == 0 => {
-            warn!("[Whisper CPP CMD][{}] Output JSON file is empty: {:?}", job_id, expected_whisper_json_output_path);
-            let _ = fs::remove_file(expected_whisper_json_output_path); // Clean up empty file
-            return Err(CommandError::from(format!("Whisper output JSON is empty: {:?}", expected_whisper_json_output_path)));
-        }
-        Err(e) => {
-             warn!("[Whisper CPP CMD][{}] Could not get metadata for output file {:?}: {}", job_id, expected_whisper_json_output_path, e);
-             // Potentially return error or proceed if metadata check is not critical
-        }
-        _ => {} // File exists and is not empty
-    }
-
-    info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cli execution: {:?}", job_id, expected_whisper_json_output_path);
-    Ok(expected_whisper_json_output_path.to_path_buf())
-}
-
-// Adapted from local_handler/transcription.rs
-fn parse_whisper_json_cmd(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
-    debug!("[JSON Parse CMD] Reading whisper output: {:?}", json_path);
-    let file = File::open(json_path)?;
-    let reader = std::io::BufReader::new(file); // Ensure BufReader is in scope
-    let output: WhisperJsonOutput = serde_json::from_reader(reader)
-        .map_err(|e| CommandError::from(format!("Failed to parse whisper JSON from '{}': {}", json_path.display(), e)))?;
-
-    let mut segments = Vec::new();
-    if let Some(transcription) = output.transcription {
-        for (idx, w_seg) in transcription.iter().enumerate() {
-            // Simplified timestamp parsing for this adaptation, assuming format is always "00:00:00,000" or "00:00:00.000"
-            // A more robust parser like in local_handler might be needed if whisper's output varies.
-            let parse_ts = |ts_str: &str| -> Result<f64, String> {
-                let parts: Vec<&str> = ts_str.split(|c| c == ':' || c == ',' || c == '.').collect();
-                if parts.len() == 4 { // hh:mm:ss:ms
-                    let h: f64 = parts[0].parse().map_err(|_| "h".to_string())?;
-                    let m: f64 = parts[1].parse().map_err(|_| "m".to_string())?;
-                    let s: f64 = parts[2].parse().map_err(|_| "s".to_string())?;
-                    let ms: f64 = parts[3].parse().map_err(|_| "ms".to_string())?;
-                    Ok(h * 3600.0 + m * 60.0 + s + ms / 1000.0)
-                } else if parts.len() == 3 && ts_str.contains(':') { // mm:ss.ms
-                     let m: f64 = parts[0].parse().map_err(|_| "m2".to_string())?;
-                     let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
-                     let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
-                     Ok(m * 60.0 + s + ms / 1000.0)
-                }
-                 else { Err(format!("Invalid timestamp format: {}", ts_str)) }
-            };
-
-            let start_time = parse_ts(&w_seg.timestamps.from)
-                .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid start time '{}': {}", idx, w_seg.timestamps.from, e_msg)))?;
-            let end_time = parse_ts(&w_seg.timestamps.to)
-                 .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid end time '{}': {}", idx, w_seg.timestamps.to, e_msg)))?;
-
-            if end_time < start_time {
-                 warn!("[JSON Parse CMD] Skipping segment {} due to end time < start time.", idx);
-                 continue;
-            }
-            segments.push(TranscriptSegment {
-                start_time,
-                end_time,
-                speaker: "Unknown".to_string(), // Default speaker
-                text: w_seg.text.trim().to_string(),
-            });
-        }
-    }
-    info!("[JSON Parse CMD] Parsed {} segments from {}", segments.len(), json_path.display());
-    Ok(segments)
-}
 
 // Adapted from local_handler/transcription.rs
 async fn run_diarization_script<R: Runtime>(
@@ -2192,9 +1994,9 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     model_path: &str,
     language_code: &str,
     job_id: &str,
-    output_base_for_whisper: &str,
+    _output_base_for_whisper: &str,
     expected_whisper_json_output_path: &PathBuf,
-    final_transcript_destination_path: &PathBuf, // New parameter
+    _final_transcript_destination_path: &PathBuf, // Not used directly here anymore
     num_speakers: usize,
     expected_rttm_output_path: &PathBuf,
     is_translation_pass: bool,
@@ -2202,32 +2004,28 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     media_filename_for_progress: &str,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
-    info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
-        job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
-    // Original info log:
-    // ... (kept for reference)
+    info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}", job_id, language_code, is_translation_pass, num_speakers);
 
-    info!("[Exec Pass][{}] DEBUG: About to call run_whisper_cpp_sidecar_cmd. is_translation_pass: {}", job_id, is_translation_pass);
-    // `expected_whisper_json_output_path` is the short temporary path whisper will write to.
-    // `output_base_for_whisper` is its base name (without .json extension).
-    let temp_whisper_json_output_path = run_whisper_cpp_sidecar_cmd(
-        app_handle,
-        wav_media_path_str,
-        model_path,
-        language_code,
+    let output_dir = expected_whisper_json_output_path.parent()
+        .ok_or_else(|| CommandError::from("Invalid output path"))?
+        .to_path_buf();
+
+    let options = TranscriptionOptions {
+        language_code: Some(language_code.to_string()),
+        model_path: model_path.to_string(),
+        output_dir: output_dir,
+        translate: is_translation_pass,
+    };
+
+    let engine = WhisperCppEngine::new(app_handle.clone());
+    
+    info!("[Exec Pass][{}] Calling TranscriptionEngine...", job_id);
+    let mut segments = engine.transcribe(
+        Path::new(wav_media_path_str),
+        &options,
         job_id,
-        output_base_for_whisper, // This is the short temp base name
-        expected_whisper_json_output_path, // This is the short temp full path with .json
-        is_translation_pass,
-        cancel_flag.clone(),
+        cancel_flag.clone()
     ).await?;
-
-    info!("[Exec Pass][{}] Moving temporary whisper output from {:?} to {:?}", job_id, temp_whisper_json_output_path, final_transcript_destination_path);
-    fs::rename(&temp_whisper_json_output_path, final_transcript_destination_path)
-        .map_err(|e| CommandError::from(format!("Failed to move whisper output to final destination: {}", e)))?;
-
-    // Now parse from the final destination
-    let mut segments = parse_whisper_json_cmd(final_transcript_destination_path)?;
 
     if num_speakers > 0 && !is_translation_pass {
         emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?;
@@ -2267,7 +2065,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
 
     map_speaker_ids_to_names(&mut segments, speaker_names);
 
-    info!("[Exec Pass][{}] Pass complete. Segments: {}. Final transcript at: {:?}", job_id, segments.len(), final_transcript_destination_path);
+    info!("[Exec Pass][{}] Pass complete. Segments: {}.", job_id, segments.len());
     Ok(segments)
 }
 

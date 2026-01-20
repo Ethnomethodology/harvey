@@ -81,6 +81,7 @@ calamine = { version = "0.26.0", features = ["dates"] }
 hound = "3.5"
 rust_xlsxwriter = "0.61.0"
 tokenizers = "0.22.1"
+async-trait = "0.1.89"
 
 [dev-dependencies]
 tempfile = "3.10.1"

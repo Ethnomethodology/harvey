@@ -1,6 +1,7 @@
 # src-tauri/scripts/run_translation.py
 import argparse
 import sys
+import os
 import json
 from transformers import MarianMTModel, MarianTokenizer
 
@@ -20,6 +21,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
+        # Force offline mode to prevent any internet connection attempts
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
         # Reconfigure stdout to ensure UTF-8 encoding, especially for Windows
         if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8')

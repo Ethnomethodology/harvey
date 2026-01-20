@@ -19,9 +19,27 @@ def run_diarization(audio_path, num_speakers, token):
             print(f"Error: Audio file not found at {audio_path}", file=sys.stderr)
             sys.exit(1)
 
+        # Force offline mode to prevent any internet connection attempts
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
         # Check for GPU availability
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using device: {device}", file=sys.stderr)
+
+        # Fix for PyTorch 2.6+ weights_only=True default causing unpickling errors with Pyannote/SpeechBrain
+        try:
+            # Attempt to allowlist TorchVersion and Pyannote Specifications
+            from torch.torch_version import TorchVersion
+            from pyannote.audio.core.task import Specifications, Problem, Resolution
+            torch.serialization.add_safe_globals([TorchVersion, Specifications, Problem, Resolution])
+        except (ImportError, AttributeError, Exception) as e:
+            print(f"Warning: Failed to add safe globals: {e}", file=sys.stderr)
+            pass
+
+        # Set auth token in environment variables since Pipeline.from_pretrained might not accept it directly
+        if token:
+            os.environ["HF_TOKEN"] = token
+            os.environ["HUGGING_FACE_HUB_TOKEN"] = token
 
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1"
