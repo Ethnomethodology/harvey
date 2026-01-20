@@ -102,10 +102,15 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     // Clear micromamba cache to prevent issues with corrupted downloads
     emitter.emit("installation-log", LogPayload { message: "Clearing micromamba cache...".into() }).unwrap();
-    let (mut rx_clean, _child_clean) = shell.sidecar("micromamba")?
-        .args(&["clean", "--all", "-y"])
-        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-        .spawn()?;
+    let mut clean_command = shell.sidecar("micromamba")?;
+    clean_command = clean_command.args(&["clean", "--all", "-y"])
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+    
+    if cfg!(target_os = "windows") {
+        clean_command = clean_command.env("MAMBA_SSL_NO_REVOKE", "true");
+    }
+
+    let (mut rx_clean, _child_clean) = clean_command.spawn()?;
 
     while let Some(event) = rx_clean.recv().await {
         match event {
@@ -151,11 +156,16 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         attempts += 1;
         emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
 
-        let (mut rx, _child) = shell.sidecar("micromamba")?
-            .args(&create_args)
+        let mut create_command = shell.sidecar("micromamba")?;
+        create_command = create_command.args(&create_args)
             .env("PYTHONUNBUFFERED", "1")
-            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-            .spawn()?;
+            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+        
+        if cfg!(target_os = "windows") {
+            create_command = create_command.env("MAMBA_SSL_NO_REVOKE", "true");
+        }
+
+        let (mut rx, _child) = create_command.spawn()?;
 
         let mut output_lines = Vec::new();
         while let Some(event) = rx.recv().await {
