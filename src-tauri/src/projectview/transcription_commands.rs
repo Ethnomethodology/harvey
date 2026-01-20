@@ -588,6 +588,8 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             original_import_path: Some(original_media_path.clone()), // Store original path as import path
             speaker_names: None, // Speaker names come from XML, not directly stored here.
             waveform_data: None,
+            language_code: None,
+            properties: None,
         };
 
         let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
@@ -2569,6 +2571,8 @@ pub async fn stop_live_transcription(
                             original_import_path: metadata_from_db.original_import_path,
                             speaker_names: metadata_from_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
                             waveform_data: metadata_from_db.waveform_data,
+                            language_code: metadata_from_db.language_code,
+                            properties: metadata_from_db.properties,
                         };
 
                         if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
@@ -2600,6 +2604,8 @@ pub async fn stop_live_transcription(
                             original_import_path: None,
                             speaker_names: None,
                             waveform_data: None,
+                            language_code: None,
+                            properties: None,
                         };
 
                         let attachments_json_string = json!(audio_files).to_string();

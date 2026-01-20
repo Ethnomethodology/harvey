@@ -21,6 +21,10 @@ export async function updateConfigStatus(force = false) {
         console.log("Config status already initialized and not forced, skipping backend check.");
         return;
     }
+    
+    // Reset initialization status to show checking state in UI
+    configStatus.update(s => ({ ...s, isInitialized: false }));
+
     try {
         const status = await invoke('check_config_status');
         configStatus.set({ ...status, isInitialized: true });

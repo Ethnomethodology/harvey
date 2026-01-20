@@ -405,7 +405,7 @@
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-border">
         <!-- Left Panel: List of all tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
-        <div class="w-1/4 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
+        <div class="w-64 flex-shrink-0 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
         <h2 class="text-sm font-semibold mb-4 dark:text-text-primary">All Tags</h2>
         {#if $allTags.length > 0}
             <ul class="text-xs">
@@ -427,7 +427,7 @@
     {/if}
 
     <!-- Middle Panel: Tag details and highlights -->
-        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'} bg-white dark:bg-surface-1">
+        <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-surface-1">
         {#if selectedTag}
             {#if isLoading}
                 <p class="dark:text-text-primary">Loading tag information...</p>

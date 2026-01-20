@@ -374,6 +374,9 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         throw new Error('projectXmlPath is required');
     }
     try {
+        // Clear any existing transcript state to prevent leakage from previous projects
+        clearTranscriptState();
+
         const loadedData = await invoke('load_project_data', { projectXmlPath });
         
         const normalizedBaseDirectory = normalizePath(loadedData.base_directory);

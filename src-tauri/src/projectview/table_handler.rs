@@ -203,6 +203,8 @@ pub async fn import_table_file(
         original_import_path: Some(source_path_str.clone()),
         speaker_names: None,
         waveform_data: None,
+        language_code: None,
+        properties: None,
     };
     debug!("[import_table_file] File metadata for DB created.");
 
@@ -967,6 +969,8 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
         original_import_path: None,
         speaker_names: None,
         waveform_data: None,
+        language_code: None,
+        properties: Some(json!({"has_headers": true}).to_string()),
     };
 
     if let Err(e) = db_handler::save_asset_metadata(
