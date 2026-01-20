@@ -69,7 +69,8 @@ import {
     setPdfAnnotationsLoadFailed,
 
     prepareMediaNoteView,
-    markMediaNoteTranscriptChangesDiscarded
+    markMediaNoteTranscriptChangesDiscarded,
+    loadAutosaveState
 } from '$lib/stores/projectStore.js';
 
 import {
@@ -451,6 +452,11 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             ...current,
             ...dataToSet
         }));
+
+        // Load autosave preference for this project (defaults to true)
+        if (loadedData.project_uuid) {
+            loadAutosaveState(loadedData.project_uuid);
+        }
 
         // Update project groups list
         try {
