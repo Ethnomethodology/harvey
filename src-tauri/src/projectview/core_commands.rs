@@ -1250,6 +1250,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         original_import_path: Some(source_file_path_str.clone()),
         speaker_names: None,
         waveform_data: None,
+        language_code: None,
+        properties: None,
     };
 
     let final_asset_type: String;

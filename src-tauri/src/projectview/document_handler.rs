@@ -160,6 +160,8 @@ pub async fn import_document<R: Runtime>(
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
                 waveform_data: None,
+                language_code: None,
+                properties: None,
             };
 
             // Save metadata to SQLite database
@@ -284,6 +286,8 @@ pub async fn import_document<R: Runtime>(
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
                 waveform_data: None,
+                language_code: None,
+                properties: None,
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

@@ -353,6 +353,8 @@ pub async fn import_word_transcript<R: Runtime>(
                 original_import_path: None,
                 speaker_names: None,
                 waveform_data: None,
+                language_code: None,
+                properties: None,
     };
 
     let asset_relative_path_for_db = final_transcript_path

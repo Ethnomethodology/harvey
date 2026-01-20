@@ -30,6 +30,8 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
     pub waveform_data: Option<Vec<u8>>,
+    pub language_code: Option<String>,
+    pub properties: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -139,6 +141,8 @@ pub fn init_db() -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             waveform_data BLOB,
+            language_code TEXT,
+            properties TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -193,6 +197,28 @@ pub fn init_db() -> Result<(), CommandError> {
     if !waveform_data_exists {
         info!("[DB] Adding waveform_data column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB", [])?;
+    }
+
+    // Migration for language_code
+    let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let lang_code_exists = stmt_check_lang_code
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "language_code"));
+
+    if !lang_code_exists {
+        info!("[DB] Adding language_code column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN language_code TEXT", [])?;
+    }
+
+    // Migration for properties
+    let mut stmt_check_properties = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let properties_exists = stmt_check_properties
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "properties"));
+
+    if !properties_exists {
+        info!("[DB] Adding properties column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN properties TEXT", [])?;
     }
 
     // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
@@ -957,8 +983,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json, waveform_data
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+            original_import_path, speaker_names_json, waveform_data, language_code, properties
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -979,6 +1005,8 @@ pub fn save_asset_metadata(
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
             waveform_data = excluded.waveform_data,
+            language_code = excluded.language_code,
+            properties = excluded.properties,
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -1007,6 +1035,8 @@ pub fn save_asset_metadata(
             to_sql_optional_str(metadata.original_import_path.as_deref()),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
             to_sql_optional_blob(metadata.waveform_data.as_deref()),
+            to_sql_optional_str(metadata.language_code.as_deref()),
+            to_sql_optional_str(metadata.properties.as_deref()),
         ],
     )?;
 
@@ -1028,7 +1058,8 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
     let mut stmt = conn.prepare("
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data
+               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
+               language_code, properties
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1054,6 +1085,8 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             original_import_path: row.get(16)?,
             speaker_names_json: row.get(17)?,
             waveform_data: row.get(18)?,
+            language_code: row.get(19)?,
+            properties: row.get(20)?,
         })
     }).optional()?;
 
@@ -1954,6 +1987,8 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             waveform_data BLOB,
+            language_code TEXT,
+            properties TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
