@@ -1,8 +1,8 @@
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
-    import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+    import { getDownloadedModels } from '$lib/services/configureActions';
     import ManageModelsModal from './ManageModelsModal.svelte';
 
     export let showModal = false;
@@ -17,7 +17,7 @@
 
     async function loadModels() {
         try {
-            models = await invoke('get_downloaded_models');
+            models = await getDownloadedModels();
             if (models.length > 0) {
                 selectedModel = models[0].name;
             }

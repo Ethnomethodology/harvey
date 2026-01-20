@@ -9,6 +9,7 @@
 	import {
 		saveDownloadLocation,
 		getDownloadedModels,
+		getAllDownloadedModels,
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
@@ -61,8 +62,7 @@
 				return;
 			}
 
-            // TODO: This needs to be updated to also get downloaded translation models
-			const currentModels = await getDownloadedModels();
+			const currentModels = await getAllDownloadedModels();
 			const modelsToMove = currentModels.length > 0 && downloadLocation;
 
 			let confirmed = true;
