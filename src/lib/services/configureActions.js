@@ -48,9 +48,18 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models (e.g., those starting with 'Helsinki-NLP/opus-mt-')
-	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.name.startsWith('Helsinki-NLP/opus-mt-')) : [];
+	// Filter out translation models (e.g., those containing 'opus-mt')
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.name.includes('opus-mt')) : [];
 	return transcriptionModels;
+  } catch (error) {
+	console.error("Error invoking get_downloaded_models:", error);
+	return [];
+  }
+}
+export async function getAllDownloadedModels() {
+  try {
+	const models = await invoke('get_downloaded_models');
+	return Array.isArray(models) ? models : [];
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
 	return [];

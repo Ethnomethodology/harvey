@@ -2298,6 +2298,9 @@ pub async fn stop_live_transcription(
 
         if attachments_dir.exists() && attachments_dir.is_dir() {
             let mut audio_files: Vec<String> = Vec::new();
+            
+            // First collect all candidate files synchronously
+            let mut candidate_paths: Vec<PathBuf> = Vec::new();
             match fs::read_dir(&attachments_dir) {
                 Ok(entries) => {
                     for entry in entries {
@@ -2306,7 +2309,7 @@ pub async fn stop_live_transcription(
                             if path.is_file() {
                                 if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
                                     if extension.eq_ignore_ascii_case("wav") {
-                                         audio_files.push(path.to_string_lossy().to_string());
+                                         candidate_paths.push(path);
                                     }
                                 }
                             }
@@ -2316,6 +2319,16 @@ pub async fn stop_live_transcription(
                 Err(e) => {
                     error!("[Live Transcription] Failed to read attachments directory: {}", e);
                 }
+            }
+
+            // Now process them (trim silence)
+            for path in candidate_paths {
+                let path_str = path.to_string_lossy().to_string();
+                // Attempt to trim silence
+                if let Err(e) = trim_silence_from_wav(&app_handle, &path_str).await {
+                    error!("[Live Transcription] Failed to trim silence from {}: {}", path_str, e);
+                }
+                audio_files.push(path_str);
             }
 
             if !audio_files.is_empty() {
@@ -2431,4 +2444,54 @@ pub async fn stop_live_transcription(
     }
 
     Ok(true)
+}
+
+// Helper to trim silence from the beginning of a WAV file using FFmpeg
+async fn trim_silence_from_wav(app_handle: &AppHandle, file_path_str: &str) -> Result<(), String> {
+    let input_path = PathBuf::from(file_path_str);
+    if !input_path.exists() {
+        return Err(format!("Input file not found: {}", file_path_str));
+    }
+
+    let output_path = input_path.with_extension("trimmed.wav");
+    let ffmpeg_path = get_ffmpeg_path(app_handle).map_err(|e| e.to_string())?;
+
+    // Use silenceremove filter to remove silence from the start
+    // start_periods=1: remove silence from the beginning only
+    // start_duration=0.1: silence must be at least 0.1s long to be detected
+    // start_threshold=-50dB: consider anything below -50dB as silence
+    let args = vec![
+        "-i".to_string(),
+        file_path_str.to_string(),
+        "-af".to_string(),
+        "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB".to_string(),
+        "-y".to_string(),
+        output_path.to_string_lossy().to_string(),
+    ];
+
+    info!("[Live Transcription] Trimming silence: {:?} {}", ffmpeg_path, args.join(" "));
+
+    let output = app_handle
+        .shell()
+        .command(ffmpeg_path.to_string_lossy().to_string())
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute ffmpeg: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("FFmpeg failed: {}", stderr));
+    }
+
+    // Replace original file with trimmed file if successful and not empty
+    if output_path.exists() && output_path.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+        fs::remove_file(&input_path).map_err(|e| format!("Failed to remove original file: {}", e))?;
+        fs::rename(&output_path, &input_path).map_err(|e| format!("Failed to rename trimmed file: {}", e))?;
+        info!("[Live Transcription] Successfully trimmed silence from {}", file_path_str);
+    } else {
+        return Err(format!("Trimmed output file missing or empty for {}", file_path_str));
+    }
+
+    Ok(())
 }
