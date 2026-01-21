@@ -14,11 +14,23 @@
     import CommentsPanel from './CommentsPanel.svelte';
     import EditTagModal from '../modals/EditTagModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
+    import { get } from 'svelte/store';
 
     let unsubscribePanelState;
 
     let unsubscribeRefresher;
-    onMount(() => {
+    onMount(async () => {
+        // Force refresh all tags first to get latest list from backend
+        await fetchAllTags();
+
+        // Then force refresh the selected tag if there is one
+        const currentTag = get(selectedTag);
+        if (currentTag) {
+            console.log('[TagsView] onMount: Force refreshing selected tag:', currentTag.name);
+            // Re-select to trigger get_tag_info and load fresh highlights
+            await selectTag(currentTag);
+        }
+
         unsubscribePanelState = panelStateStore.subscribe(state => {
             console.log('panelStateStore subscription triggered in TagsView.svelte', state);
             if (tabulatorInstance) {
@@ -34,12 +46,6 @@
         unsubscribeRefresher = refresher.subscribe(async () => {
             if (isFirstRun) {
                 isFirstRun = false;
-                // Check if a tag is already selected and refresh it
-                const currentSelectedTag = get(selectedTag);
-                if (currentSelectedTag) {
-                    console.log('[TagsView] Refreshing selected tag on mount/first run:', currentSelectedTag.name);
-                    await selectTag(currentSelectedTag);
-                }
                 return;
             }
             await fetchAllTags();
