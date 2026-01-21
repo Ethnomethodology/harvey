@@ -116,7 +116,8 @@
                         tags: highlight.tags || [],
                         comments: highlight.comments || [],
                         pageIndex: highlight.pageIndex, // Capture pageIndex for PDFs
-                        quadPoints: highlight.quadPoints // Capture quadPoints for PDFs
+                        quadPoints: highlight.quadPoints, // Capture quadPoints for PDFs
+                        documentOrder: highlight.documentOrder // Capture position for Lexical docs
                     });
                 }
                 map.get(highlight.id).textParts.push(highlight.text);
@@ -138,6 +139,9 @@
                     const bx = (b.quadPoints && b.quadPoints.length > 0) ? b.quadPoints[0][0] : 0;
                     return ax - bx;
                 });
+            } else {
+                // Sort Lexical highlights by their position in the document flow
+                result.sort((a, b) => (a.documentOrder ?? 0) - (b.documentOrder ?? 0));
             }
             return result;
         }

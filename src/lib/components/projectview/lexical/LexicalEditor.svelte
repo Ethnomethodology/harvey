@@ -1153,7 +1153,8 @@ function gatherAllHighlights() {
     const finalHighlights = [];
     const seenIds = new Set();
 
-    for (const block of blocks) {
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
         if (block.length === 0) continue;
         
         const firstNode = block[0];
@@ -1181,7 +1182,8 @@ function gatherAllHighlights() {
             nodeKey: firstNode.getKey(), 
             color: color,
             tags: metadata ? [...(metadata.tags || [])] : [],
-            comments: metadata ? [...(metadata.comments || [])] : []
+            comments: metadata ? [...(metadata.comments || [])] : [],
+            documentOrder: i // Assign order based on current sequence in document
         });
     }
 
