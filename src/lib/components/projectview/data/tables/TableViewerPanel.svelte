@@ -32,7 +32,35 @@
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
+    let tableReady = false;
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
+    
+    // Reactive mapping of store highlights to Tabulator styles
+    $: if ($project.currentTableHighlights) {
+        const hls = $project.currentTableHighlights;
+        const newRowStyles = {};
+        const newCellStyles = {};
+        
+        if (Array.isArray(hls)) {
+            hls.forEach(h => {
+                if (h.id?.startsWith('row-')) {
+                    const rowIndex = h.id.substring(4);
+                    newRowStyles[rowIndex] = h.color;
+                } else if (h.id?.startsWith('cell-')) {
+                    // Cell IDs are in format "cell-rowIndex-colField"
+                    newCellStyles[h.id] = h.color;
+                }
+            });
+        }
+        
+        tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
+        
+        // Trigger a reformat of rows to apply new styles
+        if (tabulatorInstance && tableReady) {
+            tabulatorInstance.getRows().forEach(row => row.reformat());
+        }
+    }
+
     let searchTerm = '';
     let cellMatches = []; // Changed from searchMatches to store cell components
     let currentMatchIndex = -1;
@@ -43,6 +71,40 @@
 
     let showOptionsMenu = false;
     let areFiltersVisible = false; // Start with the assumption that filters are hidden
+
+    function scrollToHighlight(id) {
+        if (!id || !tabulatorInstance) return;
+        
+        // Clear immediately to prevent infinite loops
+        project.update(p => ({ ...p, requestedHighlightId: null }));
+
+        console.log(`[TableViewerPanel] Scrolling to highlight: ${id}`);
+        if (id.startsWith('row-')) {
+            const rowIndex = parseInt(id.substring(4), 10);
+            
+            // Small delay to ensure Tabulator has finished internal layout
+            setTimeout(() => {
+                const row = tabulatorInstance.getRow(rowIndex);
+                if (row) {
+                    row.scrollTo().then(() => {
+                        const el = row.getElement();
+                        el.style.transition = 'outline 0.3s ease';
+                        el.style.outline = '4px solid #3b82f6';
+                        el.style.outlineOffset = '-4px';
+                        setTimeout(() => {
+                            el.style.outline = 'none';
+                        }, 2000);
+                    }).catch(err => console.error(`[TableViewerPanel] Scroll failed for row ${rowIndex}:`, err));
+                } else {
+                    console.warn(`[TableViewerPanel] Row ${rowIndex} not found for highlight ${id}`);
+                }
+            }, 100);
+        }
+    }
+
+    $: if ($project.requestedHighlightId && tableReady) {
+        scrollToHighlight($project.requestedHighlightId);
+    }
 
     async function toggleFilters() {
         if (!tabulatorInstance) return;
@@ -317,32 +379,36 @@
 
     async function applyHighlightToCells(color, cellsToModify) {
         if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
-        const rowsToReformat = new Set();
+        
+        let currentHighlights = get(project).currentTableHighlights || [];
+        const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
+
         cellsToModify.forEach(cell => {
             const row = cell.getRow();
-            const rowIndex = row.getData().harvey_internal_id;
+            const rowData = row.getData();
+            const rowIndex = rowData.harvey_internal_id;
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
+            
+            // Remove existing highlight for this cell
+            currentHighlights = currentHighlights.filter(h => h.id !== cellKey);
+            
             if (color) {
-                tableStyles.cellStyles[cellKey] = color;
-            } else {
-                delete tableStyles.cellStyles[cellKey];
+                const cellValue = rowData[colField];
+                const text = `Cell [Row ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
+                
+                currentHighlights.push({
+                    id: cellKey,
+                    color: color,
+                    text: text,
+                    tags: [],
+                    comments: []
+                });
             }
-            rowsToReformat.add(row);
         });
-        rowsToReformat.forEach(row => row.reformat());
-        const ranges = tabulatorInstance.getRanges();
-        if (ranges) {
-            ranges.forEach(range => range.remove());
-        }
-        try {
-            await saveTableStyles(tablePath, {
-                rowStyles: tableStyles.rowStyles,
-                cellStyles: tableStyles.cellStyles
-            });
-        } catch (err) {
-            console.error("Failed to save table styles:", err);
-        }
+        
+        setTableHighlights(currentHighlights);
+        await saveTableHighlights();
     }
 
     async function applyHighlightToRows(color, rows) {
@@ -381,15 +447,6 @@
 
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
-
-        tableStyles = { rowStyles: {}, cellStyles: {} };
-        currentHighlights.forEach(h => {
-            if (h.id.startsWith('row-')) {
-                const rowIndex = h.id.substring(4);
-                tableStyles.rowStyles[rowIndex] = h.color;
-            }
-        });
-        rows.forEach(row => row.reformat());
 
         const ranges = tabulatorInstance.getRanges();
         if (ranges) {
@@ -518,35 +575,80 @@
         }
 
         try {
+            // 1. Load Table Data first so we can use it for format conversion if needed
+            const response = await loadTableData(pathForTable, hasHeaders);
+            tableData = response.data;
+            tableData.forEach((d, i) => d.harvey_internal_id = i);
+            const tableHeaders = response.headers;
+
+            // 2. Load Highlights/Styles
             const loadedHighlightsOrStyles = await loadTableStyles(pathForTable);
 
             let highlightsForStore = [];
-            tableStyles = { rowStyles: {}, cellStyles: {} };
 
             if (loadedHighlightsOrStyles) {
                 if (Array.isArray(loadedHighlightsOrStyles)) {
-                    // New format
+                    // New format: Array of highlights
                     highlightsForStore = loadedHighlightsOrStyles;
-                    loadedHighlightsOrStyles.forEach(h => {
-                        if (h.id.startsWith('row-')) {
-                            const rowIndex = h.id.substring(4);
-                            tableStyles.rowStyles[rowIndex] = h.color;
-                        }
-                    });
                 } else if (typeof loadedHighlightsOrStyles === 'object' && loadedHighlightsOrStyles.rowStyles) {
-                    // Old format, for backward compatibility
-                    tableStyles.rowStyles = loadedHighlightsOrStyles.rowStyles || {};
-                    tableStyles.cellStyles = loadedHighlightsOrStyles.cellStyles || {};
-                    // Highlights panel will be empty for this table until new highlights are added.
+                    // Old format: Object with rowStyles and cellStyles. Convert to new format.
+                    console.log('[TableViewerPanel] Converting old style format to new highlights format');
+                    
+                    // Convert rowStyles
+                    if (loadedHighlightsOrStyles.rowStyles) {
+                        for (const [rowIndexStr, color] of Object.entries(loadedHighlightsOrStyles.rowStyles)) {
+                            const rowIndex = parseInt(rowIndexStr, 10);
+                            const rowData = tableData[rowIndex];
+                            if (rowData) {
+                                const rowNumber = rowIndex + 1;
+                                const textParts = [rowNumber.toString()];
+                                // We don't have ordered columns yet, so we just use all values
+                                Object.keys(rowData).forEach(key => {
+                                    if (key !== 'harvey_internal_id') {
+                                        const value = rowData[key];
+                                        textParts.push(value !== null && value !== undefined ? value : "");
+                                    }
+                                });
+                                const text = textParts.join(' | ');
+                                highlightsForStore.push({
+                                    id: `row-${rowIndex}`,
+                                    color: color,
+                                    text: text,
+                                    tags: [],
+                                    comments: []
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Convert cellStyles
+                    if (loadedHighlightsOrStyles.cellStyles) {
+                        for (const [cellKey, color] of Object.entries(loadedHighlightsOrStyles.cellStyles)) {
+                            // cellKey format: "cell-rowIndex-colField"
+                            const parts = cellKey.split('-');
+                            if (parts.length >= 3) {
+                                const rowIndex = parseInt(parts[1], 10);
+                                const colField = parts.slice(2).join('-');
+                                const rowData = tableData[rowIndex];
+                                if (rowData) {
+                                    const cellValue = rowData[colField];
+                                    const text = `Cell [Row ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
+                                    highlightsForStore.push({
+                                        id: cellKey,
+                                        color: color,
+                                        text: text,
+                                        tags: [],
+                                        comments: []
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             setLoadedTableHighlights(highlightsForStore);
 
-            const response = await loadTableData(pathForTable, hasHeaders);
-            tableData = response.data;
-            tableData.forEach((d, i) => d.harvey_internal_id = i);
-            const tableHeaders = response.headers;
             await tick();
             if (!tableContainer) {
                  error = 'Failed to initialize table viewer: container lost.';
@@ -657,6 +759,9 @@
                 clipboardCopyRowRange:"range",
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
+            });
+            tabulatorInstance.on("tableBuilt", () => {
+                tableReady = true;
             });
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;

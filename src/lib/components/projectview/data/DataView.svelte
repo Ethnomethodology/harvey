@@ -33,7 +33,7 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
-    let tableViewRef;
+    export let tableViewRef;
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 

@@ -82,7 +82,6 @@
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
-  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
 
   export let initialJson = null;
@@ -158,15 +157,14 @@
   let searchToggleButtonElement;
 
   let latestScrollTargetKey = null; // New component-level variable
+  let areHighlightsReady = false; // Track if highlights have been loaded from backend
+  let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
 
   let isResizing = false;
   let resizeDirection = null;
   let resizeTargetCellKey = null;
   let resizeStartPos = { x: 0, y: 0 };
   let resizerLineStyle = 'display: none;';
-
-  let showFloatingToolbar = false;
-  let floatingToolbarPosition = { top: 0, left: 0 };
 
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
@@ -288,7 +286,10 @@
   }
 
   async function loadHighlights() {
-    if (!documentPath) return;
+    if (!documentPath) {
+        areHighlightsReady = true;
+        return;
+    }
     try {
       const highlightsJson = await invoke('load_lexical_highlights', {
         args: {
@@ -310,6 +311,8 @@
       }
     } catch (error) {
       console.error('Error loading highlights:', error);
+    } finally {
+        areHighlightsReady = true;
     }
   }
 
@@ -462,25 +465,16 @@
     try {
         const parsedState = editor.parseEditorState(initialStateString);
         editor.setEditorState(parsedState);
+        areNodesReady = true;
     } catch (e) {
         console.error(`[LexicalEditor ${instanceId}] Failed to parse and set initial editor state:`, e);
         editor.update(() => {
             const root = _getRoot();
             root.clear();
             root.append(_createParagraphNode());
+            areNodesReady = true;
         });
     }
-
-    // Apply initial highlights after editor state is set
-    editor.update(() => {
-        for (const highlight of initialHighlights) {
-            const node = _getNodeByKey(highlight.nodeKey);
-            if (_isExtendedTextNode(node)) {
-                node.setStyle(`background-color: ${highlight.color}`);
-                node.setHighlightId(highlight.id);
-            }
-        }
-    });
 
 
     editor.setRootElement(editorContainer);
@@ -529,21 +523,6 @@
                 try {
                     editor.getEditorState().read(updateToolbarState);
                     if (enableFloatingToolbar) {
-                        const selection = _getSelection();
-                        if (selection && !selection.isCollapsed()) {
-                            const domSelection = window.getSelection();
-                            if (domSelection && !domSelection.isCollapsed) {
-                                const domRange = domSelection.getRangeAt(0);
-                                const rect = domRange.getBoundingClientRect();
-                                floatingToolbarPosition = {
-                                    top: rect.top - 40,
-                                    left: rect.left + (rect.width / 2) - 80,
-                                };
-                                showFloatingToolbar = true;
-                            }
-                        } else {
-                            showFloatingToolbar = false;
-                        }
                         showModifyToolbar = false;
                         clickedNodeKey = null;
                     }
@@ -876,6 +855,7 @@
     if (!editor) { console.warn("[LexicalEditor] resetEditorState called before editor initialized."); return; }
     console.log("[LexicalEditor] resetEditorState called.");
     closeTableCellMenu(false);
+    areNodesReady = false;
     editor.update(() => {
       try {
         let newState;
@@ -894,8 +874,10 @@
         }
         newState = editor.parseEditorState(stateToParse);
         editor.setEditorState(newState);
+
         historyState.undoStack = [];
         historyState.redoStack = [];
+        areNodesReady = true;
       } catch (e) {
         console.error('[LexicalEditor] Error parsing JSON during resetEditorState:', e, "Attempted JSON:", jsonString?.substring(0, 100));
         try {
@@ -904,6 +886,7 @@
             })));
             historyState.undoStack = [];
             historyState.redoStack = [];
+            areNodesReady = true;
         } catch (fallbackError) {
             console.error('[LexicalEditor] CRITICAL: Failed to set even fallback state during resetEditorState:', fallbackError);
         }
@@ -947,6 +930,7 @@
               return;
           }
         editor.setEditorState(parsedState, { tag: 'history-merge' });
+
       } catch (e) {
         console.error('[LexicalEditor] Failed to parse JSON in updateContent:', e);
         console.error('[LexicalEditor] Faulty JSON for updateContent:', newJsonString ? newJsonString.substring(0, 200) + '...' : 'null');
@@ -1093,7 +1077,8 @@
             const newId = uuidv4();
             for (const node of selectedNodes) {
                 let targetNode = node;
-                if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent()) && targetNode.isSegmented()) {
+                if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent())) {
+                     // Check if it's a segmented node within an ExtendedTextNode
                      targetNode = targetNode.getParent();
                 }
 
@@ -1102,9 +1087,8 @@
                     const currentHighlightId = extendedNode.getHighlightId();
 
                     if (colorToApply !== 'transparent') {
-                        if (currentHighlightId === null) {
-                            extendedNode.setHighlightId(newId);
-                        }
+                        // Always assign a new ID for the new highlight range
+                        extendedNode.setHighlightId(newId);
                     } else {
                         if (currentHighlightId !== null) {
                             extendedNode.setHighlightId(null);
@@ -1121,38 +1105,94 @@
 }
 
 function gatherAllHighlights() {
-    const allHighlights = [];
     const root = _getRoot();
-    const nodesToVisit = [root];
-    const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
-
-    while(nodesToVisit.length > 0) {
-        const currentNode = nodesToVisit.pop();
-        if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
-            const highlightId = currentNode.getHighlightId();
-            const style = currentNode.getStyle();
-            const colorMatch = style.match(/background-color:\s*(.*?);/);
-            const color = colorMatch ? colorMatch[1] : 'transparent';
-
-            const existingHighlight = existingHighlightsMap.get(highlightId);
-
-            allHighlights.push({
-                id: highlightId,
-                text: currentNode.getTextContent(),
-                nodeKey: currentNode.getKey(),
-                color: color,
-                tags: existingHighlight ? existingHighlight.tags : [],
-                comments: existingHighlight ? existingHighlight.comments : []
-            });
+    const allTextNodes = [];
+    
+    // 1. Collect ALL text nodes in document order to identify gaps correctly
+    const visit = (node) => {
+        if (_isExtendedTextNode(node)) {
+            allTextNodes.push(node);
+        } else if (_isElementNode(node)) {
+            node.getChildren().forEach(visit);
         }
-        if (currentNode.getChildren) {
-            const children = currentNode.getChildren();
-            for (let i = children.length - 1; i >= 0; i--) {
-                nodesToVisit.push(children[i]);
+    };
+    visit(root);
+
+    if (allTextNodes.length === 0) return [];
+
+    // Use latest highlights from store for metadata merging
+    const currentHighlights = get(project).currentDocumentHighlights || [];
+    const existingHighlightsMap = new Map(currentHighlights.map(h => [h.id, h]));
+
+    // 2. Group into blocks that are contiguous in the document flow
+    const blocks = [];
+    let currentBlock = [];
+
+    for (const node of allTextNodes) {
+        const highlightId = node.getHighlightId();
+        if (highlightId) {
+            if (currentBlock.length > 0) {
+                const lastNode = currentBlock[currentBlock.length - 1];
+                // Group if they share the same ID. 
+                // This allows highlights to span multiple paragraphs/nodes while remaining one annotation.
+                if (lastNode.getHighlightId() === highlightId) {
+                    currentBlock.push(node);
+                } else {
+                    blocks.push(currentBlock);
+                    currentBlock = [node];
+                }
+            } else {
+                currentBlock = [node];
+            }
+        } else {
+            // Unhighlighted text node! This is a gap that forces a split.
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock);
+                currentBlock = [];
             }
         }
     }
-    return allHighlights;
+    if (currentBlock.length > 0) blocks.push(currentBlock);
+
+    // 3. Normalize IDs and merge metadata
+    const finalHighlights = [];
+    const seenIds = new Set();
+
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
+        if (block.length === 0) continue;
+        
+        const firstNode = block[0];
+        let highlightId = firstNode.getHighlightId();
+        const style = firstNode.getStyle();
+        // Robust regex to capture color regardless of semicolons
+        const colorMatch = style.match(/background-color:\s*([^;]+)/);
+        const color = colorMatch ? colorMatch[1].trim() : 'transparent';
+
+        const originalId = highlightId;
+        if (seenIds.has(highlightId)) {
+            // This is a disjoint part of an original highlight.
+            // Assign a new ID to ensure it's a separate annotation entry.
+            highlightId = uuidv4();
+            block.forEach(n => n.setHighlightId(highlightId));
+        } else {
+            seenIds.add(highlightId);
+        }
+
+        const metadata = existingHighlightsMap.get(originalId);
+        
+        finalHighlights.push({
+            id: highlightId,
+            text: block.map(n => n.getTextContent()).join(''),
+            nodeKey: firstNode.getKey(), 
+            color: color,
+            tags: metadata ? [...(metadata.tags || [])] : [],
+            comments: metadata ? [...(metadata.comments || [])] : [],
+            documentOrder: i // Assign order based on current sequence in document
+        });
+    }
+
+    return finalHighlights;
 }
 
 function updateAndSaveHighlights(highlights) {
@@ -1161,6 +1201,75 @@ function updateAndSaveHighlights(highlights) {
     dispatch('highlightschange', { highlights });
 }
 
+function scrollToHighlight(id) {
+    if (!id || !editor) return;
+    
+    let attempts = 0;
+    const maxAttempts = 15; // Increased attempts
+    
+    const tryScroll = () => {
+        // Recursive function to find node by highlight ID - MUST be called inside tryScroll to retry search
+        const findNodeKey = () => {
+            let foundKey = null;
+            editor.getEditorState().read(() => {
+                const root = _getRoot();
+                const nodesToVisit = [root];
+                while(nodesToVisit.length > 0) {
+                    const node = nodesToVisit.pop();
+                    if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                        foundKey = node.getKey();
+                        break;
+                    }
+                    if (node.getChildren) {
+                        const children = node.getChildren();
+                        for (let i = children.length - 1; i >= 0; i--) {
+                            nodesToVisit.push(children[i]);
+                        }
+                    }
+                }
+            });
+            return foundKey;
+        };
+
+        const targetNodeKey = findNodeKey();
+
+        if (targetNodeKey) {
+            const domElement = editor.getElementByKey(targetNodeKey);
+            if (domElement) {
+                console.log(`[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`);
+                domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Pulse effect
+                domElement.style.transition = 'outline 0.3s ease';
+                domElement.style.outline = '4px solid #3b82f6';
+                domElement.style.outlineOffset = '2px';
+                setTimeout(() => {
+                    if (domElement) domElement.style.outline = 'none';
+                }, 2000);
+                
+                // Success - clear the request
+                project.update(p => ({ ...p, requestedHighlightId: null }));
+                return;
+            }
+        }
+
+        // If either node not found OR DOM element not found, retry
+        if (attempts < maxAttempts) {
+            attempts++;
+            setTimeout(tryScroll, 150); // Slightly longer delay between retries
+        } else {
+            console.warn(`[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`);
+            project.update(p => ({ ...p, requestedHighlightId: null }));
+        }
+    };
+    
+    // Give Lexical a moment to finish its current update cycle if any
+    setTimeout(tryScroll, 50);
+}
+
+// Trigger scroll when editor is ready AND highlights are loaded AND nodes are loaded AND there is a requested ID
+$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady) {
+    scrollToHighlight($project.requestedHighlightId);
+}
 
   function handleBlockTypeChange(event) {
     const type = event.target.value; if (!editor || !isReady || !editor.isEditable()) return;
@@ -2208,22 +2317,6 @@ $: if (editor && activeLayout) {
   on:confirm={handleInsertTableConfirm}
   on:close={() => showInsertTableModal = false}
 />
-
-{#if enableFloatingToolbar}
-<FloatingHighlightToolbar
-  editor={editor}
-  showToolbar={showFloatingToolbar}
-  toolbarPosition={floatingToolbarPosition}
-  onHighlight={(color) => {
-    applyHighlightColor(color);
-    showFloatingToolbar = false;
-  }}
-  onRemoveHighlight={() => {
-    applyHighlightColor('transparent');
-    showFloatingToolbar = false;
-  }}
-/>
-{/if}
 
 {#if enableFloatingToolbar}
 <FloatingModifyHighlightToolbar

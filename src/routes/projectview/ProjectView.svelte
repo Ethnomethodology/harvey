@@ -469,7 +469,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 prepareDocumentView(null);
             }
         } else if (selectedTab === 'transcriptions') {
-            prepareDocumentView(null);
+            // prepareDocumentView(null); // Removed to persist Data tab state
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
                 const proj = get(project);
@@ -509,78 +509,101 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
     }
 
 	async function handleRequestOpenTab(event) {
-        const { tabName, loadNotePath } = event.detail;
-        const path = loadNotePath;
-        const itemLogName = path ? path.split(/[\\/]/).pop() : 'no specific item';
-        project.update(p => ({ ...p, isLoading: true, statusMessage: `Opening ${itemLogName} in ${tabName} tab...` }));
+        const { tabName, loadNotePath, highlightId, viewType, originalDocType } = event.detail;
+        if (!tabName || !loadNotePath) return;
 
-        if (!tabName) {
-            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Error: Tab name missing.' }));
+        const proj = get(project);
+        let path = normalizePath(loadNotePath);
+        
+        // Robust absolute path resolution
+        let cleanPath = path.replace(/^\/+/, ''); // Strip leading slashes for check
+        if (proj.baseDirectory && !path.startsWith(proj.baseDirectory)) {
+            // Check if it looks like a relative path belonging to the project
+            if (cleanPath.startsWith('harvey_files') || !cleanPath.includes('/')) {
+                path = normalizePath(`${proj.baseDirectory}/${cleanPath}`);
+            }
+        }
+
+        const itemLogName = path.split(/[\\/]/).pop();
+        console.log(`[ProjectView] handleRequestOpenTab: path=${path}, viewType=${viewType}, originalDocType=${originalDocType}`);
+
+        // Update requested highlight ID immediately so the target component can react
+        project.update(p => ({ 
+            ...p, 
+            isLoading: true, 
+            statusMessage: `Opening ${itemLogName}...`,
+            requestedHighlightId: highlightId || null 
+        }));
+
+        // Determine if we are already viewing this path
+        const isAlreadyViewing = (
+            normalizePath(proj.selectedDocumentPath) === path ||
+            normalizePath(proj.currentImportedTranscriptPath) === path ||
+            normalizePath(proj.selectedMediaNotePath) === path
+        );
+
+        if (isAlreadyViewing) {
+            console.log(`[ProjectView] Already viewing ${itemLogName}. Just ensuring correct tab.`);
+            if (selectedTab !== tabName) {
+                await handleTabClick(tabName);
+            }
+            project.update(p => ({ ...p, isLoading: false }));
             return;
         }
 
-        // If already on the data tab and the requested path is the currently active one, do nothing.
-        // This prevents the loading spinner from getting stuck when clicking the same file.
-        const currentProjectState = get(project);
-        if (selectedTab === 'data' && path) {
-            if (path === currentProjectState.selectedDocumentPath ||
-                path === currentProjectState.currentImportedTranscriptPath ||
-                path === currentProjectState.selectedMediaNotePath) {
-                project.update(p => ({ ...p, isLoading: false, statusMessage: `Already viewing ${itemLogName}.` }));
-                return;
-            }
-        }
-
-        let canProceed = true;
-        let actionContext = path ? `loading item '${itemLogName}'` : "switching tabs";
-
-        if (selectedTab === 'data') {
-            canProceed = await checkUnsavedChangesThenProceed(path, actionContext);
-        } else if (selectedTab === 'transcriptions') {
-            if (transcriptionsViewRef) {
-                try {
-                    // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
-                    await transcriptionsViewRef.handleToggleEditMode();
-                    canProceed = true;
-                } catch (e) {
-                    // If handleToggleEditMode throws, it means the user cancelled the save/discard.
-                    canProceed = false;
-                }
-            }
-        }
-
+        // Not already viewing, proceed with full load
+        let canProceed = await checkUnsavedChangesThenProceed(path, "opening item");
         if (!canProceed) {
-            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Action cancelled.' }));
+            project.update(p => ({ ...p, isLoading: false }));
             return;
         }
 
         if (selectedTab !== tabName) {
             await handleTabClick(tabName);
             await tick();
-        } else {
-             project.update(p => ({...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false}));
         }
 
-        if (tabName === 'data' && path) {
-            const proj = get(project);
-            const isImportedTranscript = proj.importedTranscriptFiles.some(f => normalizePath(`${proj.baseDirectory}/${f.relativePath}`) === path);
-            const isMediaNote = proj.files.some(f => f.path === path && (f.file_type === 'media'));
-            if (isImportedTranscript) prepareImportedTranscriptView(path);
-            else if (isMediaNote) prepareMediaNoteView(path);
-            else {
-                const extension = path.split('.').pop()?.toLowerCase();
-                let itemType = 'documents';
-                if (['csv', 'xlsx'].includes(extension)) itemType = 'tables';
-                else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'].includes(extension)) itemType = 'images';
-                prepareDocumentView(path, itemType);
+        // Determine type and prepare view
+        if (tabName === 'data') {
+            const isImportedTranscript = viewType === 'transcript' || originalDocType === 'imported_transcript' ||
+                proj.importedTranscriptFiles?.some(f => normalizePath(`${proj.baseDirectory}/${f.relative_path || f.relativePath}`) === path);
+            
+            const isMediaTranscript = originalDocType === 'audio_transcript' || originalDocType === 'video_transcript';
+            
+            if (isImportedTranscript) {
+                prepareImportedTranscriptView(path);
+            } else if (isMediaTranscript) {
+                function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
+                    if (!Array.isArray(nodes)) return null;
+                    for (const node of nodes) {
+                        if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath)) return node;
+                        const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
+                        if (found) return found;
+                    }
+                    return null;
+                }
+                const mediaNode = findMediaByTranscriptPathRecursive(proj.files, path);
+                if (mediaNode) prepareMediaNoteView(mediaNode.path);
+                else prepareDocumentView(path, 'documents');
+            } else {
+                const ext = path.split('.').pop()?.toLowerCase();
+                let type = 'documents';
+                if (['csv', 'xlsx'].includes(ext)) type = 'tables';
+                else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'].includes(ext)) type = 'images';
+                prepareDocumentView(path, type);
             }
-        } else if (tabName === 'data' && !path) {
-            prepareDocumentView(null);
         }
 
+        if (selectedTab !== tabName) {
+            await handleTabClick(tabName);
+            await tick();
+        }
+
+        // Final check to clear loading overlay if sub-loading didn't trigger
         const projState = get(project);
-        if (!projState.isDocumentLoading && !projState.isImportedTranscriptLoading && !projState.isMediaNoteTranscriptLoading && !projState.isTranscribing && !projState.isImportingAsset) {
-            project.update(p => ({...p, isLoading: false, statusMessage: path ? p.statusMessage : `Switched to ${tabName} tab.`}));
+        const stillLoading = projState.isDocumentLoading || projState.isImportedTranscriptLoading || projState.isMediaNoteTranscriptLoading;
+        if (!stillLoading && !projState.isTranscribing && !projState.isImportingAsset) {
+            project.update(p => ({...p, isLoading: false }));
         }
     }
 
@@ -878,7 +901,10 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 						on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
 					 />
 				{:else if selectedTab === 'tags'}
-					<TagsView bind:this={tagsViewRef} />
+					<TagsView
+                        bind:this={tagsViewRef}
+                        on:requestviewchange={handleRequestOpenTab}
+                    />
 				{/if}
 			</div>
 		</div>

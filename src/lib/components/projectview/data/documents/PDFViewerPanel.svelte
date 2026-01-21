@@ -24,6 +24,7 @@ import { get } from 'svelte/store';
     const PRESET_SCALES = ['auto', 'page-actual', 'page-fit', 'page-width', '0.5', '0.75', '1', '1.25', '1.5', '2', '3', '4'];
     let viewerContainer; let viewerElement; let pdfViewerWrapperElement;
 
+    let isMounted = false;
     let selectionToolbarElement;
     let showSelectionToolbar = false;
     let selectionToolbarTop = 0;
@@ -45,16 +46,12 @@ import { get } from 'svelte/store';
     // let isToolbarHighlightDropdownOpen = false; // Removed
     // let highlightDropdownRef; // Removed
 
-    let newHighlightDropdownRef; // Added for new dropdown
-    let isNewHighlightDropdownOpen = false; // Added for new dropdown
+    let highlightDropdownRef;
+    let isHighlightDropdownOpen = false;
+    let selectedHighlightColor = 'transparent';
 
     let zoomDropdownRef;
     let isZoomDropdownOpen = false;
-
-    // Reactive state for Quick Highlight feature
-    let isQuickHighlightActive = false;
-    let quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
-    let quickHighlightMode = 'highlight'; // Possible values: 'highlight', 'remove'
 
 
     let pageRendering = false; let pageNumInput = currentPageNum; let pdfjsLib = null; let PDFViewer = null; let EventBus = null; let PDFLinkService = null; let PDFFindController = null; 
@@ -472,6 +469,7 @@ import { get } from 'svelte/store';
     }
 
     onMount(async () => {
+        isMounted = true;
         // Initialize the Web Worker
         annotationMatcherWorker = new Worker(new URL('$lib/workers/pdfAnnotationMatcher.worker.js', import.meta.url), { type: 'module' });
         annotationMatcherWorker.onmessage = handleWorkerMessage;
@@ -485,7 +483,11 @@ import { get } from 'svelte/store';
         document.head.appendChild(pdfJsStyleElement);
         if (!pdfPath) { error = 'No PDF path provided.'; loading = false; return; }
         setTimeout(async () => {
-            if (!viewerContainer || !viewerElement || !pdfViewerWrapperElement) { console.error('[PDFViewerPanel] Required container elements null on mount.'); error = 'Failed init viewer elements.'; loading = false; return; }
+            if (!isMounted) return;
+            if (!viewerContainer || !viewerElement || !pdfViewerWrapperElement) { 
+                console.warn('[PDFViewerPanel] Required container elements not ready after delay.'); 
+                return; 
+            }
             await loadPdfAndLibraries(viewerContainer);
             document.addEventListener('click', handleClickOutside);
             viewerContainer?.addEventListener('mouseup', handleViewerMouseUp);
@@ -510,10 +512,11 @@ import { get } from 'svelte/store';
                 }
             }, 60000); // 60,000 milliseconds = 1 minute
 
-        }, 100); 
+        }, 200); 
     });
 
     onDestroy(() => {
+        isMounted = false;
         if (autosaveIntervalId) {
             clearInterval(autosaveIntervalId);
         }
@@ -599,20 +602,18 @@ import { get } from 'svelte/store';
     }
 
     function handleClickOutside(event) {
-        if (isNewHighlightDropdownOpen && newHighlightDropdownRef && !newHighlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
-            isNewHighlightDropdownOpen = false;
+        if (isHighlightDropdownOpen && highlightDropdownRef && !highlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
+            isHighlightDropdownOpen = false;
         }
         if (isZoomDropdownOpen && zoomDropdownRef && !zoomDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) { // Ensure not clicking on a menu item of the zoom dropdown itself
             isZoomDropdownOpen = false;
         }
         // Ensure the new dropdown check doesn't prevent the selection toolbar from hiding.
-        // The condition for hiding selectionToolbar should be independent of newHighlightDropdownRef unless it's part of the selection toolbar itself.
-        // Based on current structure, newHighlightDropdownRef is part of the main toolbar, not the floating selection toolbar.
+        // The condition for hiding selectionToolbar should be independent of highlightDropdownRef unless it's part of the selection toolbar itself.
+        // Based on current structure, highlightDropdownRef is part of the main toolbar, not the floating selection toolbar.
         if (showSelectionToolbar && selectionToolbarElement && !selectionToolbarElement.contains(event.target)) {
             // Check if the click is on any part of the main toolbar that should keep the selection toolbar open (e.g. if it was a highlight color button)
             // For now, we assume any click outside selectionToolbar itself should be evaluated for hiding.
-            // The original logic for `!(highlightDropdownRef && highlightDropdownRef.contains(event.target))` was to prevent hiding if clicking the old highlight dropdown.
-            // We don't have such a direct equivalent needing to keep selectionToolbar open for the new main toolbar dropdown.
             const isInsideViewer = viewerElement?.contains(event.target);
             const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
 
@@ -641,40 +642,11 @@ import { get } from 'svelte/store';
         // Defer resetting the flag until after the current event cycle (mouseup + potential click)
         setTimeout(() => { wasPerformingSelection = false; }, 0);
 
-        if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) return;
+        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
         await tick();
 
-        if (isQuickHighlightActive) {
-            // Only apply quick highlight if a selection was actually performed
-            if (wasPerformingSelection && sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-                const range = sel.getRangeAt(0); // sel is already defined
-                let isInTextLayer = false;
-                const ancestor = range.commonAncestorContainer;
-                if (ancestor && viewerElement?.contains(ancestor)) {
-                    const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
-                    if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
-                }
-
-                if (isInTextLayer && range.toString().trim().length > 0) {
-                    const rangeToUse = range.cloneRange();
-                    selectedRange = rangeToUse;
-                    toolbarMode = 'selection';
-
-                    if (quickHighlightMode === 'highlight') {
-                        await handleHighlightAction(quickHighlightColor);
-                    } else if (quickHighlightMode === 'remove') {
-                        await handleHighlightAction('remove');
-                    }
-
-                    window.getSelection()?.removeAllRanges();
-                    selectedRange = null;
-                }
-            }
-            return; // If quick highlight is active, we either process it or do nothing else with selection toolbar.
-        }
-
-        // Logic for standard floating toolbar (if Quick Highlight is not active)
-        if (wasPerformingSelection && sel && sel.rangeCount > 0 && !sel.isCollapsed) { // Check wasPerformingSelection
+        // Logic for standard highlighting (floating toolbar or top toolbar)
+        if (wasPerformingSelection && sel && sel.rangeCount > 0 && !sel.isCollapsed) {
             const range = sel.getRangeAt(0); // sel is already defined
             let isInTextLayer = false;
             const ancestor = range.commonAncestorContainer;
@@ -684,26 +656,12 @@ import { get } from 'svelte/store';
                 }
 
             if (isInTextLayer && range.toString().trim().length > 0) {
-                const targetElement = event.target;
-                const clickedOnExistingHighlight = targetElement.closest?.('.pdf-highlight') || targetElement.closest?.('.overlay-part');
-
-                if (clickedOnExistingHighlight) {
-                    window.getSelection()?.removeAllRanges(); // Clear selection
-                    hideSelectionToolbar(); // Hide toolbar
-                    return; // Suppress 'selection' toolbar
-                }
-
-                // If not clicking on existing highlight, proceed to show 'selection' toolbar
+                // We store the selection but don't show the floating toolbar (as per new requirements)
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
-                showSelectionToolbar = true; 
+                showSelectionToolbar = false; 
 
-                requestAnimationFrame(() => {
-                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
-                        positionToolbarAtPoint(event.clientX, event.clientY);
-                    }
-                });
                 return;
             }
         }
@@ -716,7 +674,7 @@ import { get } from 'svelte/store';
 
     async function handleViewerClick(event) {
         // If the click is on the selection toolbar or its dropdown, let normal interaction proceed.
-        if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) { // Adjusted for new dropdown ref
+        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) {
             return;
         }
 
@@ -738,14 +696,10 @@ import { get } from 'svelte/store';
         // If a text selection was just made (mouseup set the mode and range),
         // and the selection toolbar is meant to be shown for that new selection,
         // then this click should not try to find a clicked highlight or change the mode.
-        if (toolbarMode === 'selection' && selectedRange && showSelectionToolbar) {
-            // This block might still be useful if a selection was made on plain text,
-            // the 'selection' toolbar appeared, and then a click happens (e.g. to dismiss it).
-            // However, if `wasPerformingSelection` was true and `clickedOnExistingHighlightTarget` was false,
-            // the above block wouldn't return.
-            // This original block primarily prevents switching from 'selection' to 'click' mode
-            // if the selection toolbar is already active for a *new* selection.
-            return; // Exit early, letting the selection toolbar (from mouseup) be the focus.
+        if (toolbarMode === 'selection' && selectedRange) {
+            // If a text selection was just made, we protect the 'selection' mode
+            // so the top toolbar can apply the highlight to the selected range.
+            return; 
         }
 
         // Detect click on either old span or new overlay rectangles
@@ -837,10 +791,12 @@ import { get } from 'svelte/store';
     }
 
     function hideSelectionToolbar() {
-        if (showSelectionToolbar) {
-            clearTimeout(hideToolbarTimeoutId); showSelectionToolbar = false;
-            toolbarMode = null; selectedRange = null; clickedHighlightId = null; clickedHighlightColor = null;
-        }
+        clearTimeout(hideToolbarTimeoutId); 
+        showSelectionToolbar = false;
+        toolbarMode = null; 
+        selectedRange = null; 
+        clickedHighlightId = null; 
+        clickedHighlightColor = null;
     }
     function handleToolbarMouseEnter() { clearTimeout(hideToolbarTimeoutId); }
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
@@ -853,47 +809,39 @@ import { get } from 'svelte/store';
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
 
             const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
+            const newHighlightId = `hl-${uuidv4()}`;
 
-            // --- MODIFIED LOGIC BLOCK FOR REMOVING FROM SELECTION --- >>>
+            // --- MODIFIED LOGIC BLOCK FOR REMOVING FROM SELECTION (ERASER) --- >>>
             if (color === 'remove') {
-                console.log('[handleHighlightAction] Attempting to remove highlight from selection (new logic).');
+                console.log('[handleHighlightAction] Eraser mode: Removing highlights from selection.');
                 hideSelectionToolbar();
                 window.getSelection()?.removeAllRanges();
 
                 const { pageIndex: selectionPageIndex, pageElement: selectionPageElement } = getRangePageInfo(rangeToUse);
-                if (selectionPageIndex === -1) {
-                    console.warn('[handleHighlightAction] Remove from selection: Could not determine page index.');
-                    return;
-                }
+                if (selectionPageIndex === -1) return;
 
                 let actualSelectionPageElement = selectionPageElement;
                 if (!actualSelectionPageElement && pdfViewer) {
                     const pageView = pdfViewer.getPageView(selectionPageIndex);
                     actualSelectionPageElement = pageView?.div;
                 }
-                const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || viewerContainer?.getBoundingClientRect() || { top: 0, left: 0 };
+                const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
                 const selectionClientRects = rangeToUse.getClientRects();
                 const selectionQuads = processAndMergeQuadPoints(selectionClientRects, selectionPageRect);
 
-                if (!selectionQuads || selectionQuads.length === 0) {
-                    console.warn('[handleHighlightAction] Remove from selection: No valid quads for current selection.');
-                    return;
-                }
+                if (!selectionQuads || selectionQuads.length === 0) return;
                 const selectionBBox = getBoundingBoxForQuads(selectionQuads);
-                if (!selectionBBox) {
-                    console.warn('[handleHighlightAction] Remove from selection: Could not get bounding box for selection quads.');
-                    return;
-                }
+                if (!selectionBBox) return;
 
                 const highlightsToProcess = [...initialHighlights];
                 for (const existingHl of highlightsToProcess) {
                     if (existingHl.pageIndex === selectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
                         const existingHlBBox = getBoundingBoxForQuads(existingHl.quadPoints);
                         if (!existingHlBBox || !doBoundingBoxesIntersect(selectionBBox, existingHlBBox)) {
-                            continue; // No intersection, skip this highlight
+                            continue; 
                         }
 
-                        const originalExistingQuads = JSON.parse(JSON.stringify(existingHl.quadPoints)); // For undo
+                        const originalExistingQuads = JSON.parse(JSON.stringify(existingHl.quadPoints)); 
                         let quadsBeforeSelection = [];
                         let quadsAfterSelection = [];
 
@@ -902,64 +850,35 @@ import { get } from 'svelte/store';
                             if (!exQuadBBox) continue;
 
                             if (!doBoundingBoxesIntersect(exQuadBBox, selectionBBox)) {
-                                // Quad does not intersect with the selection bounding box
-                                if (exQuadBBox.y2 <= selectionBBox.y1) { // Quad is entirely above selection
-                                    quadsBeforeSelection.push(exQuad);
-                                } else if (exQuadBBox.y1 >= selectionBBox.y2) { // Quad is entirely below selection
-                                    quadsAfterSelection.push(exQuad);
-                                } else { // Quad is on the same horizontal band as the selection
-                                    if (exQuadBBox.x2 <= selectionBBox.x1) { // Quad is entirely to the left of selection
-                                        quadsBeforeSelection.push(exQuad);
-                                    } else if (exQuadBBox.x1 >= selectionBBox.x2) { // Quad is entirely to the right of selection
-                                        quadsAfterSelection.push(exQuad);
-                                    } else {
-                                        // This case should be rare if intersection logic is correct.
-                                        // Quad is on the same band and horizontally overlapping but wasn't caught by intersection.
-                                        console.warn('[handleHighlightAction] Non-intersecting exQuad overlaps selection horizontally. Defaulting to quadsBeforeSelection. exQuadBBox:', exQuadBBox, 'selectionBBox:', selectionBBox);
-                                        quadsBeforeSelection.push(exQuad); // Default behavior
-                                    }
+                                if (exQuadBBox.y2 <= selectionBBox.y1) quadsBeforeSelection.push(exQuad);
+                                else if (exQuadBBox.y1 >= selectionBBox.y2) quadsAfterSelection.push(exQuad);
+                                else {
+                                    if (exQuadBBox.x2 <= selectionBBox.x1) quadsBeforeSelection.push(exQuad);
+                                    else if (exQuadBBox.x1 >= selectionBBox.x2) quadsAfterSelection.push(exQuad);
+                                    else quadsBeforeSelection.push(exQuad); 
                                 }
                             } else {
-                                // Quad intersects with the selection bounding box, subtract and categorize remnants
                                 const remnants = subtractQuads([exQuad], selectionQuads);
                                 for (const remnantQuad of remnants) {
                                     const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
                                     if (!remnantBBox) continue;
-
-                                    if (remnantBBox.x2 <= selectionBBox.x1) { // Remnant is to the left of the selection
-                                        quadsBeforeSelection.push(remnantQuad);
-                                    } else if (remnantBBox.x1 >= selectionBBox.x2) { // Remnant is to the right of the selection
-                                        quadsAfterSelection.push(remnantQuad);
-                                    } else {
-                                        // Remnant overlaps horizontally with selection - this implies a vertical cut or complex scenario.
-                                        // This case handles remnants that are directly above or below the "hole" punched by selectionQuads
-                                        // within the bounds of exQuad if exQuad was taller than the selection.
-                                        // Or, if subtractQuads produced a remnant that still overlaps horizontally (which is unexpected for simple hole punching).
-                                        console.warn('[handleHighlightAction] Remnant quad overlaps selection horizontally. exQuadBBox:', exQuadBBox, 'remnantBBox:', remnantBBox, 'selectionBBox:', selectionBBox);
-                                        // Fallback logic based on vertical position relative to selection (if exQuad is primarily horizontal)
-                                        // or horizontal center if truly ambiguous.
-                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) { // exQuad is wider than tall
-                                            if (remnantBBox.y2 <= selectionBBox.y1) { // Remnant is above selection
-                                                quadsBeforeSelection.push(remnantQuad);
-                                            } else if (remnantBBox.y1 >= selectionBBox.y2) { // Remnant is below selection
-                                                quadsAfterSelection.push(remnantQuad);
-                                            } else { // Fallback to x_center for truly overlapping cases within the selection's vertical span
+                                    if (remnantBBox.x2 <= selectionBBox.x1) quadsBeforeSelection.push(remnantQuad);
+                                    else if (remnantBBox.x1 >= selectionBBox.x2) quadsAfterSelection.push(remnantQuad);
+                                    else {
+                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) {
+                                            if (remnantBBox.y2 <= selectionBBox.y1) quadsBeforeSelection.push(remnantQuad);
+                                            else if (remnantBBox.y1 >= selectionBBox.y2) quadsAfterSelection.push(remnantQuad);
+                                            else {
                                                 const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                                                 const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                                if (remnantCenterX < selectionCenterX) {
-                                                    quadsBeforeSelection.push(remnantQuad);
-                                                } else {
-                                                    quadsAfterSelection.push(remnantQuad);
-                                                }
+                                                if (remnantCenterX < selectionCenterX) quadsBeforeSelection.push(remnantQuad);
+                                                else quadsAfterSelection.push(remnantQuad);
                                             }
-                                        } else { // exQuad is taller than wide (or square) - use original y_center logic or x_center
+                                        } else {
                                             const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                                             const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                            if (remnantCenterX < selectionCenterX) { // Default to x-based split for ambiguous cases
-                                                quadsBeforeSelection.push(remnantQuad);
-                                            } else {
-                                                quadsAfterSelection.push(remnantQuad);
-                                            }
+                                            if (remnantCenterX < selectionCenterX) quadsBeforeSelection.push(remnantQuad);
+                                            else quadsAfterSelection.push(remnantQuad);
                                         }
                                     }
                                 }
@@ -991,9 +910,9 @@ import { get } from 'svelte/store';
                                 id: newSplitHighlightId,
                                 color: existingHl.color,
                                 pageIndex: existingHl.pageIndex,
-                                text: existingHl.text, // Text might be inaccurate for the split part
+                                text: existingHl.text,
                                 quadPoints: finalQuadsAfter,
-                                prefix: existingHl.prefix, // Prefixes/suffixes might be inaccurate
+                                prefix: existingHl.prefix,
                                 suffix: existingHl.suffix,
                             };
                             dispatch('pdfhighlightevent', { type: 'add', ...newHighlightDataObject });
@@ -1008,8 +927,7 @@ import { get } from 'svelte/store';
             }
             // --- END OF MODIFIED LOGIC BLOCK ---
 
-            const newHighlightId = `hl-${uuidv4()}`;
-            // Calculate new selection quads first for subsumption check
+            // Calculate new selection quads
             const { pageIndex: newSelectionPageIndex, pageElement: newSelectionPageElement } = getRangePageInfo(rangeToUse);
             let actualNewSelectionPageElement = newSelectionPageElement;
             if (!actualNewSelectionPageElement && newSelectionPageIndex !== -1 && pdfViewer) {
@@ -1020,84 +938,8 @@ import { get } from 'svelte/store';
             const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
             const newSelectionProcessedQuads = processAndMergeQuadPoints(newSelectionClientRects, newSelectionPageRect);
 
-            if (newSelectionPageIndex === -1) {
-                console.warn('[handleHighlightAction] Could not determine page index for new selection for overlap check. Proceeding without check.');
-            } else {
-                const highlightsToCheck = [...initialHighlights];
-                for (const existingHl of highlightsToCheck) {
-                    if (existingHl.pageIndex === newSelectionPageIndex) {
-                        if (existingHl.quadPoints && existingHl.quadPoints.length > 0) {
-                            if (areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints)) {
-                                console.log(`[handleHighlightAction] New selection subsumes existing highlight ID: ${existingHl.id}. Removing old one.`);
-                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
-                                // For proper undo, we need the full original data including its specific range data if possible.
-                                // Using existingHl as dataForStorage is a simplification.
-                                recordAction('removeHighlight', {
-                                    id: existingHl.id,
-                                    color: existingHl.color,
-                                    dataForStorage: { ...existingHl }
-                                });
-                                // The UI for the old highlight (overlay parts) will be removed by the 'remove' event handler
-                                // or by the new highlight's render call if IDs match (though they won't here).
-                                // No need to call removeHighlightOverlay(existingHl.id) directly here if events handle it.
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Phase 2: Handle Partial Overlaps by Trimming Existing Highlights ---
-            const newSelectionBoundingBox = newSelectionProcessedQuads.length > 0 ? getBoundingBoxForQuads(newSelectionProcessedQuads) : null;
-            // const highlightsToUpdateForUndo = []; // Not using this batching approach for now
-
-            for (const existingHl of [...initialHighlights]) { // Iterate on a copy
-                if (existingHl.pageIndex === newSelectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
-
-                    // Basic check: if an ID was already processed by subsumption, it might be gone from initialHighlights
-                    // or its quadPoints might be empty. A more robust check might involve a list of IDs already handled.
-                    // For this iteration, we assume `areQuadsSubsumed` handles distinct cases.
-                    // If existingHl was fully subsumed, it should have been removed/marked.
-                    // This logic targets *only* partial overlaps.
-
-                    const existingHlBoundingBox = getBoundingBoxForQuads(existingHl.quadPoints);
-
-                    if (newSelectionBoundingBox && doBoundingBoxesIntersect(newSelectionBoundingBox, existingHlBoundingBox) &&
-                        !areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints) && // Not fully subsumed by new
-                        !areQuadsSubsumed(existingHl.quadPoints, newSelectionProcessedQuads)      // New not fully subsumed by old
-                    ) {
-                        console.log(`[handleHighlightAction] Partial overlap detected with existing highlight ID: ${existingHl.id}. Attempting to trim.`);
-
-                        const originalQuadsForUndo = JSON.parse(JSON.stringify(existingHl.quadPoints)); // Deep copy for undo
-                        const remainingQuads = subtractQuads(existingHl.quadPoints, newSelectionProcessedQuads);
-
-                        if (remainingQuads.length === 0) {
-                            console.log(`[handleHighlightAction] Trimming existing highlight ID: ${existingHl.id} resulted in empty quads. Removing it.`);
-                            dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
-                            recordAction('removeHighlight', {
-                                id: existingHl.id,
-                                color: existingHl.color,
-                                dataForStorage: { ...existingHl, quadPoints: originalQuadsForUndo }
-                            });
-                        } else {
-                            console.log(`[handleHighlightAction] Updating existing highlight ID: ${existingHl.id} with ${remainingQuads.length} remaining quads.`);
-
-                            dispatch('pdfhighlightevent', {
-                                type: 'update',
-                                ...existingHl, // Spread existing properties
-                                quadPoints: remainingQuads // Override quadPoints
-                            });
-                            recordAction('updateHighlightQuads', {
-                                id: existingHl.id,
-                                oldQuads: originalQuadsForUndo,
-                                newQuads: remainingQuads,
-                                originalHighlightData: JSON.parse(JSON.stringify(existingHl)) // Store all original data
-                            });
-                        }
-                        markPdfAnnotationsDirty();
-                    }
-                }
-            }
-            // End of new partial overlap logic
+            // Stacking model: We no longer remove or trim existing highlights when adding a new one.
+            // Highlights are treated as independent layers.
 
             // --- Immediate Visual Update for the new highlight ---
             const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
@@ -1222,8 +1064,31 @@ import { get } from 'svelte/store';
     //     selectedRange = null; // Clear after use
     // }
 
-    function toggleNewHighlightDropdown() { // Added new function
-        isNewHighlightDropdownOpen = !isNewHighlightDropdownOpen;
+    function toggleHighlightDropdown() { 
+        isHighlightDropdownOpen = !isHighlightDropdownOpen;
+    }
+
+    async function applyHighlightColor(colorToApply) {
+        if (loading || !pdfDoc) return;
+        
+        const colorValue = colorToApply === 'rgba(255, 255, 255, 1)' ? 'remove' : colorToApply;
+
+        if (selectedRange && toolbarMode === 'selection') {
+            await handleHighlightAction(colorValue);
+            window.getSelection()?.removeAllRanges();
+            hideSelectionToolbar();
+        } else if (toolbarMode === 'click' && clickedHighlightId) {
+            await handleHighlightAction(colorValue);
+        }
+        
+        selectedHighlightColor = colorToApply;
+        isHighlightDropdownOpen = false;
+    }
+
+    $: if (toolbarMode === 'click' && clickedHighlightColor) {
+        selectedHighlightColor = clickedHighlightColor;
+    } else if (toolbarMode !== 'click' && !selectedRange) {
+        selectedHighlightColor = 'transparent';
     }
 
     function toggleZoomDropdown() {
@@ -2385,6 +2250,40 @@ function updateHighlightOverlayColor(id, color) {
         return 'auto'; // Default fallback
     })();
 
+    function scrollToHighlight(id) {
+        if (!id) return;
+        const highlight = initialHighlights.find(h => h.id === id);
+        if (highlight) {
+            console.log(`[PDFViewerPanel] Scrolling to highlight: ${id} on page ${highlight.pageIndex + 1}`);
+            // Scroll to the page
+            pdfViewer.scrollPageIntoView({ pageNumber: highlight.pageIndex + 1 });
+            
+            // Wait for page to be in view and rendered
+            setTimeout(() => {
+                const overlayParts = document.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
+                if (overlayParts.length > 0) {
+                    overlayParts[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Pulse effect
+                    overlayParts.forEach(el => {
+                        el.style.transition = 'outline 0.3s ease';
+                        el.style.outline = '4px solid #3b82f6';
+                        el.style.outlineOffset = '2px';
+                        setTimeout(() => {
+                            el.style.outline = 'none';
+                        }, 2000);
+                    });
+                }
+            }, 500);
+
+            // Clear the requested highlight ID after scrolling
+            project.update(p => ({ ...p, requestedHighlightId: null }));
+        }
+    }
+
+    $: if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
+        scrollToHighlight($project.requestedHighlightId);
+    }
+
     $: currentZoomLabel = (() => {
         const scaleStr = String(currentScaleValue);
         const foundOption = zoomOptions.find(opt => opt.value === scaleStr);
@@ -2465,79 +2364,31 @@ function updateHighlightOverlayColor(id, color) {
         <button class="mini-toolbar-button" title="Next match" on:click={() => runSearch({ findPrevious: false })} disabled={loading || !pdfDoc || !searchQuery}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     </div>
     <div class="separator"></div>
-    <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group inline-flex items-center" role="group">
-        <button
-            class="mini-toolbar-button rounded-e-none border-r border-gray-300 dark:border-r-d-gray-600"
-            class:active={isQuickHighlightActive}
-            title="Quick Highlight - {isQuickHighlightActive ? 'On' : 'Off'}"
-            on:click={() => {
-                isQuickHighlightActive = !isQuickHighlightActive;
-                if (isQuickHighlightActive) {
-                    // If no specific color has been chosen via dropdown (quickHighlightColor is still default/yellow or was white from 'None')
-                    // OR if the mode was 'remove' (meaning 'None' was selected)
-                    // then default to yellow highlight.
-                    if (quickHighlightColor === 'rgba(255, 242, 117, 0.5)' || quickHighlightColor === 'rgba(255, 255, 255, 1)' || quickHighlightMode === 'remove') {
-                        quickHighlightMode = 'highlight';
-                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
-                    }
-                    // Otherwise, if a color was previously selected (e.g., Green) and mode is 'highlight',
-                    // it will retain that color and mode.
-                }
-            }}
-            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : `background-color: rgba(255, 255, 255, 1);`) : ''}"
-        >
-            {#if isQuickHighlightActive}
-                {#if quickHighlightMode === 'remove'}
-                    {@html removeHighlightIconSVG}
-                {:else}
-                    {@html markerIconSVG}
-                {/if}
-            {:else}
-                {@html markerIconSVG}
-            {/if}
-        </button>
-        <div class="relative flex items-center" bind:this={newHighlightDropdownRef}>
-            <button class="mini-toolbar-button rounded-s-none border-l-0" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
-                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-            </button>
-            {#if isNewHighlightDropdownOpen}
-            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-surface-2 border border-gray-300 dark:border-border shadow-lg overflow-hidden py-1">
-                {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
-                    <div
-                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
-                        role="menuitem"
-                        tabindex="-1"
-                        on:click={() => {
-                            quickHighlightColor = opt.value;
-                            quickHighlightMode = 'highlight';
-                            isNewHighlightDropdownOpen = false;
-                            isQuickHighlightActive = true; // Enable toggle
-                        }}
-                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
-                    >
-                        <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={opt.value}></span>
-                        <span>{opt.label}</span>
-                    </div>
-                {/each}
-                <div
-                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
-                    role="menuitem"
-                    tabindex="-1"
-                    on:click={() => {
-                        quickHighlightColor = 'rgba(255, 255, 255, 1)'; // White
-                        quickHighlightMode = 'remove'; // Set mode to remove
-                        isNewHighlightDropdownOpen = false;
-                        isQuickHighlightActive = true; // Enable toggle
-                    }}
-                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = 'rgba(255, 255, 255, 1)'; quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
-                >
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
-                    <span>None</span>
-                </div>
+    <div class="relative" bind:this={highlightDropdownRef}>
+      <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
+        </svg>
+        <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+        </svg>
+      </button>
+      {#if isHighlightDropdownOpen}
+        <div class="absolute top-full mt-1 right-0 z-30 w-32 bg-white dark:bg-surface-2 border border-gray-300 dark:border-border shadow-lg py-1">
+          {#each highlightOptions as option}
+            <div
+              class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-gray-200"
+              on:click={() => applyHighlightColor(option.value)}
+              role="menuitemradio"
+              aria-checked={selectedHighlightColor === option.value}
+              tabindex="-1"
+            >
+              <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style="background-color: {option.value === 'rgba(255, 255, 255, 1)' ? '#fff' : option.value};"></span>
+              <span>{option.label}</span>
             </div>
-            {/if}
+          {/each}
         </div>
+      {/if}
     </div>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={undo} title="Undo (⌘+Z)" disabled={undoStack.length === 0}>

@@ -196,7 +196,7 @@ export async function deleteTableColumn(tablePath, columnName) {
  */
 export async function saveTableStyles(tablePath, styles) {
     try {
-        await invoke('save_table_styles', { filePath: tablePath, styles: JSON.stringify(styles) });
+        await invoke('save_table_styles', { filePath: tablePath, styles: styles });
     } catch (error) {
         console.error(`Failed to save styles for table ${tablePath}:`, error);
         throw error;
@@ -235,7 +235,7 @@ export async function loadTableHighlights(filePath) {
         return;
     }
     try {
-        const highlights = await invoke("load_table_styles", { filePath });
+        const highlights = await loadTableStyles(filePath);
         setLoadedTableHighlights(highlights || []);
     } catch (error) {
         console.error(`Error loading table highlights for ${filePath}:`, error);
@@ -255,7 +255,7 @@ export async function saveTableHighlights() {
     try {
         await invoke('save_table_styles', {
             filePath: tablePath,
-            styles: JSON.stringify(highlights)
+            styles: highlights
         });
         markTableHighlightsAsSaved();
         console.log(`[ProjectService] Table highlights saved for ${tablePath}`);
@@ -2071,11 +2071,16 @@ export async function clearProjectDataStore() {
     // and to avoid circular dependencies if projectStore itself imports projectService.
     const projectStoreModule = await import('$lib/stores/projectStore.js');
     const transcriptStoreModule = await import('$lib/stores/transcriptStore.js');
+    const tagStoreModule = await import('$lib/stores/tagStore.js');
 
     projectStoreModule.project.set({ ...projectStoreModule.initialState });
     projectStoreModule.currentProjectGroupsList.set([]);
 
     transcriptStoreModule.clearTranscriptState();
+
+    tagStoreModule.selectedTag.set(null);
+    tagStoreModule.tagInfo.set(null);
+    tagStoreModule.tagSearchQuery.set('');
 
     // Optionally, inform other parts of the app that the project has been cleared
     // await emit('project-cleared');

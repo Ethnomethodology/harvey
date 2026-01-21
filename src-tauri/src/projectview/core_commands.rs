@@ -1623,6 +1623,20 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         "media" => {
              if let Some(media_stem) = media_stem_opt.as_deref() {
                 let media_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(media_stem);
+
+                // Cleanup highlights for all associated transcripts before deleting
+                if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&fs::read_to_string(&xml_path_buf).unwrap_or_default()) {
+                    if let Some(media_entry) = project_data.media_files.files.iter().find(|f| f.name == media_stem) {
+                        for transcript in &media_entry.transcripts {
+                            if let Err(e) = delete_annotations_from_db(&project_id_for_db, &transcript.relative_path, "lexical") {
+                                warn!("[Backend Delete] Failed to delete highlights for transcript {} during media deletion: {}", transcript.relative_path, e);
+                            } else {
+                                info!("[Backend Delete] Deleted highlights for transcript {} during media deletion.", transcript.relative_path);
+                            }
+                        }
+                    }
+                }
+
                 if media_stem_dir_path.exists() && media_stem_dir_path.is_dir() {
                     info!("[Backend Delete] Deleting media stem directory: {}", media_stem_dir_path.display());
                     fs::remove_dir_all(&media_stem_dir_path).map_err(|e| CommandError::from(format!("Failed to delete directory {}: {}", media_stem_dir_path.display(), e)))?;
@@ -1655,6 +1669,12 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
              if let Some(media_stem) = media_stem_opt.as_deref() {
                 info!("[Backend Delete] Deleting media-associated transcript file: {}", item_path_buf.display());
                 fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete file {}: {}", item_path_buf.display(), e)))?;
+
+                if let Err(e) = delete_annotations_from_db(&project_id_for_db, &item_relative_path, "lexical") {
+                    warn!("[Backend Delete] Failed to delete highlights for transcript {} during transcript deletion: {}", item_relative_path, e);
+                } else {
+                    info!("[Backend Delete] Deleted highlights for transcript {} during transcript deletion.", item_relative_path);
+                }
 
                 info!("[Backend Delete] Updating XML to remove transcript link for '{}' with path '{}'", media_stem, item_relative_path);
                 let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
@@ -1699,6 +1719,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 warn!("[Backend Delete] Failed to delete asset metadata from DB for project_id {}, path {}: {}. Main file was deleted.", project_id_for_db, item_relative_path, e);
             } else {
                 info!("[Backend Delete] Deleted asset metadata from DB for project_id {}, path {}", project_id_for_db, item_relative_path);
+            }
+
+            // Delete highlights from DB
+            if let Err(e) = delete_annotations_from_db(&project_id_for_db, &item_relative_path, "lexical") {
+                warn!("[Backend Delete] Failed to delete highlights for imported transcript {} during deletion: {}", item_relative_path, e);
+            } else {
+                info!("[Backend Delete] Deleted highlights for imported transcript {} during deletion.", item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
