@@ -802,47 +802,39 @@ import { get } from 'svelte/store';
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
 
             const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
+            const newHighlightId = `hl-${uuidv4()}`;
 
-            // --- MODIFIED LOGIC BLOCK FOR REMOVING FROM SELECTION --- >>>
+            // --- MODIFIED LOGIC BLOCK FOR REMOVING FROM SELECTION (ERASER) --- >>>
             if (color === 'remove') {
-                console.log('[handleHighlightAction] Attempting to remove highlight from selection (new logic).');
+                console.log('[handleHighlightAction] Eraser mode: Removing highlights from selection.');
                 hideSelectionToolbar();
                 window.getSelection()?.removeAllRanges();
 
                 const { pageIndex: selectionPageIndex, pageElement: selectionPageElement } = getRangePageInfo(rangeToUse);
-                if (selectionPageIndex === -1) {
-                    console.warn('[handleHighlightAction] Remove from selection: Could not determine page index.');
-                    return;
-                }
+                if (selectionPageIndex === -1) return;
 
                 let actualSelectionPageElement = selectionPageElement;
                 if (!actualSelectionPageElement && pdfViewer) {
                     const pageView = pdfViewer.getPageView(selectionPageIndex);
                     actualSelectionPageElement = pageView?.div;
                 }
-                const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || viewerContainer?.getBoundingClientRect() || { top: 0, left: 0 };
+                const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
                 const selectionClientRects = rangeToUse.getClientRects();
                 const selectionQuads = processAndMergeQuadPoints(selectionClientRects, selectionPageRect);
 
-                if (!selectionQuads || selectionQuads.length === 0) {
-                    console.warn('[handleHighlightAction] Remove from selection: No valid quads for current selection.');
-                    return;
-                }
+                if (!selectionQuads || selectionQuads.length === 0) return;
                 const selectionBBox = getBoundingBoxForQuads(selectionQuads);
-                if (!selectionBBox) {
-                    console.warn('[handleHighlightAction] Remove from selection: Could not get bounding box for selection quads.');
-                    return;
-                }
+                if (!selectionBBox) return;
 
                 const highlightsToProcess = [...initialHighlights];
                 for (const existingHl of highlightsToProcess) {
                     if (existingHl.pageIndex === selectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
                         const existingHlBBox = getBoundingBoxForQuads(existingHl.quadPoints);
                         if (!existingHlBBox || !doBoundingBoxesIntersect(selectionBBox, existingHlBBox)) {
-                            continue; // No intersection, skip this highlight
+                            continue; 
                         }
 
-                        const originalExistingQuads = JSON.parse(JSON.stringify(existingHl.quadPoints)); // For undo
+                        const originalExistingQuads = JSON.parse(JSON.stringify(existingHl.quadPoints)); 
                         let quadsBeforeSelection = [];
                         let quadsAfterSelection = [];
 
@@ -851,64 +843,35 @@ import { get } from 'svelte/store';
                             if (!exQuadBBox) continue;
 
                             if (!doBoundingBoxesIntersect(exQuadBBox, selectionBBox)) {
-                                // Quad does not intersect with the selection bounding box
-                                if (exQuadBBox.y2 <= selectionBBox.y1) { // Quad is entirely above selection
-                                    quadsBeforeSelection.push(exQuad);
-                                } else if (exQuadBBox.y1 >= selectionBBox.y2) { // Quad is entirely below selection
-                                    quadsAfterSelection.push(exQuad);
-                                } else { // Quad is on the same horizontal band as the selection
-                                    if (exQuadBBox.x2 <= selectionBBox.x1) { // Quad is entirely to the left of selection
-                                        quadsBeforeSelection.push(exQuad);
-                                    } else if (exQuadBBox.x1 >= selectionBBox.x2) { // Quad is entirely to the right of selection
-                                        quadsAfterSelection.push(exQuad);
-                                    } else {
-                                        // This case should be rare if intersection logic is correct.
-                                        // Quad is on the same band and horizontally overlapping but wasn't caught by intersection.
-                                        console.warn('[handleHighlightAction] Non-intersecting exQuad overlaps selection horizontally. Defaulting to quadsBeforeSelection. exQuadBBox:', exQuadBBox, 'selectionBBox:', selectionBBox);
-                                        quadsBeforeSelection.push(exQuad); // Default behavior
-                                    }
+                                if (exQuadBBox.y2 <= selectionBBox.y1) quadsBeforeSelection.push(exQuad);
+                                else if (exQuadBBox.y1 >= selectionBBox.y2) quadsAfterSelection.push(exQuad);
+                                else {
+                                    if (exQuadBBox.x2 <= selectionBBox.x1) quadsBeforeSelection.push(exQuad);
+                                    else if (exQuadBBox.x1 >= selectionBBox.x2) quadsAfterSelection.push(exQuad);
+                                    else quadsBeforeSelection.push(exQuad); 
                                 }
                             } else {
-                                // Quad intersects with the selection bounding box, subtract and categorize remnants
                                 const remnants = subtractQuads([exQuad], selectionQuads);
                                 for (const remnantQuad of remnants) {
                                     const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
                                     if (!remnantBBox) continue;
-
-                                    if (remnantBBox.x2 <= selectionBBox.x1) { // Remnant is to the left of the selection
-                                        quadsBeforeSelection.push(remnantQuad);
-                                    } else if (remnantBBox.x1 >= selectionBBox.x2) { // Remnant is to the right of the selection
-                                        quadsAfterSelection.push(remnantQuad);
-                                    } else {
-                                        // Remnant overlaps horizontally with selection - this implies a vertical cut or complex scenario.
-                                        // This case handles remnants that are directly above or below the "hole" punched by selectionQuads
-                                        // within the bounds of exQuad if exQuad was taller than the selection.
-                                        // Or, if subtractQuads produced a remnant that still overlaps horizontally (which is unexpected for simple hole punching).
-                                        console.warn('[handleHighlightAction] Remnant quad overlaps selection horizontally. exQuadBBox:', exQuadBBox, 'remnantBBox:', remnantBBox, 'selectionBBox:', selectionBBox);
-                                        // Fallback logic based on vertical position relative to selection (if exQuad is primarily horizontal)
-                                        // or horizontal center if truly ambiguous.
-                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) { // exQuad is wider than tall
-                                            if (remnantBBox.y2 <= selectionBBox.y1) { // Remnant is above selection
-                                                quadsBeforeSelection.push(remnantQuad);
-                                            } else if (remnantBBox.y1 >= selectionBBox.y2) { // Remnant is below selection
-                                                quadsAfterSelection.push(remnantQuad);
-                                            } else { // Fallback to x_center for truly overlapping cases within the selection's vertical span
+                                    if (remnantBBox.x2 <= selectionBBox.x1) quadsBeforeSelection.push(remnantQuad);
+                                    else if (remnantBBox.x1 >= selectionBBox.x2) quadsAfterSelection.push(remnantQuad);
+                                    else {
+                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) {
+                                            if (remnantBBox.y2 <= selectionBBox.y1) quadsBeforeSelection.push(remnantQuad);
+                                            else if (remnantBBox.y1 >= selectionBBox.y2) quadsAfterSelection.push(remnantQuad);
+                                            else {
                                                 const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                                                 const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                                if (remnantCenterX < selectionCenterX) {
-                                                    quadsBeforeSelection.push(remnantQuad);
-                                                } else {
-                                                    quadsAfterSelection.push(remnantQuad);
-                                                }
+                                                if (remnantCenterX < selectionCenterX) quadsBeforeSelection.push(remnantQuad);
+                                                else quadsAfterSelection.push(remnantQuad);
                                             }
-                                        } else { // exQuad is taller than wide (or square) - use original y_center logic or x_center
+                                        } else {
                                             const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                                             const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                            if (remnantCenterX < selectionCenterX) { // Default to x-based split for ambiguous cases
-                                                quadsBeforeSelection.push(remnantQuad);
-                                            } else {
-                                                quadsAfterSelection.push(remnantQuad);
-                                            }
+                                            if (remnantCenterX < selectionCenterX) quadsBeforeSelection.push(remnantQuad);
+                                            else quadsAfterSelection.push(remnantQuad);
                                         }
                                     }
                                 }
@@ -940,9 +903,9 @@ import { get } from 'svelte/store';
                                 id: newSplitHighlightId,
                                 color: existingHl.color,
                                 pageIndex: existingHl.pageIndex,
-                                text: existingHl.text, // Text might be inaccurate for the split part
+                                text: existingHl.text,
                                 quadPoints: finalQuadsAfter,
-                                prefix: existingHl.prefix, // Prefixes/suffixes might be inaccurate
+                                prefix: existingHl.prefix,
                                 suffix: existingHl.suffix,
                             };
                             dispatch('pdfhighlightevent', { type: 'add', ...newHighlightDataObject });
@@ -957,8 +920,7 @@ import { get } from 'svelte/store';
             }
             // --- END OF MODIFIED LOGIC BLOCK ---
 
-            const newHighlightId = `hl-${uuidv4()}`;
-            // Calculate new selection quads first for subsumption check
+            // Calculate new selection quads
             const { pageIndex: newSelectionPageIndex, pageElement: newSelectionPageElement } = getRangePageInfo(rangeToUse);
             let actualNewSelectionPageElement = newSelectionPageElement;
             if (!actualNewSelectionPageElement && newSelectionPageIndex !== -1 && pdfViewer) {
@@ -969,83 +931,8 @@ import { get } from 'svelte/store';
             const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
             const newSelectionProcessedQuads = processAndMergeQuadPoints(newSelectionClientRects, newSelectionPageRect);
 
-            if (newSelectionPageIndex === -1) {
-                console.warn('[handleHighlightAction] Could not determine page index for new selection for overlap check. Proceeding without check.');
-            } else {
-                const highlightsToCheck = [...initialHighlights];
-                for (const existingHl of highlightsToCheck) {
-                    if (existingHl.pageIndex === newSelectionPageIndex) {
-                        if (existingHl.quadPoints && existingHl.quadPoints.length > 0) {
-                            if (areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints)) {
-                                console.log(`[handleHighlightAction] New selection subsumes existing highlight ID: ${existingHl.id}. Removing old one.`);
-                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
-                                // For proper undo, we need the full original data including its specific range data if possible.
-                                // Using existingHl as dataForStorage is a simplification.
-                                recordAction('removeHighlight', {
-                                    id: existingHl.id,
-                                    color: existingHl.color,
-                                    dataForStorage: { ...existingHl }
-                                });
-                                // The UI for the old highlight (overlay parts) will be removed by the 'remove' event handler
-                                // or by the new highlight's render call if IDs match (though they won't here).
-                                // No need to call removeHighlightOverlay(existingHl.id) directly here if events handle it.
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Phase 2: Handle Partial Overlaps by Trimming Existing Highlights ---
-            const newSelectionBoundingBox = newSelectionProcessedQuads.length > 0 ? getBoundingBoxForQuads(newSelectionProcessedQuads) : null;
-            // const highlightsToUpdateForUndo = []; // Not using this batching approach for now
-
-            for (const existingHl of [...initialHighlights]) { // Iterate on a copy
-                if (existingHl.pageIndex === newSelectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
-
-                    // Basic check: if an ID was already processed by subsumption, it might be gone from initialHighlights
-                    // or its quadPoints might be empty. A more robust check might involve a list of IDs already handled.
-                    // For this iteration, we assume `areQuadsSubsumed` handles distinct cases.
-                    // If existingHl was fully subsumed, it should have been removed/marked.
-                    // This logic targets *only* partial overlaps.
-
-                    const existingHlBoundingBox = getBoundingBoxForQuads(existingHl.quadPoints);
-
-                    if (newSelectionBoundingBox && doBoundingBoxesIntersect(newSelectionBoundingBox, existingHlBoundingBox) &&
-                        !areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints) // Not fully subsumed by new
-                    ) {
-                        console.log(`[handleHighlightAction] Partial overlap detected with existing highlight ID: ${existingHl.id}. Attempting to trim.`);
-
-                        const originalQuadsForUndo = JSON.parse(JSON.stringify(existingHl.quadPoints)); // Deep copy for undo
-                        const remainingQuads = subtractQuads(existingHl.quadPoints, newSelectionProcessedQuads);
-
-                        if (remainingQuads.length === 0) {
-                            console.log(`[handleHighlightAction] Trimming existing highlight ID: ${existingHl.id} resulted in empty quads. Removing it.`);
-                            dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
-                            recordAction('removeHighlight', {
-                                id: existingHl.id,
-                                color: existingHl.color,
-                                dataForStorage: { ...existingHl, quadPoints: originalQuadsForUndo }
-                            });
-                        } else {
-                            console.log(`[handleHighlightAction] Updating existing highlight ID: ${existingHl.id} with ${remainingQuads.length} remaining quads.`);
-
-                            dispatch('pdfhighlightevent', {
-                                type: 'update',
-                                ...existingHl, // Spread existing properties
-                                quadPoints: remainingQuads // Override quadPoints
-                            });
-                            recordAction('updateHighlightQuads', {
-                                id: existingHl.id,
-                                oldQuads: originalQuadsForUndo,
-                                newQuads: remainingQuads,
-                                originalHighlightData: JSON.parse(JSON.stringify(existingHl)) // Store all original data
-                            });
-                        }
-                        markPdfAnnotationsDirty();
-                    }
-                }
-            }
-            // End of new partial overlap logic
+            // Stacking model: We no longer remove or trim existing highlights when adding a new one.
+            // Highlights are treated as independent layers.
 
             // --- Immediate Visual Update for the new highlight ---
             const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
