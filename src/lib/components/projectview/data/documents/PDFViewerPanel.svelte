@@ -693,17 +693,12 @@ import { get } from 'svelte/store';
                     return; // Suppress 'selection' toolbar
                 }
 
-                // If not clicking on existing highlight, proceed to show 'selection' toolbar
+                // If not clicking on existing highlight, we store the selection but don't show the floating toolbar
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
-                showSelectionToolbar = true; 
+                showSelectionToolbar = false; 
 
-                requestAnimationFrame(() => {
-                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
-                        positionToolbarAtPoint(event.clientX, event.clientY);
-                    }
-                });
                 return;
             }
         }
@@ -837,10 +832,12 @@ import { get } from 'svelte/store';
     }
 
     function hideSelectionToolbar() {
-        if (showSelectionToolbar) {
-            clearTimeout(hideToolbarTimeoutId); showSelectionToolbar = false;
-            toolbarMode = null; selectedRange = null; clickedHighlightId = null; clickedHighlightColor = null;
-        }
+        clearTimeout(hideToolbarTimeoutId); 
+        showSelectionToolbar = false;
+        toolbarMode = null; 
+        selectedRange = null; 
+        clickedHighlightId = null; 
+        clickedHighlightColor = null;
     }
     function handleToolbarMouseEnter() { clearTimeout(hideToolbarTimeoutId); }
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
@@ -2508,13 +2505,33 @@ function updateHighlightOverlayColor(id, color) {
                         class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
                         role="menuitem"
                         tabindex="-1"
-                        on:click={() => {
-                            quickHighlightColor = opt.value;
-                            quickHighlightMode = 'highlight';
+                        on:click={async () => {
+                            if (selectedRange && toolbarMode === 'selection') {
+                                await handleHighlightAction(opt.value);
+                                window.getSelection()?.removeAllRanges();
+                                hideSelectionToolbar();
+                            } else {
+                                quickHighlightColor = opt.value;
+                                quickHighlightMode = 'highlight';
+                                isQuickHighlightActive = true; // Enable toggle
+                            }
                             isNewHighlightDropdownOpen = false;
-                            isQuickHighlightActive = true; // Enable toggle
                         }}
-                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
+                        on:keydown={async (e) => { 
+                            if (e.key === 'Enter' || e.key === ' ') { 
+                                if (selectedRange && toolbarMode === 'selection') {
+                                    await handleHighlightAction(opt.value);
+                                    window.getSelection()?.removeAllRanges();
+                                    hideSelectionToolbar();
+                                } else {
+                                    quickHighlightColor = opt.value; 
+                                    quickHighlightMode = 'highlight'; 
+                                    isQuickHighlightActive = true; 
+                                }
+                                isNewHighlightDropdownOpen = false; 
+                                e.preventDefault();
+                            }
+                        }}
                     >
                         <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={opt.value}></span>
                         <span>{opt.label}</span>
@@ -2524,13 +2541,33 @@ function updateHighlightOverlayColor(id, color) {
                     class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
                     role="menuitem"
                     tabindex="-1"
-                    on:click={() => {
-                        quickHighlightColor = 'rgba(255, 255, 255, 1)'; // White
-                        quickHighlightMode = 'remove'; // Set mode to remove
+                    on:click={async () => {
+                        if (selectedRange && toolbarMode === 'selection') {
+                            await handleHighlightAction('remove');
+                            window.getSelection()?.removeAllRanges();
+                            hideSelectionToolbar();
+                        } else {
+                            quickHighlightColor = 'rgba(255, 255, 255, 1)'; // White
+                            quickHighlightMode = 'remove'; // Set mode to remove
+                            isQuickHighlightActive = true; // Enable toggle
+                        }
                         isNewHighlightDropdownOpen = false;
-                        isQuickHighlightActive = true; // Enable toggle
                     }}
-                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = 'rgba(255, 255, 255, 1)'; quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
+                    on:keydown={async (e) => { 
+                        if (e.key === 'Enter' || e.key === ' ') { 
+                            if (selectedRange && toolbarMode === 'selection') {
+                                await handleHighlightAction('remove');
+                                window.getSelection()?.removeAllRanges();
+                                hideSelectionToolbar();
+                            } else {
+                                quickHighlightColor = 'rgba(255, 255, 255, 1)'; 
+                                quickHighlightMode = 'remove'; 
+                                isQuickHighlightActive = true; 
+                            }
+                            isNewHighlightDropdownOpen = false; 
+                            e.preventDefault();
+                        }
+                    }}
                 >
                     <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
                     <span>None</span>
