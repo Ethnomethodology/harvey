@@ -1103,62 +1103,70 @@
 
 function gatherAllHighlights() {
     const root = _getRoot();
-    const highlightedNodes = [];
+    const allTextNodes = [];
     
-    // 1. Traverse and collect highlighted nodes in order
+    // 1. Collect ALL text nodes in document order to identify gaps correctly
     const visit = (node) => {
-        if (_isExtendedTextNode(node) && node.getHighlightId()) {
-            highlightedNodes.push(node);
-        }
-        if (_isElementNode(node)) {
+        if (_isExtendedTextNode(node)) {
+            allTextNodes.push(node);
+        } else if (_isElementNode(node)) {
             node.getChildren().forEach(visit);
         }
     };
     visit(root);
 
-    if (highlightedNodes.length === 0) return [];
+    if (allTextNodes.length === 0) return [];
 
     const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
 
-    // 2. Group into contiguous blocks sharing SAME ID and COLOR
+    // 2. Group into blocks that are contiguous in the document flow
     const blocks = [];
-    let currentBlock = [highlightedNodes[0]];
+    let currentBlock = [];
 
-    for (let i = 1; i < highlightedNodes.length; i++) {
-        const prev = highlightedNodes[i - 1];
-        const curr = highlightedNodes[i];
-
-        const prevId = prev.getHighlightId();
-        const currId = curr.getHighlightId();
-        const prevStyle = prev.getStyle();
-        const currStyle = curr.getStyle();
-        
-        // Contiguity check: are they siblings and adjacent?
-        const isContiguous = prev.getNextSibling() === curr;
-
-        if (prevId === currId && prevStyle === currStyle && isContiguous) {
-            currentBlock.push(curr);
+    for (const node of allTextNodes) {
+        const highlightId = node.getHighlightId();
+        if (highlightId) {
+            if (currentBlock.length > 0) {
+                const lastNode = currentBlock[currentBlock.length - 1];
+                // Group if they share the same ID. 
+                // This allows highlights to span multiple paragraphs/nodes while remaining one annotation.
+                if (lastNode.getHighlightId() === highlightId) {
+                    currentBlock.push(node);
+                } else {
+                    blocks.push(currentBlock);
+                    currentBlock = [node];
+                }
+            } else {
+                currentBlock = [node];
+            }
         } else {
-            blocks.push(currentBlock);
-            currentBlock = [curr];
+            // Unhighlighted text node! This is a gap that forces a split.
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock);
+                currentBlock = [];
+            }
         }
     }
-    blocks.push(currentBlock);
+    if (currentBlock.length > 0) blocks.push(currentBlock);
 
-    // 3. Normalize IDs: disjoint blocks sharing an ID get new IDs + cloned metadata
+    // 3. Normalize IDs and merge metadata
     const finalHighlights = [];
     const seenIds = new Set();
 
     for (const block of blocks) {
+        if (block.length === 0) continue;
+        
         const firstNode = block[0];
         let highlightId = firstNode.getHighlightId();
         const style = firstNode.getStyle();
-        const colorMatch = style.match(/background-color:\s*(.*?);/);
-        const color = colorMatch ? colorMatch[1] : 'transparent';
+        // Robust regex to capture color regardless of semicolons
+        const colorMatch = style.match(/background-color:\s*([^;]+)/);
+        const color = colorMatch ? colorMatch[1].trim() : 'transparent';
 
         const originalId = highlightId;
         if (seenIds.has(highlightId)) {
-            // Disjoint block with same ID! Assign a new ID to split it.
+            // This is a disjoint part of an original highlight.
+            // Assign a new ID to ensure it's a separate annotation entry.
             highlightId = uuidv4();
             block.forEach(n => n.setHighlightId(highlightId));
         } else {
