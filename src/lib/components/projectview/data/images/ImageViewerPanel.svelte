@@ -241,9 +241,9 @@
             await saveImageAnnotations();
             annotationBeingEdited = newAnnotation;
             isEditingExisting = false;
-            const osdRect = osdViewerElement.getBoundingClientRect();
-            dialogX = event.position.x - osdRect.left;
-            dialogY = event.position.y - osdRect.top;
+            // event.position is already relative to the viewer element
+            dialogX = event.position.x;
+            dialogY = event.position.y;
             showAnnotationCreationDialog = true;
         }
         currentRect = null;
@@ -287,7 +287,7 @@
 
         // Position dialog near the clicked annotation
         const osdRect = osdViewerElement.getBoundingClientRect();
-        const annotationRect = event.target.getBoundingClientRect();
+        const annotationRect = event.currentTarget.getBoundingClientRect();
         dialogX = annotationRect.left - osdRect.left + annotationRect.width;
         dialogY = annotationRect.top - osdRect.top + annotationRect.height;
 
@@ -444,122 +444,126 @@
             <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-d-gray-800/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
-            <!-- SVG overlay for drawing and displaying annotations -->
-            <svg bind:this={svgOverlay} class="pointer-events-none z-20" viewBox="0 0 1 1"
-                 class:cursor-draw={activeDrawingTool !== null}
-                 class:cursor-pan={activeDrawingTool === null}>
-                {#each $currentAnnotations as annotation (annotation.id)}
-                    {@const shapeData = annotation.target.selector.value}
-                    {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
-                    {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
-                    {@const strokeColor = adjustOpacity(fillColor, 1)}
-
-                    {#if shapeData.shape === 'rectangle'}
-                        <rect
-                            x={shapeData.x}
-                            y={shapeData.y}
-                            width={shapeData.width}
-                            height={shapeData.height}
-                            fill={fillColor}
-                            stroke={strokeColor}
-                            stroke-width="1px"
-                            vector-effect="non-scaling-stroke"
-                            class="pointer-events-auto cursor-pointer"
-                            on:click={(e) => handleAnnotationClick(e, annotation)}
-                        />
-                    {:else if shapeData.shape === 'circle'}
-                        <circle
-                            cx={shapeData.cx}
-                            cy={shapeData.cy}
-                            r={shapeData.r}
-                            fill={fillColor}
-                            stroke={strokeColor}
-                            stroke-width="1px"
-                            vector-effect="non-scaling-stroke"
-                            class="pointer-events-auto cursor-pointer"
-                            on:click={(e) => handleAnnotationClick(e, annotation)}
-                        />
-                    {:else if shapeData.shape === 'polygon'}
-                        <polygon
-                            points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
-                            fill={fillColor}
-                            stroke={strokeColor}
-                            stroke-width="0.002"
-                            class="pointer-events-auto cursor-pointer"
-                            on:click|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
-                        />
-                    {/if}
-                {/each}
-                {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
-                    <rect
-                        x={currentRect.x}
-                        y={currentRect.y}
-                        width={currentRect.width}
-                        height={currentRect.height}
-                        fill="rgba(255, 242, 117, 0.5)"
-                        stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="1px"
-                        vector-effect="non-scaling-stroke"
-                    />
-                {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
-                    <circle
-                        cx={currentCircle.cx}
-                        cy={currentCircle.cy}
-                        r={currentCircle.r}
-                        fill="rgba(255, 242, 117, 0.5)"
-                        stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="1px"
-                        vector-effect="non-scaling-stroke"
-                    />
-                {:else if isDrawing && activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
-                    <polygon
-                        points={currentPreviewPolygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                        fill="rgba(255, 242, 117, 0.5)"
-                        stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="0.002"
-                        vector-effect="non-scaling-stroke"
-                    />
-                    {#if currentPolygon.previewLine}
-                        <line
-                            x1={currentPolygon.previewLine.x1}
-                            y1={currentPolygon.previewLine.y1}
-                            x2={currentPolygon.previewLine.x2}
-                            y2={currentPolygon.previewLine.y2}
-                            stroke="rgba(255, 242, 117, 1)"
-                            stroke-width="1px"
-                            stroke-dasharray="0.01, 0.01"
-                            vector-effect="non-scaling-stroke"
-                        />
-                    {/if}
-                    {#if currentPolygon.closingPreviewLine}
-                        <line
-                            x1={currentPolygon.closingPreviewLine.x1}
-                            y1={currentPolygon.closingPreviewLine.y1}
-                            x2={currentPolygon.closingPreviewLine.x2}
-                            y2={currentPolygon.closingPreviewLine.y2}
-                            stroke="rgba(255, 242, 117, 1)"
-                            stroke-width="1px"
-                            stroke-dasharray="0.01, 0.01"
-                            vector-effect="non-scaling-stroke"
-                        />
-                    {/if}
-                {/if}
-            </svg>
         </div>
 
+        <!-- SVG overlay for drawing and displaying annotations -->
+        <!-- Moved outside osdViewerElement to prevent OSD initialization from clearing it -->
+        <svg bind:this={svgOverlay} class="pointer-events-none z-20 absolute inset-0" viewBox="0 0 1 1"
+                class:cursor-draw={activeDrawingTool !== null}
+                class:cursor-pan={activeDrawingTool === null}>
+            {#each $currentAnnotations as annotation (annotation.id)}
+                {@const shapeData = annotation.target.selector.value}
+                {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
+                {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
+                {@const strokeColor = adjustOpacity(fillColor, 1)}
+
+                {#if shapeData.shape === 'rectangle'}
+                    <rect
+                        x={shapeData.x}
+                        y={shapeData.y}
+                        width={shapeData.width}
+                        height={shapeData.height}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        stroke-width="1px"
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer"
+                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                    />
+                {:else if shapeData.shape === 'circle'}
+                    <circle
+                        cx={shapeData.cx}
+                        cy={shapeData.cy}
+                        r={shapeData.r}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        stroke-width="1px"
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer"
+                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                    />
+                {:else if shapeData.shape === 'polygon'}
+                    <polygon
+                        points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        stroke-width="0.002"
+                        class="pointer-events-auto cursor-pointer"
+                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                    />
+                {/if}
+            {/each}
+            {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
+                <rect
+                    x={currentRect.x}
+                    y={currentRect.y}
+                    width={currentRect.width}
+                    height={currentRect.height}
+                    fill="rgba(255, 242, 117, 0.5)"
+                    stroke="rgba(255, 242, 117, 1)"
+                    stroke-width="1px"
+                    vector-effect="non-scaling-stroke"
+                />
+            {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
+                <circle
+                    cx={currentCircle.cx}
+                    cy={currentCircle.cy}
+                    r={currentCircle.r}
+                    fill="rgba(255, 242, 117, 0.5)"
+                    stroke="rgba(255, 242, 117, 1)"
+                    stroke-width="1px"
+                    vector-effect="non-scaling-stroke"
+                />
+            {:else if isDrawing && activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
+                <polygon
+                    points={currentPreviewPolygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="rgba(255, 242, 117, 0.5)"
+                    stroke="rgba(255, 242, 117, 1)"
+                    stroke-width="0.002"
+                    vector-effect="non-scaling-stroke"
+                />
+                {#if currentPolygon.previewLine}
+                    <line
+                        x1={currentPolygon.previewLine.x1}
+                        y1={currentPolygon.previewLine.y1}
+                        x2={currentPolygon.previewLine.x2}
+                        y2={currentPolygon.previewLine.y2}
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1px"
+                        stroke-dasharray="0.01, 0.01"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {/if}
+                {#if currentPolygon.closingPreviewLine}
+                    <line
+                        x1={currentPolygon.closingPreviewLine.x1}
+                        y1={currentPolygon.closingPreviewLine.y1}
+                        x2={currentPolygon.closingPreviewLine.x2}
+                        y2={currentPolygon.closingPreviewLine.y2}
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1px"
+                        stroke-dasharray="0.01, 0.01"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {/if}
+            {/if}
+        </svg>
+
         {#if showAnnotationCreationDialog}
-            <AnnotationCreationDialog
-                x={dialogX}
-                y={dialogY}
-                initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
-                initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
-                initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
-                isEditing={isEditingExisting}
-                panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
-                on:save={handleAnnotationDialogSave}
-                on:cancel={handleAnnotationDialogCancel}
-                on:delete={handleAnnotationDialogDelete}
-            />
+            {#key annotationBeingEdited?.id}
+                <AnnotationCreationDialog
+                    x={dialogX}
+                    y={dialogY}
+                    initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
+                    initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
+                    initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
+                    isEditing={isEditingExisting}
+                    panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
+                    on:save={handleAnnotationDialogSave}
+                    on:cancel={handleAnnotationDialogCancel}
+                    on:delete={handleAnnotationDialogDelete}
+                />
+            {/key}
         {/if}
     </div>
 </div>
