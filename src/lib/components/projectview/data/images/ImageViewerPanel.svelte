@@ -251,7 +251,7 @@
         startViewportPoint = null;
     }
 
-    function onDoubleClick(event) {
+    async function onDoubleClick(event) {
         if (activeDrawingTool !== 'polygon' || !isDrawing) return;
         event.preventDefaultAction = true;
 
@@ -263,7 +263,13 @@
         };
 
         updateImageAnnotations([...$currentAnnotations, newAnnotation]);
-        saveImageAnnotations();
+        await saveImageAnnotations();
+
+        annotationBeingEdited = newAnnotation;
+        isEditingExisting = false;
+        dialogX = event.position.x;
+        dialogY = event.position.y;
+        showAnnotationCreationDialog = true;
 
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
