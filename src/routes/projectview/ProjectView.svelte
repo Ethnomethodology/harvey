@@ -469,7 +469,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 prepareDocumentView(null);
             }
         } else if (selectedTab === 'transcriptions') {
-            prepareDocumentView(null);
+            // prepareDocumentView(null); // Removed to persist Data tab state
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
                 const proj = get(project);

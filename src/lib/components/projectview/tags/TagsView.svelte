@@ -6,7 +6,7 @@
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
-    import { allTags, updateTag, deleteTag, fetchAllTags } from '$lib/stores/tagStore.js';
+    import { allTags, updateTag, deleteTag, fetchAllTags, selectedTag, tagInfo, tagSearchQuery, selectTag } from '$lib/stores/tagStore.js';
     import { refresher } from '$lib/stores/refresherStore.js';
     import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
@@ -38,9 +38,8 @@
             }
             await fetchAllTags();
             // If the selected tag was deleted, clear the view
-            if (selectedTag && !$allTags.some(t => t.id === selectedTag.id)) {
-                selectedTag = null;
-                tagInfo = null;
+            if ($selectedTag && !$allTags.some(t => t.id === $selectedTag.id)) {
+                selectTag(null);
                 description = '';
             }
         });
@@ -78,15 +77,12 @@
         }
     }
 
-    let selectedTag = null;
-    let tagInfo = null;
     let isLoading = false;
     let description = '';
     let tableContainer;
     let paginationContainer;
     let tabulatorInstance = null;
     let isEditing = false;
-    let searchQuery = '';
     let tagNameInput = '';
     let tableReady = false;
     let processedHighlights = [];
@@ -116,8 +112,8 @@
         }
     }
     $: {
-        if (tagInfo && tagInfo.highlights) {
-            processedHighlights = tagInfo.highlights.map(item => {
+        if ($tagInfo && $tagInfo.highlights) {
+            processedHighlights = $tagInfo.highlights.map(item => {
                 // The backend sometimes returns the highlight nested, sometimes not.
                 // This normalizes it.
                 const highlight = item.highlight || item;
@@ -131,6 +127,13 @@
             });
         } else {
             processedHighlights = [];
+        }
+    }
+
+    $: {
+        if ($tagInfo) {
+            description = $tagInfo.description;
+            tagNameInput = $tagInfo.name;
         }
     }
 
@@ -152,14 +155,14 @@
     }
 
     afterUpdate(() => {
-        if (tagInfo && tableContainer && !tabulatorInstance) {
+        if ($tagInfo && tableContainer && !tabulatorInstance) {
             initializeTable(processedHighlights);
         } else if (tabulatorInstance && tableReady) {
             // This ensures we only update data if the table exists and is ready
             tabulatorInstance.setData(processedHighlights);
         }
 
-        if (!tagInfo && tabulatorInstance) {
+        if (!$tagInfo && tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
             tableReady = false;
@@ -167,14 +170,14 @@
     });
 
     function handleSearch() {
-        if (!searchQuery && searchQuery.trim() === '') {
+        if (!$tagSearchQuery && $tagSearchQuery.trim() === '') {
             if (tabulatorInstance) {
                 tabulatorInstance.clearFilter();
             }
             return;
         }
         if (tabulatorInstance) {
-            const term = searchQuery.trim();
+            const term = $tagSearchQuery.trim();
             if (term) {
                 tabulatorInstance.setFilter("text", "like", term);
             } else {
@@ -195,7 +198,7 @@
             paginationSize: 10,
             paginationAddRow: "table",
             initialFilter: [
-                {field:"text", type:"like", value:searchQuery}
+                {field:"text", type:"like", value:$tagSearchQuery}
             ],
             columns: [
                 { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell) => {
@@ -236,12 +239,12 @@
                         const commentPill = commentCount > 0 ? `<span class=\"absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center\">${commentCount}</span>` : '';
 
                         return `<div class=\"flex items-center\">
-                                <button title=\"Inspect" class=\"mr-4\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" class=\"bi bi-eye\" viewBox=\"0 0 16 16">
+                                <button title=\"Inspect" class=\"mr-4\"><svg xmlns=\"http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
                                     <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
                                     <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
                                   </svg></button>
                                 <button title="Comments" class=\"relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4\">
-                                    <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" class=\"bi bi-chat\" viewBox=\"0 0 16 16">
+                                    <svg xmlns=\"http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
                                         <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
                                     </svg>
                                     ${commentPill}
@@ -278,26 +281,7 @@
 
     async function handleSelectTag(tag) {
         isEditing = false;
-        selectedTag = tag;
-        tagInfo = null;
-        description = '';
-        try {
-            isLoading = true;
-            tagInfo = await invoke('get_tag_info', {
-                projectId: $project.id,
-                tagId: tag.id,
-                tagName: tag.name,
-            });
-            console.log("tagInfo:", tagInfo);
-            if (tagInfo) {
-                description = tagInfo.description;
-                tagNameInput = tagInfo.name;
-            }
-        } catch (error) {
-            console.error(`Failed to load tag info for ${tag.name}:`, error);
-        } finally {
-            isLoading = false;
-        }
+        selectTag(tag);
     }
 
     async function handleSaveTag(event) {
@@ -315,8 +299,7 @@
                 if (renamedTag) {
                     handleSelectTag(renamedTag);
                 } else {
-                    selectedTag = null;
-                    tagInfo = null;
+                    selectTag(null);
                 }
             }
         } catch (error) {
@@ -329,8 +312,7 @@
         try {
             await deleteTag(id);
             isEditModalOpen = false;
-            selectedTag = null;
-            tagInfo = null;
+            selectTag(null);
             description = '';
         } catch (error) {
             console.error(`Failed to delete tag:`, error);
@@ -395,21 +377,21 @@
     }
 
     async function handleUntag(item) {
-        if (!selectedTag) return;
+        if (!$selectedTag) return;
 
-        const confirmed = await confirm(`Are you sure you want to remove the tag "${selectedTag.name}" from this highlight?`);
+        const confirmed = await confirm(`Are you sure you want to remove the tag "${$selectedTag.name}" from this highlight?`);
         if (!confirmed) return;
 
         try {
             await invoke('remove_tag_from_highlight', {
                 projectId: $project.id,
                 highlightId: item.id,
-                tagToRemove: selectedTag.name,
+                tagToRemove: $selectedTag.name,
                 filePath: item.source.file_path,
                 docType: item.source.original_doc_type || item.source.file_type,
             });
             // Refresh the view
-            await handleSelectTag(selectedTag);
+            await handleSelectTag($selectedTag);
         } catch (error) {
             console.error("Failed to remove tag from highlight:", error);
         }
@@ -427,11 +409,11 @@
                 {#each $allTags as tag (tag.id)}
                     <li
                         class="p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
-                        class:bg-blue-200={selectedTag?.id === tag.id}
-                        class:dark:bg-blue-800={selectedTag?.id === tag.id}
+                        class:bg-blue-200={$selectedTag?.id === tag.id}
+                        class:dark:bg-blue-800={$selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
                     >
-                        <span class:dark:!text-blue-200={selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
+                        <span class:dark:!text-blue-200={$selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
                     </li>
                 {/each}
             </ul>
@@ -443,13 +425,13 @@
 
     <!-- Middle Panel: Tag details and highlights -->
         <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-surface-1">
-        {#if selectedTag}
+        {#if $selectedTag}
             {#if isLoading}
                 <p class="dark:text-text-primary">Loading tag information...</p>
-            {:else if tagInfo}
+            {:else if $tagInfo}
                 <div class="h-[20%] flex flex-col">
                     <div class="flex items-center space-x-2">
-                        <h2 class="text-xl font-bold dark:text-white">{tagInfo.name}</h2>
+                        <h2 class="text-xl font-bold dark:text-white">{$tagInfo.name}</h2>
                         <button on:click={() => isEditModalOpen = true} class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square w-4 h-4" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"></path><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"></path></svg>
                         </button>
@@ -466,7 +448,7 @@
 {#if isEditModalOpen}
     <EditTagModal
         showModal={isEditModalOpen}
-        tag={selectedTag}
+        tag={$selectedTag}
         on:close={() => isEditModalOpen = false}
         on:save={handleSaveTag}
         on:delete={handleDeleteTagFromModal}
@@ -475,8 +457,8 @@
 
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
-                        <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" autocomplete="off" autocorrect="off">
+                        <h3 class="text-lg font-semibold dark:text-white">Highlights ({$tagInfo.highlight_count})</h3>
+                        <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" autocomplete="off" autocorrect="off">
                     </div>
                     <div class="flex-grow overflow-auto border border-gray-300 dark:border-border rounded-md" bind:this={tableContainer}>
                     </div>

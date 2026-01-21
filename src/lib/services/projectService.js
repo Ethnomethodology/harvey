@@ -2071,11 +2071,16 @@ export async function clearProjectDataStore() {
     // and to avoid circular dependencies if projectStore itself imports projectService.
     const projectStoreModule = await import('$lib/stores/projectStore.js');
     const transcriptStoreModule = await import('$lib/stores/transcriptStore.js');
+    const tagStoreModule = await import('$lib/stores/tagStore.js');
 
     projectStoreModule.project.set({ ...projectStoreModule.initialState });
     projectStoreModule.currentProjectGroupsList.set([]);
 
     transcriptStoreModule.clearTranscriptState();
+
+    tagStoreModule.selectedTag.set(null);
+    tagStoreModule.tagInfo.set(null);
+    tagStoreModule.tagSearchQuery.set('');
 
     // Optionally, inform other parts of the app that the project has been cleared
     // await emit('project-cleared');

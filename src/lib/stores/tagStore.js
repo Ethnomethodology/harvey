@@ -14,6 +14,13 @@ import { triggerRefresh } from '$lib/stores/refresherStore.js';
 // This will hold an array of Tag objects.
 export const allTags = writable([]);
 
+// Store for the currently selected tag in the Tags view
+export const selectedTag = writable(null);
+// Store for the details of the currently selected tag
+export const tagInfo = writable(null);
+// Store for the search query in the Tags view
+export const tagSearchQuery = writable('');
+
 /**
  * Fetches all tags for the current project from the database and updates the store.
  */
@@ -28,9 +35,43 @@ export async function fetchAllTags() {
     try {
         const tagsFromDb = await invoke('get_all_tags', { projectId: proj.id });
         allTags.set(tagsFromDb || []);
+
+        // Validate selected tag still exists
+        const currentSelected = get(selectedTag);
+        if (currentSelected && !tagsFromDb.some(t => t.id === currentSelected.id)) {
+            selectedTag.set(null);
+            tagInfo.set(null);
+        }
     } catch (error) {
         console.error('[tagStore] Failed to fetch tags:', error);
         allTags.set([]);
+    }
+}
+
+/**
+ * Sets the selected tag and fetches its info.
+ */
+export async function selectTag(tag) {
+    if (!tag) {
+        selectedTag.set(null);
+        tagInfo.set(null);
+        return;
+    }
+
+    selectedTag.set(tag);
+    tagInfo.set(null); // Clear previous info while loading
+
+    const proj = get(project);
+    try {
+        const info = await invoke('get_tag_info', {
+            projectId: proj.id,
+            tagId: tag.id,
+            tagName: tag.name,
+        });
+        tagInfo.set(info);
+    } catch (error) {
+        console.error(`[tagStore] Failed to load tag info for ${tag.name}:`, error);
+        tagInfo.set(null);
     }
 }
 
