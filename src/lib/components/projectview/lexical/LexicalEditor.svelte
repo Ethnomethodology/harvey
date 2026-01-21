@@ -82,7 +82,6 @@
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
-  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
 
   export let initialJson = null;
@@ -164,9 +163,6 @@
   let resizeTargetCellKey = null;
   let resizeStartPos = { x: 0, y: 0 };
   let resizerLineStyle = 'display: none;';
-
-  let showFloatingToolbar = false;
-  let floatingToolbarPosition = { top: 0, left: 0 };
 
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
@@ -529,21 +525,6 @@
                 try {
                     editor.getEditorState().read(updateToolbarState);
                     if (enableFloatingToolbar) {
-                        const selection = _getSelection();
-                        if (selection && !selection.isCollapsed()) {
-                            const domSelection = window.getSelection();
-                            if (domSelection && !domSelection.isCollapsed) {
-                                const domRange = domSelection.getRangeAt(0);
-                                const rect = domRange.getBoundingClientRect();
-                                floatingToolbarPosition = {
-                                    top: rect.top - 40,
-                                    left: rect.left + (rect.width / 2) - 80,
-                                };
-                                showFloatingToolbar = true;
-                            }
-                        } else {
-                            showFloatingToolbar = false;
-                        }
                         showModifyToolbar = false;
                         clickedNodeKey = null;
                     }
@@ -2208,22 +2189,6 @@ $: if (editor && activeLayout) {
   on:confirm={handleInsertTableConfirm}
   on:close={() => showInsertTableModal = false}
 />
-
-{#if enableFloatingToolbar}
-<FloatingHighlightToolbar
-  editor={editor}
-  showToolbar={showFloatingToolbar}
-  toolbarPosition={floatingToolbarPosition}
-  onHighlight={(color) => {
-    applyHighlightColor(color);
-    showFloatingToolbar = false;
-  }}
-  onRemoveHighlight={() => {
-    applyHighlightColor('transparent');
-    showFloatingToolbar = false;
-  }}
-/>
-{/if}
 
 {#if enableFloatingToolbar}
 <FloatingModifyHighlightToolbar
