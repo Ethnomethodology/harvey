@@ -114,6 +114,27 @@
         }
     }
 
+    async function loadHighlightsForTranscript(path) {
+        if (!path) {
+            setDocumentHighlights([]);
+            return;
+        }
+        try {
+            const projectId = get(projectStore).id;
+            const rawHighlights = await invoke('load_lexical_highlights', {
+                args: {
+                    projectId: projectId,
+                    documentPath: path,
+                }
+            });
+            const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
+            setDocumentHighlights(highlights);
+        } catch (e) {
+            console.error("[MediaEditorPanel] Error loading highlights:", e);
+            setDocumentHighlights([]);
+        }
+    }
+
     let previousActiveTranscriptPathInDataTab = null;
     $: if ($projectStore.activeTranscriptPathInDataTab && $projectStore.activeTranscriptPathInDataTab !== previousActiveTranscriptPathInDataTab) {
         previousActiveTranscriptPathInDataTab = $projectStore.activeTranscriptPathInDataTab;
@@ -121,6 +142,7 @@
         transcriptName = associatedTranscriptPath.split(/[\\/]/).pop();
         console.log(`[MediaEditorPanel] activeTranscriptPathInDataTab changed to: ${associatedTranscriptPath}`);
         loadTranscript(associatedTranscriptPath);
+        loadHighlightsForTranscript(associatedTranscriptPath);
         showDataTrimUI = false; // Hide trim UI when switching transcripts
         currentTrimAudioBuffer = null;
     } else if (!$projectStore.activeTranscriptPathInDataTab && previousActiveTranscriptPathInDataTab) {
@@ -132,6 +154,7 @@
         isTranscriptLoading = false; transcriptLoadError = null; showDataTrimUI = false; currentTrimAudioBuffer = null;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         localEditorJsonState = defaultEmptyJson;
+        setDocumentHighlights([]);
         // Also clear the selectedMediaNotePath if it matches the previous one
         if (get(projectStore).selectedMediaNotePath === mediaPath) {
             projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null }));
@@ -197,11 +220,13 @@
             associatedTranscriptPath = activeTranscriptPath;
             transcriptName = activeTranscriptPath.split(/[\\/]/).pop();
             loadTranscript(activeTranscriptPath);
+            loadHighlightsForTranscript(activeTranscriptPath);
         } else if (!activeTranscriptPath && mediaPath) {
             if (associatedTranscriptPath) {
                 associatedTranscriptPath = null;
                 transcriptName = 'N/A';
                 setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
+                setDocumentHighlights([]);
             }
         }
     }
