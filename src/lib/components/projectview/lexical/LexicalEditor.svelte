@@ -157,6 +157,8 @@
   let searchToggleButtonElement;
 
   let latestScrollTargetKey = null; // New component-level variable
+  let areHighlightsReady = false; // Track if highlights have been loaded from backend
+  let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
 
   let isResizing = false;
   let resizeDirection = null;
@@ -284,7 +286,10 @@
   }
 
   async function loadHighlights() {
-    if (!documentPath) return;
+    if (!documentPath) {
+        areHighlightsReady = true;
+        return;
+    }
     try {
       const highlightsJson = await invoke('load_lexical_highlights', {
         args: {
@@ -306,6 +311,8 @@
       }
     } catch (error) {
       console.error('Error loading highlights:', error);
+    } finally {
+        areHighlightsReady = true;
     }
   }
 
@@ -458,12 +465,14 @@
     try {
         const parsedState = editor.parseEditorState(initialStateString);
         editor.setEditorState(parsedState);
+        areNodesReady = true;
     } catch (e) {
         console.error(`[LexicalEditor ${instanceId}] Failed to parse and set initial editor state:`, e);
         editor.update(() => {
             const root = _getRoot();
             root.clear();
             root.append(_createParagraphNode());
+            areNodesReady = true;
         });
     }
 
@@ -846,6 +855,7 @@
     if (!editor) { console.warn("[LexicalEditor] resetEditorState called before editor initialized."); return; }
     console.log("[LexicalEditor] resetEditorState called.");
     closeTableCellMenu(false);
+    areNodesReady = false;
     editor.update(() => {
       try {
         let newState;
@@ -867,6 +877,7 @@
 
         historyState.undoStack = [];
         historyState.redoStack = [];
+        areNodesReady = true;
       } catch (e) {
         console.error('[LexicalEditor] Error parsing JSON during resetEditorState:', e, "Attempted JSON:", jsonString?.substring(0, 100));
         try {
@@ -875,6 +886,7 @@
             })));
             historyState.undoStack = [];
             historyState.redoStack = [];
+            areNodesReady = true;
         } catch (fallbackError) {
             console.error('[LexicalEditor] CRITICAL: Failed to set even fallback state during resetEditorState:', fallbackError);
         }
@@ -1191,46 +1203,71 @@ function updateAndSaveHighlights(highlights) {
 
 function scrollToHighlight(id) {
     if (!id || !editor) return;
-    editor.getEditorState().read(() => {
-        const root = _getRoot();
-        const nodesToVisit = [root];
-        let targetNodeKey = null;
-
-        while(nodesToVisit.length > 0) {
-            const node = nodesToVisit.pop();
-            if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
-                targetNodeKey = node.getKey();
-                break;
-            }
-            if (node.getChildren) {
-                const children = node.getChildren();
-                for (let i = children.length - 1; i >= 0; i--) {
-                    nodesToVisit.push(children[i]);
-                }
-            }
-        }
-
-        if (targetNodeKey) {
-            tick().then(() => {
-                const domElement = editor.getElementByKey(targetNodeKey);
-                if (domElement) {
-                    domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    // Pulse effect
-                    domElement.style.transition = 'outline 0.3s ease';
-                    domElement.style.outline = '4px solid #3b82f6';
-                    domElement.style.outlineOffset = '2px';
-                    setTimeout(() => {
-                        domElement.style.outline = 'none';
-                    }, 2000);
+    
+    let attempts = 0;
+    const maxAttempts = 15; // Increased attempts
+    
+    const tryScroll = () => {
+        // Recursive function to find node by highlight ID - MUST be called inside tryScroll to retry search
+        const findNodeKey = () => {
+            let foundKey = null;
+            editor.getEditorState().read(() => {
+                const root = _getRoot();
+                const nodesToVisit = [root];
+                while(nodesToVisit.length > 0) {
+                    const node = nodesToVisit.pop();
+                    if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                        foundKey = node.getKey();
+                        break;
+                    }
+                    if (node.getChildren) {
+                        const children = node.getChildren();
+                        for (let i = children.length - 1; i >= 0; i--) {
+                            nodesToVisit.push(children[i]);
+                        }
+                    }
                 }
             });
+            return foundKey;
+        };
+
+        const targetNodeKey = findNodeKey();
+
+        if (targetNodeKey) {
+            const domElement = editor.getElementByKey(targetNodeKey);
+            if (domElement) {
+                console.log(`[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`);
+                domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Pulse effect
+                domElement.style.transition = 'outline 0.3s ease';
+                domElement.style.outline = '4px solid #3b82f6';
+                domElement.style.outlineOffset = '2px';
+                setTimeout(() => {
+                    if (domElement) domElement.style.outline = 'none';
+                }, 2000);
+                
+                // Success - clear the request
+                project.update(p => ({ ...p, requestedHighlightId: null }));
+                return;
+            }
         }
-    });
-    // Clear the requested highlight ID after scrolling
-    project.update(p => ({ ...p, requestedHighlightId: null }));
+
+        // If either node not found OR DOM element not found, retry
+        if (attempts < maxAttempts) {
+            attempts++;
+            setTimeout(tryScroll, 150); // Slightly longer delay between retries
+        } else {
+            console.warn(`[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`);
+            project.update(p => ({ ...p, requestedHighlightId: null }));
+        }
+    };
+    
+    // Give Lexical a moment to finish its current update cycle if any
+    setTimeout(tryScroll, 50);
 }
 
-$: if ($project.requestedHighlightId && isReady) {
+// Trigger scroll when editor is ready AND highlights are loaded AND nodes are loaded AND there is a requested ID
+$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady) {
     scrollToHighlight($project.requestedHighlightId);
 }
 
