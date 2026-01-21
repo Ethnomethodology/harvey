@@ -60,7 +60,7 @@
             </div>
 
             <div class="mb-6">
-                <label for="tagDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
+                <label for="tagDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea
                     id="tagDescription"
                     bind:value={currentDescription}

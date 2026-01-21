@@ -25,6 +25,10 @@ export const allTags = writable([]);
 // Writable store for holding all tag groups in the project.
 export const tagGroups = writable([]);
 
+// Writable store for holding the currently selected tag/group in TagsView
+// Structure: { type: 'tag' | 'group' | null, id: number | null }
+export const selectedTagState = writable({ type: null, id: null });
+
 /**
  * Fetches all tags and tag groups for the current project from the database and updates the stores.
  */
