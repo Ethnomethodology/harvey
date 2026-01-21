@@ -25,7 +25,14 @@
             }
             if (itemPath) {
                 console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
-                await loadHighlightsForFile(itemPath, itemType);
+
+                let pathForHighlights = itemPath;
+                const p = get(project);
+                if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
+                     pathForHighlights = p.activeTranscriptPathInDataTab;
+                }
+
+                await loadHighlightsForFile(pathForHighlights, itemType);
                 await fetchAllTags(); // Also refresh the list of all available tags
             }
         });
@@ -33,7 +40,13 @@
 
 	$: if (refreshKey) {
 		if (itemPath) {
-			loadHighlightsForFile(itemPath, itemType);
+            let pathForHighlights = itemPath;
+            const p = get(project);
+            if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
+                 pathForHighlights = p.activeTranscriptPathInDataTab;
+            }
+
+			loadHighlightsForFile(pathForHighlights, itemType);
 			fetchAllTags();
 		}
 	}
