@@ -1074,7 +1074,8 @@
             const newId = uuidv4();
             for (const node of selectedNodes) {
                 let targetNode = node;
-                if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent()) && targetNode.isSegmented()) {
+                if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent())) {
+                     // Check if it's a segmented node within an ExtendedTextNode
                      targetNode = targetNode.getParent();
                 }
 
@@ -1083,9 +1084,8 @@
                     const currentHighlightId = extendedNode.getHighlightId();
 
                     if (colorToApply !== 'transparent') {
-                        if (currentHighlightId === null) {
-                            extendedNode.setHighlightId(newId);
-                        }
+                        // Always assign a new ID for the new highlight range
+                        extendedNode.setHighlightId(newId);
                     } else {
                         if (currentHighlightId !== null) {
                             extendedNode.setHighlightId(null);
@@ -1102,38 +1102,82 @@
 }
 
 function gatherAllHighlights() {
-    const allHighlights = [];
     const root = _getRoot();
-    const nodesToVisit = [root];
+    const highlightedNodes = [];
+    
+    // 1. Traverse and collect highlighted nodes in order
+    const visit = (node) => {
+        if (_isExtendedTextNode(node) && node.getHighlightId()) {
+            highlightedNodes.push(node);
+        }
+        if (_isElementNode(node)) {
+            node.getChildren().forEach(visit);
+        }
+    };
+    visit(root);
+
+    if (highlightedNodes.length === 0) return [];
+
     const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
 
-    while(nodesToVisit.length > 0) {
-        const currentNode = nodesToVisit.pop();
-        if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
-            const highlightId = currentNode.getHighlightId();
-            const style = currentNode.getStyle();
-            const colorMatch = style.match(/background-color:\s*(.*?);/);
-            const color = colorMatch ? colorMatch[1] : 'transparent';
+    // 2. Group into contiguous blocks sharing SAME ID and COLOR
+    const blocks = [];
+    let currentBlock = [highlightedNodes[0]];
 
-            const existingHighlight = existingHighlightsMap.get(highlightId);
+    for (let i = 1; i < highlightedNodes.length; i++) {
+        const prev = highlightedNodes[i - 1];
+        const curr = highlightedNodes[i];
 
-            allHighlights.push({
-                id: highlightId,
-                text: currentNode.getTextContent(),
-                nodeKey: currentNode.getKey(),
-                color: color,
-                tags: existingHighlight ? existingHighlight.tags : [],
-                comments: existingHighlight ? existingHighlight.comments : []
-            });
-        }
-        if (currentNode.getChildren) {
-            const children = currentNode.getChildren();
-            for (let i = children.length - 1; i >= 0; i--) {
-                nodesToVisit.push(children[i]);
-            }
+        const prevId = prev.getHighlightId();
+        const currId = curr.getHighlightId();
+        const prevStyle = prev.getStyle();
+        const currStyle = curr.getStyle();
+        
+        // Contiguity check: are they siblings and adjacent?
+        const isContiguous = prev.getNextSibling() === curr;
+
+        if (prevId === currId && prevStyle === currStyle && isContiguous) {
+            currentBlock.push(curr);
+        } else {
+            blocks.push(currentBlock);
+            currentBlock = [curr];
         }
     }
-    return allHighlights;
+    blocks.push(currentBlock);
+
+    // 3. Normalize IDs: disjoint blocks sharing an ID get new IDs + cloned metadata
+    const finalHighlights = [];
+    const seenIds = new Set();
+
+    for (const block of blocks) {
+        const firstNode = block[0];
+        let highlightId = firstNode.getHighlightId();
+        const style = firstNode.getStyle();
+        const colorMatch = style.match(/background-color:\s*(.*?);/);
+        const color = colorMatch ? colorMatch[1] : 'transparent';
+
+        const originalId = highlightId;
+        if (seenIds.has(highlightId)) {
+            // Disjoint block with same ID! Assign a new ID to split it.
+            highlightId = uuidv4();
+            block.forEach(n => n.setHighlightId(highlightId));
+        } else {
+            seenIds.add(highlightId);
+        }
+
+        const metadata = existingHighlightsMap.get(originalId);
+        
+        finalHighlights.push({
+            id: highlightId,
+            text: block.map(n => n.getTextContent()).join(''),
+            nodeKey: firstNode.getKey(), 
+            color: color,
+            tags: metadata ? [...(metadata.tags || [])] : [],
+            comments: metadata ? [...(metadata.comments || [])] : []
+        });
+    }
+
+    return finalHighlights;
 }
 
 function updateAndSaveHighlights(highlights) {
