@@ -469,7 +469,8 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 prepareDocumentView(null);
             }
         } else if (selectedTab === 'transcriptions') {
-            prepareDocumentView(null);
+            // Do NOT clear document view here. It should persist for when user returns to 'data' tab.
+            // prepareDocumentView(null);
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
                 const proj = get(project);
@@ -878,7 +879,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 						on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
 					 />
 				{:else if selectedTab === 'tags'}
-					<TagsView bind:this={tagsViewRef} />
+					<TagsView bind:this={tagsViewRef} on:requestopentab={handleRequestOpenTab} />
 				{/if}
 			</div>
 		</div>
