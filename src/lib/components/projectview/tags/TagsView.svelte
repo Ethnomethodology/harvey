@@ -34,6 +34,12 @@
         unsubscribeRefresher = refresher.subscribe(async () => {
             if (isFirstRun) {
                 isFirstRun = false;
+                // Check if a tag is already selected and refresh it
+                const currentSelectedTag = get(selectedTag);
+                if (currentSelectedTag) {
+                    console.log('[TagsView] Refreshing selected tag on mount/first run:', currentSelectedTag.name);
+                    await selectTag(currentSelectedTag);
+                }
                 return;
             }
             await fetchAllTags();
