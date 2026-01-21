@@ -105,6 +105,7 @@
                 comments: h.comments || []
             }));
         } else { // Handles 'doc', 'pdf', 'imported_transcript'
+            const isPdf = type === 'doc' && get(project).selectedDocumentPath?.toLowerCase().endsWith('.pdf');
             const map = new Map();
             for (const highlight of highlights) {
                 if (!map.has(highlight.id)) {
@@ -114,15 +115,31 @@
                         textParts: [],
                         tags: highlight.tags || [],
                         comments: highlight.comments || [],
-                        pageIndex: highlight.pageIndex // Capture pageIndex for PDFs
+                        pageIndex: highlight.pageIndex, // Capture pageIndex for PDFs
+                        quadPoints: highlight.quadPoints // Capture quadPoints for PDFs
                     });
                 }
                 map.get(highlight.id).textParts.push(highlight.text);
             }
-            return Array.from(map.values()).map(group => ({
+            let result = Array.from(map.values()).map(group => ({
                 ...group,
                 text: group.textParts.join(' ')
             }));
+
+            if (isPdf) {
+                result.sort((a, b) => {
+                    if (a.pageIndex !== b.pageIndex) return a.pageIndex - b.pageIndex;
+                    // For same page, use top-most quad's Y coordinate (quadPoints[0][1])
+                    const ay = (a.quadPoints && a.quadPoints.length > 0) ? a.quadPoints[0][1] : 0;
+                    const by = (b.quadPoints && b.quadPoints.length > 0) ? b.quadPoints[0][1] : 0;
+                    // Use a small tolerance for same-line highlights
+                    if (Math.abs(ay - by) > 5) return ay - by;
+                    const ax = (a.quadPoints && a.quadPoints.length > 0) ? a.quadPoints[0][0] : 0;
+                    const bx = (b.quadPoints && b.quadPoints.length > 0) ? b.quadPoints[0][0] : 0;
+                    return ax - bx;
+                });
+            }
+            return result;
         }
     }
 
