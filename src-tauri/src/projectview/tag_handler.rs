@@ -5,8 +5,8 @@ use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{HighlightInfo, HighlightSource};
 use crate::projectview::db_handler;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf}; // Added PathBuf
-use rusqlite::{params, OptionalExtension}; // Added OptionalExtension
+use std::path::{Path, PathBuf};
+use rusqlite::{params, OptionalExtension};
 
 use log::{info, warn, error};
 
@@ -22,11 +22,11 @@ use rusqlite::Connection;
 
 
 #[tauri::command]
-pub fn add_tag(project_id: &str, name: String, color: Option<String>) -> Result<i64, CommandError> {
-    info!("[Tags] Adding tag '{}' to project_id: {}", name, project_id);
+pub fn add_tag(project_id: &str, name: String, color: Option<String>, description: Option<String>, tag_group_id: Option<i64>) -> Result<i64, CommandError> {
+    info!("[Tags] Adding tag '{}' to project_id: {}, group: {:?}", name, project_id, tag_group_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    db_handler::add_tag(&conn, project_id, &name, color.as_deref())
+    db_handler::add_tag(&conn, project_id, &name, color.as_deref(), description.as_deref(), tag_group_id)
 }
 
 #[tauri::command]
@@ -36,6 +36,67 @@ pub fn get_all_tags(project_id: &str) -> Result<Vec<db_handler::Tag>, CommandErr
     let conn = Connection::open(&db_path)?;
     db_handler::get_all_tags(&conn, project_id)
 }
+
+// --- Tag Group Commands ---
+
+#[tauri::command]
+pub fn create_tag_group(project_id: &str, name: String, description: Option<String>) -> Result<i64, CommandError> {
+    info!("[Tags] Creating tag group '{}' for project_id: {}", name, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::create_tag_group(&conn, project_id, &name, description.as_deref())
+}
+
+#[tauri::command]
+pub fn update_tag_group(project_id: &str, group_id: i64, name: String, description: Option<String>) -> Result<(), CommandError> {
+    info!("[Tags] Updating tag group id {} for project_id: {}", group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::update_tag_group(&conn, project_id, group_id, &name, description.as_deref())
+}
+
+#[tauri::command]
+pub fn delete_tag_group(project_id: &str, group_id: i64) -> Result<(), CommandError> {
+    info!("[Tags] Deleting tag group id {} from project_id: {}", group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::delete_tag_group(&conn, project_id, group_id)
+}
+
+#[tauri::command]
+pub fn get_all_tag_groups(project_id: &str) -> Result<Vec<db_handler::TagGroup>, CommandError> {
+    info!("[Tags] Getting all tag groups for project_id: {}", project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::get_all_tag_groups(&conn, project_id)
+}
+
+#[tauri::command]
+pub fn move_tag_to_group(project_id: &str, tag_id: i64, group_id: Option<i64>) -> Result<(), CommandError> {
+    info!("[Tags] Moving tag id {} to group {:?} for project_id: {}", tag_id, group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    // We first need the existing tag details to update it properly
+    // But update_tag in db_handler expects all fields.
+    // Let's just run a specific update query here or fetch-then-update.
+    // Fetching first is safer.
+    let mut stmt = conn.prepare("SELECT name, color, description FROM tags WHERE id = ?1 AND project_id = ?2")?;
+    let tag_row = stmt.query_row(params![tag_id, project_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, Option<String>>(2)?,
+        ))
+    }).optional()?;
+
+    if let Some((name, color, description)) = tag_row {
+        db_handler::update_tag(&conn, project_id, tag_id, &name, color.as_deref(), description.as_deref(), group_id)
+    } else {
+        Err(CommandError::Message("Tag not found".to_string()))
+    }
+}
+
+// --- End Tag Group Commands ---
 
 fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
     match asset_type {
@@ -58,7 +119,6 @@ fn determine_asset_type(
     conn: &Connection,
     project_id: &str,
 ) -> String {
-    info!("[Tags] determine_asset_type file_path_str: {}", file_path_str);
     let path = Path::new(file_path_str);
 
     // 1. Check for imported_transcript (standalone)
@@ -87,32 +147,13 @@ fn determine_asset_type(
         if let Some(media_stem_index) = parts.iter().position(|&p| p.eq_ignore_ascii_case("media")) {
             if parts.len() > media_stem_index + 1 {
                 let media_stem = parts[media_stem_index + 1];
-                // Construct the likely relative path to the actual media file
-                // This assumes a structure like harvey_files/Media/STEM/media/STEM.ext
-                // We need to find the actual media file within the media stem directory
-                let _media_stem_dir_path = PathBuf::from(file_path_str)
-                    .parent().and_then(|p| p.parent()) // Go up from transcripts/ to STEM/
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                // Construct the relative path to the media file within the project
-                // This is tricky because the media file name might not be the same as the stem.
-                // We need to query asset_metadata for assets within this media stem directory.
-                // A more robust way would be to pass the media_xml_identifier from the frontend.
-                // For now, let's try to find the media file based on the stem.
-
-                // This is a simplified approach. A more robust solution would involve
-                // querying the asset_metadata table for the media file associated with this stem.
-                // For now, let's assume the media file is named after the stem and is in the 'media' subdirectory.
                 let media_file_relative_path_prefix = format!("harvey_files/Media/{}/media/", media_stem);
 
-                // Query the asset_metadata table for assets whose relative path starts with this prefix
-                // and whose asset_type is 'media'. Then check the extension of that media file.
                 let mut stmt = conn.prepare(
                     "SELECT asset_relative_path FROM asset_metadata
                      WHERE project_id = ?1 AND asset_relative_path LIKE ?2 || '%'
-                     AND asset_type = 'media' LIMIT 1" // Changed asset_type to 'media'
-                ).unwrap(); // TODO: Handle unwrap gracefully
+                     AND asset_type = 'media' LIMIT 1"
+                ).unwrap();
 
                 let result = stmt.query_row(
                     rusqlite::params![project_id, media_file_relative_path_prefix],
@@ -120,7 +161,7 @@ fn determine_asset_type(
                         let media_asset_relative_path: String = row.get(0)?;
                         Ok(media_asset_relative_path)
                     }
-                ).optional().unwrap(); // TODO: Handle unwrap gracefully
+                ).optional().unwrap();
 
                 if let Some(media_asset_relative_path) = result {
                     let media_path = Path::new(&media_asset_relative_path);
@@ -128,10 +169,9 @@ fn determine_asset_type(
                     return match extension {
                         "mp3" | "wav" | "m4a" => "audio_transcript".to_string(),
                         "mp4" | "mov" | "avi" => "video_transcript".to_string(),
-                        _ => "transcript".to_string(), // Fallback if media extension is unexpected
+                        _ => "transcript".to_string(),
                     };
                 } else {
-                    warn!("[Tags] Could not find associated media asset metadata for transcript: {}. Falling back to generic 'transcript'.", file_path_str);
                     return "transcript".to_string();
                 }
             }
@@ -162,9 +202,15 @@ fn determine_asset_type(
 #[tauri::command]
 pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<TagInfo, CommandError> {
     info!("[Tags] get_tag_info called for tag_name: {}", tag_name);
-    info!("[Tags] Getting info for tag '{}' in project_id: {}", tag_name, project_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
+
+    // Fetch tag description from DB
+    let mut stmt = conn.prepare("SELECT description FROM tags WHERE name = ?1 AND project_id = ?2")?;
+    let description: String = stmt.query_row(params![tag_name, project_id], |row| {
+        row.get::<_, Option<String>>(0).map(|s| s.unwrap_or_default())
+    }).optional()?.unwrap_or_default();
+
     let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, &tag_name)?;
 
     let mut highlight_infos = Vec::new();
@@ -189,7 +235,6 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             .unwrap_or_else(Vec::new);
 
         let final_asset_type = determine_asset_type(&asset_type_opt, &file_path, &conn, project_id);
-        info!("[Tags] Determined asset type for file '{}' is '{}'", file_path, final_asset_type);
 
         let source = HighlightSource {
             file_name,
@@ -202,27 +247,107 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             source,
             highlight,
             other_tags,
+            tag_name: None, // No specific tag name needed when viewing single tag
         });
     }
 
     let tag_info = TagInfo {
         name: tag_name.clone(),
-        description: "".to_string(), // Description is not stored in the db yet
+        description,
         highlight_count: highlight_infos.len(),
         highlights: highlight_infos,
     };
-
-    
 
     Ok(tag_info)
 }
 
 #[tauri::command]
-pub fn update_tag(project_id: &str, tag_id: i64, new_name: String, color: Option<String>) -> Result<(), CommandError> {
+pub fn get_tag_group_info(project_id: &str, group_id: i64) -> Result<TagInfo, CommandError> {
+    info!("[Tags] get_tag_group_info called for group_id: {}", group_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // 1. Get Group Details
+    let mut stmt_group = conn.prepare("SELECT name, description FROM tag_groups WHERE id = ?1 AND project_id = ?2")?;
+    let (group_name, group_description) = stmt_group.query_row(params![group_id, project_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+    })?;
+
+    // 2. Get All Tags in Group
+    let mut stmt_tags = conn.prepare("SELECT name FROM tags WHERE tag_group_id = ?1 AND project_id = ?2")?;
+    let tags_iter = stmt_tags.query_map(params![group_id, project_id], |row| {
+        row.get::<_, String>(0)
+    })?;
+
+    let mut highlight_infos = Vec::new();
+    // We allow duplicates if different tags in the same group point to the same highlight,
+    // to show which tag is responsible. But if the SAME tag returns the SAME highlight (unlikely unless DB issue), we dedupe.
+    // Actually, `get_highlights_by_tag` might return multiple rows if we didn't dedupe there?
+    // `get_highlights_by_tag` dedupes internaly in its loop logic in `tag_handler.rs` above via `seen_highlight_ids`,
+    // but `db_handler::get_highlights_by_tag` returns raw rows.
+    // Wait, `db_handler::get_highlights_by_tag` implementation in `db_handler.rs` returns `Vec<(Highlight, String, Vec<String>, Option<String>)>`.
+    // It processes annotations.
+    
+    // We need to iterate over each tag in the group.
+    for tag_name_res in tags_iter {
+        let tag_name = tag_name_res?;
+        let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, &tag_name)?;
+
+        let mut seen_highlight_ids_for_this_tag = HashSet::new();
+
+        for (mut highlight, file_path, tags, asset_type_opt) in highlights_with_tag {
+             if !seen_highlight_ids_for_this_tag.insert(highlight.id.clone()) {
+                continue;
+            }
+
+            highlight.tags = Some(tags);
+
+            let source_file_path = Path::new(&file_path);
+            let file_name = source_file_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            let other_tags = highlight.tags.as_ref()
+                .map(|tags| tags.iter().filter(|t| **t != tag_name).cloned().collect())
+                .unwrap_or_else(Vec::new);
+
+            let final_asset_type = determine_asset_type(&asset_type_opt, &file_path, &conn, project_id);
+
+            let source = HighlightSource {
+                file_name,
+                file_path: file_path.clone(),
+                file_type: map_asset_type_to_icon_type(&final_asset_type).to_string(),
+                original_doc_type: final_asset_type,
+            };
+
+            highlight_infos.push(HighlightInfo {
+                source,
+                highlight,
+                other_tags,
+                tag_name: Some(tag_name.clone()), // Inject the tag name!
+            });
+        }
+    }
+
+    let tag_info = TagInfo {
+        name: group_name,
+        description: group_description.unwrap_or_default(),
+        highlight_count: highlight_infos.len(),
+        highlights: highlight_infos,
+    };
+
+    Ok(tag_info)
+}
+
+
+#[tauri::command]
+pub fn update_tag(project_id: &str, tag_id: i64, new_name: String, color: Option<String>, description: Option<String>, tag_group_id: Option<i64>) -> Result<(), CommandError> {
     info!("[Tags] Updating info for tag '{}'", tag_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    db_handler::update_tag(&conn, project_id, tag_id, &new_name, color.as_deref())
+    db_handler::update_tag(&conn, project_id, tag_id, &new_name, color.as_deref(), description.as_deref(), tag_group_id)
 }
 
 #[tauri::command]

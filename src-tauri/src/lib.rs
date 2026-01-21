@@ -206,6 +206,12 @@ pub fn run() {
             projectview::tag_handler::remove_tag_globally,
             projectview::tag_handler::rename_tag_in_highlights,
             projectview::tag_handler::remove_tag_from_highlight,
+            projectview::tag_handler::create_tag_group,
+            projectview::tag_handler::update_tag_group,
+            projectview::tag_handler::delete_tag_group,
+            projectview::tag_handler::get_all_tag_groups,
+            projectview::tag_handler::move_tag_to_group,
+            projectview::tag_handler::get_tag_group_info,
 
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,

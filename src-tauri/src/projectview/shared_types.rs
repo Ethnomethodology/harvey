@@ -114,6 +114,8 @@ pub struct HighlightInfo {
     pub highlight: Highlight,
     pub source: HighlightSource,
     pub other_tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag_name: Option<String>,
 }
 
 

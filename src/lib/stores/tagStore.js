@@ -8,37 +8,57 @@ import { triggerRefresh } from '$lib/stores/refresherStore.js';
  * @property {number} id
  * @property {string} name
  * @property {string | null} color
+ * @property {string | null} description
+ * @property {number | null} tag_group_id
+ */
+
+/**
+ * @typedef {object} TagGroup
+ * @property {number} id
+ * @property {string} name
+ * @property {string | null} description
  */
 
 // Writable store for holding all tags in the project.
-// This will hold an array of Tag objects.
 export const allTags = writable([]);
 
+// Writable store for holding all tag groups in the project.
+export const tagGroups = writable([]);
+
 /**
- * Fetches all tags for the current project from the database and updates the store.
+ * Fetches all tags and tag groups for the current project from the database and updates the stores.
  */
 export async function fetchAllTags() {
     const proj = get(project);
     if (!proj || !proj.id) {
         console.warn('[tagStore] fetchAllTags called without a project ID.');
         allTags.set([]);
+        tagGroups.set([]);
         return;
     }
 
     try {
-        const tagsFromDb = await invoke('get_all_tags', { projectId: proj.id });
+        const [tagsFromDb, groupsFromDb] = await Promise.all([
+            invoke('get_all_tags', { projectId: proj.id }),
+            invoke('get_all_tag_groups', { projectId: proj.id })
+        ]);
+
         allTags.set(tagsFromDb || []);
+        tagGroups.set(groupsFromDb || []);
     } catch (error) {
-        console.error('[tagStore] Failed to fetch tags:', error);
+        console.error('[tagStore] Failed to fetch tags/groups:', error);
         allTags.set([]);
+        tagGroups.set([]);
     }
 }
 
 /**
  * Adds a new tag to the database if it doesn't already exist, then refreshes the store.
  * @param {string} newTagName - The name of the new tag to add.
+ * @param {string|null} [description] - Optional description.
+ * @param {number|null} [groupId] - Optional group ID.
  */
-export async function addTag(newTagName) {
+export async function addTag(newTagName, description = null, groupId = null) {
     if (!newTagName || typeof newTagName !== 'string' || newTagName.trim() === '') {
         return;
     }
@@ -60,10 +80,11 @@ export async function addTag(newTagName) {
         await invoke('add_tag', {
             projectId: proj.id,
             name: tagToAdd,
-            color: null // Default color, can be changed later
+            color: null, // Default color
+            description: description,
+            tagGroupId: groupId
         });
 
-        // After adding, refresh the entire list to ensure consistency.
         await fetchAllTags();
     } catch (error) {
         console.error(`[tagStore] Failed to add new tag "${tagToAdd}":`, error);
@@ -75,15 +96,16 @@ export async function addTag(newTagName) {
  * @param {number} tagId - The ID of the tag to update.
  * @param {string} newName - The new name for the tag.
  * @param {string | null} newColor - The new color for the tag.
+ * @param {string | null} newDescription - The new description.
+ * @param {number | null} newGroupId - The new group ID.
  */
-export async function updateTag(tagId, newName, newColor) {
+export async function updateTag(tagId, newName, newColor, newDescription = null, newGroupId = null) {
     const proj = get(project);
     if (!proj || !proj.id) {
         console.error('[tagStore] updateTag called without a project ID.');
         return;
     }
 
-    // Find the original tag name before updating
     const tags = get(allTags);
     const originalTag = tags.find(tag => tag.id === tagId);
     if (!originalTag) {
@@ -96,10 +118,11 @@ export async function updateTag(tagId, newName, newColor) {
             projectId: proj.id,
             tagId: tagId,
             newName: newName,
-            color: newColor
+            color: newColor,
+            description: newDescription,
+            tagGroupId: newGroupId
         });
 
-        // After successfully renaming the tag, cascade the change to all highlights
         if (oldName !== newName) {
             await invoke('rename_tag_in_highlights', {
                 projectId: proj.id,
@@ -112,7 +135,7 @@ export async function updateTag(tagId, newName, newColor) {
         triggerRefresh();
     } catch (error) {
         console.error(`[tagStore] Failed to update tag ${tagId}:`, error);
-        throw error; // Re-throw to allow the component to handle it
+        throw error;
     }
 }
 
@@ -127,7 +150,6 @@ export async function deleteTag(tagId) {
         return;
     }
 
-    // Find the tag name before deleting
     const tags = get(allTags);
     const tagToDelete = tags.find(tag => tag.id === tagId);
     if (!tagToDelete) {
@@ -136,13 +158,11 @@ export async function deleteTag(tagId) {
     const tagName = tagToDelete.name;
 
     try {
-        // First, remove the tag from all highlights that use it
         await invoke('remove_tag_globally', {
             projectId: proj.id,
             tagName: tagName,
         });
 
-        // Then, delete the tag itself from the central list
         await invoke('delete_tag', {
             projectId: proj.id,
             tagId: tagId
@@ -152,6 +172,79 @@ export async function deleteTag(tagId) {
         triggerRefresh();
     } catch (error) {
         console.error(`[tagStore] Failed to delete tag ${tagId}:`, error);
-        throw error; // Re-throw to allow the component to handle it
+        throw error;
+    }
+}
+
+// --- Group Functions ---
+
+export async function addTagGroup(name, description = null) {
+    if (!name || !name.trim()) return;
+    const proj = get(project);
+    if (!proj || !proj.id) return;
+
+    try {
+        await invoke('create_tag_group', {
+            projectId: proj.id,
+            name: name.trim(),
+            description: description
+        });
+        await fetchAllTags();
+    } catch (error) {
+        console.error('[tagStore] Failed to create tag group:', error);
+        throw error;
+    }
+}
+
+export async function updateTagGroup(groupId, name, description = null) {
+    const proj = get(project);
+    if (!proj || !proj.id) return;
+
+    try {
+        await invoke('update_tag_group', {
+            projectId: proj.id,
+            groupId: groupId,
+            name: name.trim(),
+            description: description
+        });
+        await fetchAllTags();
+    } catch (error) {
+        console.error('[tagStore] Failed to update tag group:', error);
+        throw error;
+    }
+}
+
+export async function deleteTagGroup(groupId) {
+    const proj = get(project);
+    if (!proj || !proj.id) return;
+
+    try {
+        await invoke('delete_tag_group', {
+            projectId: proj.id,
+            groupId: groupId
+        });
+        await fetchAllTags();
+    } catch (error) {
+        console.error('[tagStore] Failed to delete tag group:', error);
+        throw error;
+    }
+}
+
+export async function moveTagToGroup(tagId, groupId) {
+    const proj = get(project);
+    if (!proj || !proj.id) return;
+
+    try {
+        await invoke('move_tag_to_group', {
+            projectId: proj.id,
+            tagId: tagId,
+            groupId: groupId
+        });
+        // We don't necessarily need a full fetch if we update the local store smartly,
+        // but full fetch is safer and easier.
+        await fetchAllTags();
+    } catch (error) {
+        console.error('[tagStore] Failed to move tag to group:', error);
+        throw error;
     }
 }

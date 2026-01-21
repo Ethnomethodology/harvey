@@ -117,6 +117,33 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
 
+    // tag_groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tag_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized tag_groups table.");
+
+    // Trigger for tag_groups updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_tag_groups_updated_at
+        AFTER UPDATE ON tag_groups
+        FOR EACH ROW
+        BEGIN
+            UPDATE tag_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_tag_groups_updated_at trigger.");
+
     // asset_metadata table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS asset_metadata (
@@ -457,9 +484,12 @@ pub fn init_db() -> Result<(), CommandError> {
             project_id TEXT NOT NULL,
             name TEXT NOT NULL,
             color TEXT,
+            description TEXT,
+            tag_group_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_group_id) REFERENCES tag_groups(id) ON DELETE SET NULL,
             UNIQUE (project_id, name)
         )",
         [],
@@ -480,14 +510,38 @@ pub fn init_db() -> Result<(), CommandError> {
 
     // Migration for adding color column to tags table
     let mut stmt = conn.prepare("PRAGMA table_info(tags)")?;
-    let column_exists = stmt.query_map([], |row| {
+    let color_exists = stmt.query_map([], |row| {
         let column_name: String = row.get(1)?;
         Ok(column_name)
     })?.any(|col| col.as_deref() == Ok("color"));
 
-    if !column_exists {
+    if !color_exists {
         info!("[DB] Adding color column to tags table.");
         conn.execute("ALTER TABLE tags ADD COLUMN color TEXT", [])?;
+    }
+
+    // Migration for adding description column to tags table
+    let mut stmt_desc = conn.prepare("PRAGMA table_info(tags)")?;
+    let desc_exists = stmt_desc.query_map([], |row| {
+        let column_name: String = row.get(1)?;
+        Ok(column_name)
+    })?.any(|col| col.as_deref() == Ok("description"));
+
+    if !desc_exists {
+        info!("[DB] Adding description column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN description TEXT", [])?;
+    }
+
+    // Migration for adding tag_group_id column to tags table
+    let mut stmt_group = conn.prepare("PRAGMA table_info(tags)")?;
+    let group_exists = stmt_group.query_map([], |row| {
+        let column_name: String = row.get(1)?;
+        Ok(column_name)
+    })?.any(|col| col.as_deref() == Ok("tag_group_id"));
+
+    if !group_exists {
+        info!("[DB] Adding tag_group_id column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN tag_group_id INTEGER REFERENCES tag_groups(id) ON DELETE SET NULL", [])?;
     }
 
     // highlights table
@@ -1480,12 +1534,22 @@ pub struct Tag {
     pub project_id: String,
     pub name: String,
     pub color: Option<String>,
+    pub description: Option<String>,
+    pub tag_group_id: Option<i64>,
 }
 
-pub fn add_tag(conn: &Connection, project_id: &str, name: &str, color: Option<&str>) -> Result<i64, CommandError> {
-    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}", project_id, name, color);
-    let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color) VALUES (?1, ?2, ?3)")?;
-    let id = stmt.insert(params![project_id, name, color])?;
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct TagGroup {
+    pub id: i64,
+    pub project_id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+pub fn add_tag(conn: &Connection, project_id: &str, name: &str, color: Option<&str>, description: Option<&str>, tag_group_id: Option<i64>) -> Result<i64, CommandError> {
+    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}, desc={:?}, group={:?}", project_id, name, color, description, tag_group_id);
+    let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color, description, tag_group_id) VALUES (?1, ?2, ?3, ?4, ?5)")?;
+    let id = stmt.insert(params![project_id, name, color, description, tag_group_id])?;
     info!("[DB] Tag added successfully with id {}: name={}", id, name);
     Ok(id)
 }
@@ -1497,11 +1561,11 @@ pub fn delete_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<()
     Ok(())
 }
 
-pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, color: Option<&str>) -> Result<(), CommandError> {
-    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}", tag_id, project_id, name, color);
+pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, color: Option<&str>, description: Option<&str>, tag_group_id: Option<i64>) -> Result<(), CommandError> {
+    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}, desc={:?}, group={:?}", tag_id, project_id, name, color, description, tag_group_id);
     conn.execute(
-        "UPDATE tags SET name = ?1, color = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
-        params![name, color, tag_id, project_id],
+        "UPDATE tags SET name = ?1, color = ?2, description = ?3, tag_group_id = ?4, updated_at = CURRENT_TIMESTAMP WHERE id = ?5 AND project_id = ?6",
+        params![name, color, description, tag_group_id, tag_id, project_id],
     )?;
     info!("[DB] Tag with id {} updated successfully.", tag_id);
     Ok(())
@@ -1509,13 +1573,15 @@ pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, 
 
 pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
-    let mut stmt = conn.prepare("SELECT id, project_id, name, color FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
+    let mut stmt = conn.prepare("SELECT id, project_id, name, color, description, tag_group_id FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
     let tag_iter = stmt.query_map(params![project_id], |row| {
         Ok(Tag {
             id: row.get(0)?,
             project_id: row.get(1)?,
             name: row.get(2)?,
             color: row.get(3)?,
+            description: row.get(4)?,
+            tag_group_id: row.get(5)?,
         })
     })?;
 
@@ -1525,6 +1591,55 @@ pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, Com
     }
     info!("[DB] Loaded {} tags for project_id {}", tags.len(), project_id);
     Ok(tags)
+}
+
+pub fn create_tag_group(conn: &Connection, project_id: &str, name: &str, description: Option<&str>) -> Result<i64, CommandError> {
+    debug!("[DB] Creating tag group for project_id {}: name={}", project_id, name);
+    let mut stmt = conn.prepare("INSERT INTO tag_groups (project_id, name, description) VALUES (?1, ?2, ?3)")?;
+    let id = stmt.insert(params![project_id, name, description])?;
+    info!("[DB] Tag group created successfully: id={}, name={}", id, name);
+    Ok(id)
+}
+
+pub fn update_tag_group(conn: &Connection, project_id: &str, group_id: i64, name: &str, description: Option<&str>) -> Result<(), CommandError> {
+    debug!("[DB] Updating tag group with id {} in project_id {}: name={}", group_id, project_id, name);
+    conn.execute(
+        "UPDATE tag_groups SET name = ?1, description = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
+        params![name, description, group_id, project_id],
+    )?;
+    info!("[DB] Tag group with id {} updated successfully.", group_id);
+    Ok(())
+}
+
+pub fn delete_tag_group(conn: &Connection, project_id: &str, group_id: i64) -> Result<(), CommandError> {
+    debug!("[DB] Deleting tag group with id {} from project_id {}", group_id, project_id);
+    // Tags will have tag_group_id set to NULL due to ON DELETE SET NULL constraint if we add it,
+    // OR we should manually update them or delete them. The prompt implies grouping, so deleting a group probably shouldn't delete tags.
+    // I will set tag_group_id to NULL for tags in this group before deleting (or rely on DB constraint if I added it).
+    // Safest is to rely on DB constraint or manually update. I'll add ON DELETE SET NULL in init_db.
+    conn.execute("DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2", params![group_id, project_id])?;
+    info!("[DB] Tag group with id {} deleted successfully.", group_id);
+    Ok(())
+}
+
+pub fn get_all_tag_groups(conn: &Connection, project_id: &str) -> Result<Vec<TagGroup>, CommandError> {
+    debug!("[DB] Loading all tag groups for project_id {}", project_id);
+    let mut stmt = conn.prepare("SELECT id, project_id, name, description FROM tag_groups WHERE project_id = ?1 ORDER BY name ASC")?;
+    let group_iter = stmt.query_map(params![project_id], |row| {
+        Ok(TagGroup {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+        })
+    })?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result?);
+    }
+    info!("[DB] Loaded {} tag groups for project_id {}", groups.len(), project_id);
+    Ok(groups)
 }
 
 // --- End Tag Functions ---
