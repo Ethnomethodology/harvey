@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/tags/TagsView.svelte -->
 <script>
-    import { onMount, afterUpdate, onDestroy } from 'svelte';
+    import { onMount, afterUpdate, onDestroy, createEventDispatcher } from 'svelte';
     import { slide } from 'svelte/transition';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm } from '@tauri-apps/plugin-dialog';
@@ -95,6 +95,8 @@
     let isCommentsPanelOpen = false;
     let isEditModalOpen = false;
 
+    const dispatch = createEventDispatcher();
+
     $: {
         if (typeof document !== 'undefined') {
             if (isCommentsPanelOpen) {
@@ -136,6 +138,17 @@
     function showComments(highlightInfo) {
         selectedHighlight = highlightInfo;
         isCommentsPanelOpen = true;
+    }
+
+    function handleInspect(highlight) {
+        console.log('[TagsView] Inspecting highlight:', highlight);
+        dispatch('requestviewchange', {
+            tabName: 'data',
+            loadNotePath: highlight.source.file_path,
+            viewType: highlight.source.file_type,
+            originalDocType: highlight.source.original_doc_type,
+            highlightId: highlight.id
+        });
     }
 
     afterUpdate(() => {
@@ -245,7 +258,9 @@
                         const highlight = cell.getRow().getData();
                         const target = e.target.closest('button');
                         if (!target) return;
-                        if (target.title === 'Comments') {
+                        if (target.title === 'Inspect') {
+                            handleInspect(highlight);
+                        } else if (target.title === 'Comments') {
                             showComments(highlight);
                         } else if (target.title === 'Untag') {
                             handleUntag(highlight);

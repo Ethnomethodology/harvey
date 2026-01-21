@@ -45,6 +45,7 @@ const initialState = {
     error: null,
     statusMessage: 'Initializing...',
     requestedNoteToLoad: null,
+    requestedHighlightId: null,
 
     selectedDocumentPath: null,
     selectedDocumentType: null,
@@ -177,8 +178,8 @@ export function setSelectedGroup(groupId, groupData) {
 export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
     const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
-    const isTable = itemType === 'tables';
-    const isImage = itemType === 'images';
+    const isTable = itemType === 'tables' || itemType === 'table';
+    const isImage = itemType === 'images' || itemType === 'image';
     const isJsonDocument = normalizedFilePath && itemType === 'documents' && !isPdf;
 
     const defaultFileLevelMetadata = {
@@ -193,7 +194,8 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
         if (normalizedFilePath) {
             newIsDocumentLoading = (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) ||
                                   (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations))) ||
-                                  (isImage && (!selectingSamePath || !p.currentImageAnnotations));
+                                  (isImage && (!selectingSamePath || !p.currentImageAnnotations)) ||
+                                  (isTable && (!selectingSamePath || !p.currentTableHighlights));
         }
 
         return {
@@ -265,7 +267,6 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
                 else { console.error("[ProjectStore] loadImageAnnotations not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
             })().catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isTable) {
-             project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
             (async () => {
                 if (projectService.loadTableHighlights) await projectService.loadTableHighlights(normalizedFilePath);
                 else { console.error("[ProjectStore] loadTableHighlights not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
@@ -497,10 +498,21 @@ export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
 
 // --- Table Highlight State Management ---
 export function setLoadedTableHighlights(highlightsArray) {
+    if (!Array.isArray(highlightsArray)) {
+        console.warn('[projectStore] setLoadedTableHighlights called with non-array:', highlightsArray);
+        // If it's an old-format object, we don't want to clear the new-format highlights in the store
+        // but we should still mark loading as finished.
+        project.update(p => ({
+            ...p,
+            isDocumentLoading: false,
+            isLoading: false
+        }));
+        return;
+    }
     project.update(p => ({
         ...p,
-        currentTableHighlights: Array.isArray(highlightsArray) ? highlightsArray : [],
-        initialTableHighlights: Array.isArray(highlightsArray) ? JSON.parse(JSON.stringify(highlightsArray)) : [],
+        currentTableHighlights: highlightsArray,
+        initialTableHighlights: JSON.parse(JSON.stringify(highlightsArray)),
         isTableHighlightsDirty: false,
         isDocumentLoading: false,
         isLoading: false
@@ -527,6 +539,10 @@ export function setTableHighlightsLoadFailed(filePath, errorMsg) {
 }
 
 export function setTableHighlights(highlights, markDirty = true) {
+    if (!Array.isArray(highlights)) {
+        console.warn('[projectStore] setTableHighlights called with non-array:', highlights);
+        return;
+    }
     project.update(store => {
         const initialJson = JSON.stringify(store.initialTableHighlights);
         const currentJson = JSON.stringify(highlights);

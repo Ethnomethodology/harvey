@@ -24,6 +24,7 @@ import { get } from 'svelte/store';
     const PRESET_SCALES = ['auto', 'page-actual', 'page-fit', 'page-width', '0.5', '0.75', '1', '1.25', '1.5', '2', '3', '4'];
     let viewerContainer; let viewerElement; let pdfViewerWrapperElement;
 
+    let isMounted = false;
     let selectionToolbarElement;
     let showSelectionToolbar = false;
     let selectionToolbarTop = 0;
@@ -468,6 +469,7 @@ import { get } from 'svelte/store';
     }
 
     onMount(async () => {
+        isMounted = true;
         // Initialize the Web Worker
         annotationMatcherWorker = new Worker(new URL('$lib/workers/pdfAnnotationMatcher.worker.js', import.meta.url), { type: 'module' });
         annotationMatcherWorker.onmessage = handleWorkerMessage;
@@ -481,7 +483,11 @@ import { get } from 'svelte/store';
         document.head.appendChild(pdfJsStyleElement);
         if (!pdfPath) { error = 'No PDF path provided.'; loading = false; return; }
         setTimeout(async () => {
-            if (!viewerContainer || !viewerElement || !pdfViewerWrapperElement) { console.error('[PDFViewerPanel] Required container elements null on mount.'); error = 'Failed init viewer elements.'; loading = false; return; }
+            if (!isMounted) return;
+            if (!viewerContainer || !viewerElement || !pdfViewerWrapperElement) { 
+                console.warn('[PDFViewerPanel] Required container elements not ready after delay.'); 
+                return; 
+            }
             await loadPdfAndLibraries(viewerContainer);
             document.addEventListener('click', handleClickOutside);
             viewerContainer?.addEventListener('mouseup', handleViewerMouseUp);
@@ -506,10 +512,11 @@ import { get } from 'svelte/store';
                 }
             }, 60000); // 60,000 milliseconds = 1 minute
 
-        }, 100); 
+        }, 200); 
     });
 
     onDestroy(() => {
+        isMounted = false;
         if (autosaveIntervalId) {
             clearInterval(autosaveIntervalId);
         }
@@ -2242,6 +2249,40 @@ function updateHighlightOverlayColor(id, color) {
         }
         return 'auto'; // Default fallback
     })();
+
+    function scrollToHighlight(id) {
+        if (!id) return;
+        const highlight = initialHighlights.find(h => h.id === id);
+        if (highlight) {
+            console.log(`[PDFViewerPanel] Scrolling to highlight: ${id} on page ${highlight.pageIndex + 1}`);
+            // Scroll to the page
+            pdfViewer.scrollPageIntoView({ pageNumber: highlight.pageIndex + 1 });
+            
+            // Wait for page to be in view and rendered
+            setTimeout(() => {
+                const overlayParts = document.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
+                if (overlayParts.length > 0) {
+                    overlayParts[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Pulse effect
+                    overlayParts.forEach(el => {
+                        el.style.transition = 'outline 0.3s ease';
+                        el.style.outline = '4px solid #3b82f6';
+                        el.style.outlineOffset = '2px';
+                        setTimeout(() => {
+                            el.style.outline = 'none';
+                        }, 2000);
+                    });
+                }
+            }, 500);
+
+            // Clear the requested highlight ID after scrolling
+            project.update(p => ({ ...p, requestedHighlightId: null }));
+        }
+    }
+
+    $: if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
+        scrollToHighlight($project.requestedHighlightId);
+    }
 
     $: currentZoomLabel = (() => {
         const scaleStr = String(currentScaleValue);

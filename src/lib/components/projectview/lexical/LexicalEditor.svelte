@@ -467,17 +467,6 @@
         });
     }
 
-    // Apply initial highlights after editor state is set
-    editor.update(() => {
-        for (const highlight of initialHighlights) {
-            const node = _getNodeByKey(highlight.nodeKey);
-            if (_isExtendedTextNode(node)) {
-                node.setStyle(`background-color: ${highlight.color}`);
-                node.setHighlightId(highlight.id);
-            }
-        }
-    });
-
 
     editor.setRootElement(editorContainer);
 
@@ -875,6 +864,7 @@
         }
         newState = editor.parseEditorState(stateToParse);
         editor.setEditorState(newState);
+
         historyState.undoStack = [];
         historyState.redoStack = [];
       } catch (e) {
@@ -928,6 +918,7 @@
               return;
           }
         editor.setEditorState(parsedState, { tag: 'history-merge' });
+
       } catch (e) {
         console.error('[LexicalEditor] Failed to parse JSON in updateContent:', e);
         console.error('[LexicalEditor] Faulty JSON for updateContent:', newJsonString ? newJsonString.substring(0, 200) + '...' : 'null');
@@ -1117,7 +1108,9 @@ function gatherAllHighlights() {
 
     if (allTextNodes.length === 0) return [];
 
-    const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
+    // Use latest highlights from store for metadata merging
+    const currentHighlights = get(project).currentDocumentHighlights || [];
+    const existingHighlightsMap = new Map(currentHighlights.map(h => [h.id, h]));
 
     // 2. Group into blocks that are contiguous in the document flow
     const blocks = [];
@@ -1196,6 +1189,50 @@ function updateAndSaveHighlights(highlights) {
     dispatch('highlightschange', { highlights });
 }
 
+function scrollToHighlight(id) {
+    if (!id || !editor) return;
+    editor.getEditorState().read(() => {
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        let targetNodeKey = null;
+
+        while(nodesToVisit.length > 0) {
+            const node = nodesToVisit.pop();
+            if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                targetNodeKey = node.getKey();
+                break;
+            }
+            if (node.getChildren) {
+                const children = node.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
+        }
+
+        if (targetNodeKey) {
+            tick().then(() => {
+                const domElement = editor.getElementByKey(targetNodeKey);
+                if (domElement) {
+                    domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Pulse effect
+                    domElement.style.transition = 'outline 0.3s ease';
+                    domElement.style.outline = '4px solid #3b82f6';
+                    domElement.style.outlineOffset = '2px';
+                    setTimeout(() => {
+                        domElement.style.outline = 'none';
+                    }, 2000);
+                }
+            });
+        }
+    });
+    // Clear the requested highlight ID after scrolling
+    project.update(p => ({ ...p, requestedHighlightId: null }));
+}
+
+$: if ($project.requestedHighlightId && isReady) {
+    scrollToHighlight($project.requestedHighlightId);
+}
 
   function handleBlockTypeChange(event) {
     const type = event.target.value; if (!editor || !isReady || !editor.isEditable()) return;

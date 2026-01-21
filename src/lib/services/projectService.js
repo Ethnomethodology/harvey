@@ -196,7 +196,7 @@ export async function deleteTableColumn(tablePath, columnName) {
  */
 export async function saveTableStyles(tablePath, styles) {
     try {
-        await invoke('save_table_styles', { filePath: tablePath, styles: JSON.stringify(styles) });
+        await invoke('save_table_styles', { filePath: tablePath, styles: styles });
     } catch (error) {
         console.error(`Failed to save styles for table ${tablePath}:`, error);
         throw error;
@@ -235,7 +235,7 @@ export async function loadTableHighlights(filePath) {
         return;
     }
     try {
-        const highlights = await invoke("load_table_styles", { filePath });
+        const highlights = await loadTableStyles(filePath);
         setLoadedTableHighlights(highlights || []);
     } catch (error) {
         console.error(`Error loading table highlights for ${filePath}:`, error);
@@ -255,7 +255,7 @@ export async function saveTableHighlights() {
     try {
         await invoke('save_table_styles', {
             filePath: tablePath,
-            styles: JSON.stringify(highlights)
+            styles: highlights
         });
         markTableHighlightsAsSaved();
         console.log(`[ProjectService] Table highlights saved for ${tablePath}`);

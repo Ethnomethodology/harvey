@@ -57,31 +57,44 @@
         selectedHighlightId = null;
     }
 
-    // --- Reactive State based on itemType ---
+    // --- Reactive State based on Store and Props ---
     let activeHighlights = [];
+    let effectiveType = null;
+
     $: {
-        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
-        if (itemType === 'imported_transcript') {
-            activeHighlights = $project.currentImportedTranscriptHighlights || [];
-        } else if (isPdf) {
-            activeHighlights = $project.currentPdfAnnotations || [];
-        } else if (itemType === 'images') {
-            activeHighlights = $project.currentImageAnnotations || [];
-        } else if (itemType === 'tables' || itemType === 'table') {
-            activeHighlights = $project.currentTableHighlights || [];
+        const p = $project;
+        const currentPath = p.selectedDocumentPath;
+        const selectedType = p.selectedDocumentType;
+        
+        // Prioritize store state for determining the type of the active document
+        if (p.selectedMediaNotePath) {
+            effectiveType = 'doc'; // Media transcripts are handled like docs
+            activeHighlights = p.currentDocumentHighlights || [];
+        } else if (p.currentImportedTranscriptPath) {
+            effectiveType = 'imported_transcript';
+            activeHighlights = p.currentImportedTranscriptHighlights || [];
+        } else if (selectedType === 'tables') {
+            effectiveType = 'table';
+            activeHighlights = p.currentTableHighlights || [];
+        } else if (selectedType === 'images') {
+            effectiveType = 'image';
+            activeHighlights = p.currentImageAnnotations || [];
+        } else if (currentPath?.toLowerCase().endsWith('.pdf')) {
+            effectiveType = 'pdf';
+            activeHighlights = p.currentPdfAnnotations || [];
         } else {
-            activeHighlights = $project.currentDocumentHighlights || [];
+            effectiveType = 'doc';
+            activeHighlights = p.currentDocumentHighlights || [];
         }
     }
 
     $: selectedHighlightForComments = activeHighlights.find(h => h.id === selectedHighlightId) || null;
 
-    // This function now also needs to handle the structure of image annotations
+    // This function handles the structure conversion for different annotation types
     function processHighlights(highlights, type) {
-        if (!highlights || highlights.length === 0) {
-            return [];
-        }
-        if (type === 'images') {
+        if (!highlights || highlights.length === 0) return [];
+
+        if (type === 'image') {
             return highlights.map(annotation => {
                 const titleBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Title');
                 const descriptionBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Description');
@@ -89,14 +102,14 @@
 
                 return {
                     id: annotation.id,
-                    color: colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)', // Default color
+                    color: colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)',
                     title: titleBody ? titleBody.value : 'No title',
                     description: descriptionBody ? descriptionBody.value : 'No description',
                     tags: annotation.tags || [],
                     comments: annotation.comments || []
                 };
             });
-        } else if (type === 'tables') {
+        } else if (type === 'table') {
             return highlights.map(h => ({
                 id: h.id,
                 color: h.color,
@@ -105,7 +118,7 @@
                 comments: h.comments || []
             }));
         } else { // Handles 'doc', 'pdf', 'imported_transcript'
-            const isPdf = type === 'doc' && get(project).selectedDocumentPath?.toLowerCase().endsWith('.pdf');
+            const isPdf = type === 'pdf';
             const map = new Map();
             for (const highlight of highlights) {
                 if (!map.has(highlight.id)) {
@@ -115,9 +128,9 @@
                         textParts: [],
                         tags: highlight.tags || [],
                         comments: highlight.comments || [],
-                        pageIndex: highlight.pageIndex, // Capture pageIndex for PDFs
-                        quadPoints: highlight.quadPoints, // Capture quadPoints for PDFs
-                        documentOrder: highlight.documentOrder // Capture position for Lexical docs
+                        pageIndex: highlight.pageIndex,
+                        quadPoints: highlight.quadPoints,
+                        documentOrder: highlight.documentOrder
                     });
                 }
                 map.get(highlight.id).textParts.push(highlight.text);
@@ -130,35 +143,31 @@
             if (isPdf) {
                 result.sort((a, b) => {
                     if (a.pageIndex !== b.pageIndex) return a.pageIndex - b.pageIndex;
-                    // For same page, use top-most quad's Y coordinate (quadPoints[0][1])
                     const ay = (a.quadPoints && a.quadPoints.length > 0) ? a.quadPoints[0][1] : 0;
                     const by = (b.quadPoints && b.quadPoints.length > 0) ? b.quadPoints[0][1] : 0;
-                    // Use a small tolerance for same-line highlights
                     if (Math.abs(ay - by) > 5) return ay - by;
                     const ax = (a.quadPoints && a.quadPoints.length > 0) ? a.quadPoints[0][0] : 0;
                     const bx = (b.quadPoints && b.quadPoints.length > 0) ? b.quadPoints[0][0] : 0;
                     return ax - bx;
                 });
             } else {
-                // Sort Lexical highlights by their position in the document flow
                 result.sort((a, b) => (a.documentOrder ?? 0) - (b.documentOrder ?? 0));
             }
             return result;
         }
     }
 
-    $: processedHighlights = processHighlights(activeHighlights, itemType);
+    $: processedHighlights = processHighlights(activeHighlights, effectiveType);
 
     async function handleHighlightsUpdate(newHighlights) {
-        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
-        if (itemType === 'imported_transcript') {
+        if (effectiveType === 'imported_transcript') {
             setImportedTranscriptHighlights(newHighlights);
-        } else if (isPdf) {
+        } else if (effectiveType === 'pdf') {
             updatePdfAnnotations(newHighlights, true);
-        } else if (itemType === 'images') {
+        } else if (effectiveType === 'image') {
             updateImageAnnotations(newHighlights);
             await saveImageAnnotations();
-        } else if (itemType === 'tables' || itemType === 'table') {
+        } else if (effectiveType === 'table') {
             setTableHighlights(newHighlights);
             await saveTableHighlights();
         } else {
@@ -178,10 +187,7 @@
 
     async function handleCreateTag(newTag, highlightId) {
         try {
-            // The addTag function from the store now handles the backend call and refreshing the store.
             await addTag(newTag);
-
-            // After the store is updated, we can update the current highlight's tags.
             const highlight = activeHighlights.find(h => h.id === highlightId);
             if (highlight && !(highlight.tags || []).includes(newTag)) {
                 const newTags = [...(highlight.tags || []), newTag];
@@ -189,7 +195,6 @@
             }
         } catch (error) {
             console.error('Failed to create tag:', error);
-            // Optionally, show a notification to the user
         }
     }
 
@@ -197,26 +202,17 @@
         const { type, detail } = event;
         const { highlightId, commentId, newText, comment } = detail;
 
-        let docType = itemType;
-        if (itemType === 'doc') {
-             docType = $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'doc';
-        } else if (itemType === 'images') {
-            docType = 'image';
-        } else if (itemType === 'tables' || itemType === 'table') {
-            docType = 'table';
-        }
-
         if (type === 'addcomment') {
-            addCommentToHighlight(highlightId, comment, docType);
+            addCommentToHighlight(highlightId, comment, effectiveType);
         } else if (type === 'deletecomment') {
-            deleteComment(highlightId, commentId, docType);
+            deleteComment(highlightId, commentId, effectiveType);
         } else if (type === 'editcomment') {
-            updateComment(highlightId, commentId, newText, docType);
+            updateComment(highlightId, commentId, newText, effectiveType);
         }
 
-        if (docType === 'image') {
+        if (effectiveType === 'image') {
             saveImageAnnotations();
-        } else if (docType === 'table') {
+        } else if (effectiveType === 'table') {
             saveTableHighlights();
         }
     }
@@ -235,7 +231,7 @@
                 {#each processedHighlights as highlight (highlight.id)}
                     <li class="border" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2 bg-white dark:bg-surface-3">
-                            {#if itemType === 'images'}
+                            {#if effectiveType === 'image'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
                                 <p class="text-gray-600 dark:text-gray-300 mt-1">{highlight.description || 'No Description'}</p>
                             {:else}
@@ -276,7 +272,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript' || itemType === 'images' || itemType === 'tables'}
+        {:else if effectiveType === 'doc' || effectiveType === 'media' || effectiveType === 'imported_transcript' || effectiveType === 'image' || effectiveType === 'table' || effectiveType === 'pdf'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>
