@@ -549,11 +549,14 @@
                         <div
                             class="flex items-center justify-between p-2 cursor-pointer rounded bg-gray-50 dark:bg-surface-3 hover:bg-gray-100 dark:hover:bg-gray-700"
                             class:bg-blue-100={$selectedTagGroup?.id === group.id}
-                            class:dark:bg-blue-900={$selectedTagGroup?.id === group.id}
+                            class:dark:bg-blue-800={$selectedTagGroup?.id === group.id}
                             on:click={() => handleSelect(group, 'group')}
                         >
                             <div class="flex items-center">
-                                <span class="font-semibold text-sm dark:text-white truncate">{group.name}</span>
+                                <span class="font-semibold text-sm dark:text-white truncate"
+                                    class:!text-blue-700={$selectedTagGroup?.id === group.id}
+                                    class:dark:!text-blue-200={$selectedTagGroup?.id === group.id}
+                                >{group.name}</span>
                             </div>
                             <!-- Edit Group Button (visible on hover or active) -->
                             <button
@@ -576,12 +579,14 @@
                             {#each group.tags as tag (tag.id)}
                                 <div
                                     class="p-2 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary border border-gray-200 dark:border-border bg-white dark:bg-surface-2"
-                                    class:bg-blue-200={$selectedTag?.id === tag.id}
+                                    class:bg-blue-100={$selectedTag?.id === tag.id}
                                     class:dark:bg-blue-800={$selectedTag?.id === tag.id}
-                                    class:border-blue-300={$selectedTag?.id === tag.id}
                                     on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                                 >
-                                    <span class="truncate dark:text-text-secondary">{tag.name}</span>
+                                    <span class="truncate dark:text-text-secondary"
+                                        class:!text-blue-700={$selectedTag?.id === tag.id}
+                                        class:dark:!text-blue-200={$selectedTag?.id === tag.id}
+                                    >{tag.name}</span>
                                 </div>
                             {/each}
                         </div>
@@ -602,12 +607,14 @@
                         {#each ungroupedTags as tag (tag.id)}
                             <div
                                 class="p-2 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary border border-gray-200 dark:border-border bg-white dark:bg-surface-2"
-                                class:bg-blue-200={$selectedTag?.id === tag.id}
+                                class:bg-blue-100={$selectedTag?.id === tag.id}
                                 class:dark:bg-blue-800={$selectedTag?.id === tag.id}
-                                class:border-blue-300={$selectedTag?.id === tag.id}
                                 on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                             >
-                                <span class="truncate dark:text-text-secondary">{tag.name}</span>
+                                <span class="truncate dark:text-text-secondary"
+                                    class:!text-blue-700={$selectedTag?.id === tag.id}
+                                    class:dark:!text-blue-200={$selectedTag?.id === tag.id}
+                                >{tag.name}</span>
                             </div>
                         {/each}
                     </div>
