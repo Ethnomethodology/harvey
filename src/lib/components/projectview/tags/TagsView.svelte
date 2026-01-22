@@ -38,6 +38,8 @@
     let isEditGroupModalOpen = false;
     let isCommentsPanelOpen = false;
 
+    let isLoading = false;
+
     // UI State for Context Menu / Dropdown
     let showAddMenu = false;
 
@@ -119,11 +121,17 @@
 
     function closeAddMenu(e) {
         // If click is inside the menu button or menu itself, ignore
-        // But here we attach to window, so we check target
-        const menu = document.getElementById('add-tag-menu');
-        const btn = document.getElementById('add-tag-btn');
-        if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
-            showAddMenu = false;
+        // We need to use closest because e.target might be the SVG inside the button
+        if (showAddMenu) {
+            const menu = document.getElementById('add-tag-menu');
+            const btn = document.getElementById('add-tag-btn');
+
+            const clickedInsideMenu = menu && menu.contains(e.target);
+            const clickedButton = btn && (btn === e.target || btn.contains(e.target));
+
+            if (!clickedInsideMenu && !clickedButton) {
+                showAddMenu = false;
+            }
         }
     }
 
@@ -466,10 +474,10 @@
                 <h2 class="text-sm font-semibold dark:text-text-primary">All Tags</h2>
                 <button
                     id="add-tag-btn"
-                    class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-                    on:click={() => showAddMenu = !showAddMenu}
+                    class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full cursor-pointer z-10"
+                    on:click|stopPropagation={() => showAddMenu = !showAddMenu}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical pointer-events-none" viewBox="0 0 16 16">
                         <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
                     </svg>
                 </button>
@@ -520,7 +528,7 @@
 
                         <!-- Group Tags (Indented) -->
                         <div
-                            class="pl-4 pt-1 min-h-[10px]"
+                            class="pl-4 pt-1 min-h-[2rem]"
                             use:dndzone={{items: group.tags, flipDurationMs}}
                             on:consider={(e) => handleDndConsiderGroup(group.id, e)}
                             on:finalize={(e) => handleDndFinalizeGroup(group.id, e)}
