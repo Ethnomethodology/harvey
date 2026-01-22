@@ -49,8 +49,9 @@
 
     // Internal DnD State
     const flipDurationMs = 200;
+    let isDragging = false; // Flag to prevent store updates from overwriting local state during drag
 
-    $: {
+    $: if (!isDragging) {
         // Rebuild structure when stores change
         // We need to map tags to groups
         const groupMap = new Map($allTagGroups.map(g => [g.id, { ...g, tags: [] }]));
@@ -160,6 +161,7 @@
     }
 
     // --- Table & Data Logic ---
+    let description = '';
     let tableContainer;
     let tabulatorInstance = null;
     let tableReady = false;
@@ -394,6 +396,7 @@
     // --- DnD Handlers ---
     // For groups: dragging tags INTO a group or reordering within.
     function handleDndConsiderGroup(groupId, e) {
+        isDragging = true;
         const idx = groups.findIndex(g => g.id === groupId);
         if (idx !== -1) {
             groups[idx].tags = e.detail.items;
@@ -418,10 +421,12 @@
                 }
             }
         }
+        isDragging = false;
     }
 
     // For ungrouped: dragging tags OUT of a group or reordering.
     function handleDndConsiderUngrouped(e) {
+        isDragging = true;
         ungroupedTags = e.detail.items;
     }
 
@@ -437,6 +442,7 @@
                 }
             }
         }
+        isDragging = false;
     }
 
     // --- Selection ---
