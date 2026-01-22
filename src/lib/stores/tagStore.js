@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
+import { v4 as uuidv4 } from 'uuid';
 import { project } from '$lib/stores/projectStore.js';
 import { triggerRefresh } from '$lib/stores/refresherStore.js';
 
