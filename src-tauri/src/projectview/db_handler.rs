@@ -1576,7 +1576,8 @@ pub fn create_tag_group(
 
 pub fn get_tag_groups(conn: &Connection, project_id: &str) -> Result<Vec<TagGroup>, CommandError> {
     debug!("[DB] Loading tag groups for project_id {}", project_id);
-    let mut stmt = conn.prepare("SELECT id, project_id, name, description FROM tag_groups WHERE project_id = ?1 ORDER BY name ASC")?;
+    // Cast id to TEXT to handle cases where it might be stored as INTEGER (e.g. legacy or migration artifact)
+    let mut stmt = conn.prepare("SELECT CAST(id AS TEXT), project_id, name, description FROM tag_groups WHERE project_id = ?1 ORDER BY name ASC")?;
     let group_iter = stmt.query_map(params![project_id], |row| {
         Ok(TagGroup {
             id: row.get(0)?,
