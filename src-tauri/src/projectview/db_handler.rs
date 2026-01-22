@@ -716,6 +716,9 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized highlight_tags table.");
 
+    // Cleanup legacy tables if they exist
+    conn.execute("DROP TABLE IF EXISTS tag_groups_legacy", [])?;
+    conn.execute("DROP TABLE IF EXISTS tags_legacy", [])?;
 
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
