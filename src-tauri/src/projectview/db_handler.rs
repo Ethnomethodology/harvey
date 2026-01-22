@@ -490,6 +490,57 @@ pub fn init_db() -> Result<(), CommandError> {
         }
     }
 
+    // RECOVERY CHECK: Check if 'tags' still references 'tag_groups_legacy'
+    {
+        let mut stmt_check_fks = conn.prepare("PRAGMA foreign_key_list(tags)")?;
+        let references_legacy_table = stmt_check_fks
+            .query_map([], |row| {
+                let table: String = row.get(2)?;
+                Ok(table)
+            })?
+            .any(|res| res.map_or(false, |table| table == "tag_groups_legacy"));
+
+        if references_legacy_table {
+            info!("[DB] CRITICAL: 'tags' table references 'tag_groups_legacy'. Attempting recovery migration.");
+            conn.execute("ALTER TABLE tags RENAME TO tags_recovery", [])?;
+
+            conn.execute(
+                "CREATE TABLE tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    color TEXT,
+                    description TEXT,
+                    tag_group_id TEXT REFERENCES tag_groups(id) ON DELETE CASCADE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    UNIQUE (project_id, name)
+                )",
+                [],
+            )?;
+
+            conn.execute(
+                "INSERT INTO tags (id, project_id, name, color, description, tag_group_id, created_at, updated_at)
+                 SELECT id, project_id, name, color, description, CAST(tag_group_id AS TEXT), created_at, updated_at FROM tags_recovery",
+                []
+            )?;
+
+            conn.execute("DROP TABLE tags_recovery", [])?;
+
+            conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS update_tags_updated_at
+                AFTER UPDATE ON tags
+                FOR EACH ROW
+                BEGIN
+                    UPDATE tags SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+                END;",
+                [],
+            )?;
+            info!("[DB] 'tags' table recovery complete. FKs should now point to 'tag_groups'.");
+        }
+    }
+
     // tag_groups table (Normal creation if it doesn't exist)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tag_groups (

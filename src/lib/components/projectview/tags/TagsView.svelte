@@ -471,6 +471,37 @@
 
     let currentEditingGroup = null;
 
+    // --- Action Handlers ---
+    function handleInspect(highlight) {
+        if (!highlight || !highlight.source) return;
+        dispatch('requestviewchange', {
+            tabName: 'data',
+            loadNotePath: highlight.source.file_path,
+            highlightId: highlight.id,
+            viewType: highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' : 
+                      highlight.source.file_type === 'csv' ? 'table' :
+                      highlight.source.file_type === 'image' ? 'image' : 
+                      highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document',
+            originalDocType: highlight.source.file_type
+        });
+    }
+
+    function showComments(highlight) {
+        selectedHighlight = highlight;
+        isCommentsPanelOpen = true;
+    }
+
+    async function handleUntag(highlight) {
+        // TODO: Implement untagging functionality.
+        // This requires removing the tag from the specific annotation in the backend or updating the document.
+        // For now, we'll log it and maybe show a message.
+        console.warn('Untagging from Tags view is not yet fully implemented.', highlight);
+        const doUntag = await confirm('Untagging from this view is not yet supported. Please inspect the file to remove the tag.', { title: 'Not Implemented', kind: 'info' });
+        if (doUntag) {
+             handleInspect(highlight);
+        }
+    }
+
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
