@@ -1534,7 +1534,8 @@ pub fn update_tag(
 
 pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
-    let mut stmt = conn.prepare("SELECT id, project_id, name, color, description, tag_group_id FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
+    // Cast tag_group_id to TEXT to handle cases where it might be stored as INTEGER (e.g. legacy or migration artifact)
+    let mut stmt = conn.prepare("SELECT id, project_id, name, color, description, CAST(tag_group_id AS TEXT) FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
     let tag_iter = stmt.query_map(params![project_id], |row| {
         Ok(Tag {
             id: row.get(0)?,
