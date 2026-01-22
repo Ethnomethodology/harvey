@@ -392,6 +392,83 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_groups_updated_at trigger.");
 
+    // Check tag_groups schema to ensure id is TEXT. If it was created as INTEGER (legacy), migrate it.
+    {
+        let mut stmt_check_tag_group_id_type = conn.prepare("PRAGMA table_info(tag_groups)")?;
+        let is_integer_id = stmt_check_tag_group_id_type
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                let type_: String = row.get(2)?;
+                Ok((name, type_))
+            })?
+            .any(|res| res.map_or(false, |(name, type_)| name == "id" && type_.to_uppercase() == "INTEGER"));
+
+        if is_integer_id {
+            info!("[DB] Detected legacy INTEGER id in tag_groups. Migrating to TEXT...");
+            conn.execute("ALTER TABLE tag_groups RENAME TO tag_groups_legacy", [])?;
+            conn.execute(
+                "CREATE TABLE tag_groups (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    UNIQUE (project_id, name)
+                )",
+                [],
+            )?;
+            // Migrate data, casting ID to TEXT.
+            conn.execute(
+                "INSERT INTO tag_groups (id, project_id, name, description, created_at, updated_at)
+                 SELECT CAST(id AS TEXT), project_id, name, description, created_at, updated_at FROM tag_groups_legacy",
+                []
+            )?;
+            conn.execute("DROP TABLE tag_groups_legacy", [])?;
+
+            // Re-create the trigger for the new table
+            conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS update_tag_groups_updated_at
+                AFTER UPDATE ON tag_groups
+                FOR EACH ROW
+                BEGIN
+                    UPDATE tag_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+                END;",
+                [],
+            )?;
+            info!("[DB] tag_groups migration complete.");
+        }
+    }
+
+    // tag_groups table (Normal creation if it doesn't exist)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tag_groups (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized tag_groups table.");
+
+    // Trigger for tag_groups updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_tag_groups_updated_at
+        AFTER UPDATE ON tag_groups
+        FOR EACH ROW
+        BEGIN
+            UPDATE tag_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_tag_groups_updated_at trigger.");
+
     // file_groups table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS file_groups (
