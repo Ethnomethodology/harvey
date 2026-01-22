@@ -1480,12 +1480,29 @@ pub struct Tag {
     pub project_id: String,
     pub name: String,
     pub color: Option<String>,
+    pub description: Option<String>,
+    pub tag_group_id: Option<String>,
 }
 
-pub fn add_tag(conn: &Connection, project_id: &str, name: &str, color: Option<&str>) -> Result<i64, CommandError> {
-    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}", project_id, name, color);
-    let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color) VALUES (?1, ?2, ?3)")?;
-    let id = stmt.insert(params![project_id, name, color])?;
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct TagGroup {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+pub fn add_tag(
+    conn: &Connection,
+    project_id: &str,
+    name: &str,
+    color: Option<&str>,
+    description: Option<&str>,
+    tag_group_id: Option<&str>
+) -> Result<i64, CommandError> {
+    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}, group={:?}", project_id, name, color, tag_group_id);
+    let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color, description, tag_group_id) VALUES (?1, ?2, ?3, ?4, ?5)")?;
+    let id = stmt.insert(params![project_id, name, color, description, tag_group_id])?;
     info!("[DB] Tag added successfully with id {}: name={}", id, name);
     Ok(id)
 }
@@ -1497,11 +1514,19 @@ pub fn delete_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<()
     Ok(())
 }
 
-pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, color: Option<&str>) -> Result<(), CommandError> {
-    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}", tag_id, project_id, name, color);
+pub fn update_tag(
+    conn: &Connection,
+    project_id: &str,
+    tag_id: i64,
+    name: &str,
+    color: Option<&str>,
+    description: Option<&str>,
+    tag_group_id: Option<&str>
+) -> Result<(), CommandError> {
+    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}, group={:?}", tag_id, project_id, name, color, tag_group_id);
     conn.execute(
-        "UPDATE tags SET name = ?1, color = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
-        params![name, color, tag_id, project_id],
+        "UPDATE tags SET name = ?1, color = ?2, description = ?3, tag_group_id = ?4, updated_at = CURRENT_TIMESTAMP WHERE id = ?5 AND project_id = ?6",
+        params![name, color, description, tag_group_id, tag_id, project_id],
     )?;
     info!("[DB] Tag with id {} updated successfully.", tag_id);
     Ok(())
@@ -1509,13 +1534,15 @@ pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, 
 
 pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
-    let mut stmt = conn.prepare("SELECT id, project_id, name, color FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
+    let mut stmt = conn.prepare("SELECT id, project_id, name, color, description, tag_group_id FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
     let tag_iter = stmt.query_map(params![project_id], |row| {
         Ok(Tag {
             id: row.get(0)?,
             project_id: row.get(1)?,
             name: row.get(2)?,
             color: row.get(3)?,
+            description: row.get(4)?,
+            tag_group_id: row.get(5)?,
         })
     })?;
 
@@ -1526,6 +1553,75 @@ pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, Com
     info!("[DB] Loaded {} tags for project_id {}", tags.len(), project_id);
     Ok(tags)
 }
+
+// --- Tag Group Functions ---
+
+pub fn create_tag_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    name: &str,
+    description: Option<&str>
+) -> Result<(), CommandError> {
+    debug!("[DB] Creating tag group for project_id {}: id={}, name={}", project_id, group_id, name);
+    conn.execute(
+        "INSERT INTO tag_groups (id, project_id, name, description) VALUES (?1, ?2, ?3, ?4)",
+        params![group_id, project_id, name, description],
+    )
+    .map_err(|e| CommandError::Message(format!("Failed to create tag group {}: {}", name, e)))?;
+    info!("[DB] Tag group created successfully: id={}, name={}", group_id, name);
+    Ok(())
+}
+
+pub fn get_tag_groups(conn: &Connection, project_id: &str) -> Result<Vec<TagGroup>, CommandError> {
+    debug!("[DB] Loading tag groups for project_id {}", project_id);
+    let mut stmt = conn.prepare("SELECT id, project_id, name, description FROM tag_groups WHERE project_id = ?1 ORDER BY name ASC")?;
+    let group_iter = stmt.query_map(params![project_id], |row| {
+        Ok(TagGroup {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+        })
+    })?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result.map_err(|e| CommandError::Message(format!("Failed to map tag group row: {}", e)))?);
+    }
+    info!("[DB] Loaded {} tag groups for project_id {}", groups.len(), project_id);
+    Ok(groups)
+}
+
+pub fn update_tag_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    name: &str,
+    description: Option<&str>
+) -> Result<(), CommandError> {
+    debug!("[DB] Updating tag group with id {} in project_id {}: name={}", group_id, project_id, name);
+    conn.execute(
+        "UPDATE tag_groups SET name = ?1, description = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
+        params![name, description, group_id, project_id],
+    )?;
+    info!("[DB] Tag group with id {} updated successfully.", group_id);
+    Ok(())
+}
+
+pub fn delete_tag_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting tag group with id {} from project_id {}", group_id, project_id);
+    // Note: Child tags should be deleted via ON DELETE CASCADE or manually if not supported.
+    // We will rely on application logic or FK if set up.
+    // But wait, the FK will be on 'tags' table pointing to 'tag_groups'.
+    // If we delete the group, we want to delete the tags.
+    // We should configure FK with ON DELETE CASCADE in init_db.
+    conn.execute("DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2", params![group_id, project_id])?;
+    info!("[DB] Tag group with id {} deleted successfully.", group_id);
+    Ok(())
+}
+
+// --- End Tag Group Functions ---
 
 // --- End Tag Functions ---
 

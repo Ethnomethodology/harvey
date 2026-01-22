@@ -18,15 +18,92 @@ pub struct TagInfo {
     pub highlights: Vec<HighlightInfo>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TagGroupInfo {
+    pub name: String,
+    pub description: String,
+    pub highlight_count: usize,
+    pub highlights: Vec<HighlightInfo>,
+}
+
 use rusqlite::Connection;
 
 
 #[tauri::command]
-pub fn add_tag(project_id: &str, name: String, color: Option<String>) -> Result<i64, CommandError> {
-    info!("[Tags] Adding tag '{}' to project_id: {}", name, project_id);
+pub fn add_tag(project_id: &str, name: String, color: Option<String>, description: Option<String>, tag_group_id: Option<String>) -> Result<i64, CommandError> {
+    info!("[Tags] Adding tag '{}' to project_id: {}, group: {:?}", name, project_id, tag_group_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    db_handler::add_tag(&conn, project_id, &name, color.as_deref())
+    db_handler::add_tag(&conn, project_id, &name, color.as_deref(), description.as_deref(), tag_group_id.as_deref())
+}
+
+#[tauri::command]
+pub fn get_tag_group_info(project_id: &str, group_id: String) -> Result<TagGroupInfo, CommandError> {
+    info!("[Tags] Getting info for tag group '{}' in project_id: {}", group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // Get group details
+    let mut stmt = conn.prepare("SELECT name, description FROM tag_groups WHERE id = ?1 AND project_id = ?2")?;
+    let (group_name, group_desc): (String, Option<String>) = stmt.query_row(params![group_id, project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })?;
+
+    // Get all tags in this group
+    let all_tags = db_handler::get_all_tags(&conn, project_id)?;
+    let child_tag_names: HashSet<String> = all_tags.into_iter()
+        .filter(|t| t.tag_group_id.as_deref() == Some(&group_id))
+        .map(|t| t.name)
+        .collect();
+
+    let mut all_highlight_infos = Vec::new();
+    let mut seen_highlight_ids = HashSet::new();
+
+    for tag_name in &child_tag_names {
+        let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, tag_name)?;
+
+        for (mut highlight, file_path, tags, asset_type_opt) in highlights_with_tag {
+            if !seen_highlight_ids.insert(highlight.id.clone()) {
+                continue;
+            }
+
+            highlight.tags = Some(tags);
+
+            let source_file_path = Path::new(&file_path);
+            let file_name = source_file_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            // other_tags should exclude any tag that is IN the group.
+            let other_tags = highlight.tags.as_ref()
+                .map(|tags| tags.iter().filter(|t| !child_tag_names.contains(*t)).cloned().collect())
+                .unwrap_or_else(Vec::new);
+
+            let final_asset_type = determine_asset_type(&asset_type_opt, &file_path, &conn, project_id);
+
+            let source = HighlightSource {
+                file_name,
+                file_path: file_path.clone(),
+                file_type: map_asset_type_to_icon_type(&final_asset_type).to_string(),
+                original_doc_type: final_asset_type,
+            };
+
+            all_highlight_infos.push(HighlightInfo {
+                source,
+                highlight,
+                other_tags,
+            });
+        }
+    }
+
+    Ok(TagGroupInfo {
+        name: group_name,
+        description: group_desc.unwrap_or_default(),
+        highlight_count: all_highlight_infos.len(),
+        highlights: all_highlight_infos,
+    })
 }
 
 #[tauri::command]
@@ -35,6 +112,38 @@ pub fn get_all_tags(project_id: &str) -> Result<Vec<db_handler::Tag>, CommandErr
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
     db_handler::get_all_tags(&conn, project_id)
+}
+
+#[tauri::command]
+pub fn create_tag_group(project_id: &str, group_id: String, name: String, description: Option<String>) -> Result<(), CommandError> {
+    info!("[Tags] Creating tag group '{}' ({}) for project_id: {}", name, group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::create_tag_group(&conn, project_id, &group_id, &name, description.as_deref())
+}
+
+#[tauri::command]
+pub fn get_tag_groups(project_id: &str) -> Result<Vec<db_handler::TagGroup>, CommandError> {
+    info!("[Tags] Getting all tag groups for project_id: {}", project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::get_tag_groups(&conn, project_id)
+}
+
+#[tauri::command]
+pub fn update_tag_group(project_id: &str, group_id: String, name: String, description: Option<String>) -> Result<(), CommandError> {
+    info!("[Tags] Updating tag group '{}' for project_id: {}", group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::update_tag_group(&conn, project_id, &group_id, &name, description.as_deref())
+}
+
+#[tauri::command]
+pub fn delete_tag_group(project_id: &str, group_id: String) -> Result<(), CommandError> {
+    info!("[Tags] Deleting tag group '{}' from project_id: {}", group_id, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+    db_handler::delete_tag_group(&conn, project_id, &group_id)
 }
 
 fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
@@ -205,24 +314,32 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
         });
     }
 
+    // Fetch description from DB if available
+    // We already have 'tags' (which are strings) for each highlight, but we need the description of the *queried* tag.
+    // We can fetch it separately or pass it if available.
+    // Since get_all_tags returns description, the frontend likely already knows it, but TagInfo is returned here.
+    // Let's fetch the tag definition to get the description.
+    let mut stmt = conn.prepare("SELECT description FROM tags WHERE project_id = ?1 AND name = ?2")?;
+    let description: String = stmt.query_row(params![project_id, tag_name], |row| {
+        Ok(row.get(0).unwrap_or_default())
+    }).unwrap_or_default();
+
     let tag_info = TagInfo {
         name: tag_name.clone(),
-        description: "".to_string(), // Description is not stored in the db yet
+        description,
         highlight_count: highlight_infos.len(),
         highlights: highlight_infos,
     };
-
-    
 
     Ok(tag_info)
 }
 
 #[tauri::command]
-pub fn update_tag(project_id: &str, tag_id: i64, new_name: String, color: Option<String>) -> Result<(), CommandError> {
+pub fn update_tag(project_id: &str, tag_id: i64, new_name: String, color: Option<String>, description: Option<String>, tag_group_id: Option<String>) -> Result<(), CommandError> {
     info!("[Tags] Updating info for tag '{}'", tag_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    db_handler::update_tag(&conn, project_id, tag_id, &new_name, color.as_deref())
+    db_handler::update_tag(&conn, project_id, tag_id, &new_name, color.as_deref(), description.as_deref(), tag_group_id.as_deref())
 }
 
 #[tauri::command]
