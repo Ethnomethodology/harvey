@@ -405,7 +405,11 @@ pub fn init_db() -> Result<(), CommandError> {
 
         if is_integer_id {
             info!("[DB] Detected legacy INTEGER id in tag_groups. Migrating to TEXT...");
+
+            // 1. Rename old tag_groups
             conn.execute("ALTER TABLE tag_groups RENAME TO tag_groups_legacy", [])?;
+
+            // 2. Create new tag_groups with TEXT ID
             conn.execute(
                 "CREATE TABLE tag_groups (
                     id TEXT PRIMARY KEY,
@@ -419,15 +423,50 @@ pub fn init_db() -> Result<(), CommandError> {
                 )",
                 [],
             )?;
-            // Migrate data, casting ID to TEXT.
+
+            // 3. Migrate data
             conn.execute(
                 "INSERT INTO tag_groups (id, project_id, name, description, created_at, updated_at)
                  SELECT CAST(id AS TEXT), project_id, name, description, created_at, updated_at FROM tag_groups_legacy",
                 []
             )?;
-            conn.execute("DROP TABLE tag_groups_legacy", [])?;
 
-            // Re-create the trigger for the new table
+            // 4. Update 'tags' table to reference the NEW 'tag_groups' table.
+            // Because SQLite 'ALTER TABLE RENAME' updates FKs to point to the renamed table ('tag_groups_legacy'),
+            // the 'tags' table now references 'tag_groups_legacy'. We must point it back to 'tag_groups'.
+            // Since we can't easily alter FKs, we must recreate the 'tags' table.
+
+            conn.execute("ALTER TABLE tags RENAME TO tags_legacy", [])?;
+            conn.execute(
+                "CREATE TABLE tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    color TEXT,
+                    description TEXT,
+                    tag_group_id TEXT REFERENCES tag_groups(id) ON DELETE CASCADE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    UNIQUE (project_id, name)
+                )",
+                [],
+            )?;
+
+            // Copy data back to tags.
+            // Note: tags_legacy.tag_group_id might be INTEGER if it was linked to the old table.
+            // We cast it to TEXT to match the new schema.
+            conn.execute(
+                "INSERT INTO tags (id, project_id, name, color, description, tag_group_id, created_at, updated_at)
+                 SELECT id, project_id, name, color, description, CAST(tag_group_id AS TEXT), created_at, updated_at FROM tags_legacy",
+                []
+            )?;
+
+            // 5. Cleanup legacy tables
+            conn.execute("DROP TABLE tag_groups_legacy", [])?;
+            conn.execute("DROP TABLE tags_legacy", [])?;
+
+            // Re-create the triggers
             conn.execute(
                 "CREATE TRIGGER IF NOT EXISTS update_tag_groups_updated_at
                 AFTER UPDATE ON tag_groups
@@ -437,7 +476,17 @@ pub fn init_db() -> Result<(), CommandError> {
                 END;",
                 [],
             )?;
-            info!("[DB] tag_groups migration complete.");
+            conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS update_tags_updated_at
+                AFTER UPDATE ON tags
+                FOR EACH ROW
+                BEGIN
+                    UPDATE tags SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+                END;",
+                [],
+            )?;
+
+            info!("[DB] tag_groups and tags schema migration complete.");
         }
     }
 
