@@ -547,9 +547,9 @@
                     <div class="mb-2 rounded border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                         <!-- Group Header -->
                         <div
-                            class="flex items-center justify-between p-2 cursor-pointer rounded bg-gray-50 dark:bg-surface-3 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            class="flex items-center justify-between px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                             class:bg-blue-100={$selectedTagGroup?.id === group.id}
-                            class:dark:bg-blue-800={$selectedTagGroup?.id === group.id}
+                            class:dark:bg-blue-900={$selectedTagGroup?.id === group.id}
                             on:click={() => handleSelect(group, 'group')}
                         >
                             <div class="flex items-center">
@@ -578,9 +578,9 @@
                         >
                             {#each group.tags as tag (tag.id)}
                                 <div
-                                    class="p-2 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary border border-gray-200 dark:border-border bg-white dark:bg-surface-2"
+                                    class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                                     class:bg-blue-100={$selectedTag?.id === tag.id}
-                                    class:dark:bg-blue-800={$selectedTag?.id === tag.id}
+                                    class:dark:bg-blue-900={$selectedTag?.id === tag.id}
                                     on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                                 >
                                     <span class="truncate dark:text-text-secondary"
@@ -606,9 +606,9 @@
                     >
                         {#each ungroupedTags as tag (tag.id)}
                             <div
-                                class="p-2 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary border border-gray-200 dark:border-border bg-white dark:bg-surface-2"
+                                class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                                 class:bg-blue-100={$selectedTag?.id === tag.id}
-                                class:dark:bg-blue-800={$selectedTag?.id === tag.id}
+                                class:dark:bg-blue-900={$selectedTag?.id === tag.id}
                                 on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                             >
                                 <span class="truncate dark:text-text-secondary"
