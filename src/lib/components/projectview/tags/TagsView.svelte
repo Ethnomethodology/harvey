@@ -194,44 +194,52 @@
         }
     }
 
-    // Update table data
-    afterUpdate(() => {
-        if ($tagInfo && tableContainer && !tabulatorInstance) {
-            initializeTable(processedHighlights);
-        } else if (tabulatorInstance && tableReady) {
-            // Update table structure if columns change (e.g. Tag Name column for Groups)
-            // But usually setColumns causes full redraw.
-            // For now, simpler to destroy and recreate if the column structure needs to change (Group vs Tag view)
-            // Or just update columns dynamically.
-            // Let's check if the view mode changed (Group vs Single Tag)
+    // React to tagInfo or selection changes to update table
+    $: {
+        if ($tagInfo && tableContainer) {
             const isGroupView = !!$selectedTagGroup;
-            const hasTagNameCol = tabulatorInstance.getColumn("tagName");
-
-            if (isGroupView && !hasTagNameCol) {
-                // Need to add column, easiest to re-init
+            // If table doesn't exist, create it
+            if (!tabulatorInstance) {
                 initializeTable(processedHighlights);
-            } else if (!isGroupView && hasTagNameCol) {
-                // Need to remove column, re-init
-                initializeTable(processedHighlights);
-            } else {
-                tabulatorInstance.setData(processedHighlights);
+            } else if (tableReady) {
+                // Check if we need to switch column structure
+                // We rely on a custom property 'isGroupView' on the instance or check columns
+                // But getting columns can be buggy if not ready.
+                // Simplest is to check if we switched modes.
+                // We can store the current mode in a variable
+                if (currentTableMode !== (isGroupView ? 'group' : 'tag')) {
+                    initializeTable(processedHighlights);
+                } else {
+                    // Just update data
+                    tabulatorInstance.replaceData(processedHighlights)
+                        .then(() => {
+                            if (tabulatorInstance) {
+                                tabulatorInstance.redraw();
+                            }
+                        })
+                        .catch(err => console.error("Table update failed", err));
+                }
             }
-        }
-
-        if (!$tagInfo && tabulatorInstance) {
+        } else if (!$tagInfo && tabulatorInstance) {
+            // Cleanup if no tag selected
             tabulatorInstance.destroy();
             tabulatorInstance = null;
             tableReady = false;
+            currentTableMode = null;
         }
-    });
+    }
+
+    let currentTableMode = null; // 'tag' or 'group'
 
     function initializeTable(data) {
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
+            tabulatorInstance = null;
         }
         tableReady = false;
 
         const isGroupView = !!$selectedTagGroup;
+        currentTableMode = isGroupView ? 'group' : 'tag';
 
         let columns = [
             { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell) => {
@@ -258,14 +266,9 @@
             columns.push({
                 title: "Tag Name", field: "tags", widthGrow: 2, formatter: (cell) => {
                     const allTagsOnHighlight = cell.getValue() || [];
-                    // We want to show which of the GROUP'S tags this highlight belongs to.
-                    // $selectedTagGroup is available
                     if (!$selectedTagGroup) return '';
 
-                    // We need to know the tags in the current group.
-                    // We can find them in `groups` derived array or filter `allTags`.
                     const currentGroupTags = $allTags.filter(t => t.tag_group_id === $selectedTagGroup.id).map(t => t.name);
-
                     const matchingTags = allTagsOnHighlight.filter(t => currentGroupTags.includes(t));
 
                     if (matchingTags.length === 0) return '';
