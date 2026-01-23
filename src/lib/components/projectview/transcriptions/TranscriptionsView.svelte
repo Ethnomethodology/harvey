@@ -32,6 +32,8 @@
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte'; // <-- Added this import
+    import ManualSettingsModal from '$lib/components/projectview/modals/ManualSettingsModal.svelte';
+    import { updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -110,6 +112,9 @@
     let pendingLoadItem = null; // Stores the item that was requested to be loaded
     let pendingLoadItemName = ''; // Name for the modal
     let pendingLoadItemType = ''; // Type for the modal (e.g., 'media', 'transcript')
+
+    // State for ManualSettingsModal
+    let isManualSettingsModalOpen = false;
 
     async function handlePreviousRequest() {
         if (get(transcriptStore).transcriptDirty) {
@@ -342,6 +347,16 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
+    // Handlers for Manual Transcription Settings
+    function handleRequestManualSettings() {
+        isManualSettingsModalOpen = true;
+    }
+
+    function handleManualSettingsConfirm(event) {
+        const { duration, speakerMode } = event.detail;
+        updateManualSegmentSettings({ duration, speakerMode });
+    }
+
     
 
     // Handlers for UnsavedChangesModal
@@ -552,6 +567,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
+                on:requestmanualsettings={handleRequestManualSettings}
              />
         </div>
     </div>
@@ -600,6 +616,17 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         on:cancel={handleModalCancel}
     />
 {/if}
+
+{#if isManualSettingsModalOpen}
+    <ManualSettingsModal
+        bind:showModal={isManualSettingsModalOpen}
+        currentSettings={$transcriptStore.manualSegmentSettings}
+        speakerList={$transcriptStore.speakers?.names || []}
+        on:confirm={handleManualSettingsConfirm}
+        on:close={() => isManualSettingsModalOpen = false}
+    />
+{/if}
+
 </div>
 <style lang="postcss">
     .min-h-0 { min-height: 0; }

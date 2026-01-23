@@ -34,8 +34,9 @@
 
     // Derived state for manual validation
     $: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
-    $: availableSpace = Math.max(0, mediaDuration - lastSegmentEndTime);
-    $: isManualDurationValid = totalDurationNeeded <= availableSpace + 0.001; // tolerance
+    // For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
+    // So we validate against total media duration, not remaining space.
+    $: isManualDurationValid = totalDurationNeeded <= mediaDuration + 0.001; 
 
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '0s';
@@ -61,7 +62,7 @@
                     segmentCount: manualSegmentCount,
                     segmentDuration: manualSegmentDuration,
                     speakerMode: manualSpeakerMode,
-                    startTime: lastSegmentEndTime
+                    startTime: 0 // Always start from 0 for new transcript via this modal
                 },
                 speakersConfig: modalSpeakersConfig // Pass speakers config even in manual for alternations
             });
@@ -242,8 +243,8 @@
                         <!-- MANUAL SETTINGS -->
                         <div class="p-3 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 mb-2">
                             <div class="flex justify-between mb-1">
-                                <span>Available Space:</span>
-                                <span class="font-medium">{formatDuration(availableSpace)}</span>
+                                <span>Total Media Duration:</span>
+                                <span class="font-medium">{formatDuration(mediaDuration)}</span>
                             </div>
                         </div>
 
@@ -298,7 +299,7 @@
                                 <span class="font-bold">{formatDuration(totalDurationNeeded)}</span>
                             </div>
                             {#if !isManualDurationValid}
-                                <p class="text-xs mt-1 font-medium">Exceeds available space!</p>
+                                <p class="text-xs mt-1 font-medium">Exceeds total media duration!</p>
                             {/if}
                         </div>
                     {/if}
