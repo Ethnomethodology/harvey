@@ -292,7 +292,17 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
-    export function handleInsertSegmentRequest(event) { const { index, startTime, endTime } = event.detail; if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return; const newSegment = { start_time: startTime, end_time: endTime, speaker: "Unknown", text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), }; insertTranscriptSegment(index, newSegment); }
+    export function handleInsertSegmentRequest(event) {
+        const { index, startTime, endTime, speaker } = event.detail;
+        if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return;
+        const newSegment = {
+            start_time: startTime,
+            end_time: endTime,
+            speaker: speaker || "Unknown",
+            text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }),
+        };
+        insertTranscriptSegment(index, newSegment);
+    }
 
     export function activateTrimModeOnPlayer() {
         if (mediaPlayerRef && typeof mediaPlayerRef.enterTrimMode === 'function') {

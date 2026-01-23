@@ -57,6 +57,14 @@ export const initialTranscriptState = {
     translateToEnglish: false,
     diarizationEnabledForNextJob: false,
 
+    // Transcription Mode & Manual Settings
+    transcriptionMode: 'automatic', // 'automatic' | 'manual'
+    manualSegmentSettings: {
+        duration: 60,
+        speakerMode: 'unselected', // 'unselected' | 'alternate'
+        lastUsedSpeakerIndex: -1
+    },
+
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
     secondaryTranscriptPath: null,
@@ -628,6 +636,17 @@ export function setSelectedModel(modelName) {
 
 export function setSelectedLanguage(languageCode) {
     transcriptStore.update((ts) => ({ ...ts, selectedLanguage: languageCode || null }));
+}
+
+export function setTranscriptionMode(mode) {
+    transcriptStore.update((ts) => ({ ...ts, transcriptionMode: mode }));
+}
+
+export function updateManualSegmentSettings(settings) {
+    transcriptStore.update((ts) => ({
+        ...ts,
+        manualSegmentSettings: { ...ts.manualSegmentSettings, ...settings }
+    }));
 }
 
 export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = null) {

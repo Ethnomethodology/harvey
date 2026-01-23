@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
-	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript, setSecondaryTranscript } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript, setSecondaryTranscript, updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -582,13 +582,12 @@
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) {
         if (!previewEditMode) return;
-        const MIN_GAP_SECONDS = 1.0;
-        const TIME_TOLERANCE = 0.001;
-        const currentSegments = get(transcriptStore).segments;
-        const mediaDuration = get(transcriptStore).player.duration;
+        const store = get(transcriptStore);
+        const mode = store.transcriptionMode;
+        const currentSegments = store.segments;
+        const mediaDuration = store.player.duration;
 
         let finalIndex = index;
-
         let prevEndTime = 0.0;
         let nextStartTime = mediaDuration;
 
@@ -598,6 +597,81 @@
         if (finalIndex < currentSegments.length) {
             nextStartTime = currentSegments[finalIndex]?.start_time ?? mediaDuration;
         }
+
+        // --- MANUAL MODE LOGIC ---
+        if (mode === 'manual') {
+            const settings = store.manualSegmentSettings;
+            const duration = settings.duration || 60;
+            
+            let newStartTime = prevEndTime;
+            let newEndTime = Math.min(mediaDuration, newStartTime + duration);
+            
+            const availableGap = nextStartTime - prevEndTime;
+            
+            if (newEndTime > nextStartTime + 0.001) {
+                 if (finalIndex < currentSegments.length) {
+                     if (availableGap < 0.5) {
+                         await message(`Not enough space to insert a segment here. Gap is ${availableGap.toFixed(2)}s.`, { title: "No Space", type: "warning" });
+                         return;
+                     }
+                     // Fill available gap if preferred duration is too long
+                     newEndTime = nextStartTime; 
+                 }
+            }
+
+            if (newEndTime <= newStartTime + 0.001) {
+                 await message("Cannot insert segment: No duration available.", { title: "Error", type: "warning" });
+                 return;
+            }
+
+            // Speaker Logic
+            let speaker = "Unknown";
+            if (settings.speakerMode === 'alternate') {
+                const names = store.speakers.names;
+                if (names.length >= 2) {
+                    let lastIndex = settings.lastUsedSpeakerIndex;
+                    if (lastIndex === -1 && finalIndex > 0) {
+                         // Try to infer from previous segment if state is fresh
+                         const prevSpeaker = currentSegments[finalIndex - 1]?.speaker;
+                         if (prevSpeaker && names.includes(prevSpeaker)) {
+                             lastIndex = names.indexOf(prevSpeaker);
+                         }
+                    }
+                    
+                    const nextSpeakerIndex = (lastIndex + 1) % names.length;
+                    speaker = names[nextSpeakerIndex];
+                    
+                    // Update store for next time
+                    updateManualSegmentSettings({ lastUsedSpeakerIndex: nextSpeakerIndex });
+                }
+            } else {
+                 // Unselected mode: "Unknown" or just leave it empty? User said "unselected".
+                 // In our system "Unknown" is the unselected state usually.
+                 speaker = "Unknown"; 
+            }
+
+            // Construct new segment with empty text structure
+            const newSegment = {
+                start_time: newStartTime,
+                end_time: newEndTime,
+                speaker: speaker,
+                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
+            };
+
+            // We need to call the store function directly because dispatch('insertnewsegment') 
+            // in TranscriptionsView currently hardcodes speaker to "Unknown".
+            // To support custom speakers, we should import insertTranscriptSegment directly here.
+            // But wait, insertTranscriptSegment is an exported function from transcriptStore.js.
+            // I need to import it at the top of this file to use it.
+            // I'll assume I can add it to the imports in a separate step or just rely on dispatch if I update TranscriptionsView?
+            // Updating TranscriptionsView to accept 'speaker' in event detail is cleaner.
+            
+            dispatch('insertnewsegment', { index: finalIndex, startTime: newStartTime, endTime: newEndTime, speaker: speaker });
+            return;
+        }
+
+        const MIN_GAP_SECONDS = 1.0;
+        const TIME_TOLERANCE = 0.001;
 
         const gap = nextStartTime - prevEndTime;
         if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) {
