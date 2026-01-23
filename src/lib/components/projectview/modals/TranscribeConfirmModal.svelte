@@ -304,7 +304,7 @@
                                 <span class="font-medium">{formatDuration(mediaDuration)}</span>
                             </div>
                             <div class="flex justify-between">
-                                <span>Total segmented:</span>
+                                <span>Segmented:</span>
                                 <span class="font-bold {isManualDurationValid ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}">
                                     {formatDuration(totalDurationNeeded)}
                                 </span>
