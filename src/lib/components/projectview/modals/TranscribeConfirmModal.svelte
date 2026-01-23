@@ -278,7 +278,7 @@
                                 min="1"
                                 max="100"
                                 bind:value={manualSegmentCount}
-                                class="ui-select w-full"
+                                class="ui-input w-full"
                             />
                         </div>
 
@@ -290,7 +290,7 @@
                                     type="number"
                                     min="1"
                                     bind:value={manualSegmentDuration}
-                                    class="ui-select w-full"
+                                    class="ui-input w-full"
                                 />
                                 <span class="text-xs text-gray-500 whitespace-nowrap min-w-[4rem]">
                                     ({formatDuration(manualSegmentDuration)})
@@ -530,8 +530,26 @@
 		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
 	}
 	.ui-select {
-		@apply block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500;
+		@apply block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md;
+        background-color: white;
 	}
+    :global(.dark) .ui-select {
+        background-color: #0d0d0d;
+        border-color: #333333;
+        color: white;
+        color-scheme: dark;
+    }
+
+	.ui-input {
+		@apply block w-full px-3 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md;
+        background-color: white;
+	}
+    :global(.dark) .ui-input {
+        background-color: #0d0d0d;
+        border-color: #333333;
+        color: white;
+        color-scheme: dark;
+    }
 	.btn-xs-secondary {
 		@apply px-2 py-1 text-xs font-medium rounded border;
 		@apply bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300;

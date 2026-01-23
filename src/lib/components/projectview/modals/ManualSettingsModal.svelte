@@ -109,8 +109,15 @@
 
 <style lang="postcss">
 	.ui-input {
-		@apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm;
+		@apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm;
+        background-color: white;
 	}
+    :global(.dark) .ui-input {
+        background-color: #0d0d0d;
+        border-color: #333333;
+        color: white;
+        color-scheme: dark;
+    }
     .ui-radio {
         @apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
     }
