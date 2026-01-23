@@ -231,20 +231,6 @@
                             />
                         </div>
 
-                        <div class="pt-2">
-                            <div class="flex items-center space-x-2">
-                                <input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
-                                <label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                                    Identify different speakers (diarize)
-                                </label>
-                            </div>
-                            {#if modalEnableDiarization}
-                                <p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
-                                    Note: Speaker identification can significantly increase transcription time.
-                                </p>
-                            {/if}
-                        </div>
-
                         <div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
                             <div class="flex justify-between items-center">
                                 <div>
@@ -265,6 +251,20 @@
                                     ({modalSpeakersConfig.names.join(', ')})
                                 </p>
                             </div>
+                            {/if}
+                        </div>
+
+                        <div class="pt-2 border-t border-gray-200 dark:border-border mt-3">
+                            <div class="flex items-center space-x-2">
+                                <input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
+                                <label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                    Identify different speakers (diarize)
+                                </label>
+                            </div>
+                            {#if modalEnableDiarization}
+                                <p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
+                                    Note: Speaker identification can significantly increase transcription time.
+                                </p>
                             {/if}
                         </div>
 
