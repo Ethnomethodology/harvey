@@ -396,6 +396,30 @@
         }
     }
 
+    async function handleSaveTag(event) {
+        const { id, name, description } = event.detail;
+        // Use existing color and group if not provided (modal doesn't edit color/group currently)
+        const currentColor = $selectedTag ? $selectedTag.color : null;
+        const currentGroupId = $selectedTag ? $selectedTag.tag_group_id : null;
+        try {
+            await updateTag(id, name, currentColor, description, currentGroupId);
+            isEditTagModalOpen = false;
+        } catch (error) {
+            console.error("Failed to update tag:", error);
+        }
+    }
+
+    async function handleDeleteTagFromModal(event) {
+        const { id } = event.detail;
+        try {
+            await deleteTag(id);
+            isEditTagModalOpen = false;
+            selectTag(null);
+        } catch (error) {
+            console.error("Failed to delete tag:", error);
+        }
+    }
+
     // --- DnD Handlers ---
     // For groups: dragging tags INTO a group or reordering within.
     function handleDndConsiderGroup(groupId, e) {
