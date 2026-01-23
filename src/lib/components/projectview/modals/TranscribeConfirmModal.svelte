@@ -270,13 +270,6 @@
 
                     {:else}
                         <!-- MANUAL SETTINGS -->
-                        <div class="p-3 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 mb-2">
-                            <div class="flex justify-between mb-1">
-                                <span>Total Media Duration:</span>
-                                <span class="font-medium">{formatDuration(mediaDuration)}</span>
-                            </div>
-                        </div>
-
                         <div class="space-y-1">
                             <label for="manualSegCount" class="block font-medium text-gray-900 dark:text-gray-100">Number of Segments:</label>
                             <input
@@ -303,6 +296,24 @@
                                     ({formatDuration(manualSegmentDuration)})
                                 </span>
                             </div>
+                        </div>
+
+                        <div class="mt-2 p-2 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1">
+                            <div class="flex justify-between">
+                                <span>Media Duration:</span>
+                                <span class="font-medium">{formatDuration(mediaDuration)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Total segmented:</span>
+                                <span class="font-bold {isManualDurationValid ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}">
+                                    {formatDuration(totalDurationNeeded)}
+                                </span>
+                            </div>
+                            {#if !isManualDurationValid}
+                                <p class="text-center font-semibold text-red-600 dark:text-red-400 pt-1 border-t border-gray-200 dark:border-gray-600">
+                                    Exceeds total media duration!
+                                </p>
+                            {/if}
                         </div>
 
                         <div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3 mb-2">
@@ -338,16 +349,6 @@
                             />
                             {#if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
                                 <p class="text-xs text-red-500 mt-1">Need at least 2 speakers configured.</p>
-                            {/if}
-                        </div>
-
-                        <div class="mt-2 p-2 rounded {isManualDurationValid ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}">
-                            <div class="flex justify-between text-xs">
-                                <span>Total New Time:</span>
-                                <span class="font-bold">{formatDuration(totalDurationNeeded)}</span>
-                            </div>
-                            {#if !isManualDurationValid}
-                                <p class="text-xs mt-1 font-medium">Exceeds total media duration!</p>
                             {/if}
                         </div>
                     {/if}
