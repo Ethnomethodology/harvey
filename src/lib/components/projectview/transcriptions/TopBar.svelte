@@ -8,7 +8,7 @@
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
-	import { requestTranscription, requestTranslation, insertTranscriptSegment } from '$lib/services/projectService.js';
+	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
 	import { getDownloadedModels, exportTranscript } from '$lib/services/configureActions.js';
 
 	// --- Tauri Imports ---
