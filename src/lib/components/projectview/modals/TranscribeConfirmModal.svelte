@@ -245,6 +245,29 @@
                             {/if}
                         </div>
 
+                        <div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <strong>Speakers:</strong>
+                                    <span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn-xs-secondary"
+                                    on:click={() => showNestedSpeakersModal = true}
+                                >
+                                    Edit Speakers
+                                </button>
+                            </div>
+                            {#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
+                            <div class="pl-4">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+                                    ({modalSpeakersConfig.names.join(', ')})
+                                </p>
+                            </div>
+                            {/if}
+                        </div>
+
                     {:else}
                         <!-- MANUAL SETTINGS -->
                         <div class="p-3 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 mb-2">
@@ -282,6 +305,29 @@
                             </div>
                         </div>
 
+                        <div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3 mb-2">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <strong>Speakers:</strong>
+                                    <span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn-xs-secondary"
+                                    on:click={() => showNestedSpeakersModal = true}
+                                >
+                                    Edit Speakers
+                                </button>
+                            </div>
+                            {#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
+                            <div class="pl-4">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+                                    ({modalSpeakersConfig.names.join(', ')})
+                                </p>
+                            </div>
+                            {/if}
+                        </div>
+
                         <div class="space-y-1">
                             <label for="manualSpeakerModeDropdown" class="block font-medium text-gray-900 dark:text-gray-100">Speaker Assignment:</label>
                             <Dropdown
@@ -305,29 +351,6 @@
                             {/if}
                         </div>
                     {/if}
-
-					<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
-						<div class="flex justify-between items-center">
-							<div>
-								<strong>Speakers:</strong>
-								<span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
-							</div>
-							<button
-								type="button"
-								class="btn-xs-secondary"
-								on:click={() => showNestedSpeakersModal = true}
-							>
-								Edit Speakers
-							</button>
-						</div>
-						{#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
-						<div class="pl-4">
-							<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
-								({modalSpeakersConfig.names.join(', ')})
-							</p>
-						</div>
-						{/if}
-					</div>
 
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-border">
