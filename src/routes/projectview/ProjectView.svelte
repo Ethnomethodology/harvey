@@ -40,7 +40,7 @@
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
     import { fetchAllTags } from '$lib/stores/tagStore.js';
-    import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData, insertTranscriptSegment } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
@@ -102,17 +102,64 @@ async function loadTranscriptionConfigData() {
 	}
 
 async function onConfirmTranscriptionStart(event) {
-    const { selectedModel, transcriptionMode, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig } = event.detail;
+    const { transcriptionMode, selectedModel, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig, manualSettings } = event.detail;
 
-    // Update the central transcript store with the user's choices from the modal
-    setSelectedModel(selectedModel);
-    setSelectedLanguage(selectedLanguage);
-    setTranslateToEnglish(translateToEnglish);
-    setDiarizationPreference(enableDiarization);
-    // The updateSpeakerConfig from the store expects individual arguments, not the object
-    updateSpeakerConfig(speakersConfig.count, speakersConfig.names, speakersConfig.translatedNames);
+    // Common: Update speaker config
+    if (speakersConfig) {
+        updateSpeakerConfig(speakersConfig.count, speakersConfig.names, speakersConfig.translatedNames);
+    }
 
-    await handleConfirmStartTranscription(transcriptionMode);
+    if (transcriptionMode === 'automatic') {
+        // Update store with automatic settings
+        setSelectedModel(selectedModel);
+        setSelectedLanguage(selectedLanguage);
+        setTranslateToEnglish(translateToEnglish);
+        setDiarizationPreference(enableDiarization);
+
+        await handleConfirmStartTranscription(transcriptionMode);
+    } else if (transcriptionMode === 'manual') {
+        // Manual Logic
+        toggleTranscribeModal(false); // Close modal
+
+        const { segmentCount, segmentDuration, speakerMode, startTime } = manualSettings;
+        const store = get(transcriptStore);
+        const currentSegments = store.segments || [];
+        const speakerNames = store.speakers.names;
+        
+        let currentStartTime = startTime;
+        
+        // Determine starting speaker index logic for alternation
+        let lastSpeakerIndex = -1;
+        if (currentSegments.length > 0) {
+             const lastSpeaker = currentSegments[currentSegments.length - 1].speaker;
+             if (speakerNames.includes(lastSpeaker)) {
+                 lastSpeakerIndex = speakerNames.indexOf(lastSpeaker);
+             }
+        }
+
+        for (let i = 0; i < segmentCount; i++) {
+            const newEndTime = currentStartTime + segmentDuration;
+            let speaker = "Unknown";
+            
+            if (speakerMode === 'alternate' && speakerNames.length >= 2) {
+                 // Start from the *next* speaker after the last one
+                 const baseIndex = (lastSpeakerIndex + 1) % 2;
+                 const currentSpeakerIndex = (baseIndex + i) % 2;
+                 speaker = speakerNames[currentSpeakerIndex];
+            }
+
+            const newSegment = { 
+                start_time: currentStartTime, 
+                end_time: newEndTime, 
+                speaker: speaker, 
+                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), 
+            };
+            
+            // Insert at the end
+            insertTranscriptSegment(currentSegments.length + i, newSegment);
+            currentStartTime = newEndTime;
+        }
+    }
 }
 
 // Reactive declaration for config issues
@@ -920,6 +967,8 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
         speakers={$transcriptStore.speakers}
         jobId={$transcriptStore.transcriptionJobId}
 		downloadedModelsList={downloadedModelsList}
+        mediaDuration={$transcriptStore.player?.duration || 0}
+        lastSegmentEndTime={$transcriptStore.segments?.length > 0 ? $transcriptStore.segments[$transcriptStore.segments.length - 1].end_time : 0}
 		
 		languageOptions={languageOptions}
 		initialDiarizationEnabled={$transcriptStore.diarizationEnabledForNextJob}

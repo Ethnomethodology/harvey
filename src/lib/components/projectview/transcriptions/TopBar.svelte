@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode, setTranscriptionMode, updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -18,7 +18,6 @@
 	
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
-    import AddSegmentsModal from '../modals/AddSegmentsModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
 	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
@@ -33,7 +32,6 @@
 	let isManageModalOpen = false;
 	let isSpeakersModalOpen = false;
 	let isExportModalOpen = false;
-    let isAddSegmentsModalOpen = false;
 	let isLayoutSettingsModalOpen = false; // Added
 	let transcriptsForModal = [];
 
@@ -142,91 +140,6 @@
 		}
 		requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
 	}
-
-    function handleAddSegmentsClick() {
-        if (!$transcriptStore.selectedMediaFile?.path) {
-            message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
-            return;
-        }
-        isAddSegmentsModalOpen = true;
-    }
-
-    async function handleAddSegmentsConfirm(event) {
-        const { segmentCount, segmentDuration, speakerMode, startTime } = event.detail;
-        
-        // Update store with user preferences for future + button clicks
-        updateManualSegmentSettings({ duration: segmentDuration, speakerMode });
-
-        // Add the segments
-        // We'll use insertTranscriptSegment from projectService/transcriptStore
-        // Note: insertTranscriptSegment usually inserts at a specific index. 
-        // Here we are appending to the end or filling a gap.
-        // For simplicity, we'll append to the end based on startTime provided by modal logic.
-        
-        // We need to import insertTranscriptSegment from transcriptStore.js to push to undo stack correctly?
-        // Yes, importing from store is better. But I imported it from projectService above? 
-        // Wait, transcriptStore has insertTranscriptSegment too.
-        // Let's use the one from transcriptStore.js via import { insertTranscriptSegment } ...
-        // Ah, I see I imported `insertTranscriptSegment` from projectService in the top block. 
-        // Let's check where it really is. It is in transcriptStore.js.
-        // I need to import it from there.
-        
-        // Let's dynamically import it to avoid circular dependency issues if any, or just trust the import if I fix it.
-        // Actually, I'll update the imports section to get it from transcriptStore.
-        
-        const { insertTranscriptSegment } = await import('$lib/stores/transcriptStore.js');
-        const store = get(transcriptStore);
-        const currentSegments = store.segments;
-        
-        let currentStartTime = startTime;
-        
-        for (let i = 0; i < segmentCount; i++) {
-            const newEndTime = currentStartTime + segmentDuration;
-            
-            // Speaker logic
-            let speaker = "Unknown";
-            if (speakerMode === 'alternate') {
-                const speakerNames = store.speakers.names;
-                if (speakerNames.length >= 2) {
-                    // Determine index based on previous segment or default to 0
-                    // For bulk add, we alternate starting from... the last used?
-                    // Let's just alternate 0, 1, 0, 1... for this batch.
-                    // Or check the very last segment in the store.
-                    const lastSegment = currentSegments.length > 0 ? currentSegments[currentSegments.length - 1] : null;
-                    let lastSpeakerIndex = -1;
-                    if (lastSegment && speakerNames.includes(lastSegment.speaker)) {
-                        lastSpeakerIndex = speakerNames.indexOf(lastSegment.speaker);
-                    }
-                    
-                    // Logic for batch: 
-                    // Segment 1: (last + 1) % 2
-                    // Segment 2: (last + 2) % 2 ...
-                    // Since we are adding sequentially, we can just toggle.
-                    // Wait, insertTranscriptSegment updates the store immediately?
-                    // Yes. So if we query the store inside loop it might be updated?
-                    // No, get(transcriptStore) gets the snapshot. 
-                    // But insertTranscriptSegment calls update().
-                    
-                    // Simple approach: calculate speaker for this specific segment based on (baseIndex + i)
-                    const baseIndex = (lastSpeakerIndex + 1) % 2; // Start with the next one
-                    const currentSpeakerIndex = (baseIndex + i) % 2;
-                    speaker = speakerNames[currentSpeakerIndex];
-                }
-            }
-
-            const newSegment = { 
-                start_time: currentStartTime, 
-                end_time: newEndTime, 
-                speaker: speaker, 
-                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), 
-            };
-            
-            // We append to the end, so index is current length + i
-            insertTranscriptSegment(currentSegments.length + i, newSegment);
-            
-            currentStartTime = newEndTime;
-        }
-    }
 
 	function openExportModal() {
 		if ($transcriptStore.segments?.length > 0 && $transcriptStore.currentTranscriptPath) {
@@ -408,17 +321,6 @@
 			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
 		/>
 
-		<!-- Transcription Mode -->
-		<Dropdown
-			containerClasses="w-48"
-			options={[
-				{ value: 'automatic', label: 'Automatic Transcription' },
-				{ value: 'manual', label: 'Manual Transcription' },
-			]}
-			value={$transcriptStore.transcriptionMode}
-            on:change={(e) => setTranscriptionMode(e.detail)}
-		/>
-
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
 			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
@@ -434,9 +336,7 @@
 			</button>
 		  </div>
 
-        <!-- Conditional Button: Transcribe OR Add Segments -->
-        {#if $transcriptStore.transcriptionMode === 'automatic'}
-    		<!-- Transcribe Button -->
+		<!-- Transcribe Button -->
 			<button
 				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
 				on:click="{handleTranscribeClick}"
@@ -455,20 +355,7 @@
 				<span class="text-xs">Transcribe</span>
 				{/if}
 			</button>
-        {:else}
-            <!-- Add Segments Button -->
-            <button
-                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
-                on:click="{handleAddSegmentsClick}"
-                title="{isTranscribeDisabled ? 'Select media first' : 'Add Segments'}"
-                disabled="{isTranscribeDisabled}"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                <span class="text-xs">Add Segments</span>
-            </button>
-        {/if}
+
 
 			<!-- Translate Button -->
 			<button
@@ -530,16 +417,6 @@
 	currentLayoutKey="{$activeLayout}"
 	on:selectLayout="{handleLayoutSelected}"
 	on:close={() => isLayoutSettingsModalOpen = false}
-/>
-
-<AddSegmentsModal
-    bind:showModal={isAddSegmentsModalOpen}
-    mediaName={$transcriptStore.selectedMediaFile?.name || ''}
-    mediaDuration={$transcriptStore.player.duration || 0}
-    existingSegments={$transcriptStore.segments || []}
-    speakerList={$transcriptStore.speakers?.names || []}
-    on:close={() => isAddSegmentsModalOpen = false}
-    on:confirm={handleAddSegmentsConfirm}
 />
 
 <TranslateModal 

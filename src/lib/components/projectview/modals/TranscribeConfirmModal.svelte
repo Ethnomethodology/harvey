@@ -12,29 +12,60 @@
 	export let downloadedModelsList = [];
 	export let languageOptions = []; // Expect languageOptions as a prop, default to empty array
 	export let speakers = { count: 0, names: [], translatedNames: [] };
-
+    export let mediaDuration = 0; // Added for manual mode validation
+    export let lastSegmentEndTime = 0; // Added for manual mode validation
 
 	const dispatch = createEventDispatcher();
 
 	// Local state for editable fields
 	let modalSelectedModel = '';
-	let modalTranscriptionMode = 'automatic';
+	let modalTranscriptionMode = 'automatic'; // Kept for store compatibility if needed, but UI uses modalTab
+    let modalTab = 'automatic'; // 'automatic' | 'manual'
 	let modalSelectedLanguage = 'auto';
 	
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
 	let showNestedSpeakersModal = false;
 
+    // Manual Mode State
+    let manualSegmentCount = 1;
+    let manualSegmentDuration = 60;
+    let manualSpeakerMode = 'unselected';
+
+    // Derived state for manual validation
+    $: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
+    $: availableSpace = Math.max(0, mediaDuration - lastSegmentEndTime);
+    $: isManualDurationValid = totalDurationNeeded <= availableSpace + 0.001; // tolerance
+
+    function formatDuration(seconds) {
+        if (!seconds && seconds !== 0) return '0s';
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}m ${s}s`;
+    }
+
 	// Event Handlers
 	function handleConfirm() {
-		dispatch('confirmStart', {
-			selectedModel: modalSelectedModel,
-			transcriptionMode: modalTranscriptionMode,
-			selectedLanguage: modalSelectedLanguage,
-			
-			enableDiarization: modalEnableDiarization,
-			speakersConfig: modalSpeakersConfig
-		});
+        if (modalTab === 'automatic') {
+            dispatch('confirmStart', {
+                transcriptionMode: 'automatic',
+                selectedModel: modalSelectedModel,
+                selectedLanguage: modalSelectedLanguage,
+                enableDiarization: modalEnableDiarization,
+                speakersConfig: modalSpeakersConfig
+            });
+        } else {
+            dispatch('confirmStart', {
+                transcriptionMode: 'manual',
+                manualSettings: {
+                    segmentCount: manualSegmentCount,
+                    segmentDuration: manualSegmentDuration,
+                    speakerMode: manualSpeakerMode,
+                    startTime: lastSegmentEndTime
+                },
+                speakersConfig: modalSpeakersConfig // Pass speakers config even in manual for alternations
+            });
+        }
 	}
 
 	function handleCancelRequest() {
@@ -50,18 +81,6 @@
 	}
 
 	// --- Reactive Derivations from Store for UI ---
-	// $: console.log('[ModalDebug] Store State:', $transcriptStore); // Uncomment for deep debugging
-
-	// $: {
-	// 	console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
-	// }
-
-	// $: {
-	// 	if ($transcriptStore.showTranscribeModal) {
-	// 		console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
-	// 	}
-	// }
-
 	$: showModal = $transcriptStore.showTranscribeModal;
 	$: isTranscribing = $transcriptStore.isTranscribing;
 	$: jobStatus = $transcriptStore.transcriptionJobStatus;
@@ -75,11 +94,19 @@
 	$: if (showModal && !isTranscribing && jobStatus === null && !isInitialized) {
 		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
+        modalTab = $transcriptStore.transcriptionMode || 'automatic'; // Initialize tab from store
 		
 		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
 		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
 		// Use a deep copy to prevent direct mutation of the prop or store value until confirmed.
 		modalSpeakersConfig = JSON.parse(JSON.stringify(speakers || { count: 0, names: [], translatedNames: [] }));
+        
+        // Initialize manual settings from store if available
+        if ($transcriptStore.manualSegmentSettings) {
+            manualSegmentDuration = $transcriptStore.manualSegmentSettings.duration || 60;
+            manualSpeakerMode = $transcriptStore.manualSegmentSettings.speakerMode || 'unselected';
+        }
+        
 		isInitialized = true;
 	}
 
@@ -89,7 +116,7 @@
 	}
 
 	// --- Title Logic ---
-	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Confirm Transcription Settings' :
+	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Transcription Settings' :
 					 (isTranscribing && jobStatus === 'initiating') ? 'Initiating Transcription...' :
 					 (isTranscribing && jobStatus === 'running') ? `Transcription Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
 					 (jobStatus === 'cancelling') ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` : // Added 'cancelling'
@@ -154,41 +181,129 @@
 
 			{#if !isTranscribing && jobStatus === null}
 				<!-- CONFIRM VIEW -->
+                
+                <!-- Tabs -->
+                <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                    <button
+                        class="flex-1 py-2 text-sm font-medium text-center border-b-2 focus:outline-none transition-colors {modalTab === 'automatic' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+                        on:click={() => modalTab = 'automatic'}
+                    >
+                        Automatic
+                    </button>
+                    <button
+                        class="flex-1 py-2 text-sm font-medium text-center border-b-2 focus:outline-none transition-colors {modalTab === 'manual' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+                        on:click={() => modalTab = 'manual'}
+                    >
+                        Manual
+                    </button>
+                </div>
+
 				<div class="space-y-3 text-sm mb-5 text-gray-700 dark:text-gray-300 max-h-[60vh] overflow-y-auto pr-2">
 					<div><strong>File:</strong> <span class="font-mono break-all ml-2">{fileName || 'N/A'}</span></div>
 
-					<div class="space-y-1">
-						<label for="modalTranscriptionModeSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcription Mode:</label>
-						<select id="modalTranscriptionModeSelect" class="ui-select w-full" value={modalTranscriptionMode} disabled>
-							<option value="automatic">Automatic Transcription</option>
-							<option value="manual" disabled>Manual Transcription (Not Implemented)</option>
-						</select>
-					</div>
+                    {#if modalTab === 'automatic'}
+                        <!-- AUTOMATIC SETTINGS -->
+                        <div class="space-y-1">
+                            <label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+                            <Dropdown
+                                containerClasses="w-full"
+                                options={downloadedModelsList.map(m => ({ value: m.name, label: m.name }))}
+                                bind:value={modalSelectedModel}
+                                placeholder="Select a Model"
+                                disabled={downloadedModelsList.length === 0}
+                            />
+                        </div>
 
-					<div class="space-y-1">
-						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
-						<Dropdown
-							containerClasses="w-full"
-							options={downloadedModelsList.map(m => ({ value: m.name, label: m.name }))}
-							bind:value={modalSelectedModel}
-							placeholder="Select a Model"
-							disabled={downloadedModelsList.length === 0}
-						/>
-					</div>
+                        <div class="space-y-1">
+                            <label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
+                            <Dropdown
+                                containerClasses="w-full"
+                                options={languageOptions}
+                                bind:value={modalSelectedLanguage}
+                                placeholder="Select a Language"
+                            />
+                        </div>
 
-					<div class="space-y-1">
-						<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
-						<Dropdown
-							containerClasses="w-full"
-							options={languageOptions}
-							bind:value={modalSelectedLanguage}
-							placeholder="Select a Language"
-						/>
-					</div>
+                        <div class="pt-2">
+                            <div class="flex items-center space-x-2">
+                                <input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
+                                <label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                    Identify different speakers (diarize)
+                                </label>
+                            </div>
+                            {#if modalEnableDiarization}
+                                <p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
+                                    Note: Speaker identification can significantly increase transcription time.
+                                </p>
+                            {/if}
+                        </div>
 
-					
+                    {:else}
+                        <!-- MANUAL SETTINGS -->
+                        <div class="p-3 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 mb-2">
+                            <div class="flex justify-between mb-1">
+                                <span>Available Space:</span>
+                                <span class="font-medium">{formatDuration(availableSpace)}</span>
+                            </div>
+                        </div>
 
-					<div class="pt-1 space-y-1"> 
+                        <div class="space-y-1">
+                            <label for="manualSegCount" class="block font-medium text-gray-900 dark:text-gray-100">Number of Segments:</label>
+                            <input
+                                id="manualSegCount"
+                                type="number"
+                                min="1"
+                                max="100"
+                                bind:value={manualSegmentCount}
+                                class="ui-select w-full"
+                            />
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="manualSegDuration" class="block font-medium text-gray-900 dark:text-gray-100">Duration (seconds):</label>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    id="manualSegDuration"
+                                    type="number"
+                                    min="1"
+                                    bind:value={manualSegmentDuration}
+                                    class="ui-select w-full"
+                                />
+                                <span class="text-xs text-gray-500 whitespace-nowrap min-w-[4rem]">
+                                    ({formatDuration(manualSegmentDuration)})
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <label class="block font-medium text-gray-900 dark:text-gray-100 mb-1">Speaker Assignment:</label>
+                            <div class="flex gap-4">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" group={manualSpeakerMode} value="unselected" class="ui-checkbox rounded-full">
+                                    <span class="ml-2">Unselected</span>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" group={manualSpeakerMode} value="alternate" class="ui-checkbox rounded-full" disabled={modalSpeakersConfig.names.length < 2}>
+                                    <span class="ml-2" class:opacity-50={modalSpeakersConfig.names.length < 2}>Alternate</span>
+                                </label>
+                            </div>
+                            {#if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
+                                <p class="text-xs text-red-500 mt-1">Need at least 2 speakers configured.</p>
+                            {/if}
+                        </div>
+
+                        <div class="mt-2 p-2 rounded {isManualDurationValid ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}">
+                            <div class="flex justify-between text-xs">
+                                <span>Total New Time:</span>
+                                <span class="font-bold">{formatDuration(totalDurationNeeded)}</span>
+                            </div>
+                            {#if !isManualDurationValid}
+                                <p class="text-xs mt-1 font-medium">Exceeds available space!</p>
+                            {/if}
+                        </div>
+                    {/if}
+
+					<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
 						<div class="flex justify-between items-center">
 							<div>
 								<strong>Speakers:</strong>
@@ -211,23 +326,19 @@
 						{/if}
 					</div>
 
-					<div class="pt-2">
-						<div class="flex items-center space-x-2">
-							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
-							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-								Identify different speakers (diarize)
-							</label>
-						</div>
-						{#if modalEnableDiarization}
-							<p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
-								Note: Speaker identification can significantly increase transcription time.
-							</p>
-						{/if}
-					</div>
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-border">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
-					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
+					<button 
+                        class="btn-primary" 
+                        on:click={handleConfirm} 
+                        disabled={
+                            (modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
+                            (modalTab === 'manual' && !isManualDurationValid)
+                        }
+                    >
+                        {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
+                    </button>
 				</div>
 
 			{:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
