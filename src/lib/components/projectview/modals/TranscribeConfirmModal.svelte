@@ -30,13 +30,18 @@
     // Manual Mode State
     let manualSegmentCount = 1;
     let manualSegmentDuration = 60;
-    let manualSpeakerMode = 'unselected';
+    let manualSpeakerMode = 'unassigned';
 
     // Derived state for manual validation
     $: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
     // For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
     // So we validate against total media duration, not remaining space.
     $: isManualDurationValid = totalDurationNeeded <= mediaDuration + 0.001; 
+
+    $: speakerOptions = [
+        { value: 'unassigned', label: 'Unassigned' },
+        { value: 'alternate', label: 'Alternate Speakers', disabled: modalSpeakersConfig.names.length < 2 }
+    ];
 
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '0s';
@@ -105,7 +110,8 @@
         // Initialize manual settings from store if available
         if ($transcriptStore.manualSegmentSettings) {
             manualSegmentDuration = $transcriptStore.manualSegmentSettings.duration || 60;
-            manualSpeakerMode = $transcriptStore.manualSegmentSettings.speakerMode || 'unselected';
+            manualSpeakerMode = $transcriptStore.manualSegmentSettings.speakerMode || 'unassigned';
+            if (manualSpeakerMode === 'unselected') manualSpeakerMode = 'unassigned'; // Migration
         }
         
 		isInitialized = true;
@@ -276,18 +282,14 @@
                             </div>
                         </div>
 
-                        <div class="pt-2">
-                            <label class="block font-medium text-gray-900 dark:text-gray-100 mb-1">Speaker Assignment:</label>
-                            <div class="flex gap-4">
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="radio" group={manualSpeakerMode} value="unselected" class="ui-checkbox rounded-full">
-                                    <span class="ml-2">Unselected</span>
-                                </label>
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="radio" group={manualSpeakerMode} value="alternate" class="ui-checkbox rounded-full" disabled={modalSpeakersConfig.names.length < 2}>
-                                    <span class="ml-2" class:opacity-50={modalSpeakersConfig.names.length < 2}>Alternate</span>
-                                </label>
-                            </div>
+                        <div class="space-y-1">
+                            <label for="manualSpeakerModeDropdown" class="block font-medium text-gray-900 dark:text-gray-100">Speaker Assignment:</label>
+                            <Dropdown
+                                id="manualSpeakerModeDropdown"
+                                containerClasses="w-full"
+                                options={speakerOptions}
+                                bind:value={manualSpeakerMode}
+                            />
                             {#if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
                                 <p class="text-xs text-red-500 mt-1">Need at least 2 speakers configured.</p>
                             {/if}

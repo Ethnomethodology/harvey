@@ -2,21 +2,28 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
 	import { X } from 'lucide-svelte';
+    import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	export let showModal = false;
-	export let currentSettings = { duration: 60, speakerMode: 'unselected' }; // Default
+	export let currentSettings = { duration: 60, speakerMode: 'unassigned' }; // Default
     export let speakerList = []; // Array of speaker names
 
 	const dispatch = createEventDispatcher();
 
     let duration = 60;
-    let speakerMode = 'unselected';
+    let speakerMode = 'unassigned';
 
     // Sync local state when modal opens
 	$: if (showModal) {
         duration = currentSettings.duration || 60;
-        speakerMode = currentSettings.speakerMode || 'unselected';
+        speakerMode = currentSettings.speakerMode || 'unassigned';
+        if (speakerMode === 'unselected') speakerMode = 'unassigned'; // Migration
 	}
+
+    $: speakerOptions = [
+        { value: 'unassigned', label: 'Unassigned' },
+        { value: 'alternate', label: 'Alternate Speakers', disabled: speakerList.length < 2 }
+    ];
 
 	function handleConfirm() {
 		dispatch('confirm', {
@@ -77,27 +84,15 @@
 				</div>
 
 				<!-- Speaker Mode -->
-				<div class="space-y-2">
-					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Speaker Assignment</label>
-                    <div class="space-y-2">
-                        <label class="flex items-center space-x-2 cursor-pointer">
-                            <input type="radio" group={speakerMode} value="unselected" class="ui-radio" />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Unselected / Unknown</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                group={speakerMode} 
-                                value="alternate" 
-                                class="ui-radio" 
-                                disabled={speakerList.length < 2}
-                            />
-                            <span class="text-sm text-gray-700 dark:text-gray-300" class:opacity-50={speakerList.length < 2}>
-                                Alternate Speakers
-                            </span>
-                        </label>
-                    </div>
-                    {#if speakerList.length < 2}
+				<div class="space-y-1">
+					<label for="speakerModeDropdown" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Speaker Assignment</label>
+                    <Dropdown
+                        id="speakerModeDropdown"
+                        containerClasses="w-full"
+                        options={speakerOptions}
+                        bind:value={speakerMode}
+                    />
+                    {#if speakerMode === 'alternate' && speakerList.length < 2}
                         <p class="text-xs text-orange-500">Add at least 2 speakers to enable alternation.</p>
                     {/if}
 				</div>

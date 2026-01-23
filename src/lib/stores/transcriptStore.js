@@ -61,7 +61,7 @@ export const initialTranscriptState = {
     transcriptionMode: 'automatic', // 'automatic' | 'manual'
     manualSegmentSettings: {
         duration: 60,
-        speakerMode: 'unselected', // 'unselected' | 'alternate'
+        speakerMode: 'unassigned', // 'unassigned' | 'alternate'
         lastUsedSpeakerIndex: -1
     },
 

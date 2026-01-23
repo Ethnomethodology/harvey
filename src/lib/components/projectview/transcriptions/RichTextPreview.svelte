@@ -645,8 +645,8 @@
                     updateManualSegmentSettings({ lastUsedSpeakerIndex: nextSpeakerIndex });
                 }
             } else {
-                 // Unselected mode: "Unknown" or just leave it empty? User said "unselected".
-                 // In our system "Unknown" is the unselected state usually.
+                 // Unassigned mode: "Unknown" or just leave it empty? User said "unassigned".
+                 // In our system "Unknown" is the unassigned state usually.
                  speaker = "Unknown"; 
             }
 
