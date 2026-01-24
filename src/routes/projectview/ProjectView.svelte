@@ -89,6 +89,10 @@
 	
 	let isLoadingTranscriptionConfig = true;
 
+	$: if ($transcriptStore.showTranscribeModal) {
+		loadTranscriptionConfigData();
+	}
+
 async function loadTranscriptionConfigData() {
 		isLoadingTranscriptionConfig = true;
 		try {
@@ -987,6 +991,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		initialDiarizationEnabled={$transcriptStore.diarizationEnabledForNextJob}
         on:confirmStart={onConfirmTranscriptionStart}
         on:cancelRequest={handleCancelTranscriptionRequest}
+        on:openConfig={() => { showConfigurationModal = true; toggleTranscribeModal(false); }}
         on:closeAndReset={() => {
             transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false, transcriptionJobStatus: null, transcriptionErrorMessage: null, transcriptionJobId: null, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' } }));
             // Also clear any pending data related to a job that was just acknowledged as done/error/cancelled
