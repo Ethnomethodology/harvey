@@ -84,14 +84,23 @@
 				</div>
 
 				<!-- Speaker Mode -->
-				<div class="space-y-1">
-					<label for="speakerModeDropdown" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Speaker Assignment</label>
-                    <Dropdown
-                        id="speakerModeDropdown"
-                        containerClasses="w-full"
-                        options={speakerOptions}
-                        bind:value={speakerMode}
-                    />
+				<div class="space-y-2">
+					<span class="block text-sm font-medium text-gray-700 dark:text-gray-300">Speaker Assignment</span>
+					<div class="flex flex-col space-y-2 ml-1">
+						{#each speakerOptions as option}
+							<label class="flex items-center space-x-2 cursor-pointer {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}">
+								<input
+									type="radio"
+									name="speakerMode"
+									value={option.value}
+									bind:group={speakerMode}
+									disabled={option.disabled}
+									class="ui-radio"
+								/>
+								<span class="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
+							</label>
+						{/each}
+					</div>
                     {#if speakerMode === 'alternate' && speakerList.length < 2}
                         <p class="text-xs text-orange-500">Add at least 2 speakers to enable alternation.</p>
                     {/if}

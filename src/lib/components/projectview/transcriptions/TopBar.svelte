@@ -427,6 +427,7 @@
         await requestTranslation(e.detail.transcript.path, e.detail.model);
     }}
     on:cancelRequest={() => dispatch('cancelTranslationRequest')}
+    on:openConfig={() => dispatch('openConfig')}
     on:closeAndReset={() => toggleTranslateModal(false)}
     on:runInBackgroundAndClose={() => {
         dispatch('runTranslationInBackground');

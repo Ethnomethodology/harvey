@@ -932,6 +932,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 on:requestImport={handleImportMediaInSidebar}
 				on:cancelTranslationRequest={handleCancelTranslationRequest}
 				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
+                on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'tags'}
