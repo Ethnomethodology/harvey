@@ -47,6 +47,117 @@
 	$: isAnyModelDownloading = Object.values(downloadStatus).includes('downloading');
     $: isBusy = isAnyModelDownloading;
 
+	let modelDisplayData = {};
+
+	// Update display data reactively
+	$: {
+		const newData = {};
+		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
+
+		// Track all models we know about (available + downloaded)
+		const allKnownModels = [...availableModelsList];
+		for (const dm of currentDownloaded) {
+			if (!allKnownModels.some(am => am.id === dm.name)) {
+				// Add downloaded model to known list if it's not there (e.g. from manual entry)
+				allKnownModels.push({
+					id: dm.name,
+					src: null, // We'll rely on formatModelDisplayName for these
+					tgt: null,
+					downloads: 0
+				});
+			}
+		}
+
+		for (const model of allKnownModels) {
+			const id = model.id;
+			const getStatus = (modelId) => {
+				const liveStatus = downloadStatus[modelId];
+				if (liveStatus && liveStatus !== 'not_downloaded') return liveStatus;
+				return currentDownloaded.some((m) => m?.name === modelId) ? 'complete' : 'not_downloaded';
+			};
+			const status = getStatus(id);
+			
+			// We don't have progress percent for translation yet in this component's logic, 
+			// but we can add it if backend supports it. For now, just status.
+			newData[id] = { status };
+		}
+		modelDisplayData = newData;
+	}
+
+	// Combined list logic
+	$: displayedModels = (() => {
+		let baseList = [];
+		if (!hasFetched) {
+			// Show only models that are downloaded OR have active state
+			baseList = [...downloadedModels.map(m => ({
+				id: m.name,
+				src: null,
+				tgt: null,
+				downloads: 0
+			}))];
+			
+			// Add any that are currently downloading but not yet in downloadedModels
+			for (const id in downloadStatus) {
+				if (downloadStatus[id] === 'downloading' && !baseList.some(m => m.id === id)) {
+					baseList.push({ id, src: null, tgt: null, downloads: 0 });
+				}
+			}
+		} else {
+			baseList = [...availableModelsList];
+			// Ensure all downloaded models are in the list
+			for (const dm of downloadedModels) {
+				if (!baseList.some(am => am.id === dm.name)) {
+					baseList.push({ id: dm.name, src: null, tgt: null, downloads: 0 });
+				}
+			}
+		}
+
+		// Filter by search query
+		if (searchQuery.trim() !== '') {
+			const q = searchQuery.toLowerCase();
+			baseList = baseList.filter(m => {
+				const srcName = languageMap.get(m.src)?.toLowerCase() || '';
+				const tgtName = languageMap.get(m.tgt)?.toLowerCase() || '';
+				const displayName = formatModelDisplayName(m.id).toLowerCase();
+				return (
+					m.id.toLowerCase().includes(q) ||
+					m.src?.toLowerCase().includes(q) ||
+					m.tgt?.toLowerCase().includes(q) ||
+					srcName.includes(q) ||
+					tgtName.includes(q) ||
+					displayName.includes(q)
+				);
+			});
+		}
+
+		// Sort: Downloaded/Active first, then by downloads descending
+		return baseList.sort((a, b) => {
+			const statusA = modelDisplayData[a.id]?.status;
+			const statusB = modelDisplayData[b.id]?.status;
+			const aActive = statusA && statusA !== 'not_downloaded';
+			const bActive = statusB && statusB !== 'not_downloaded';
+
+			if (aActive && !bActive) return -1;
+			if (!aActive && bActive) return 1;
+			
+			if (aActive && bActive) return a.id.localeCompare(b.id);
+			
+			return (b.downloads || 0) - (a.downloads || 0);
+		}).slice(0, 2000);
+	})();
+
+	// Filter logic triggers auto-fetch if searching
+	$: {
+		if (searchQuery.trim() === '') {
+			autoFetchTriggered = false;
+		} else {
+			if (!hasFetched && !isFetchingModels && !autoFetchTriggered) {
+				autoFetchTriggered = true;
+				handleRefreshModels();
+			}
+		}
+	}
+
 	let unlistenStart = null;
 	let unlistenLog = null;
 	let unlistenComplete = null;
@@ -62,14 +173,11 @@
 	async function handleRefreshModels() {
 		if (isFetchingModels) return;
 		isFetchingModels = true;
-		// searchQuery = ''; // Preserving search query so filter applies after fetch
 		try {
 			const fetched = await fetchAvailableModels();
 			if (fetched && Array.isArray(fetched) && fetched.length > 0) {
-				// Sort by downloads descending
-				availableModelsList = fetched.sort((a, b) => b.downloads - a.downloads);
+				availableModelsList = fetched;
 				hasFetched = true;
-				notificationStore.add(`Successfully fetched ${fetched.length} models.`, 'success');
 			} else {
 				notificationStore.add('Fetched model list was empty.', 'warning');
 			}
@@ -77,34 +185,6 @@
 			notificationStore.add(`Failed to refresh models: ${e.message}`, 'error');
 		} finally {
 			isFetchingModels = false;
-		}
-	}
-
-	// Filter logic
-	$: {
-		if (searchQuery.trim() === '') {
-			filteredModels = availableModelsList.slice(0, 2000); // Show up to 2000 models
-			autoFetchTriggered = false; // Reset trigger when cleared
-		} else {
-			const q = searchQuery.toLowerCase();
-			
-			// Auto-fetch if user searches before list is loaded
-			if (!hasFetched && !isFetchingModels && availableModelsList.length === 0 && !autoFetchTriggered) {
-				autoFetchTriggered = true;
-				handleRefreshModels();
-			}
-
-			filteredModels = availableModelsList.filter(m => {
-				const srcName = languageMap.get(m.src)?.toLowerCase() || '';
-				const tgtName = languageMap.get(m.tgt)?.toLowerCase() || '';
-				return (
-					m.id.toLowerCase().includes(q) ||
-					m.src?.toLowerCase().includes(q) ||
-					m.tgt?.toLowerCase().includes(q) ||
-					srcName.includes(q) ||
-					tgtName.includes(q)
-				);
-			}).slice(0, 2000); // Limit results for performance
 		}
 	}
 
@@ -156,6 +236,7 @@
 				isDownloading = false;
 			});
 		} catch (err) {
+			console.error('Failed to attach download event listeners:', err);
 			configError = 'Could not set up download monitoring.';
 		}
 	});
@@ -194,18 +275,30 @@
 
     async function handleDelete(model) {
 		if (isBusy) return;
-		if (!model?.name) { notificationStore.add("Cannot delete model: Missing name.", 'error'); return; }
-		const confirmed = await ask(`Are you sure you want to delete the model "${model.name}"? This will remove the entire model folder from disk.`, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+		const modelNameForDelete = model.id || model.name;
+		if (!modelNameForDelete) { notificationStore.add("Cannot delete model: Missing name.", 'error'); return; }
+		const confirmed = await ask(`Are you sure you want to delete the model "${modelNameForDelete}"? This will remove the entire model folder from disk.`, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
 		if (!confirmed) return;
 		try {
-			await deleteTranslationModel(model); 
+			await deleteTranslationModel({ name: modelNameForDelete }); 
 			downloadedModels = await getLocalTranslationModels(); 
-            downloadStatus = { ...downloadStatus, [model.name]: 'not_downloaded' };
+            downloadStatus = { ...downloadStatus, [modelNameForDelete]: 'not_downloaded' };
 			setTranslationModelsDownloaded(downloadedModels.length > 0);
 		} catch (err) {
-			notificationStore.sendNotification(`Failed to delete model ${model.name}: ${err.message || err}`, 'error');
+			notificationStore.add(`Failed to delete model ${modelNameForDelete}: ${err.message || err}`, 'error');
 		}
     }
+
+	async function handleCancel(modelId) {
+		if (isBusy) return;
+		downloadStatus = { ...downloadStatus, [modelId]: 'cancelling' };
+		try {
+			await cancelTranslationModelDownload(modelId);
+		} catch (err) {
+			notificationStore.add(`Failed to cancel download for ${modelId}: ${err.message || err}`, 'error');
+			downloadStatus = { ...downloadStatus, [modelId]: 'downloading' };
+		}
+	}
 
     function formatModelDisplayName(modelName) {
         const parts = modelName.split('/');
@@ -219,7 +312,7 @@
                 const toLang = languageMap.get(toCode);
 
                 if (fromLang && toLang) {
-                    return `${fromLang} to ${toLang} (${modelName})`;
+                    return `${fromLang} to ${toLang}`;
                 }
             }
         }
@@ -233,9 +326,31 @@
 	function isModelDownloaded(id) {
 		return downloadedModels.some(m => m.name === id);
 	}
+
+	async function openLink(url) {
+		if (!url) return;
+		try {
+			await openExternal(url);
+		} catch (err) {
+			console.error(`Failed to open external link ${url}:`, err);
+		}
+	}
 	</script>
 
 <div class="flex flex-col h-full overflow-hidden">
+	<div class="flex justify-between items-center mb-2 px-1">
+		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Translation Models</h3>
+		<div class="flex items-center">
+			{#if downloadedModels.length > 0}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400">
+					{downloadedModels.length} {downloadedModels.length === 1 ? 'Model' : 'Models'} Downloaded
+				</span>
+			{:else}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400">No Models Downloaded</span>
+			{/if}
+		</div>
+	</div>
+
 	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading} title="Downloading Translation Model" inProgressText="Downloading..." />
 	{#if configError}
 		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
@@ -243,15 +358,15 @@
 		</p>
 	{/if}
 
-	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 flex-shrink-0">
-		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Helsinki-NLP models</a> for offline translation.
+	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 flex-shrink-0 px-1">
+		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" on:click|preventDefault={() => openLink('https://huggingface.co/Helsinki-NLP')} class="text-blue-600 dark:text-blue-400 hover:underline">Helsinki-NLP models</a> for offline translation.
 	</p>
 	{#if !$configStatus.python_libraries_installed}
-		<p class="text-orange-600 dark:text-orange-400 text-sm flex-shrink-0">
+		<p class="text-orange-600 dark:text-orange-400 text-sm flex-shrink-0 px-1">
 			Please install the required Python libraries first to enable model downloads.
 		</p>
 	{:else}
-		<div class="flex flex-col space-y-3 flex-grow overflow-hidden">
+		<div class="flex flex-col space-y-3 flex-grow overflow-hidden px-1">
 			<div class="flex space-x-4 mb-2 flex-shrink-0">
 				<label class="inline-flex items-center cursor-pointer">
 					<input type="radio" class="form-radio" name="translationOption" value="selectLanguages" bind:group={selectedOption} on:change={handleOptionChange}>
@@ -264,7 +379,7 @@
 			</div>
 
 			{#if selectedOption === 'selectLanguages'}
-				<div class="flex flex-col space-y-2 h-full overflow-hidden">
+				<div class="flex flex-col space-y-3 h-full overflow-hidden">
 					<div class="flex space-x-2 flex-shrink-0 p-0.5">
 						<div class="relative flex-grow">
 							<div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
@@ -285,31 +400,23 @@
 					</div>
 
 					<div class="border dark:border-gray-700 rounded-md flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-800/50 p-2">
-						{#if !hasFetched && availableModelsList.length === 0}
-							<div class="flex flex-col items-center justify-center h-full text-gray-500 space-y-3">
-								<button on:click={handleRefreshModels} class="btn-blue-small px-4 py-2 text-sm" title="Fetch model list from Hugging Face">
-									{#if isFetchingModels}
-										Fetching available models...
-									{:else}
-										List models from HuggingFace
-									{/if}
-								</button>
-							</div>
-						{:else if filteredModels.length === 0}
-							<div class="flex flex-col items-center justify-center h-full text-gray-500">
-								<p>No models found matching "{searchQuery}".</p>
-							</div>
-						{:else}
-							<div class="space-y-2">
-								{#each filteredModels as model (model.id)}
-									<div class="bg-white dark:bg-gray-800 border dark:border-gray-700 p-3 rounded-md shadow-sm flex justify-between items-center hover:border-blue-400 transition-colors">
+						<div class="space-y-2">
+							{#each displayedModels as model (model.id)}
+								{@const display = modelDisplayData[model.id] || { status: 'not_downloaded' }}
+								{@const status = display.status}
+								{@const isDownloadEnabled = !isBusy && downloadLocation && downloadLocation.trim() !== '' && $configStatus.python_libraries_installed}
+								{@const isDeleteEnabled = !isBusy}
+								{@const isCancelEnabled = status === 'downloading'}
+
+								<div class="bg-white dark:bg-gray-800 border dark:border-gray-700 p-3 rounded-md shadow-sm flex flex-col hover:border-blue-400 transition-colors relative overflow-hidden">
+									<div class="relative z-10 flex justify-between items-start">
 										<div class="flex flex-col min-w-0 pr-4">
 											<div class="flex items-center space-x-2">
 												<span class="font-semibold text-gray-800 dark:text-gray-200 truncate">
 													{#if model.src && model.tgt}
 														{getLangName(model.src)} <span class="text-gray-400">→</span> {getLangName(model.tgt)}
 													{:else}
-														{model.id}
+														{formatModelDisplayName(model.id)}
 													{/if}
 												</span>
 												<button 
@@ -322,31 +429,84 @@
 														<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
 													</svg>
 												</button>
-												{#if isModelDownloaded(model.id)}
+												{#if status === 'complete'}
 													<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Installed</span>
 												{/if}
 											</div>
 											<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center space-x-3">
 												<span class="truncate" title={model.id}>{model.id}</span>
-												<span class="flex items-center" title="Downloads">
-													<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-													{model.downloads.toLocaleString()}
-												</span>
+												{#if model.downloads > 0}
+													<span class="flex items-center" title="Downloads">
+														<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+														{model.downloads.toLocaleString()}
+													</span>
+												{/if}
 											</div>
 										</div>
-										<button 
-											on:click={() => handleDownload(model.id)} 
-											disabled={isModelDownloaded(model.id) || isBusy}
-											class="btn-blue-small flex-shrink-0 disabled:opacity-50 disabled:bg-gray-400"
-										>
-											{#if isModelDownloaded(model.id)}
-												Added
+
+										<div class="flex-shrink-0 flex items-center space-x-2 pt-1">
+											{#if status === 'complete'}
+												<button
+													class="btn-delete"
+													on:click={() => handleDelete(model)}
+													disabled={!isDeleteEnabled}
+													title="Delete model">Delete</button
+												>
+											{:else if status === 'downloading' || status === 'cancelling'}
+												<div class="flex flex-col items-end">
+													<span class="text-[10px] text-blue-700 dark:text-blue-300 font-medium tabular-nums mb-1">
+														{#if status === 'cancelling'}Cancelling...{:else}Downloading...{/if}
+													</span>
+													<button
+														class="btn-cancel"
+														on:click={() => handleCancel(model.id)}
+														disabled={!isCancelEnabled}
+														title="Cancel download">Cancel</button
+													>
+												</div>
+											{:else if status === 'error'}
+												<button
+													class="btn-retry"
+													on:click={() => handleDownload(model.id)}
+													disabled={!isDownloadEnabled}
+													title="Retry download">Retry</button
+												>
+											{:else if status === 'cancelled'}
+												<button
+													class="btn-blue-small"
+													on:click={() => handleDownload(model.id)}
+													disabled={!isDownloadEnabled}>Download</button
+												>
 											{:else}
-												Download
+												<button
+													class="btn-blue-small"
+													on:click={() => handleDownload(model.id)}
+													disabled={!isDownloadEnabled}
+													title={!isDownloadEnabled ? 'Configure download location first' : 'Download model'}
+													>Download</button
+												>
 											{/if}
-										</button>
+										</div>
 									</div>
-								{/each}
+								</div>
+							{/each}
+						</div>
+
+						{#if !hasFetched && searchQuery.trim() === ''}
+							<div class="py-4 flex justify-center">
+								<button on:click={handleRefreshModels} class="btn-blue-small px-4 py-2 text-sm" title="Refresh available translation models">
+									{#if isFetchingModels}
+										Loading available models...
+									{:else}
+										List models from HuggingFace
+									{/if}
+								</button>
+							</div>
+						{/if}
+
+						{#if hasFetched && displayedModels.length === 0 && searchQuery.trim() !== ''}
+							<div class="flex flex-col items-center justify-center h-20 text-gray-500">
+								<p>No models found matching "{searchQuery}".</p>
 							</div>
 						{/if}
 					</div>
@@ -374,25 +534,6 @@
 					</button>
 				</div>
 			{/if}
-
-			<div class="pt-2 flex-shrink-0 border-t dark:border-gray-700 mt-2">
-				<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
-					Downloaded Models 
-					<span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}">
-						({downloadedModels.length} installed)
-					</span>
-				</h4>
-				<ul class="mt-2 space-y-2 max-h-32 overflow-y-auto">
-					{#each downloadedModels as model (model.name)}
-						<li class="p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-800">
-							<div class="flex items-center justify-between">
-								<p class="text-sm font-medium text-gray-900 dark:text-gray-200 truncate pr-2">{formatModelDisplayName(model.name)}</p>
-								<button on:click={() => handleDelete(model)} class="btn-delete flex-shrink-0">Delete</button>
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</div>
 		</div>
 	{/if}
 </div>

@@ -123,15 +123,15 @@
 </script>
 
 <div class="flex flex-col space-y-4 p-1">
-  <div class="flex justify-between items-center mb-2">
+  <div class="flex justify-between items-center mb-2 px-1">
     <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">
       {#if isLoading}
-        <span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">Checking...</span>
       {:else if hasAccess}
-        <span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Downloaded</span>
+        <span class="text-sm font-medium text-green-600 dark:text-green-400">Downloaded</span>
       {:else}
-        <span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2">Download Required</span>
+        <span class="text-sm font-medium text-red-600 dark:text-red-400">Download Required</span>
       {/if}
     </div>
   </div>

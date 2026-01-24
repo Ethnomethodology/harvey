@@ -321,6 +321,19 @@
 </script>
 
 <div class="flex flex-col h-full overflow-y-auto p-1">
+	<div class="flex justify-between items-center mb-2 px-1">
+		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
+		<div class="flex items-center">
+			{#if downloadedCount > 0}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400">
+					{downloadedCount} {downloadedCount === 1 ? 'Model' : 'Models'} Downloaded
+				</span>
+			{:else}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400">No Models Downloaded</span>
+			{/if}
+		</div>
+	</div>
+
 	<InstallLogModal
 		bind:showModal={showLogModal}
 		logs={modalLogs}
