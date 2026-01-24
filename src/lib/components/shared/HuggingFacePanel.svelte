@@ -91,11 +91,16 @@
 
 {#if isPanelOpen}
   <div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
-    <p class="mb-2">
-      HuggingFace is a platform that provides tools for building, training, and deploying state-of-the-art machine learning models.
-    </p>
     <p class="mb-4">
-      Harvey uses HuggingFace to download and run translation models. Authentication is required to access certain models and to ensure you have the necessary permissions.
+      HuggingFace is the primary source for Harvey's AI models. It is used to download:
+    </p>
+    <ul class="list-disc list-inside mb-4 pl-2 space-y-1 text-gray-600 dark:text-gray-400">
+      <li><strong>Transcription models:</strong> High-performance Whisper models.</li>
+      <li><strong>Translation models:</strong> Over 1,500 language pairs from Helsinki-NLP.</li>
+      <li><strong>Diarization models:</strong> Advanced speaker identification tools.</li>
+    </ul>
+    <p class="mb-4">
+      While most models are public, an access token is required to download <strong>gated models</strong> (like those for speaker identification) and helps avoid download rate limits.
     </p>
 
     <h4 class="font-semibold mb-2 dark:text-gray-200">Setup Instructions</h4>
