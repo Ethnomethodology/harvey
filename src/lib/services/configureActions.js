@@ -211,6 +211,17 @@ export async function getLocalTranslationModels() {
 	}
 }
 
+export async function fetchAvailableModels() {
+	try {
+		const models = await invoke('fetch_available_models_command');
+		console.log("Fetched available models from backend:", models ? models.length : 0);
+		return Array.isArray(models) ? models : [];
+	} catch (error) {
+		console.error("Error invoking fetch_available_models_command:", error);
+		throw new Error(`Failed to fetch available models: ${error?.message || error}`);
+	}
+}
+
 // --- Export Action ---
 /**
  * Exports the current transcript segments to a specified file path and format.

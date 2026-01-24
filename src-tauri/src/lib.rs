@@ -154,6 +154,7 @@ pub fn run() {
             welcome::commands::download_model_command,
             welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
+            welcome::commands::fetch_available_models_command,
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::get_platform_info,
             welcome::commands::check_python_libraries_installed,
