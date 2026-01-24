@@ -2424,8 +2424,8 @@ $: if (editor && activeLayout) {
     @apply bg-blue-500 text-white;
   }
 
-  .lexical-placeholder-theme-class {
-      /* Styles for the placeholder text */
+  .lexical-content {
+      min-width: 150px; /* Prevent it from being too tiny when empty */
   }
 
   .editor-table {

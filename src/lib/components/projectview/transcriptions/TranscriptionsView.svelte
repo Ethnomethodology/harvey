@@ -13,6 +13,7 @@
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         switchDualModeTranscripts,
+        updatePlayerCurrentSegmentIndex
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -142,6 +143,10 @@
                     message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
                 }
             }
+            
+            // Sync store index
+            updatePlayerCurrentSegmentIndex(index);
+            
             editableTranscriptRef?.loadSegment?.(index);
             if (mediaPlayerRef) {
                 mediaPlayerRef.seekTo(segment.start_time);
@@ -251,6 +256,30 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             panelEditModeActive = true;
             await tick();
             editableTranscriptRef?.focusEditor?.();
+        }
+    }
+
+    export async function enterManualEditMode() {
+        console.log("[TranscriptionsView] enterManualEditMode called.");
+        panelEditModeActive = true;
+        
+        // Ensure store knows we are on segment 0
+        updatePlayerCurrentSegmentIndex(0);
+        
+        await tick();
+        
+        // Check if segments are available in the store
+        const store = get(transcriptStore);
+        if (store.segments && store.segments.length > 0) {
+            // Add a small delay to ensure EditableTranscript has received the store update
+            // and updated its local 'segments' array via subscription.
+            setTimeout(async () => {
+                // Automatically select the first segment
+                await handleSegmentClick({ detail: 0 });
+                editableTranscriptRef?.focusEditor?.();
+            }, 100);
+        } else {
+             console.warn("[TranscriptionsView] enterManualEditMode: No segments found in store to select.");
         }
     }
 

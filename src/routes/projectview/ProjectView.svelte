@@ -25,7 +25,8 @@
             silentlyRefreshProjectData,
             loadTranscriptFile,
             normalizePath,
-            clearProjectDataStore
+            clearProjectDataStore,
+            createManualTranscript
 	} from '$lib/services/projectService.js';
 	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
@@ -123,28 +124,18 @@ async function onConfirmTranscriptionStart(event) {
 
         const { segmentCount, segmentDuration, speakerMode, startTime } = manualSettings;
         const store = get(transcriptStore);
-        const currentSegments = store.segments || [];
         const speakerNames = store.speakers.names;
         
         let currentStartTime = startTime;
-        
-        // Determine starting speaker index logic for alternation
-        let lastSpeakerIndex = -1;
-        if (currentSegments.length > 0) {
-             const lastSpeaker = currentSegments[currentSegments.length - 1].speaker;
-             if (speakerNames.includes(lastSpeaker)) {
-                 lastSpeakerIndex = speakerNames.indexOf(lastSpeaker);
-             }
-        }
+        let lastSpeakerIndex = -1; // New transcript, start from first speaker or unassigned
 
+        const newSegments = [];
         for (let i = 0; i < segmentCount; i++) {
             const newEndTime = currentStartTime + segmentDuration;
             let speaker = "Unknown";
             
-            if (speakerMode === 'alternate' && speakerNames.length >= 2) {
-                 // Start from the *next* speaker after the last one
-                 const baseIndex = (lastSpeakerIndex + 1) % 2;
-                 const currentSpeakerIndex = (baseIndex + i) % 2;
+            if (speakerMode === 'alternate' && speakerNames && speakerNames.length > 0) {
+                 const currentSpeakerIndex = i % speakerNames.length;
                  speaker = speakerNames[currentSpeakerIndex];
             }
 
@@ -155,9 +146,28 @@ async function onConfirmTranscriptionStart(event) {
                 text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), 
             };
             
-            // Insert at the end
-            insertTranscriptSegment(currentSegments.length + i, newSegment);
+            newSegments.push(newSegment);
             currentStartTime = newEndTime;
+        }
+
+        if (store.selectedMediaFile?.path) {
+            try {
+                project.update(p => ({ ...p, isLoading: true, statusMessage: 'Creating manual transcript...' }));
+                await createManualTranscript(store.selectedMediaFile.path, newSegments, manualSettings);
+                
+                // Automatically enter edit mode
+                if (transcriptionsViewRef && typeof transcriptionsViewRef.enterManualEditMode === 'function') {
+                    await transcriptionsViewRef.enterManualEditMode();
+                }
+            } catch (e) {
+                console.error("[ProjectView] Error creating manual transcript:", e);
+                message(`Failed to create manual transcript: ${e.message || e}`, { title: "Error", type: "error" });
+            } finally {
+                project.update(p => ({ ...p, isLoading: false }));
+            }
+        } else {
+            console.error("[ProjectView] No media file selected, cannot create manual transcript.");
+            message("Error: No media file selected.", { title: "Error", type: "error" });
         }
     }
 }

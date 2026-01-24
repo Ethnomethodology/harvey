@@ -84,6 +84,51 @@ export const transcriptStore = writable({ ...initialTranscriptState });
 
 export const MAX_UNDO_STACK_SIZE = 50;
 
+const DEFAULT_MANUAL_SETTINGS = {
+    duration: 60,
+    speakerMode: 'unassigned',
+    lastUsedSpeakerIndex: -1
+};
+
+function getManualSettingsKey(projectId, transcriptPath) {
+    if (!projectId || !transcriptPath) return null;
+    return `harvey-manual-settings-${projectId}-${normalizePath(transcriptPath)}`;
+}
+
+export function saveManualSettingsForTranscript(transcriptPath, settings) {
+    if (typeof window === 'undefined') return;
+    const projectData = get(projectMainStore);
+    if (!projectData.id) return;
+    
+    const key = getManualSettingsKey(projectData.id, transcriptPath);
+    if (key) {
+        try {
+            localStorage.setItem(key, JSON.stringify(settings));
+        } catch (e) {
+            console.error('[TranscriptStore] Failed to save manual settings:', e);
+        }
+    }
+}
+
+export function loadManualSettingsForTranscript(transcriptPath) {
+    if (typeof window === 'undefined') return DEFAULT_MANUAL_SETTINGS;
+    const projectData = get(projectMainStore);
+    if (!projectData.id) return DEFAULT_MANUAL_SETTINGS;
+
+    const key = getManualSettingsKey(projectData.id, transcriptPath);
+    if (key) {
+        try {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                return { ...DEFAULT_MANUAL_SETTINGS, ...JSON.parse(stored) };
+            }
+        } catch (e) {
+            console.error('[TranscriptStore] Failed to load manual settings:', e);
+        }
+    }
+    return DEFAULT_MANUAL_SETTINGS;
+}
+
 // --- Transcript Management Functions ---
 
 export function pushToUndoStack() {
@@ -449,6 +494,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         updateProjectStoreState({ statusMessage: `Media transcript loaded: ${path.split(/[\\/]/).pop()}` });
 
+        const loadedSettings = loadManualSettingsForTranscript(path);
+
         return {
             ...ts,
             segments: finalSegmentsForDisplay,
@@ -463,6 +510,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            manualSegmentSettings: loadedSettings
         };
     });
 }
@@ -643,10 +691,16 @@ export function setTranscriptionMode(mode) {
 }
 
 export function updateManualSegmentSettings(settings) {
-    transcriptStore.update((ts) => ({
-        ...ts,
-        manualSegmentSettings: { ...ts.manualSegmentSettings, ...settings }
-    }));
+    transcriptStore.update((ts) => {
+        const newSettings = { ...ts.manualSegmentSettings, ...settings };
+        if (ts.currentTranscriptPath) {
+            saveManualSettingsForTranscript(ts.currentTranscriptPath, newSettings);
+        }
+        return {
+            ...ts,
+            manualSegmentSettings: newSettings
+        };
+    });
 }
 
 export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = null) {

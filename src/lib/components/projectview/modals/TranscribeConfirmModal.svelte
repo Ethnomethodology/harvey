@@ -38,9 +38,9 @@
     // So we validate against total media duration, not remaining space.
     $: isManualDurationValid = totalDurationNeeded <= mediaDuration + 0.001; 
 
-    $: speakerOptions = [
+    const manualSpeakerOptions = [
         { value: 'unassigned', label: 'Unassigned' },
-        { value: 'alternate', label: 'Alternate Speakers', disabled: modalSpeakersConfig.names.length < 2 }
+        { value: 'alternate', label: 'Alternate Speakers', disabled: (speakers?.names?.length || 0) < 2 }
     ];
 
     function formatDuration(seconds) {
@@ -344,10 +344,12 @@
                             <Dropdown
                                 id="manualSpeakerModeDropdown"
                                 containerClasses="w-full"
-                                options={speakerOptions}
+                                options={manualSpeakerOptions}
                                 bind:value={manualSpeakerMode}
                             />
-                            {#if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
+                            {#if modalSpeakersConfig.names.length < 2}
+                                <p class="text-xs text-gray-500 mt-1 italic">Note: 'Alternate Speakers' requires at least 2 speakers.</p>
+                            {:else if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
                                 <p class="text-xs text-red-500 mt-1">Need at least 2 speakers configured.</p>
                             {/if}
                         </div>

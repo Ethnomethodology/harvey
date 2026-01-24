@@ -932,14 +932,35 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
 
 export async function switchTranscriptInDataTab(newTranscriptPath) {
     const proj = get(project);
+    
+    // Check if the requested transcript is already active
+    if (proj.activeTranscriptPathInDataTab === newTranscriptPath) {
+        console.log(`[ProjectStore] Transcript ${newTranscriptPath} is already active. Skipping switch.`);
+        return;
+    }
+
     if (proj.isMediaNoteTranscriptDirty) {
-        const { confirm } = await import('@tauri-apps/plugin-dialog');
-        const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
-            title: 'Unsaved Changes',
-            type: 'warning',
-        });
-        if (!userConfirmed) {
-            return;
+        let savedSuccessfully = false;
+        if (proj.autosaveEnabled && proj.activeMediaNoteEditorRef?.ref && typeof proj.activeMediaNoteEditorRef.ref.save === 'function') {
+             console.log('[ProjectStore] Autosaving dirty transcript before switch...');
+             try {
+                 await proj.activeMediaNoteEditorRef.ref.save();
+                 savedSuccessfully = true;
+             } catch (e) {
+                 console.error('[ProjectStore] Autosave failed during switch:', e);
+                 // Proceed to prompt if save failed
+             }
+        }
+
+        if (!savedSuccessfully) {
+            const { confirm } = await import('@tauri-apps/plugin-dialog');
+            const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
+                title: 'Unsaved Changes',
+                type: 'warning',
+            });
+            if (!userConfirmed) {
+                return;
+            }
         }
     }
 

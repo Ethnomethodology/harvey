@@ -42,7 +42,7 @@ import {
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
 import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
-import { dirname, basename, sep } from '@tauri-apps/api/path';
+import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
 import {
 	project,
@@ -87,6 +87,7 @@ import {
     setTranslationStatus,
     toggleTranslateModal,
     updateTranslationProgress,
+    saveManualSettingsForTranscript // Added import
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -2182,4 +2183,164 @@ export async function handleCancelTranslationRequest() {
         }));
         notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
+}
+
+export async function createManualTranscript(mediaPath, segments, settings = null) {
+    const currentProj = get(project);
+    const projectXmlPath = currentProj.xmlPath;
+    if (!projectXmlPath) throw new Error("Project XML path missing.");
+
+    // 1. Calculate transcripts directory
+    const mediaDir = await dirname(mediaPath);
+    const stemDir = await dirname(mediaDir);
+    const transcriptsDir = await join(stemDir, 'transcripts');
+
+    // 2. Determine unique filename
+    const mediaFilename = await basename(mediaPath);
+    const mediaStem = mediaFilename.lastIndexOf('.') > -1 ? mediaFilename.substring(0, mediaFilename.lastIndexOf('.')) : mediaFilename;
+
+    const store = get(transcriptStore);
+    // Use existing transcripts from store to avoid many FS calls, assuming store is up to date
+    const existingTranscripts = store.selectedMediaFile?.associated_transcripts || [];
+    const existingNames = existingTranscripts.map(t => t.name || t.path.split(/[\\/]/).pop());
+
+    let counter = 1;
+    let newFilename = `${mediaStem}_${counter}.json`;
+    while (existingNames.includes(newFilename)) {
+        counter++;
+        newFilename = `${mediaStem}_${counter}.json`;
+    }
+    const newTranscriptPath = await join(transcriptsDir, newFilename);
+
+    // Save manual settings if provided
+    if (settings) {
+        saveManualSettingsForTranscript(newTranscriptPath, {
+            duration: settings.segmentDuration,
+            speakerMode: settings.speakerMode,
+            lastUsedSpeakerIndex: -1
+        });
+    }
+
+    // 3. Generate Lexical JSON
+    let fullLexicalTableJsonString = "";
+    try {
+        const editorForTableAssembly = createHeadlessEditor({ 
+            nodes: ALL_EDITOR_NODES, 
+            namespace: `manual-table-assembly-${Date.now()}`, 
+            onError: (e) => console.error("[ManualTableAssembly] Error:", e), 
+        });
+
+        await editorForTableAssembly.update(() => {
+            const root = _getRoot();
+            root.clear();
+            const tableNode = _createTableNode();
+            
+            // Headers
+            const headerRow = _createTableRowNode();
+            const headers = ["#", "Timestamp", "Speaker", "Text"];
+            for (const headerText of headers) {
+                const cell = _createTableCellNode({ headerState: 'column' });
+                const paragraph = _createParagraphNode();
+                paragraph.append(_createTextNode(headerText));
+                cell.append(paragraph);
+                headerRow.append(cell);
+            }
+            tableNode.append(headerRow);
+
+            // Data Rows
+            for (let i = 0; i < segments.length; i++) {
+                const segment = segments[i];
+                const dataRow = _createTableRowNode();
+                
+                // #
+                const cellNum = _createTableCellNode();
+                const pNum = _createParagraphNode();
+                pNum.append(_createTextNode(String(i + 1)));
+                cellNum.append(pNum);
+                dataRow.append(cellNum);
+                
+                // Timestamp
+                const cellTime = _createTableCellNode();
+                const pTime = _createParagraphNode();
+                const startTime = formatTimestampHtml(segment.start_time || 0);
+                const endTime = formatTimestampHtml(segment.end_time || 0);
+                pTime.append(_createTextNode(`${startTime} - ${endTime}`));
+                cellTime.append(pTime);
+                dataRow.append(cellTime);
+                
+                // Speaker
+                const cellSpeaker = _createTableCellNode();
+                const pSpeaker = _createParagraphNode();
+                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
+                cellSpeaker.append(pSpeaker);
+                dataRow.append(cellSpeaker);
+                
+                // Text
+                const cellText = _createTableCellNode();
+                if (segment.text && typeof segment.text === 'string') {
+                    let parsedSegmentState;
+                    try {
+                        parsedSegmentState = JSON.parse(segment.text);
+                    } catch (e) {
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error: Malformed segment JSON]"));
+                        cellText.append(pError);
+                        dataRow.append(cellText);
+                        tableNode.append(dataRow);
+                        continue;
+                    }
+                    
+                    function flattenNodes(nodes) {
+                        return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]);
+                    }
+
+                    const rawChildren = parsedSegmentState?.root?.children || [];
+                    const serializedChildNodes = flattenNodes(rawChildren);
+
+                    if (serializedChildNodes.length > 0) {
+                         const nodesToAppend = [];
+                         try {
+                            for (const serializedNode of serializedChildNodes) {
+                                if (serializedNode.type === 'root') continue; 
+                                const node = _parseSerializedNode(serializedNode);
+                                if (node) nodesToAppend.push(node);
+                            }
+                            if (nodesToAppend.length > 0) {
+                                cellText.append(...nodesToAppend);
+                            } else {
+                                cellText.append(_createParagraphNode());
+                            }
+                         } catch (parseErr) {
+                             console.error("Error parsing nodes for manual segment:", parseErr);
+                             cellText.append(_createParagraphNode());
+                         }
+                    } else {
+                         cellText.append(_createParagraphNode());
+                    }
+                } else {
+                    cellText.append(_createParagraphNode());
+                }
+                dataRow.append(cellText);
+                tableNode.append(dataRow);
+            }
+            root.append(tableNode);
+            root.append(_createParagraphNode());
+        });
+
+        fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
+    } catch (e) {
+        throw new Error(`Failed to generate manual transcript content: ${e.message}`);
+    }
+
+    // 4. Save
+    await invoke('save_transcript_json', { 
+        projectXmlPath: projectXmlPath, 
+        transcriptPath: newTranscriptPath, 
+        lexicalTableJsonString: fullLexicalTableJsonString,
+        language_code: 'original'
+    });
+
+    // 5. Refresh and Load
+    await refreshProjectFiles(mediaPath);
+    await loadTranscriptFile(newTranscriptPath);
 }
