@@ -2297,6 +2297,42 @@ export async function requestDocumentTranslation(documentPath, modelName) {
     }
 }
 
+export async function requestImportedTranscriptTranslation(transcriptPath, modelName) {
+    const currentProject = get(project);
+    const ts = get(transcriptStore);
+
+    if (ts.isTranslating) {
+        toggleTranslateModal(true);
+        return;
+    }
+
+    if (!currentProject.xmlPath) {
+        await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
+        return;
+    }
+
+    setTranslationStatus(true, null, { status: 'initiating' });
+
+    try {
+        const initiatedPayload = await invoke('translate_imported_transcript_command', {
+            projectXmlPath: currentProject.xmlPath,
+            transcriptPath: transcriptPath,
+            modelName: modelName,
+            targetLanguage: ts.selectedLanguage || 'en', // Default to 'en' or current selection
+        });
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id for translation.");
+        }
+
+        setTranslationStatus(true, initiatedPayload.job_id, { status: 'running' });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        setTranslationStatus(false, null, { status: 'error', errorMessage });
+        console.error(`[ProjectService] Error during translate_imported_transcript_command invocation:`, error);
+    }
+}
+
 export async function handleCancelTranslationRequest() {
     const ts = get(transcriptStore);
     const jobId = ts.translationJobId;

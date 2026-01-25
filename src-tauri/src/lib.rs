@@ -227,6 +227,7 @@ pub fn run() {
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,
             projectview::translation_commands::translate_document_command,
+            projectview::translation_commands::translate_imported_transcript_command,
             projectview::translation_commands::cancel_translation_command,
 
 

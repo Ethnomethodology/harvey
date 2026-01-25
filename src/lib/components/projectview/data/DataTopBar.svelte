@@ -18,7 +18,7 @@
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
-    import { requestDocumentTranslation } from '$lib/services/projectService.js';
+    import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
@@ -28,19 +28,34 @@
     let showLiveTranscribeModal = false;
     let showTranslateDocumentModal = false;
     let isLexicalDocument = false;
+    let isImportedTranscript = false;
 
     $: {
         const p = $project;
         if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
              isLexicalDocument = true;
+             // Check if it's an imported transcript (exists in project.importedTranscriptFiles)
+             // or by path location if baseDirectory is available (less robust than store check but quick)
+             isImportedTranscript = !!p.currentImportedTranscriptPath;
+        } else if (p.currentImportedTranscriptPath) {
+             // Case where user is viewing an imported transcript but selectedDocumentPath might be null/different?
+             // Actually DataView sets selectedDocumentPath OR currentImportedTranscriptPath.
+             // If currentImportedTranscriptPath is set, we are in imported transcript mode.
+             isLexicalDocument = true;
+             isImportedTranscript = true;
         } else {
             isLexicalDocument = false;
+            isImportedTranscript = false;
         }
     }
 
     function handleDocumentTranslateConfirm(event) {
         const { documentPath, model } = event.detail;
-        requestDocumentTranslation(documentPath, model);
+        if (isImportedTranscript) {
+            requestImportedTranscriptTranslation(documentPath, model);
+        } else {
+            requestDocumentTranslation(documentPath, model);
+        }
     }
 
     $: showTranslateDocumentModal = $transcriptStore.showTranslateModal;
@@ -692,7 +707,7 @@
 
 <TranslateDocumentModal
     bind:showModal={showTranslateDocumentModal}
-    activeDocumentPath={$project.selectedDocumentPath}
+    activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
     on:closeAndReset={() => showTranslateDocumentModal = false}
 />
