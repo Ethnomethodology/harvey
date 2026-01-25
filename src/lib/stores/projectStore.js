@@ -111,24 +111,27 @@ const initialState = {
 
     activeTranscriptPathInDataTab: null,
     fileRenamed: null,
-    importedTranscriptSplits: {}, // Maps path -> split partner path
+    importedTranscriptSplits: {}, // Maps path -> { partner: path, orientation: 'horizontal' | 'vertical' }
     showSplitTranscriptModal: false,
+    pendingSplitOrientation: 'horizontal', // Track orientation for next split
 };
 
 export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 
-export function setImportedTranscriptSplit(pathA, pathB) {
+export function setImportedTranscriptSplit(pathA, pathB, orientation = 'horizontal') {
     project.update(p => {
         const newSplits = { ...p.importedTranscriptSplits };
         if (pathB) {
-            newSplits[pathA] = pathB;
-            newSplits[pathB] = pathA;
+            newSplits[pathA] = { partner: pathB, orientation };
+            newSplits[pathB] = { partner: pathA, orientation };
         } else {
-            const partner = newSplits[pathA];
+            const partnerInfo = newSplits[pathA];
             delete newSplits[pathA];
-            if (partner) delete newSplits[partner];
+            if (partnerInfo && partnerInfo.partner) {
+                delete newSplits[partnerInfo.partner];
+            }
         }
         return { ...p, importedTranscriptSplits: newSplits };
     });

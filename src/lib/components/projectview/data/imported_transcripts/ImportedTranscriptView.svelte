@@ -7,7 +7,9 @@
 
     const dispatch = createEventDispatcher();
 
-    $: splitPartnerPath = $project.importedTranscriptSplits[itemPath];
+    $: splitInfo = $project.importedTranscriptSplits[itemPath];
+    $: splitPartnerPath = splitInfo?.partner;
+    $: orientation = splitInfo?.orientation || 'horizontal';
 
     function forwardEvent(event) {
         console.log(`[ImportedTranscriptView] Forwarding event: ${event.type}`);
@@ -23,8 +25,8 @@
 <!-- Main container for the Imported Transcript View -->
 <div class="h-full flex-grow min-w-0 bg-white dark:bg-surface-2 overflow-hidden">
     {#if splitPartnerPath}
-        <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
-            <div class="w-1/2 h-full overflow-hidden flex flex-col">
+        <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
+            <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
                 <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 truncate">
                     {itemPath.split(/[\\/]/).pop()}
                 </div>
@@ -34,7 +36,7 @@
                     {/key}
                 </div>
             </div>
-            <div class="w-1/2 h-full overflow-hidden flex flex-col">
+            <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
                 <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 truncate flex justify-between items-center">
                     <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
                     <button 

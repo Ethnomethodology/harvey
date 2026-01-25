@@ -43,7 +43,11 @@
 
     function handleConfirm() {
         if (selectedPartnerPath) {
-            setImportedTranscriptSplit($project.currentImportedTranscriptPath, selectedPartnerPath);
+            setImportedTranscriptSplit(
+                $project.currentImportedTranscriptPath, 
+                selectedPartnerPath, 
+                $project.pendingSplitOrientation
+            );
             handleClose();
         }
     }
