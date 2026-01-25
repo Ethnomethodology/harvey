@@ -17,6 +17,8 @@
     import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
+    import { requestDocumentTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
@@ -24,6 +26,24 @@
     let isLiveTranscriptionActive = false;
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
+    let showTranslateDocumentModal = false;
+    let isLexicalDocument = false;
+
+    $: {
+        const p = $project;
+        if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
+             isLexicalDocument = true;
+        } else {
+            isLexicalDocument = false;
+        }
+    }
+
+    function handleDocumentTranslateConfirm(event) {
+        const { documentPath, model } = event.detail;
+        requestDocumentTranslation(documentPath, model);
+    }
+
+    $: showTranslateDocumentModal = $transcriptStore.showTranslateModal;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -547,6 +567,14 @@
                 <span class="text-xs">Export</span>
             </button>
         {/if}
+        {#if isLexicalDocument}
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showTranslateDocumentModal = true}" title="Translate Document" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
+                </svg>
+                <span class="text-xs">Translate</span>
+            </button>
+        {/if}
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs hover-scale-effect"
             title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
@@ -660,4 +688,11 @@
     bind:showModal={showLiveTranscribeModal}
     on:confirm={handleLiveTranscribe}
     on:close={() => showLiveTranscribeModal = false}
+/>
+
+<TranslateDocumentModal
+    bind:showModal={showTranslateDocumentModal}
+    activeDocumentPath={$project.selectedDocumentPath}
+    on:confirm={handleDocumentTranslateConfirm}
+    on:closeAndReset={() => showTranslateDocumentModal = false}
 />

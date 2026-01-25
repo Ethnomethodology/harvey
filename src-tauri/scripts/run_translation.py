@@ -107,10 +107,36 @@ def translate_sliding_window(segments, model, tokenizer, device, batch_size=8):
                 
     return final_translations
 
+def translate_bulk(segments, model, tokenizer, device, batch_size=16):
+    """
+    Standard batch translation. 
+    Useful for documents where context is implicit in the flow, 
+    but we don't need strict 1:1 structure verification for timestamps.
+    """
+    translated = []
+    for i in range(0, len(segments), batch_size):
+        batch = segments[i : i + batch_size]
+        # Handle empty strings to avoid model errors or weird outputs
+        batch_clean = [s if s.strip() else " " for s in batch] 
+        
+        inputs = tokenizer(batch_clean, return_tensors="pt", padding=True, truncation=True).to(device)
+        with torch.no_grad():
+            generated = model.generate(**inputs)
+        decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+        
+        # Restore empty strings
+        for j, text in enumerate(batch):
+            if not text.strip():
+                decoded[j] = ""
+        
+        translated.extend(decoded)
+    return translated
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--text", required=True)
+    parser.add_argument("--mode", choices=["transcript", "document"], default="transcript")
     args = parser.parse_args()
 
     try:
@@ -123,11 +149,14 @@ if __name__ == "__main__":
         model = MarianMTModel.from_pretrained(args.model_path).to(device)
 
         segments = json.loads(args.text)
-        sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments using Sliding Window context...\n")
         
-        # Use sliding window with a batch size of 8 (adjust as needed for VRAM)
-        # This processes roughly 3x text per segment but guarantees context awareness
-        results = translate_sliding_window(segments, model, tokenizer, device, batch_size=8)
+        results = []
+        if args.mode == "document":
+            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Document mode (bulk)...\n")
+            results = translate_bulk(segments, model, tokenizer, device)
+        else:
+            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...\n")
+            results = translate_sliding_window(segments, model, tokenizer, device)
             
         print(json.dumps(results, ensure_ascii=False))
 

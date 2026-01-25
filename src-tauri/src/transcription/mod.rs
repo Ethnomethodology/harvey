@@ -38,5 +38,6 @@ pub trait TranslationEngine: Send + Sync {
         model_path: &Path,
         job_id: &str,
         cancel_flag: Arc<AtomicBool>,
+        mode: &str,
     ) -> Result<Vec<String>, CommandError>;
 }
