@@ -18,6 +18,7 @@
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
+    import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
@@ -582,6 +583,17 @@
                 <span class="text-xs">Export</span>
             </button>
         {/if}
+        {#if isImportedTranscript}
+            <button 
+                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
+                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true }))}" 
+                title="Split Transcript View" 
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-split" viewBox="0 0 16 16">
+                    <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5z"/>
+                </svg>
+            </button>
+        {/if}
         {#if isLexicalDocument}
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showTranslateDocumentModal = true}" title="Translate Document" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -711,3 +723,5 @@
     on:confirm={handleDocumentTranslateConfirm}
     on:closeAndReset={() => showTranslateDocumentModal = false}
 />
+
+<SplitTranscriptModal />

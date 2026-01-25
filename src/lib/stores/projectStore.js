@@ -111,11 +111,32 @@ const initialState = {
 
     activeTranscriptPathInDataTab: null,
     fileRenamed: null,
+    importedTranscriptSplits: {}, // Maps path -> split partner path
+    showSplitTranscriptModal: false,
 };
 
 export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
+
+export function setImportedTranscriptSplit(pathA, pathB) {
+    project.update(p => {
+        const newSplits = { ...p.importedTranscriptSplits };
+        if (pathB) {
+            newSplits[pathA] = pathB;
+            newSplits[pathB] = pathA;
+        } else {
+            const partner = newSplits[pathA];
+            delete newSplits[pathA];
+            if (partner) delete newSplits[partner];
+        }
+        return { ...p, importedTranscriptSplits: newSplits };
+    });
+}
+
+export function clearImportedTranscriptSplit(path) {
+    setImportedTranscriptSplit(path, null);
+}
 
 export const currentProjectGroupsList = writable([]);
 

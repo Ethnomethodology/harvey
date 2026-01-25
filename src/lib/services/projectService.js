@@ -1694,7 +1694,7 @@ export async function saveHighlightChanges(highlight) {
     }
 }
 
-export async function saveImportedTranscriptContent(filePath, jsonContent) {
+export async function saveImportedTranscriptContent(filePath, jsonContent, highlightsJson = null) {
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
@@ -1716,14 +1716,17 @@ export async function saveImportedTranscriptContent(filePath, jsonContent) {
     project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
 
     try {
-        const highlights_json = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
-            ? JSON.stringify(projState.currentImportedTranscriptHighlights)
-            : null;
+        let finalHighlightsJson = highlightsJson;
+        if (finalHighlightsJson === null) {
+            finalHighlightsJson = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
+                ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+                : null;
+        }
 
         await invoke('save_note_json', {
             targetPath: filePath,
             jsonContent: jsonContent,
-            highlightsJson: highlights_json,
+            highlightsJson: finalHighlightsJson,
         });
 
         const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
