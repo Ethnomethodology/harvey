@@ -15,93 +15,97 @@ try:
 except Exception:
     pass
 
-def split_into_sentences(text):
+def translate_sliding_window(segments, model, tokenizer, device, batch_size=8):
     """
-    Splits a block of text into sentences using common punctuation.
-    Used to recover segments if the model merges lines.
+    Translates segments using a sliding window approach: [Prev] + [Target] + [Next].
+    This provides context to the model.
+    If the model output preserves the structure (3 lines), we extract the middle line.
+    If the model merges lines or hallucinates, we mark it as failed and use a 
+    fallback isolation pass to guarantee 1:1 mapping.
     """
-    # Split by punctuation followed by space or newline
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in sentences if s.strip()]
+    final_translations = [None] * len(segments)
+    
+    # 1. Contextual Pass
+    # We process in batches to maintain reasonable speed
+    for i in range(0, len(segments), batch_size):
+        batch_indices = range(i, min(i + batch_size, len(segments)))
+        batch_inputs = []
+        batch_metadata = [] # Stores (has_prev, has_next) used for extraction logic
+        
+        for idx in batch_indices:
+            text = segments[idx].strip()
+            if not text:
+                # Empty segment, no need to translate
+                batch_inputs.append("")
+                batch_metadata.append((False, False))
+                continue
 
-def distribute_translated_to_original(translated_lines, original_texts):
-    """
-    Intelligently maps a list of translated sentences/lines back to 
-    the original segment count.
-    """
-    target_count = len(original_texts)
-    
-    # If we have a perfect match, return
-    if len(translated_lines) == target_count:
-        return translated_lines
+            prev_txt = segments[idx-1].strip() if idx > 0 else ""
+            next_txt = segments[idx+1].strip() if idx < len(segments) - 1 else ""
+            
+            # Construct input with newlines as strong separators
+            # MarianMT models typically respect newlines as sentence boundaries
+            parts = []
+            if prev_txt: parts.append(prev_txt)
+            parts.append(text)
+            if next_txt: parts.append(next_txt)
+            
+            batch_inputs.append("\n".join(parts))
+            batch_metadata.append((bool(prev_txt), bool(next_txt)))
+            
+        # Filter out empty inputs to skip inference
+        valid_indices_map = [k for k, t in enumerate(batch_inputs) if t]
+        valid_inputs = [batch_inputs[k] for k in valid_indices_map]
         
-    # If we have too many lines, join the extras into the last segment
-    if len(translated_lines) > target_count:
-        result = translated_lines[:target_count-1]
-        result.append(" ".join(translated_lines[target_count-1:]))
-        return result
-        
-    # If we have too few lines (merging happened), use character-ratio distribution
-    # but first try to split the existing lines into more sentences
-    all_sentences = []
-    for line in translated_lines:
-        all_sentences.extend(split_into_sentences(line))
-        
-    if len(all_sentences) == target_count:
-        return all_sentences
-        
-    # Final fallback: Proportionally split the entire block of text
-    full_text = " ".join(translated_lines)
-    orig_lengths = [len(t) for t in original_texts]
-    total_orig_len = sum(orig_lengths)
-    if total_orig_len == 0: return [""] * target_count
-    
-    words = full_text.split()
-    if not words: return [""] * target_count
-    
-    result = []
-    current_word_idx = 0
-    total_trans_chars = len(full_text)
-    cum_orig_len = 0
-    
-    for i in range(target_count):
-        if i == target_count - 1:
-            result.append(" ".join(words[current_word_idx:]))
-        else:
-            cum_orig_len += orig_lengths[i]
-            target_cum_pos = (cum_orig_len / total_orig_len) * total_trans_chars
-            seg_words = []
-            while current_word_idx < len(words):
-                word = words[current_word_idx]
-                test_str = " ".join(result + seg_words + [word])
-                if not seg_words or len(test_str) <= target_cum_pos:
-                    seg_words.append(word)
-                    current_word_idx += 1
+        if valid_inputs:
+            inputs = tokenizer(valid_inputs, return_tensors="pt", padding=True, truncation=True).to(device)
+            with torch.no_grad():
+                generated = model.generate(**inputs)
+            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            
+            # Map results back to the original slots
+            for map_idx, output_text in zip(valid_indices_map, decoded):
+                has_prev, has_next = batch_metadata[map_idx]
+                expected_count = 1 + int(has_prev) + int(has_next)
+                
+                # Split output by newline
+                lines = [line.strip() for line in output_text.split('\n') if line.strip()]
+                
+                if len(lines) == expected_count:
+                    # Perfect structure: Extract the target segment
+                    # If we had a previous segment, the target is at index 1, otherwise 0
+                    target_line_idx = 1 if has_prev else 0
+                    final_translations[batch_indices[map_idx]] = lines[target_line_idx]
                 else:
-                    break
-            result.append(" ".join(seg_words))
-    return result
+                    # Structure mismatch (model merged sentences or hallucinated breaks)
+                    # Leave as None to trigger fallback isolation pass
+                    pass
+        
+        # Handle the empty strings explicitly
+        for k, text in enumerate(batch_inputs):
+            if not text:
+                final_translations[batch_indices[k]] = ""
 
-def translate_batch(texts, model, tokenizer, device):
-    """
-    Translates a batch of segments using newlines as natural context boundaries.
-    """
-    if not any(t.strip() for t in texts):
-        return [""] * len(texts)
-
-    # Join with newlines - this is the most 'natural' context for the model
-    combined_input = "\n".join(texts)
+    # 2. Fallback Pass: Isolation
+    # Translate segments individually if context pass failed to return clean structure
+    failed_indices = [ix for ix, r in enumerate(final_translations) if r is None]
     
-    inputs = tokenizer(combined_input, return_tensors="pt", padding=True, truncation=True).to(device)
-    with torch.no_grad():
-        translated_tokens = model.generate(**inputs)
-    translated_output = tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
-    
-    # Split by the model's output lines
-    translated_lines = [line.strip() for line in translated_output.split("\n") if line.strip()]
-    
-    # Map back to original segments
-    return distribute_translated_to_original(translated_lines, texts)
+    if failed_indices:
+        sys.stderr.write(f"[Info] {len(failed_indices)} segments failed context check. Falling back to isolation.\n")
+        
+        for i in range(0, len(failed_indices), batch_size):
+            batch_ixs = failed_indices[i : i + batch_size]
+            batch_texts = [segments[ix] for ix in batch_ixs]
+            
+            inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+            with torch.no_grad():
+                generated = model.generate(**inputs)
+            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            
+            for ix, trans in zip(batch_ixs, decoded):
+                final_translations[ix] = trans.strip()
+                
+    return final_translations
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -119,20 +123,13 @@ if __name__ == "__main__":
         model = MarianMTModel.from_pretrained(args.model_path).to(device)
 
         segments = json.loads(args.text)
-        sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments with linguistic context...\n")
+        sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments using Sliding Window context...\n")
         
-        final_results = []
-        batch_size = 5 # Good balance between context window and model stability
-        
-        for i in range(0, len(segments), batch_size):
-            current_batch = segments[i : i + batch_size]
-            final_results.extend(translate_batch(current_batch, model, tokenizer, device))
-
-        # Ensure final count matches
-        while len(final_results) < len(segments):
-            final_results.append("")
+        # Use sliding window with a batch size of 8 (adjust as needed for VRAM)
+        # This processes roughly 3x text per segment but guarantees context awareness
+        results = translate_sliding_window(segments, model, tokenizer, device, batch_size=8)
             
-        print(json.dumps(final_results[:len(segments)], ensure_ascii=False))
+        print(json.dumps(results, ensure_ascii=False))
 
     except Exception as e:
         sys.stderr.write(f"Translation Error: {e}\n")
