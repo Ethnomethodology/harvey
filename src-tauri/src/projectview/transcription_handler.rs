@@ -419,6 +419,70 @@ pub async fn import_word_transcript<R: Runtime>(
     Ok(final_transcript_path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+pub async fn save_imported_transcript_and_update_xml(
+    project_xml_path: String,
+    target_path: String,
+    transcript_name: String,
+    json_content: String,
+) -> Result<(), CommandError> {
+    info!("[Backend Save Imported Transcript] Target Path: {}", target_path);
+    let target_path_buf = PathBuf::from(&target_path);
+    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+
+    if !project_xml_path_buf.exists() {
+        return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));
+    }
+    let project_base_dir = project_xml_path_buf.parent().unwrap();
+
+    // Validation: Must be in Transcripts folder
+    let transcripts_root = project_base_dir.join(HARVEY_FILES_DIR).join(TRANSCRIPTS_DIR);
+    if !target_path_buf.starts_with(&transcripts_root) {
+         return Err(CommandError::from(format!(
+            "Transcript save path must be inside '{}', got: {}",
+            transcripts_root.display(),
+            target_path_buf.display()
+        )));
+    }
+
+    if let Some(parent) = target_path_buf.parent() {
+        fs::create_dir_all(parent).map_err(|e| CommandError::from(format!("Failed to create parent dir: {}", e)))?;
+    }
+
+    fs::write(&target_path_buf, &json_content)
+        .map_err(|e| CommandError::from(format!("Failed write transcript file: {}", e)))?;
+
+    // Update XML
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path_buf)?)?;
+    
+    let relative_path = target_path_buf
+        .strip_prefix(project_base_dir)?
+        .to_string_lossy()
+        .replace("\\", "/");
+
+    let new_entry = ImportedTranscriptEntryXml {
+        name: transcript_name.clone(),
+        relative_path: relative_path.clone(),
+    };
+
+    if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == relative_path) {
+        project_data.imported_transcript_files.files.push(new_entry);
+        project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        save_project_xml(&project_xml_path_buf, &project_data)?;
+        info!("[Backend Save Imported Transcript] Added XML entry: {}", relative_path);
+    } else {
+        // Update name if changed
+        if let Some(pos) = project_data.imported_transcript_files.files.iter().position(|t| t.relative_path == relative_path) {
+             if project_data.imported_transcript_files.files[pos].name != transcript_name {
+                 project_data.imported_transcript_files.files[pos].name = transcript_name;
+                 save_project_xml(&project_xml_path_buf, &project_data)?;
+             }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

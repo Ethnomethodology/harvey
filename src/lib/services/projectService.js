@@ -1419,6 +1419,106 @@ export async function convertAndSaveTranscriptAsDoc() {
         throw error;
     }
 }
+
+export async function convertAndSaveTranscriptAsTranscript() {
+    const projData = get(project);
+    const tsData = get(transcriptStore);
+    const transcriptPath = tsData.currentTranscriptPath;
+    const selectedMedia = tsData.selectedMediaFile;
+    const projectXmlPath = projData.xmlPath;
+    const projectBaseDir = projData.baseDirectory;
+    
+    if (!transcriptPath) throw new Error("No transcript file loaded.");
+    if (!selectedMedia?.path) throw new Error("No media file selected.");
+    if (!projectBaseDir) throw new Error("Project base directory not found.");
+    if (!projectXmlPath) throw new Error("Project XML path not found.");
+
+    project.update(p => ({ ...p, statusMessage: `Saving as imported transcript...` }));
+
+    try {
+        const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
+        if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
+        
+        const originalTranscriptFilename = await basename(transcriptPath); 
+        const originalTranscriptStem = originalTranscriptFilename.includes('.')
+            ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
+            : originalTranscriptFilename;
+        
+        const transcriptFilenameBase = originalTranscriptStem;
+        
+        // Target is Transcripts folder
+        // Note: sep() returns a promise in Tauri v2, so await it if needed, or use the imported symbol if it's a string.
+        // In this file 'sep' is imported from @tauri-apps/api/path which is a Promise in v2 usually? 
+        // Checking imports: import { dirname, basename, sep, join } from '@tauri-apps/api/path';
+        // Wait, `sep` is a property in v1 but might be a Promise in v2. 
+        // In `convertAndSaveTranscriptAsDoc`, it uses `sep()`. Let's check.
+        // `const targetDocumentDir = ${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem};`
+        // So yes, it is called as a function.
+
+        const targetTranscriptsDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${TRANSCRIPTS_DIR_IMPORTED}${sep()}${originalTranscriptStem}`;
+        
+        // Use get_unique_document_path to ensure uniqueness (reuse checking logic)
+        const targetFullPath = await invoke('get_unique_document_path', {
+            targetDirStr: targetTranscriptsDir,
+            baseName: transcriptFilenameBase,
+            extension: 'json'
+        });
+        
+        const transcriptFilename = await basename(targetFullPath);
+
+        await invoke('save_imported_transcript_and_update_xml', {
+            projectXmlPath: projectXmlPath,
+            targetPath: targetFullPath,
+            transcriptName: transcriptFilename,
+            jsonContent: fullLexicalTableString
+        });
+
+        // Save metadata
+        // Construct relative path manually to ensure it's correct for DB key
+        let relativePath = targetFullPath.substring(projectBaseDir.length);
+        if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+            relativePath = relativePath.substring(1);
+        }
+        relativePath = relativePath.replace(/\\/g, '/');
+
+        const fileMetadata = {
+            file_name: transcriptFilename,
+            file_path: targetFullPath,
+            last_modified: new Date().toISOString(),
+            title: "",
+            description: "",
+            summary: "",
+            duration_seconds: null,
+            width: null,
+            height: null,
+            frame_rate: null,
+            bit_rate: null,
+            audio_codec: null,
+            video_codec: null,
+            created_at: new Date().toISOString(),
+            original_import_path: null,
+            speaker_names: null,
+            waveform_data: null,
+        };
+
+        await invoke('update_asset_metadata_command', {
+            projectXmlPathStr: projectXmlPath,
+            assetRelativePath: relativePath,
+            metadataPayload: fileMetadata,
+            customFieldsPayload: null,
+            assetType: 'imported_transcript',
+        });
+
+        project.update(p => ({ ...p, statusMessage: `Transcript saved as imported: ${transcriptFilename}` }));
+        await refreshProjectFiles();
+        return targetFullPath;
+
+    } catch (error) {
+         project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${error.message || error}` }));
+         throw error;
+    }
+}
+
 export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
 export async function saveCurrentPdfAnnotations() {
     const projState = get(project);

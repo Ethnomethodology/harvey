@@ -285,7 +285,8 @@ pub fn run() {
             projectview::image_handler::save_screenshot,
 
             // --- Project view TRANSCRIPT IMPORT command ---
-            projectview::transcription_handler::import_word_transcript
+            projectview::transcription_handler::import_word_transcript,
+            projectview::transcription_handler::save_imported_transcript_and_update_xml
 
         ])
         .run(tauri::generate_context!())

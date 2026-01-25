@@ -6,7 +6,7 @@
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
+	import { convertAndSaveTranscriptAsDoc, convertAndSaveTranscriptAsTranscript } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
     import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
@@ -532,7 +532,7 @@
 	async function handleAddToDocumentsClick() {
 		const confirmationMessage = `This will create a copy of the current transcript as a new document.\n\nThis document will not sync with the media player.`;
 		const userConfirmed = await confirm(confirmationMessage, {
-			title: 'Export to Documents?',
+			title: 'Save in Documents?',
 			type: 'info',
 			okLabel: 'Yes, Create Document',
 			cancelLabel: 'Cancel'
@@ -554,6 +554,34 @@
                 await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
             }
         } else {
+        }
+    }
+
+	async function handleAddToTranscriptsClick() {
+		const confirmationMessage = `This will create a copy of the current transcript as a new imported transcript.\n\nThis transcript will not sync with the media player.`;
+		const userConfirmed = await confirm(confirmationMessage, {
+			title: 'Save in Transcripts?',
+			type: 'info',
+			okLabel: 'Yes, Save Transcript',
+			cancelLabel: 'Cancel'
+		});
+
+		if (userConfirmed) {
+            try {
+                const newTranscriptPath = await convertAndSaveTranscriptAsTranscript();
+                if (newTranscriptPath) {
+                    await message(`Transcript saved to Transcripts:\n${newTranscriptPath.split(/[\\/]/).pop()}`, {title: "Transcript Saved", type: "info"});
+                    // Imported transcripts are viewed in the 'data' tab, similar to documents.
+                     dispatch('requestopentab', { tabName: 'data', loadNotePath: newTranscriptPath });
+                } else {
+                     console.error("[RichTextPreview] Transcript saving process did not return a path.");
+                     await message("Failed to save transcript file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
+                }
+            } catch (error) {
+                console.error("[RichTextPreview] Error during transcript saving process:", error);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                await message(`Failed to save transcript file: ${errorMsg}`, {title: "Error", type: "error"});
+            }
         }
     }
 
@@ -799,10 +827,16 @@
                       Manual Transcription Settings
                     </button>
                     <button
+                      on:click={() => { showExportMenu = false; handleAddToTranscriptsClick(); }}
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                    >
+                      Save in Transcripts
+                    </button>
+                    <button
                       on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
                       class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200"
                     >
-                      Export to Documents
+                      Save in Documents
                     </button>
                   </div>
                 {/if}
