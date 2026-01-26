@@ -86,15 +86,18 @@
         const { x, y, width, height, cx, cy, r, tail } = shapeData;
         if (!tail) return '';
 
-        let tx = tail.x;
-        let ty = tail.y;
+        // Scale factor for 1000x1000 viewBox
+        const S = 1000;
+
+        let tx = tail.x * S;
+        let ty = tail.y * S;
 
         let center, bounds;
         if (isCircle) {
-            center = { x: cx, y: cy };
+            center = { x: cx * S, y: cy * S };
         } else {
-            center = { x: x + width / 2, y: y + height / 2 };
-            bounds = { x, y, width, height };
+            center = { x: (x + width / 2) * S, y: (y + height / 2) * S };
+            bounds = { x: x * S, y: y * S, width: width * S, height: height * S };
         }
 
         // Vector from center to tail tip
@@ -107,7 +110,7 @@
         const dir_check = { x: dx / (len || 1), y: dy / (len || 1) };
 
         if (isCircle) {
-            t = r;
+            t = r * S;
         } else {
             const tValues = [];
             if (dir_check.x > 0) tValues.push((bounds.x + bounds.width - center.x) / dir_check.x);
@@ -118,7 +121,7 @@
         }
 
         // Ensure tail tip is outside
-        const minLen = t + 0.01;
+        const minLen = t + (0.01 * S);
         if (len < minLen) {
             const factor = minLen / (len || 0.001);
             tx = center.x + dx * factor;
@@ -136,19 +139,19 @@
             const sinA = Math.sin(angle);
             const b1Dir = { x: dir.x * cosA - dir.y * -sinA, y: dir.x * -sinA + dir.y * cosA };
             const b2Dir = { x: dir.x * cosA - dir.y * sinA, y: dir.x * sinA + dir.y * cosA };
-            const b1 = { x: center.x + b1Dir.x * r, y: center.y + b1Dir.y * r };
-            const b2 = { x: center.x + b2Dir.x * r, y: center.y + b2Dir.y * r };
-            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r} ${r} 0 1 1 ${b1.x} ${b1.y} Z`;
+            const b1 = { x: center.x + b1Dir.x * (r * S), y: center.y + b1Dir.y * (r * S) };
+            const b2 = { x: center.x + b2Dir.x * (r * S), y: center.y + b2Dir.y * (r * S) };
+            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
         } else {
             // Robust side-based rectangle logic
             let side = "";
-            const absDirX = Math.abs(dir.x * height);
-            const absDirY = Math.abs(dir.y * width);
+            const absDirX = Math.abs(dir.x * bounds.height);
+            const absDirY = Math.abs(dir.y * bounds.width);
             if (absDirX > absDirY) side = dir.x > 0 ? "right" : "left";
             else side = dir.y > 0 ? "bottom" : "top";
 
-            const sizeParam = Math.min(width, height);
-            const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01);
+            const sizeParam = Math.min(bounds.width, bounds.height);
+            const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01 * S);
 
             const TL = { x: bounds.x, y: bounds.y };
             const TR = { x: bounds.x + bounds.width, y: bounds.y };
@@ -517,6 +520,7 @@
             // Reset states that would otherwise be handled by dialog actions
             annotationBeingEdited = null;
             isEditingExisting = false;
+            activeDrawingTool = null; // Deactivate tool
         }
         currentRect = null;
         currentCircle = null;
@@ -539,6 +543,7 @@
 
         annotationBeingEdited = null;
         isEditingExisting = false;
+        activeDrawingTool = null; // Deactivate tool
         // dialogX = event.position.x;
         // dialogY = event.position.y;
         // showAnnotationCreationDialog = true;
@@ -859,26 +864,25 @@
 
         <!-- SVG overlay for drawing and displaying annotations -->
         <!-- Moved outside osdViewerElement to prevent OSD initialization from clearing it -->
-        <svg bind:this={svgOverlay} class="pointer-events-none z-20 absolute inset-0" viewBox="0 0 1 1"
+        <svg bind:this={svgOverlay} class="pointer-events-none z-20 absolute inset-0" viewBox="0 0 1000 1000"
                 class:cursor-draw={activeDrawingTool !== null}
                 class:cursor-pan={activeDrawingTool === null}>
             {#each $currentAnnotations as annotation (annotation.id)}
+                {@const S = 1000}
                 {@const shapeData = annotation.target.selector.value}
                 {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
-                {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
                 {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
                 {@const strokeColor = adjustOpacity(fillColor, 1)}
 
                 {#if shapeData.shape === 'rectangle'}
                     <rect
-                        x={shapeData.x}
-                        y={shapeData.y}
-                        width={shapeData.width}
-                        height={shapeData.height}
+                        x={shapeData.x * S}
+                        y={shapeData.y * S}
+                        width={shapeData.width * S}
+                        height={shapeData.height * S}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
-                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -887,67 +891,57 @@
                     />
                     {#if selectedAnnotationId === annotation.id}
                         <!-- 8 handles for rectangle -->
-                        <!-- Corners -->
-                        <circle cx={shapeData.x} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
-                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
-                        <!-- Mid-points -->
-                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
-                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
-                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
+                        <circle cx={shapeData.x * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
                     {/if}
                 {:else if shapeData.shape === 'speech-bubble-rect'}
                      <path
                         d={getBubblePath(shapeData, false)}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
                         on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
-                    {#if textBody}
-                        <foreignObject x={shapeData.x} y={shapeData.y} width={shapeData.width} height={shapeData.height} class="pointer-events-none">
-                            <div class="w-full h-full flex items-center justify-center text-center p-1 overflow-hidden text-xs select-none" style="color: black;">
-                                {textBody.value}
-                            </div>
-                        </foreignObject>
-                    {/if}
                     <circle
-                        cx={shapeData.tail.x}
-                        cy={shapeData.tail.y}
-                        r={handleRadius * 1.2}
+                        cx={shapeData.tail.x * S}
+                        cy={shapeData.tail.y * S}
+                        r={handleRadius * 1.2 * S}
                         fill="white"
                         stroke="black"
-                        stroke-width="0.001"
+                        stroke-width="1"
                         class="pointer-events-auto cursor-pointer hover:fill-blue-500"
                         on:pointerdown={(e) => startTailDrag(e, annotation.id)}
                     />
                     {#if selectedAnnotationId === annotation.id}
                         <!-- 8 handles for speech rect -->
-                        <circle cx={shapeData.x} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
-                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
-                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
-                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
-                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
-                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
+                        <circle cx={shapeData.x * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
                     {/if}
 
                 {:else if shapeData.shape === 'circle'}
                     <circle
-                        cx={shapeData.cx}
-                        cy={shapeData.cy}
-                        r={shapeData.r}
+                        cx={shapeData.cx * S}
+                        cy={shapeData.cy * S}
+                        r={shapeData.r * S}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
-                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -956,54 +950,47 @@
                     />
                     {#if selectedAnnotationId === annotation.id}
                         <!-- 4 radius handles -->
-                        <circle cx={shapeData.cx + shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx - shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx} cy={shapeData.cy + shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx} cy={shapeData.cy - shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={(shapeData.cx + shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={(shapeData.cx - shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx * S} cy={(shapeData.cy + shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx * S} cy={(shapeData.cy - shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                     {/if}
                 {:else if shapeData.shape === 'speech-bubble-circle'}
                      <path
                         d={getBubblePath(shapeData, true)}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
                         on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
-                    {#if textBody}
-                        <foreignObject x={shapeData.cx - shapeData.r} y={shapeData.cy - shapeData.r} width={shapeData.r * 2} height={shapeData.r * 2} class="pointer-events-none">
-                            <div class="w-full h-full flex items-center justify-center text-center p-2 overflow-hidden text-xs select-none" style="color: black;">
-                                {textBody.value}
-                            </div>
-                        </foreignObject>
-                    {/if}
                     <circle
-                        cx={shapeData.tail.x}
-                        cy={shapeData.tail.y}
-                        r={handleRadius * 1.2}
+                        cx={shapeData.tail.x * S}
+                        cy={shapeData.tail.y * S}
+                        r={handleRadius * 1.2 * S}
                         fill="white"
                         stroke="black"
-                        stroke-width="0.001"
+                        stroke-width="1"
                         class="pointer-events-auto cursor-pointer hover:fill-blue-500"
                         on:pointerdown={(e) => startTailDrag(e, annotation.id)}
                     />
                     {#if selectedAnnotationId === annotation.id}
-                        <circle cx={shapeData.cx + shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx - shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx} cy={shapeData.cy + shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
-                        <circle cx={shapeData.cx} cy={shapeData.cy - shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={(shapeData.cx + shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={(shapeData.cx - shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx * S} cy={(shapeData.cy + shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx * S} cy={(shapeData.cy - shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                     {/if}
 
                 {:else if shapeData.shape === 'polygon'}
                     <polygon
-                        points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
+                        points={shapeData.points.map(p => `${p.x * S},${p.y * S}`).join(' ')}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '0.002'}
-                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
+                        vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
                         on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
@@ -1011,63 +998,93 @@
                     />
                     {#if selectedAnnotationId === annotation.id}
                         {#each shapeData.points as point, i}
-                            <circle cx={point.x} cy={point.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startResizeDrag(e, annotation.id, i.toString())} />
+                            <circle cx={point.x * S} cy={point.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startResizeDrag(e, annotation.id, i.toString())} />
                         {/each}
                     {/if}
                 {/if}
             {/each}
-            {#if isDrawing && (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') && currentRect}
-                <rect
-                    x={currentRect.x}
-                    y={currentRect.y}
-                    width={currentRect.width}
-                    height={currentRect.height}
-                    fill="rgba(255, 242, 117, 0.5)"
-                    stroke="rgba(255, 242, 117, 1)"
-                    stroke-width="1px"
-                    vector-effect="non-scaling-stroke"
-                />
-            {:else if isDrawing && (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') && currentCircle}
-                <circle
-                    cx={currentCircle.cx}
-                    cy={currentCircle.cy}
-                    r={currentCircle.r}
-                    fill="rgba(255, 242, 117, 0.5)"
-                    stroke="rgba(255, 242, 117, 1)"
-                    stroke-width="1px"
-                    vector-effect="non-scaling-stroke"
-                />
-            {:else if isDrawing && activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
-                <polygon
-                    points={currentPreviewPolygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                    fill="rgba(255, 242, 117, 0.5)"
-                    stroke="rgba(255, 242, 117, 1)"
-                    stroke-width="0.002"
-                    vector-effect="non-scaling-stroke"
-                />
-                {#if currentPolygon.previewLine}
-                    <line
-                        x1={currentPolygon.previewLine.x1}
-                        y1={currentPolygon.previewLine.y1}
-                        x2={currentPolygon.previewLine.x2}
-                        y2={currentPolygon.previewLine.y2}
-                        stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="1px"
-                        stroke-dasharray="0.01, 0.01"
-                        vector-effect="non-scaling-stroke"
-                    />
+
+            <!-- Render Text Layer on top of shapes -->
+            {#each $currentAnnotations as annotation (annotation.id)}
+                {@const shapeData = annotation.target.selector.value}
+                {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
+                {@const S = 1000}
+                {#if textBody}
+                    {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect'}
+                        <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
+                                <p style="margin: 0; padding: 0; text-align: center; color: black; font-family: sans-serif; font-weight: 600; font-size: 14px; line-height: 1.2; word-break: break-word; width: 100%;">
+                                    {textBody.value}
+                                </p>
+                            </div>
+                        </foreignObject>
+                    {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
+                        <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
+                                <p style="margin: 0; padding: 0; text-align: center; color: black; font-family: sans-serif; font-weight: 600; font-size: 14px; line-height: 1.2; word-break: break-word; width: 100%;">
+                                    {textBody.value}
+                                </p>
+                            </div>
+                        </foreignObject>
+                    {/if}
                 {/if}
-                {#if currentPolygon.closingPreviewLine}
-                    <line
-                        x1={currentPolygon.closingPreviewLine.x1}
-                        y1={currentPolygon.closingPreviewLine.y1}
-                        x2={currentPolygon.closingPreviewLine.x2}
-                        y2={currentPolygon.closingPreviewLine.y2}
+            {/each}
+
+            {#if isDrawing}
+                {@const S = 1000}
+                {#if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') && currentRect}
+                    <rect
+                        x={currentRect.x * S}
+                        y={currentRect.y * S}
+                        width={currentRect.width * S}
+                        height={currentRect.height * S}
+                        fill="rgba(255, 242, 117, 0.5)"
                         stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="1px"
-                        stroke-dasharray="0.01, 0.01"
+                        stroke-width="1"
                         vector-effect="non-scaling-stroke"
                     />
+                {:else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') && currentCircle}
+                    <circle
+                        cx={currentCircle.cx * S}
+                        cy={currentCircle.cy * S}
+                        r={currentCircle.r * S}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {:else if activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
+                    <polygon
+                        points={currentPreviewPolygonPoints.map(p => `${p.x * S},${p.y * S}`).join(' ')}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1"
+                        vector-effect="non-scaling-stroke"
+                    />
+                    {#if currentPolygon.previewLine}
+                        <line
+                            x1={currentPolygon.previewLine.x1 * S}
+                            y1={currentPolygon.previewLine.y1 * S}
+                            x2={currentPolygon.previewLine.x2 * S}
+                            y2={currentPolygon.previewLine.y2 * S}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="1"
+                            stroke-dasharray="10, 10"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
+                    {#if currentPolygon.closingPreviewLine}
+                        <line
+                            x1={currentPolygon.closingPreviewLine.x1 * S}
+                            y1={currentPolygon.closingPreviewLine.y1 * S}
+                            x2={currentPolygon.closingPreviewLine.x2 * S}
+                            y2={currentPolygon.closingPreviewLine.y2 * S}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="1"
+                            stroke-dasharray="10, 10"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
                 {/if}
             {/if}
         </svg>
@@ -1078,6 +1095,8 @@
                     x={dialogX}
                     y={dialogY}
                     initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || (annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') ? '' : null)}
+                    initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
+                    initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
                     isEditing={isEditingExisting}
                     useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble')}
