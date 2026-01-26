@@ -194,6 +194,53 @@
         }
     }
 
+    // --- Progress Bar Tooltip State ---
+    let progressTooltipElement;
+    let progressBarElement;
+    let showProgressTooltip = false;
+    let progressTooltipText = '00:00:00';
+    let progressTooltipLeft = '0px';
+
+    function formatTimeWithHours(totalSeconds) {
+        if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00:00';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function handleMouseMoveOnProgressBar(event) {
+        if (!duration || !progressBarElement || !progressTooltipElement) return;
+
+        const progressBarRect = progressBarElement.getBoundingClientRect();
+        const mouseX_relative = event.clientX - progressBarRect.left;
+        const percent = Math.max(0, Math.min(1, mouseX_relative / progressBarRect.width));
+        const hoverTime = percent * duration;
+        progressTooltipText = formatTimeWithHours(hoverTime);
+
+        // Calculate the ideal center position for the tooltip (directly under mouse)
+        let idealTooltipCenter = mouseX_relative;
+
+        // Adjust idealTooltipCenter to prevent tooltip edges from going outside progressBarElement
+        const tooltipWidth = progressTooltipElement.offsetWidth;
+        const minAllowedCenter = tooltipWidth / 2;
+        const maxAllowedCenter = progressBarRect.width - (tooltipWidth / 2);
+
+        let clampedTooltipCenter;
+        if (progressBarRect.width < tooltipWidth) { // Tooltip wider than bar
+            clampedTooltipCenter = progressBarRect.width / 2; // Center tooltip on the bar
+        } else {
+            clampedTooltipCenter = Math.max(minAllowedCenter, Math.min(idealTooltipCenter, maxAllowedCenter));
+        }
+
+        progressTooltipLeft = `${clampedTooltipCenter}px`;
+        showProgressTooltip = true;
+    }
+
+    function handleMouseLeaveProgressBar() {
+        showProgressTooltip = false;
+    }
+
     onMount(() => {
         console.log("[ThinMediaPlayer] Mounted.");
         loadAttachments();
@@ -236,17 +283,29 @@
 
     <div class="flex items-center space-x-2 flex-grow min-w-0">
         <span class="text-[10px] text-gray-500 font-mono w-8 text-right flex-shrink-0 tabular-nums">{formatTime(currentTime)}</span>
-        <input 
-            type="range" 
-            class="flex-grow h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            min="0" 
-            max={duration || 1} 
-            step="0.001"
-            bind:value={currentTime}
-            disabled={!src}
-            on:click|stopPropagation
-            on:mousedown|stopPropagation
-        >
+        <div class="relative flex-grow h-4 flex items-center group">
+            <input 
+                bind:this={progressBarElement}
+                type="range" 
+                class="w-full h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed absolute inset-0 m-auto"
+                min="0" 
+                max={duration || 1} 
+                step="0.001"
+                bind:value={currentTime}
+                disabled={!src}
+                on:click|stopPropagation
+                on:mousedown|stopPropagation
+                on:mousemove={handleMouseMoveOnProgressBar}
+                on:mouseleave={handleMouseLeaveProgressBar}
+            >
+            <span
+                bind:this={progressTooltipElement}
+                class="absolute bottom-full mb-1 bg-black text-white text-[10px] px-1 rounded pointer-events-none whitespace-nowrap z-50"
+                style="left: {progressTooltipLeft}; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'};"
+            >
+                {progressTooltipText}
+            </span>
+        </div>
         <span class="text-[10px] text-gray-500 font-mono w-8 flex-shrink-0 tabular-nums">{formatTime(duration)}</span>
     </div>
 

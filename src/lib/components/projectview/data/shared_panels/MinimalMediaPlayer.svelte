@@ -55,6 +55,53 @@
         }
     }
 
+    // --- Progress Bar Tooltip State ---
+    let progressTooltipElement;
+    let progressBarElement;
+    let showProgressTooltip = false;
+    let progressTooltipText = '00:00:00';
+    let progressTooltipLeft = '0px';
+
+    function formatTimeWithHours(totalSeconds) {
+        if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00:00';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function handleMouseMoveOnProgressBar(event) {
+        if (!duration || !progressBarElement || !progressTooltipElement) return;
+
+        const progressBarRect = progressBarElement.getBoundingClientRect();
+        const mouseX_relative = event.clientX - progressBarRect.left;
+        const percent = Math.max(0, Math.min(1, mouseX_relative / progressBarRect.width));
+        const hoverTime = percent * duration;
+        progressTooltipText = formatTimeWithHours(hoverTime);
+
+        // Calculate the ideal center position for the tooltip (directly under mouse)
+        let idealTooltipCenter = mouseX_relative;
+
+        // Adjust idealTooltipCenter to prevent tooltip edges from going outside progressBarElement
+        const tooltipWidth = progressTooltipElement.offsetWidth;
+        const minAllowedCenter = tooltipWidth / 2;
+        const maxAllowedCenter = progressBarRect.width - (tooltipWidth / 2);
+
+        let clampedTooltipCenter;
+        if (progressBarRect.width < tooltipWidth) { // Tooltip wider than bar
+            clampedTooltipCenter = progressBarRect.width / 2; // Center tooltip on the bar
+        } else {
+            clampedTooltipCenter = Math.max(minAllowedCenter, Math.min(idealTooltipCenter, maxAllowedCenter));
+        }
+
+        progressTooltipLeft = `${clampedTooltipCenter}px`;
+        showProgressTooltip = true;
+    }
+
+    function handleMouseLeaveProgressBar() {
+        showProgressTooltip = false;
+    }
+
     function onVolumeInput(e) {
         volume = parseFloat(e.target.value) / 100;
     }
@@ -80,15 +127,27 @@
 
     <div class="flex items-center space-x-2 text-xs">
         <span class="text-gray-600 dark:text-text-secondary w-10 text-right">{formatTime(currentTime)}</span>
-        <input 
-            type="range" 
-            class="w-full h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" 
-            min="0" 
-            max={duration || 0} 
-            step="0.001"
-            bind:value={currentTime} 
-            style="--progress: {duration > 0 ? (currentTime / duration) : 0};"
-        >
+        <div class="relative w-full h-4 flex items-center group">
+            <input 
+                bind:this={progressBarElement}
+                type="range" 
+                class="w-full h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer absolute inset-0 m-auto" 
+                min="0" 
+                max={duration || 0} 
+                step="0.001"
+                bind:value={currentTime} 
+                style="--progress: {duration > 0 ? (currentTime / duration) : 0};"
+                on:mousemove={handleMouseMoveOnProgressBar}
+                on:mouseleave={handleMouseLeaveProgressBar}
+            >
+            <span
+                bind:this={progressTooltipElement}
+                class="absolute bottom-full mb-1 bg-black text-white text-[10px] px-1 rounded pointer-events-none whitespace-nowrap z-50"
+                style="left: {progressTooltipLeft}; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'};"
+            >
+                {progressTooltipText}
+            </span>
+        </div>
         <span class="text-gray-600 dark:text-text-secondary w-10">{formatTime(duration)}</span>
     </div>
 
