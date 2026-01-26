@@ -538,6 +538,7 @@
                 dialogX = event.position.x;
                 dialogY = event.position.y;
                 showAnnotationCreationDialog = true;
+                activeDrawingTool = null; // Deactivate tool
             } else {
                 // For speech bubbles and text areas, don't open dialog immediately.
                 annotationBeingEdited = null;
@@ -1310,7 +1311,9 @@
                 <AnnotationCreationDialog
                     x={dialogX}
                     y={dialogY}
-                    initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || (annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area' ? '' : null)}
+                    initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || 
+                        ((annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area') 
+                        ? '' : null)}
                     initialTextColor={annotationBeingEdited?.body?.find(b => b.type === 'TextColor' && b.purpose === 'rendering')?.value || 'black'}
                     initialFontSize={annotationBeingEdited?.body?.find(b => b.type === 'FontSize' && b.purpose === 'rendering')?.value || 14}
                     initialBorderColor={annotationBeingEdited?.body?.find(b => b.type === 'BorderColor' && b.purpose === 'rendering')?.value || null}

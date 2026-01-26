@@ -120,7 +120,7 @@
     style="left: {x}px; top: {y}px; min-width: 200px;"
 >
     {#if !isCensoredMode}
-        {#if initialText !== null || selectedShape === 'circle'}
+        {#if initialText !== null}
             <div class="mb-3">
                 <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
                 <textarea
