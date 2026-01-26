@@ -14,6 +14,7 @@
     export let initialBorderColor = null;
     export let initialBorderSize = 1;
     export let initialShape = 'rectangle';
+    export let initialTailStyle = 'straight'; // New prop for tail style
     export let isEditing = false; // New prop to indicate if we are editing an existing annotation
     export let panelBounds = null; // New prop to receive the bounding rectangle of the parent panel
     export let useSolidColors = false; // New prop to determine color palette
@@ -28,6 +29,7 @@
     let selectedBorderColor = selectedColor === 'url(#censoredPattern)' ? 'black' : (initialBorderColor || (initialColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : initialColor.replace(', 0.5', ', 1')));
     let selectedBorderSize = initialBorderSize;
     let selectedShape = (initialShape && initialShape.includes('circle')) ? 'circle' : 'rectangle';
+    let selectedTailStyle = initialTailStyle || 'straight';
 
     const transparentColors = [
         { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
@@ -72,7 +74,18 @@
     $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
     function handleSave() {
-        dispatch('save', { title, description, color: selectedColor, text, textColor: selectedTextColor, fontSize: selectedFontSize, borderColor: selectedBorderColor, borderSize: selectedBorderSize, shape: selectedShape });
+        dispatch('save', { 
+            title, 
+            description, 
+            color: selectedColor, 
+            text, 
+            textColor: selectedTextColor, 
+            fontSize: selectedFontSize, 
+            borderColor: selectedBorderColor, 
+            borderSize: selectedBorderSize, 
+            shape: selectedShape,
+            tailStyle: selectedTailStyle
+        });
     }
 
     function handleCancel() {
@@ -130,6 +143,32 @@
                     placeholder="Enter text..."
                     rows="2"
                 ></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tail Style</label>
+                <div class="flex space-x-2">
+                    <button
+                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                        class:bg-blue-600={selectedTailStyle === 'straight'}
+                        class:text-white={selectedTailStyle === 'straight'}
+                        class:bg-gray-100={selectedTailStyle !== 'straight'}
+                        class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
+                        on:click={() => (selectedTailStyle = 'straight')}
+                    >
+                        Straight
+                    </button>
+                    <button
+                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                        class:bg-blue-600={selectedTailStyle === 'curved'}
+                        class:text-white={selectedTailStyle === 'curved'}
+                        class:bg-gray-100={selectedTailStyle !== 'curved'}
+                        class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
+                        on:click={() => (selectedTailStyle = 'curved')}
+                    >
+                        Curved
+                    </button>
+                </div>
             </div>
         {:else}
             <div class="mb-3">

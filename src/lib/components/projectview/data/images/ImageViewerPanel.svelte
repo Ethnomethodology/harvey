@@ -87,7 +87,7 @@
 
     // Helper to generate speech bubble info including path and base points
     function getBubbleTailInfo(shapeData, isCircle, S = 1000) {
-        const { x, y, width, height, cx, cy, r, tail, tailWidth } = shapeData;
+        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle } = shapeData;
         if (!tail) return null;
 
         let tx = tail.x * S;
@@ -142,10 +142,16 @@
             const b2Dir = { x: dir.x * cosA - dir.y * sinA, y: dir.x * sinA + dir.y * cosA };
             const b1 = { x: center.x + b1Dir.x * (r * S), y: center.y + b1Dir.y * (r * S) };
             const b2 = { x: center.x + b2Dir.x * (r * S), y: center.y + b2Dir.y * (r * S) };
-            return {
-                path: `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`,
-                b1, b2, center, side: 'circle'
-            };
+            
+            let path;
+            if (tailStyle === 'curved') {
+                const bc = { x: center.x + dir.x * (r * S), y: center.y + dir.y * (r * S) };
+                path = `M ${b1.x} ${b1.y} Q ${bc.x} ${bc.y} ${tx} ${ty} Q ${bc.x} ${bc.y} ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
+            } else {
+                path = `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
+            }
+
+            return { path, b1, b2, center, side: 'circle' };
         } else {
             // Robust side-based rectangle logic
             let side = "";
@@ -162,29 +168,49 @@
             const BR = { x: bounds.x + bounds.width, y: bounds.y + bounds.height };
             const BL = { x: bounds.x, y: bounds.y + bounds.height };
 
-            let b1, b2, path, bx, by;
+            let b1, b2, path, bx, by, bc;
             if (side === "top") {
                 bx = Math.max(TL.x + baseHalfWidth, Math.min(TR.x - baseHalfWidth, center.x + (dir.x * t)));
                 b1 = { x: bx - baseHalfWidth, y: TL.y };
                 b2 = { x: bx + baseHalfWidth, y: TL.y };
-                path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                bc = { x: bx, y: TL.y };
+                if (tailStyle === 'curved') {
+                    path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} Q ${bc.x} ${bc.y} ${tx} ${ty} Q ${bc.x} ${bc.y} ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                } else {
+                    path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                }
             } else if (side === "right") {
                 by = Math.max(TR.y + baseHalfWidth, Math.min(BR.y - baseHalfWidth, center.y + (dir.y * t)));
                 b1 = { x: TR.x, y: by - baseHalfWidth };
                 b2 = { x: TR.x, y: by + baseHalfWidth };
-                path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                bc = { x: TR.x, y: by };
+                if (tailStyle === 'curved') {
+                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} Q ${bc.x} ${bc.y} ${tx} ${ty} Q ${bc.x} ${bc.y} ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                } else {
+                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                }
             } else if (side === "bottom") {
                 bx = Math.max(BL.x + baseHalfWidth, Math.min(BR.x - baseHalfWidth, center.x + (dir.x * t)));
                 b1 = { x: bx + baseHalfWidth, y: BR.y };
                 b2 = { x: bx - baseHalfWidth, y: BR.y };
-                path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
+                bc = { x: bx, y: BR.y };
+                if (tailStyle === 'curved') {
+                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} Q ${bc.x} ${bc.y} ${tx} ${ty} Q ${bc.x} ${bc.y} ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
+                } else {
+                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
+                }
             } else { // left
                 by = Math.max(TL.y + baseHalfWidth, Math.min(BL.y - baseHalfWidth, center.y + (dir.y * t)));
                 b1 = { x: TL.x, y: by + baseHalfWidth };
                 b2 = { x: TL.x, y: by - baseHalfWidth };
-                path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} L ${tx} ${ty} L ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
+                bc = { x: TL.x, y: by };
+                if (tailStyle === 'curved') {
+                    path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} Q ${bc.x} ${bc.y} ${tx} ${ty} Q ${bc.x} ${bc.y} ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
+                } else {
+                    path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} L ${tx} ${ty} L ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
+                }
             }
-            return { path, b1, b2, side, baseCenter: { x: (bx || (side === 'left' || side === 'right' ? center.x + dir.x * t : null)), y: (by || (side === 'top' || side === 'bottom' ? center.y + dir.y * t : null)) } };
+            return { path, b1, b2, side, baseCenter: bc };
         }
     }
 
@@ -664,11 +690,15 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape } = event.detail;
+        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
         
+        if (tailStyle) {
+            updatedSelector.tailStyle = tailStyle;
+        }
+
         // Handle shape change logic
         if (shape && shape !== updatedSelector.shape) {
             const oldShape = updatedSelector.shape;
@@ -1395,6 +1425,7 @@
                     initialBorderColor={annotationBeingEdited?.body?.find(b => b.type === 'BorderColor' && b.purpose === 'rendering')?.value || null}
                     initialBorderSize={annotationBeingEdited?.body?.find(b => b.type === 'BorderSize' && b.purpose === 'rendering')?.value || 1}
                     initialShape={annotationBeingEdited?.target?.selector?.value?.shape || 'rectangle'}
+                    initialTailStyle={annotationBeingEdited?.target?.selector?.value?.tailStyle || 'straight'}
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
