@@ -895,7 +895,11 @@
         dispatch('requestviewchange', { viewType: 'tables', itemPath: path });
     }
 
-    onMount(() => {
+    function handleToggleDataLeftPanel() {
+        panelStateStore.toggleDataLeftPanel();
+    }
+
+    onMount(async () => {
         const listener = (e) => {
             if (!$showSearchBox) return;
             const searchContainer = document.getElementById('data-search-container');
@@ -1096,8 +1100,6 @@
                     class:dark:hover:bg-d-gray-700={category.type !== activeCollapsedCategoryType}
                     class:focus:ring-2={category.type !== activeCollapsedCategoryType}
                     class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
-                    class:border-l-4={category.type === activeCollapsedCategoryType}
-                    class:border-blue-500={category.type === activeCollapsedCategoryType}
                     class:text-gray-500={category.type !== activeCollapsedCategoryType}
                     class:dark:text-d-gray-400={category.type !== activeCollapsedCategoryType}
                     class:text-blue-600={category.type === activeCollapsedCategoryType}
