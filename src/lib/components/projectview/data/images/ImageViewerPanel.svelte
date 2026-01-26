@@ -87,7 +87,7 @@
 
     // Helper to generate speech bubble info including path and base points
     function getBubbleTailInfo(shapeData, isCircle, S = 1000) {
-        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle, tailFlipped } = shapeData;
+        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle, tailFlipped, rounded } = shapeData;
         if (!tail) return null;
 
         let tx = tail.x * S;
@@ -166,6 +166,7 @@
 
             const sizeParam = Math.min(bounds.width, bounds.height);
             const baseHalfWidth = tailWidth !== undefined ? (tailWidth * S / 2) : Math.max(sizeParam * 0.1, 0.01 * S);
+            const R = rounded ? Math.min(sizeParam * 0.2, 0.04 * S) : 0;
 
             const TL = { x: bounds.x, y: bounds.y };
             const TR = { x: bounds.x + bounds.width, y: bounds.y };
@@ -173,62 +174,69 @@
             const BL = { x: bounds.x, y: bounds.y + bounds.height };
 
             let b1, b2, path, bx, by, bc;
+            
+            const arc = (p, r, sweep = 1) => r > 0 ? `A ${r} ${r} 0 0 ${sweep} ${p.x} ${p.y}` : `L ${p.x} ${p.y}`;
+
             if (side === "top") {
-                bx = Math.max(TL.x + baseHalfWidth, Math.min(TR.x - baseHalfWidth, center.x + (dir.x * t)));
+                bx = Math.max(TL.x + R + baseHalfWidth, Math.min(TR.x - R - baseHalfWidth, center.x + (dir.x * t)));
                 b1 = { x: bx - baseHalfWidth, y: TL.y };
                 b2 = { x: bx + baseHalfWidth, y: TL.y };
                 bc = { x: bx, y: TL.y };
-                if (tailStyle === 'curved') {
-                    const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? -1 : 1;
-                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
-                    const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
-                    path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
-                } else {
-                    path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
-                }
+                const curvePart = tailStyle === 'curved' ? 
+                    (() => {
+                        const spineV = { x: tx - bc.x, y: ty - bc.y };
+                        const sign = tailFlipped ? -1 : 1;
+                        const perpV = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
+                        const cp = { x: bc.x + spineV.x * 0.5 + perpV.x, y: bc.y + spineV.y * 0.5 + perpV.y };
+                        return `Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y}`;
+                    })() : `L ${tx} ${ty} L ${b2.x} ${b2.y}`;
+
+                path = `M ${TL.x + R} ${TL.y} L ${b1.x} ${b1.y} ${curvePart} L ${TR.x - R} ${TR.y} ${arc({x: TR.x, y: TR.y + R}, R)} L ${BR.x} ${BR.y - R} ${arc({x: BR.x - R, y: BR.y}, R)} L ${BL.x + R} ${BL.y} ${arc({x: BL.x, y: BL.y - R}, R)} L ${TL.x} ${TL.y + R} ${arc({x: TL.x + R, y: TL.y}, R)} Z`;
             } else if (side === "right") {
-                by = Math.max(TR.y + baseHalfWidth, Math.min(BR.y - baseHalfWidth, center.y + (dir.y * t)));
+                by = Math.max(TR.y + R + baseHalfWidth, Math.min(BR.y - R - baseHalfWidth, center.y + (dir.y * t)));
                 b1 = { x: TR.x, y: by - baseHalfWidth };
                 b2 = { x: TR.x, y: by + baseHalfWidth };
                 bc = { x: TR.x, y: by };
-                if (tailStyle === 'curved') {
-                    const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? -1 : 1;
-                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
-                    const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
-                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
-                } else {
-                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
-                }
+                const curvePart = tailStyle === 'curved' ? 
+                    (() => {
+                        const spineV = { x: tx - bc.x, y: ty - bc.y };
+                        const sign = tailFlipped ? -1 : 1;
+                        const perpV = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
+                        const cp = { x: bc.x + spineV.x * 0.5 + perpV.x, y: bc.y + spineV.y * 0.5 + perpV.y };
+                        return `Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y}`;
+                    })() : `L ${tx} ${ty} L ${b2.x} ${b2.y}`;
+
+                path = `M ${TL.x + R} ${TL.y} L ${TR.x - R} ${TR.y} ${arc({x: TR.x, y: TR.y + R}, R)} L ${b1.x} ${b1.y} ${curvePart} L ${BR.x} ${BR.y - R} ${arc({x: BR.x - R, y: BR.y}, R)} L ${BL.x + R} ${BL.y} ${arc({x: BL.x, y: BL.y - R}, R)} L ${TL.x} ${TL.y + R} ${arc({x: TL.x + R, y: TL.y}, R)} Z`;
             } else if (side === "bottom") {
-                bx = Math.max(BL.x + baseHalfWidth, Math.min(BR.x - baseHalfWidth, center.x + (dir.x * t)));
+                bx = Math.max(BL.x + R + baseHalfWidth, Math.min(BR.x - R - baseHalfWidth, center.x + (dir.x * t)));
                 b1 = { x: bx + baseHalfWidth, y: BR.y };
                 b2 = { x: bx - baseHalfWidth, y: BR.y };
                 bc = { x: bx, y: BR.y };
-                if (tailStyle === 'curved') {
-                    const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? -1 : 1;
-                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
-                    const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
-                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
-                } else {
-                    path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
-                }
+                const curvePart = tailStyle === 'curved' ? 
+                    (() => {
+                        const spineV = { x: tx - bc.x, y: ty - bc.y };
+                        const sign = tailFlipped ? -1 : 1;
+                        const perpV = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
+                        const cp = { x: bc.x + spineV.x * 0.5 + perpV.x, y: bc.y + spineV.y * 0.5 + perpV.y };
+                        return `Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y}`;
+                    })() : `L ${tx} ${ty} L ${b2.x} ${b2.y}`;
+
+                path = `M ${TL.x + R} ${TL.y} L ${TR.x - R} ${TR.y} ${arc({x: TR.x, y: TR.y + R}, R)} L ${BR.x} ${BR.y - R} ${arc({x: BR.x - R, y: BR.y}, R)} L ${b1.x} ${b1.y} ${curvePart} L ${BL.x + R} ${BL.y} ${arc({x: BL.x, y: BL.y - R}, R)} L ${TL.x} ${TL.y + R} ${arc({x: TL.x + R, y: TL.y}, R)} Z`;
             } else { // left
-                by = Math.max(TL.y + baseHalfWidth, Math.min(BL.y - baseHalfWidth, center.y + (dir.y * t)));
+                by = Math.max(TL.y + R + baseHalfWidth, Math.min(BL.y - R - baseHalfWidth, center.y + (dir.y * t)));
                 b1 = { x: TL.x, y: by + baseHalfWidth };
                 b2 = { x: TL.x, y: by - baseHalfWidth };
                 bc = { x: TL.x, y: by };
-                if (tailStyle === 'curved') {
-                    const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? -1 : 1;
-                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
-                    const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
-                    path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
-                } else {
-                    path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} L ${tx} ${ty} L ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
-                }
+                const curvePart = tailStyle === 'curved' ? 
+                    (() => {
+                        const spineV = { x: tx - bc.x, y: ty - bc.y };
+                        const sign = tailFlipped ? -1 : 1;
+                        const perpV = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
+                        const cp = { x: bc.x + spineV.x * 0.5 + perpV.x, y: bc.y + spineV.y * 0.5 + perpV.y };
+                        return `Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b1.x} ${b1.y}`;
+                    })() : `L ${tx} ${ty} L ${b1.x} ${b1.y}`;
+
+                path = `M ${TL.x + R} ${TL.y} L ${TR.x - R} ${TR.y} ${arc({x: TR.x, y: TR.y + R}, R)} L ${BR.x} ${BR.y - R} ${arc({x: BR.x - R, y: BR.y}, R)} L ${BL.x + R} ${BL.y} ${arc({x: BL.x, y: BL.y - R}, R)} L ${b1.x} ${b1.y} ${curvePart} L ${TL.x} ${TL.y + R} ${arc({x: TL.x + R, y: TL.y}, R)} Z`;
             }
             return { path, b1, b2, side, baseCenter: bc };
         }
@@ -710,7 +718,7 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped } = event.detail;
+        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -720,6 +728,9 @@
         }
         if (tailFlipped !== undefined) {
             updatedSelector.tailFlipped = tailFlipped;
+        }
+        if (rounded !== undefined) {
+            updatedSelector.rounded = rounded;
         }
 
         // Handle shape change logic
@@ -1450,6 +1461,7 @@
                     initialShape={annotationBeingEdited?.target?.selector?.value?.shape || 'rectangle'}
                     initialTailStyle={annotationBeingEdited?.target?.selector?.value?.tailStyle || 'straight'}
                     initialTailFlipped={annotationBeingEdited?.target?.selector?.value?.tailFlipped || false}
+                    initialRounded={annotationBeingEdited?.target?.selector?.value?.rounded || false}
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
