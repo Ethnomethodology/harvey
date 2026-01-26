@@ -87,7 +87,7 @@
 
     // Helper to generate speech bubble info including path and base points
     function getBubbleTailInfo(shapeData, isCircle, S = 1000) {
-        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle, tailFlipped, rounded } = shapeData;
+        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle, tailFlipped, rounded, isOval } = shapeData;
         if (!tail) return null;
 
         let tx = tail.x * S;
@@ -111,7 +111,15 @@
         const dir_check = { x: dx / (len || 1), y: dy / (len || 1) };
 
         if (isCircle) {
-            t = r * S;
+            if (isOval) {
+                // For oval, t depends on angle
+                const rx = r * S * 1.5;
+                const ry = r * S;
+                const angle = Math.atan2(dy, dx);
+                t = (rx * ry) / Math.sqrt(ry * ry * Math.pow(Math.cos(angle), 2) + rx * rx * Math.pow(Math.sin(angle), 2));
+            } else {
+                t = r * S;
+            }
         } else {
             const tValues = [];
             if (dir_check.x > 0) tValues.push((bounds.x + bounds.width - center.x) / dir_check.x);
@@ -135,24 +143,28 @@
         const dir = { x: dx / len, y: dy / len };
 
         if (isCircle) {
-            const angle = (tailWidth || 15) * (Math.PI / 180);
-            const cosA = Math.cos(angle);
-            const sinA = Math.sin(angle);
-            const b1Dir = { x: dir.x * cosA - dir.y * -sinA, y: dir.x * -sinA + dir.y * cosA };
-            const b2Dir = { x: dir.x * cosA - dir.y * sinA, y: dir.x * sinA + dir.y * cosA };
-            const b1 = { x: center.x + b1Dir.x * (r * S), y: center.y + b1Dir.y * (r * S) };
-            const b2 = { x: center.x + b2Dir.x * (r * S), y: center.y + b2Dir.y * (r * S) };
+            const angleWidth = (tailWidth || 15) * (Math.PI / 180);
+            const centralAngle = Math.atan2(dir.y, dir.x);
+            
+            const a1 = centralAngle - angleWidth;
+            const a2 = centralAngle + angleWidth;
+
+            const rx = isOval ? r * S * 1.5 : r * S;
+            const ry = r * S;
+
+            const b1 = { x: center.x + rx * Math.cos(a1), y: center.y + ry * Math.sin(a1) };
+            const b2 = { x: center.x + rx * Math.cos(a2), y: center.y + ry * Math.sin(a2) };
             
             let path;
             if (tailStyle === 'curved') {
-                const bc = { x: center.x + dir.x * (r * S), y: center.y + dir.y * (r * S) };
+                const bc = { x: center.x + dir.x * t, y: center.y + dir.y * t };
                 const spineV = { x: tx - bc.x, y: ty - bc.y };
                 const sign = tailFlipped ? -1 : 1;
                 const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                 const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
-                path = `M ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
+                path = `M ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} A ${rx} ${ry} 0 1 1 ${b1.x} ${b1.y} Z`;
             } else {
-                path = `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
+                path = `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${rx} ${ry} 0 1 1 ${b1.x} ${b1.y} Z`;
             }
 
             return { path, b1, b2, center, side: 'circle' };
@@ -718,7 +730,7 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded } = event.detail;
+        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -731,6 +743,9 @@
         }
         if (rounded !== undefined) {
             updatedSelector.rounded = rounded;
+        }
+        if (isOval !== undefined) {
+            updatedSelector.isOval = isOval;
         }
 
         // Handle shape change logic
@@ -1462,6 +1477,7 @@
                     initialTailStyle={annotationBeingEdited?.target?.selector?.value?.tailStyle || 'straight'}
                     initialTailFlipped={annotationBeingEdited?.target?.selector?.value?.tailFlipped || false}
                     initialRounded={annotationBeingEdited?.target?.selector?.value?.rounded || false}
+                    initialIsOval={annotationBeingEdited?.target?.selector?.value?.isOval || false}
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
