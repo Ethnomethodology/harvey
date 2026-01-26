@@ -16,6 +16,8 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
+    let currentAssetUrl = null;
+    let imgAspectRatio = 1;
 
     import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
@@ -276,6 +278,7 @@
 
         try {
             const assetUrl = convertFileSrc(pathForImage);
+            currentAssetUrl = assetUrl;
             console.log(`[ImageViewerPanel] Converted asset URL: ${assetUrl}`);
             await tick();
             if (!osdViewerElement) {
@@ -301,6 +304,10 @@
 
             osdViewer.addHandler('open', async () => {
                 console.log('[ImageViewerPanel OSD Event] "open" event triggered.');
+                if (osdViewer && osdViewer.world.getItemCount() > 0) {
+                    const size = osdViewer.world.getItemAt(0).getContentSize();
+                    if (size.x > 0) imgAspectRatio = size.y / size.x;
+                }
                 isLoading = false;
                 await tick(); // Ensure SVG element is rendered before adding as overlay
                 // Add SVG overlay after OSD viewer is open
@@ -1101,27 +1108,45 @@
                 class:cursor-draw={activeDrawingTool !== null}
                 class:cursor-pan={activeDrawingTool === null}>
             <defs>
-                <pattern id="censoredPattern" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
-                    <!-- 4x4 grid of 2px squares for a noisier 'static' look -->
-                    <rect x="0" y="0" width="2" height="2" fill="#fff" />
-                    <rect x="2" y="0" width="2" height="2" fill="#444" />
-                    <rect x="4" y="0" width="2" height="2" fill="#888" />
-                    <rect x="6" y="0" width="2" height="2" fill="#000" />
-                    
-                    <rect x="0" y="2" width="2" height="2" fill="#888" />
-                    <rect x="2" y="2" width="2" height="2" fill="#000" />
-                    <rect x="4" y="2" width="2" height="2" fill="#fff" />
-                    <rect x="6" y="2" width="2" height="2" fill="#444" />
-                    
-                    <rect x="0" y="4" width="2" height="2" fill="#444" />
-                    <rect x="2" y="4" width="2" height="2" fill="#fff" />
-                    <rect x="4" y="4" width="2" height="2" fill="#000" />
-                    <rect x="6" y="4" width="2" height="2" fill="#888" />
-                    
-                    <rect x="0" y="6" width="2" height="2" fill="#000" />
-                    <rect x="2" y="6" width="2" height="2" fill="#888" />
-                    <rect x="4" y="6" width="2" height="2" fill="#444" />
-                    <rect x="6" y="6" width="2" height="2" fill="#fff" />
+                <!-- Pattern for pixelated censorship.
+                     Uses 1000 width to match the SVG viewBox (0 0 1000 1000), which OSD maps to the full image width.
+                     Height is scaled by aspect ratio to ensure coverage of non-square images. -->
+                <pattern id="censoredPattern" x="0" y="0" width="1000" height={Math.max(1000, 1000 * imgAspectRatio)} patternUnits="userSpaceOnUse">
+                    {#if currentAssetUrl}
+                        <image
+                            href={currentAssetUrl}
+                            x="0" y="0"
+                            width="50"
+                            height={50 * imgAspectRatio}
+                            preserveAspectRatio="none"
+                            transform="scale(20)"
+                            style="image-rendering: pixelated; image-rendering: crisp-edges;"
+                        />
+                    {:else}
+                        <!-- 4x4 grid of 2px squares for a noisier 'static' look fallback -->
+                        <pattern id="censoredPatternFallback" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+                            <rect x="0" y="0" width="2" height="2" fill="#fff" />
+                            <rect x="2" y="0" width="2" height="2" fill="#444" />
+                            <rect x="4" y="0" width="2" height="2" fill="#888" />
+                            <rect x="6" y="0" width="2" height="2" fill="#000" />
+
+                            <rect x="0" y="2" width="2" height="2" fill="#888" />
+                            <rect x="2" y="2" width="2" height="2" fill="#000" />
+                            <rect x="4" y="2" width="2" height="2" fill="#fff" />
+                            <rect x="6" y="2" width="2" height="2" fill="#444" />
+
+                            <rect x="0" y="4" width="2" height="2" fill="#444" />
+                            <rect x="2" y="4" width="2" height="2" fill="#fff" />
+                            <rect x="4" y="4" width="2" height="2" fill="#000" />
+                            <rect x="6" y="4" width="2" height="2" fill="#888" />
+
+                            <rect x="0" y="6" width="2" height="2" fill="#000" />
+                            <rect x="2" y="6" width="2" height="2" fill="#888" />
+                            <rect x="4" y="6" width="2" height="2" fill="#444" />
+                            <rect x="6" y="6" width="2" height="2" fill="#fff" />
+                        </pattern>
+                        <rect width="1000" height="1000" fill="url(#censoredPatternFallback)" />
+                    {/if}
                 </pattern>
             </defs>
 
