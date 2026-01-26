@@ -938,6 +938,10 @@
     }, { tag: 'external' });
   }
 
+  export function getScrollElement() {
+      return editorWrapper;
+  }
+
   function updateToolbarState() {
     if (!editor || !isReady) { return; }
     const selection = _getSelection();

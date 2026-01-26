@@ -7,6 +7,72 @@
 
     const dispatch = createEventDispatcher();
 
+    let primaryPanel;
+    let secondaryPanel;
+    let cleanupSync = () => {};
+
+    function handleSyncManager(path) {
+        if (path) {
+            attemptSetupSync();
+        } else {
+            cleanupSync();
+        }
+    }
+
+    $: handleSyncManager(splitPartnerPath);
+
+    function attemptSetupSync() {
+        console.log('[ImportedTranscriptView] attemptSetupSync called. splitPartnerPath:', splitPartnerPath);
+        cleanupSync();
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            if (primaryPanel && secondaryPanel) {
+                const el1 = primaryPanel.getScrollElement();
+                const el2 = secondaryPanel.getScrollElement();
+                if (el1 && el2) {
+                    console.log('[ImportedTranscriptView] Both scroll elements found. Starting sync.');
+                    clearInterval(interval);
+                    startSync(el1, el2);
+                }
+            }
+            if (attempts > 20) {
+                console.warn('[ImportedTranscriptView] Sync setup timed out after 20 attempts.');
+                clearInterval(interval);
+            }
+        }, 100);
+    }
+
+    function startSync(el1, el2) {
+        let isSyncing = false;
+        const onScroll1 = () => {
+            if (!isSyncing) {
+                isSyncing = true;
+                el2.scrollTop = el1.scrollTop;
+                // el2.scrollLeft = el1.scrollLeft;
+                requestAnimationFrame(() => isSyncing = false);
+            }
+        };
+        const onScroll2 = () => {
+            if (!isSyncing) {
+                isSyncing = true;
+                el1.scrollTop = el2.scrollTop;
+                // el1.scrollLeft = el2.scrollLeft;
+                requestAnimationFrame(() => isSyncing = false);
+            }
+        };
+
+        el1.addEventListener('scroll', onScroll1);
+        el2.addEventListener('scroll', onScroll2);
+
+        cleanupSync = () => {
+            console.log('[ImportedTranscriptView] Cleaning up sync listeners.');
+            el1.removeEventListener('scroll', onScroll1);
+            el2.removeEventListener('scroll', onScroll2);
+            cleanupSync = () => {};
+        };
+    }
+
     $: splitInfo = $project.importedTranscriptSplits[itemPath];
     $: splitPartnerPath = splitInfo?.partner;
     $: orientation = splitInfo?.orientation || 'horizontal';
@@ -32,7 +98,7 @@
                 </div>
                 <div class="flex-grow overflow-hidden">
                     {#key itemPath}
-                        <TranscriptEditorPanel itemPath={itemPath} isPrimary={true} />
+                        <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
                     {/key}
                 </div>
             </div>
@@ -53,7 +119,7 @@
                 </div>
                 <div class="flex-grow overflow-hidden">
                     {#key splitPartnerPath}
-                        <TranscriptEditorPanel itemPath={splitPartnerPath} isPrimary={false} />
+                        <TranscriptEditorPanel bind:this={secondaryPanel} itemPath={splitPartnerPath} isPrimary={false} />
                     {/key}
                 </div>
             </div>
@@ -66,7 +132,7 @@
                         <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
                     </div>
                     <div class="flex-grow overflow-hidden">
-                        <TranscriptEditorPanel itemPath={itemPath} isPrimary={true} />
+                        <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
                     </div>
                 </div>
             {:else}

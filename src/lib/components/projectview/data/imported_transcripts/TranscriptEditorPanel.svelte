@@ -601,7 +601,11 @@
         return itemPath;
     }
 
-    const self = { save, discard, resetEditorState, getItemPath };
+    export function getScrollElement() {
+        return editorRef?.getScrollElement();
+    }
+
+    const self = { save, discard, resetEditorState, getItemPath, getScrollElement };
 
 </script>
 
