@@ -2,7 +2,6 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import { project, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
     import TranscriptEditorPanel from './TranscriptEditorPanel.svelte';
-    import ThinMediaPlayer from '../shared_panels/ThinMediaPlayer.svelte';
 
     export let itemPath = null; // Receives the full path from DataView
 

@@ -234,7 +234,7 @@
         </button>
     </div>
 
-    <div class="flex items-center space-x-2 flex-grow min-w-0 max-w-[300px]">
+    <div class="flex items-center space-x-2 flex-grow min-w-0">
         <span class="text-[10px] text-gray-500 font-mono w-8 text-right flex-shrink-0 tabular-nums">{formatTime(currentTime)}</span>
         <input 
             type="range" 

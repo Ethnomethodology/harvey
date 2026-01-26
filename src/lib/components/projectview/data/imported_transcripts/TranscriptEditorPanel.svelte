@@ -41,7 +41,6 @@
     import { ListNode, ListItemNode, registerList } from '@lexical/list';
     import { LinkNode } from '@lexical/link';
     import { ExtendedTextNode, $createExtendedTextNode as lexicalCreateExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
-    import ThinMediaPlayer from '../shared_panels/ThinMediaPlayer.svelte';
 
     const LEXICAL_NODES = [
       TableNode,
