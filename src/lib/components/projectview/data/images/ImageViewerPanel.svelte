@@ -87,7 +87,7 @@
 
     // Helper to generate speech bubble info including path and base points
     function getBubbleTailInfo(shapeData, isCircle, S = 1000) {
-        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle } = shapeData;
+        const { x, y, width, height, cx, cy, r, tail, tailWidth, tailStyle, tailFlipped } = shapeData;
         if (!tail) return null;
 
         let tx = tail.x * S;
@@ -147,7 +147,8 @@
             if (tailStyle === 'curved') {
                 const bc = { x: center.x + dir.x * (r * S), y: center.y + dir.y * (r * S) };
                 const spineV = { x: tx - bc.x, y: ty - bc.y };
-                const perp = { x: -spineV.y * 0.25, y: spineV.x * 0.25 };
+                const sign = tailFlipped ? 1 : -1;
+                const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                 const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                 path = `M ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
             } else {
@@ -179,7 +180,8 @@
                 bc = { x: bx, y: TL.y };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const perp = { x: -spineV.y * 0.25, y: spineV.x * 0.25 };
+                    const sign = tailFlipped ? 1 : -1;
+                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
                 } else {
@@ -192,7 +194,8 @@
                 bc = { x: TR.x, y: by };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const perp = { x: -spineV.y * 0.25, y: spineV.x * 0.25 };
+                    const sign = tailFlipped ? 1 : -1;
+                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
                 } else {
@@ -205,7 +208,8 @@
                 bc = { x: bx, y: BR.y };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const perp = { x: -spineV.y * 0.25, y: spineV.x * 0.25 };
+                    const sign = tailFlipped ? 1 : -1;
+                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
                 } else {
@@ -218,7 +222,8 @@
                 bc = { x: TL.x, y: by };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const perp = { x: -spineV.y * 0.25, y: spineV.x * 0.25 };
+                    const sign = tailFlipped ? 1 : -1;
+                    const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
                 } else {
@@ -705,13 +710,16 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle } = event.detail;
+        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
         
         if (tailStyle) {
             updatedSelector.tailStyle = tailStyle;
+        }
+        if (tailFlipped !== undefined) {
+            updatedSelector.tailFlipped = tailFlipped;
         }
 
         // Handle shape change logic
@@ -1441,6 +1449,7 @@
                     initialBorderSize={annotationBeingEdited?.body?.find(b => b.type === 'BorderSize' && b.purpose === 'rendering')?.value || 1}
                     initialShape={annotationBeingEdited?.target?.selector?.value?.shape || 'rectangle'}
                     initialTailStyle={annotationBeingEdited?.target?.selector?.value?.tailStyle || 'straight'}
+                    initialTailFlipped={annotationBeingEdited?.target?.selector?.value?.tailFlipped || false}
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}

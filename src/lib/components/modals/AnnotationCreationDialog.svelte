@@ -15,6 +15,7 @@
     export let initialBorderSize = 1;
     export let initialShape = 'rectangle';
     export let initialTailStyle = 'straight'; // New prop for tail style
+    export let initialTailFlipped = false; // New prop for flipping curve
     export let isEditing = false; // New prop to indicate if we are editing an existing annotation
     export let panelBounds = null; // New prop to receive the bounding rectangle of the parent panel
     export let useSolidColors = false; // New prop to determine color palette
@@ -30,6 +31,7 @@
     let selectedBorderSize = initialBorderSize;
     let selectedShape = (initialShape && initialShape.includes('circle')) ? 'circle' : 'rectangle';
     let selectedTailStyle = initialTailStyle || 'straight';
+    let tailFlipped = initialTailFlipped || false;
 
     const transparentColors = [
         { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
@@ -84,7 +86,8 @@
             borderColor: selectedBorderColor, 
             borderSize: selectedBorderSize, 
             shape: selectedShape,
-            tailStyle: selectedTailStyle
+            tailStyle: selectedTailStyle,
+            tailFlipped
         });
     }
 
@@ -170,6 +173,19 @@
                     </button>
                 </div>
             </div>
+
+            {#if selectedTailStyle === 'curved'}
+                <div class="mb-3">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                            bind:checked={tailFlipped}
+                        />
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Curve</span>
+                    </label>
+                </div>
+            {/if}
         {:else}
             <div class="mb-3">
                 <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
