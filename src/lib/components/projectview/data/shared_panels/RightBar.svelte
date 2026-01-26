@@ -56,7 +56,7 @@
         {@html HIGHLIGHTS_ICON_SVG}
     </button>
 
-    {#if itemType === 'doc'}
+    {#if itemType === 'doc' || itemType === 'imported_transcript'}
         <button
             on:click={() => handleTabClick('attachments')}
             class="p-1 focus:outline-none transition-colors"

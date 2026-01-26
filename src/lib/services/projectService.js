@@ -42,7 +42,7 @@ import {
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
 import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
-import { dirname, basename, sep } from '@tauri-apps/api/path';
+import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
 import {
 	project,
@@ -87,6 +87,7 @@ import {
     setTranslationStatus,
     toggleTranslateModal,
     updateTranslationProgress,
+    saveManualSettingsForTranscript // Added import
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -1337,6 +1338,53 @@ export function cleanupProgressListener() { if (progressUnlistenFn) { progressUn
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
+async function processJsonToRemoveHighlights(jsonString) {
+    if (!jsonString) return jsonString;
+    const editor = createHeadlessEditor({ 
+        nodes: ALL_EDITOR_NODES, 
+        namespace: `highlight-remover-${Date.now()}`, 
+        onError: (e) => console.error("[HighlightRemover] Error:", e) 
+    });
+    
+    let parsedState;
+    try {
+        parsedState = editor.parseEditorState(jsonString);
+    } catch (e) {
+        console.warn("Failed to parse JSON for highlight removal, returning original.", e);
+        return jsonString;
+    }
+    
+    editor.setEditorState(parsedState);
+    
+    await editor.update(() => {
+        const root = _getRoot();
+        const nodes = [];
+        
+        const traverse = (node) => {
+            nodes.push(node);
+            if (node.getChildren) {
+                Array.from(node.getChildren()).forEach(traverse);
+            }
+        };
+        traverse(root);
+
+        nodes.forEach(node => {
+            if ((node.getType() === 'extended-text' || node instanceof ExtendedTextNode) && node.setHighlightId) {
+                node.setHighlightId(null);
+            }
+            if (node instanceof TextNode || node.getType() === 'text' || node.getType() === 'extended-text') {
+                const style = node.getStyle();
+                if (style && typeof style === 'string' && style.includes('background-color')) {
+                    const newStyle = style.replace(/background-color\s*:\s*[^;]+;?/gi, '');
+                    node.setStyle(newStyle);
+                }
+            }
+        });
+    });
+    
+    return JSON.stringify(editor.getEditorState().toJSON());
+}
+
 export async function convertAndSaveTranscriptAsDoc() {
     const projData = get(project);
     const tsData = get(transcriptStore);
@@ -1354,8 +1402,9 @@ export async function convertAndSaveTranscriptAsDoc() {
     try {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
-        finalLexicalJsonString = fullLexicalTableString;
-                const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
+        finalLexicalJsonString = await processJsonToRemoveHighlights(fullLexicalTableString);
+        
+        const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
                 console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
                 const originalTranscriptStem = originalTranscriptFilename.includes('.')
                     ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
@@ -1418,6 +1467,126 @@ export async function convertAndSaveTranscriptAsDoc() {
         throw error;
     }
 }
+
+export async function convertAndSaveTranscriptAsTranscript() {
+    const projData = get(project);
+    const tsData = get(transcriptStore);
+    const transcriptPath = tsData.currentTranscriptPath;
+    const selectedMedia = tsData.selectedMediaFile;
+    const projectXmlPath = projData.xmlPath;
+    const projectBaseDir = projData.baseDirectory;
+    
+    if (!transcriptPath) throw new Error("No transcript file loaded.");
+    if (!selectedMedia?.path) throw new Error("No media file selected.");
+    if (!projectBaseDir) throw new Error("Project base directory not found.");
+    if (!projectXmlPath) throw new Error("Project XML path not found.");
+
+    project.update(p => ({ ...p, statusMessage: `Saving as imported transcript...` }));
+
+    try {
+        const rawLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
+        if (!rawLexicalTableString) throw new Error("Transcript file content is empty.");
+        const fullLexicalTableString = await processJsonToRemoveHighlights(rawLexicalTableString);
+        
+        const originalTranscriptFilename = await basename(transcriptPath); 
+        const originalTranscriptStem = originalTranscriptFilename.includes('.')
+            ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
+            : originalTranscriptFilename;
+        
+        const transcriptFilenameBase = originalTranscriptStem;
+        
+        // Target is Transcripts folder
+        // Note: sep() returns a promise in Tauri v2, so await it if needed, or use the imported symbol if it's a string.
+        // In this file 'sep' is imported from @tauri-apps/api/path which is a Promise in v2 usually? 
+        // Checking imports: import { dirname, basename, sep, join } from '@tauri-apps/api/path';
+        // Wait, `sep` is a property in v1 but might be a Promise in v2. 
+        // In `convertAndSaveTranscriptAsDoc`, it uses `sep()`. Let's check.
+        // `const targetDocumentDir = ${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem};`
+        // So yes, it is called as a function.
+
+        const targetTranscriptsDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${TRANSCRIPTS_DIR_IMPORTED}${sep()}${originalTranscriptStem}`;
+        
+        // Use get_unique_document_path to ensure uniqueness (reuse checking logic)
+        const targetFullPath = await invoke('get_unique_document_path', {
+            targetDirStr: targetTranscriptsDir,
+            baseName: transcriptFilenameBase,
+            extension: 'json'
+        });
+        
+        const transcriptFilename = await basename(targetFullPath);
+
+        await invoke('save_imported_transcript_and_update_xml', {
+            projectXmlPath: projectXmlPath,
+            targetPath: targetFullPath,
+            transcriptName: transcriptFilename,
+            jsonContent: fullLexicalTableString
+        });
+
+        // Save metadata
+        // Construct relative path manually to ensure it's correct for DB key
+        // Normalize targetFullPath to ensure consistent separators and prefix handling
+        const normalizedTargetFullPath = normalizePath(targetFullPath);
+        let relativePath = normalizedTargetFullPath.substring(projectBaseDir.length);
+        if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+            relativePath = relativePath.substring(1);
+        }
+        relativePath = relativePath.replace(/\\/g, '/');
+
+        const fileMetadata = {
+            file_name: transcriptFilename,
+            file_path: targetFullPath,
+            last_modified: new Date().toISOString(),
+            title: "",
+            description: "",
+            summary: "",
+            duration_seconds: null,
+            width: null,
+            height: null,
+            frame_rate: null,
+            bit_rate: null,
+            audio_codec: null,
+            video_codec: null,
+            created_at: new Date().toISOString(),
+            original_import_path: null,
+            speaker_names: null,
+            waveform_data: null,
+        };
+
+        await invoke('update_asset_metadata_command', {
+            projectXmlPathStr: projectXmlPath,
+            assetRelativePath: relativePath,
+            metadataPayload: fileMetadata,
+            customFieldsPayload: null,
+            assetType: 'imported_transcript',
+        });
+
+        // Attach the original media file to the new transcript
+        if (selectedMedia?.path) {
+            try {
+                project.update(p => ({ ...p, statusMessage: `Attaching media to transcript...` }));
+                await invoke('upload_attachment', {
+                    projectXmlPathStr: projectXmlPath,
+                    assetRelativePath: relativePath,
+                    sourceFilePathStr: selectedMedia.path
+                });
+                console.log(`[ProjectService] Media attached to transcript: ${relativePath}`);
+            } catch (attachErr) {
+                console.error(`[ProjectService] Failed to attach media:`, attachErr);
+                // Don't fail the whole operation if attachment fails, just log it.
+                await message(`Transcript saved, but failed to attach media: ${attachErr}`, { title: "Attachment Warning", type: "warning" });
+            }
+        }
+
+        project.update(p => ({ ...p, statusMessage: `Transcript saved as imported: ${transcriptFilename}` }));
+        await refreshProjectFiles();
+        return targetFullPath;
+
+    } catch (error) {
+         project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${error.message || error}` }));
+         throw error;
+    }
+}
+
 export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
 export async function saveCurrentPdfAnnotations() {
     const projState = get(project);
@@ -1593,7 +1762,7 @@ export async function saveHighlightChanges(highlight) {
     }
 }
 
-export async function saveImportedTranscriptContent(filePath, jsonContent) {
+export async function saveImportedTranscriptContent(filePath, jsonContent, highlightsJson = null) {
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
@@ -1615,14 +1784,17 @@ export async function saveImportedTranscriptContent(filePath, jsonContent) {
     project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
 
     try {
-        const highlights_json = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
-            ? JSON.stringify(projState.currentImportedTranscriptHighlights)
-            : null;
+        let finalHighlightsJson = highlightsJson;
+        if (finalHighlightsJson === null) {
+            finalHighlightsJson = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
+                ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+                : null;
+        }
 
         await invoke('save_note_json', {
             targetPath: filePath,
             jsonContent: jsonContent,
-            highlightsJson: highlights_json,
+            highlightsJson: finalHighlightsJson,
         });
 
         const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
@@ -2160,6 +2332,78 @@ export async function requestTranslation(transcriptPath, modelName) {
     }
 }
 
+export async function requestDocumentTranslation(documentPath, modelName) {
+    const currentProject = get(project);
+    const ts = get(transcriptStore);
+
+    if (ts.isTranslating) {
+        toggleTranslateModal(true);
+        return;
+    }
+
+    if (!currentProject.xmlPath) {
+        await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
+        return;
+    }
+
+    setTranslationStatus(true, null, { status: 'initiating' });
+
+    try {
+        const initiatedPayload = await invoke('translate_document_command', {
+            projectXmlPath: currentProject.xmlPath,
+            documentPath: documentPath,
+            modelName: modelName,
+            targetLanguage: 'en',
+        });
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id for translation.");
+        }
+
+        setTranslationStatus(true, initiatedPayload.job_id, { status: 'running' });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        setTranslationStatus(false, null, { status: 'error', errorMessage });
+        console.error(`[ProjectService] Error during translate_document_command invocation:`, error);
+    }
+}
+
+export async function requestImportedTranscriptTranslation(transcriptPath, modelName) {
+    const currentProject = get(project);
+    const ts = get(transcriptStore);
+
+    if (ts.isTranslating) {
+        toggleTranslateModal(true);
+        return;
+    }
+
+    if (!currentProject.xmlPath) {
+        await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
+        return;
+    }
+
+    setTranslationStatus(true, null, { status: 'initiating' });
+
+    try {
+        const initiatedPayload = await invoke('translate_imported_transcript_command', {
+            projectXmlPath: currentProject.xmlPath,
+            transcriptPath: transcriptPath,
+            modelName: modelName,
+            targetLanguage: ts.selectedLanguage || 'en', // Default to 'en' or current selection
+        });
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id for translation.");
+        }
+
+        setTranslationStatus(true, initiatedPayload.job_id, { status: 'running' });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        setTranslationStatus(false, null, { status: 'error', errorMessage });
+        console.error(`[ProjectService] Error during translate_imported_transcript_command invocation:`, error);
+    }
+}
+
 export async function handleCancelTranslationRequest() {
     const ts = get(transcriptStore);
     const jobId = ts.translationJobId;
@@ -2182,4 +2426,164 @@ export async function handleCancelTranslationRequest() {
         }));
         notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
+}
+
+export async function createManualTranscript(mediaPath, segments, settings = null) {
+    const currentProj = get(project);
+    const projectXmlPath = currentProj.xmlPath;
+    if (!projectXmlPath) throw new Error("Project XML path missing.");
+
+    // 1. Calculate transcripts directory
+    const mediaDir = await dirname(mediaPath);
+    const stemDir = await dirname(mediaDir);
+    const transcriptsDir = await join(stemDir, 'transcripts');
+
+    // 2. Determine unique filename
+    const mediaFilename = await basename(mediaPath);
+    const mediaStem = mediaFilename.lastIndexOf('.') > -1 ? mediaFilename.substring(0, mediaFilename.lastIndexOf('.')) : mediaFilename;
+
+    const store = get(transcriptStore);
+    // Use existing transcripts from store to avoid many FS calls, assuming store is up to date
+    const existingTranscripts = store.selectedMediaFile?.associated_transcripts || [];
+    const existingNames = existingTranscripts.map(t => t.name || t.path.split(/[\\/]/).pop());
+
+    let counter = 1;
+    let newFilename = `${mediaStem}_${counter}.json`;
+    while (existingNames.includes(newFilename)) {
+        counter++;
+        newFilename = `${mediaStem}_${counter}.json`;
+    }
+    const newTranscriptPath = await join(transcriptsDir, newFilename);
+
+    // Save manual settings if provided
+    if (settings) {
+        saveManualSettingsForTranscript(newTranscriptPath, {
+            duration: settings.segmentDuration,
+            speakerMode: settings.speakerMode,
+            lastUsedSpeakerIndex: -1
+        });
+    }
+
+    // 3. Generate Lexical JSON
+    let fullLexicalTableJsonString = "";
+    try {
+        const editorForTableAssembly = createHeadlessEditor({ 
+            nodes: ALL_EDITOR_NODES, 
+            namespace: `manual-table-assembly-${Date.now()}`, 
+            onError: (e) => console.error("[ManualTableAssembly] Error:", e), 
+        });
+
+        await editorForTableAssembly.update(() => {
+            const root = _getRoot();
+            root.clear();
+            const tableNode = _createTableNode();
+            
+            // Headers
+            const headerRow = _createTableRowNode();
+            const headers = ["#", "Timestamp", "Speaker", "Text"];
+            for (const headerText of headers) {
+                const cell = _createTableCellNode({ headerState: 'column' });
+                const paragraph = _createParagraphNode();
+                paragraph.append(_createTextNode(headerText));
+                cell.append(paragraph);
+                headerRow.append(cell);
+            }
+            tableNode.append(headerRow);
+
+            // Data Rows
+            for (let i = 0; i < segments.length; i++) {
+                const segment = segments[i];
+                const dataRow = _createTableRowNode();
+                
+                // #
+                const cellNum = _createTableCellNode();
+                const pNum = _createParagraphNode();
+                pNum.append(_createTextNode(String(i + 1)));
+                cellNum.append(pNum);
+                dataRow.append(cellNum);
+                
+                // Timestamp
+                const cellTime = _createTableCellNode();
+                const pTime = _createParagraphNode();
+                const startTime = formatTimestampHtml(segment.start_time || 0);
+                const endTime = formatTimestampHtml(segment.end_time || 0);
+                pTime.append(_createTextNode(`${startTime} - ${endTime}`));
+                cellTime.append(pTime);
+                dataRow.append(cellTime);
+                
+                // Speaker
+                const cellSpeaker = _createTableCellNode();
+                const pSpeaker = _createParagraphNode();
+                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
+                cellSpeaker.append(pSpeaker);
+                dataRow.append(cellSpeaker);
+                
+                // Text
+                const cellText = _createTableCellNode();
+                if (segment.text && typeof segment.text === 'string') {
+                    let parsedSegmentState;
+                    try {
+                        parsedSegmentState = JSON.parse(segment.text);
+                    } catch (e) {
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error: Malformed segment JSON]"));
+                        cellText.append(pError);
+                        dataRow.append(cellText);
+                        tableNode.append(dataRow);
+                        continue;
+                    }
+                    
+                    function flattenNodes(nodes) {
+                        return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]);
+                    }
+
+                    const rawChildren = parsedSegmentState?.root?.children || [];
+                    const serializedChildNodes = flattenNodes(rawChildren);
+
+                    if (serializedChildNodes.length > 0) {
+                         const nodesToAppend = [];
+                         try {
+                            for (const serializedNode of serializedChildNodes) {
+                                if (serializedNode.type === 'root') continue; 
+                                const node = _parseSerializedNode(serializedNode);
+                                if (node) nodesToAppend.push(node);
+                            }
+                            if (nodesToAppend.length > 0) {
+                                cellText.append(...nodesToAppend);
+                            } else {
+                                cellText.append(_createParagraphNode());
+                            }
+                         } catch (parseErr) {
+                             console.error("Error parsing nodes for manual segment:", parseErr);
+                             cellText.append(_createParagraphNode());
+                         }
+                    } else {
+                         cellText.append(_createParagraphNode());
+                    }
+                } else {
+                    cellText.append(_createParagraphNode());
+                }
+                dataRow.append(cellText);
+                tableNode.append(dataRow);
+            }
+            root.append(tableNode);
+            root.append(_createParagraphNode());
+        });
+
+        fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
+    } catch (e) {
+        throw new Error(`Failed to generate manual transcript content: ${e.message}`);
+    }
+
+    // 4. Save
+    await invoke('save_transcript_json', { 
+        projectXmlPath: projectXmlPath, 
+        transcriptPath: newTranscriptPath, 
+        lexicalTableJsonString: fullLexicalTableJsonString,
+        language_code: 'original'
+    });
+
+    // 5. Refresh and Load
+    await refreshProjectFiles(mediaPath);
+    await loadTranscriptFile(newTranscriptPath);
 }

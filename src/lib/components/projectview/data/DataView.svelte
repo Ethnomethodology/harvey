@@ -90,7 +90,7 @@
              console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
 
-        if (itemTypeForInfo !== 'doc' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
+        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
             panelStateStore.setActiveInfoPanelTab('metadata');
         }
     });
@@ -236,7 +236,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {/if}
             </div>
         {/if}

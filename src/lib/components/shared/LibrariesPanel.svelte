@@ -9,6 +9,7 @@
 	let isPanelOpen = false;
 	let error = '';
 	let showInstallModal = false;
+	let showInfo = false;
 	let installLogs = [];
 	let isInstalling = false;
 	let unlistenLog;
@@ -104,9 +105,24 @@
 
 {#if isPanelOpen}
 	<div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
-		<p class="mb-4">
-			To enable advanced features like identifying different speakers (diarization) and translating
-			transcripts, Harvey needs to install a few extra components.
+		<p class="mb-2">
+			Harvey uses <strong>micromamba</strong> to install and manage a few required libraries.
+			<button class="text-blue-600 dark:text-blue-400 hover:underline ml-1 focus:outline-none" on:click={() => showInfo = !showInfo}>
+				{showInfo ? 'Hide info' : 'More info'}
+			</button>
+		</p>
+		
+		{#if showInfo}
+			<ul class="list-disc list-inside mb-4 pl-2 space-y-1 text-gray-600 dark:text-gray-400">
+				<li><strong>PyTorch & Transformers:</strong> The AI engine for running translation and analysis models locally.</li>
+				<li><strong>pyannote.audio:</strong> Specifically for speaker identification (diarization).</li>
+				<li><strong>FFmpeg:</strong> For processing audio and video files.</li>
+				<li><strong>Pandoc:</strong> For converting and importing documents (e.g., MS Word).</li>
+			</ul>
+		{/if}
+
+		<p class="mb-4 text-xs text-gray-500 dark:text-gray-500">
+			Once downloaded, everything runs offline on your device to ensure privacy.
 		</p>
 		<div class="flex items-center">
 			{#if !$configStatus.isInitialized}

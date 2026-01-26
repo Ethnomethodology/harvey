@@ -251,6 +251,7 @@
                 }
             });
             await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -280,6 +281,7 @@
                 }
             });
             await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
         }

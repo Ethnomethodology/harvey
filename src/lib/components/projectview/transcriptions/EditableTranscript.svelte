@@ -530,14 +530,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         isLayout1Active = layoutKey === 'Layout1';
 
         // Default styles for layouts other than Layout1
-        columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0';
+        columnContainerClass = 'flex flex-col mx-auto gap-y-2 mt-4';
         segmentNumberContainerStyle = 'flex-basis: 1.880rem;';
         timestampContainerStyle = '';
         speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
         textEditorContainerStyle = 'flex-grow';
 
         if (layoutKey === 'Layout1') {
-            columnContainerClass = 'flex flex-col items-start gap-y-2 flex-grow min-h-0 w-full mt-4';
+            columnContainerClass = 'flex flex-col items-start gap-y-2 w-full mt-4';
             segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400';
         } else if (layoutKey === 'Layout2') {
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
@@ -590,7 +590,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <div class="primary-segment-editor">
                             {#if isLayout1Active}
                                 <!-- Layout 1: Single Row Table -->
-                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 w-full">
 <div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
 </div>
@@ -628,7 +628,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             <input id='endTimeInput_L2' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
                         </div>
                     </div>
-                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                    <div class="flex items-start gap-x-1">
                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
                             <Dropdown
                                 options={speakerOptions}
@@ -669,7 +669,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             />
                         </div>
                     </div>
-                    <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
+                    <div class="flex items-start gap-x-1 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
                                 <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
@@ -690,7 +690,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             <input id='endTimeInput_L4' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
                         </div>
                     </div>
-                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                    <div class="flex items-start gap-x-1">
                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
                              <Dropdown
                                 options={speakerOptions}
@@ -731,7 +731,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             />
                         </div>
                     </div>
-                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
+                     <div class="flex items-start gap-x-1 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                              {#if currentIndex !== -1 && initialJsonForEditor}
                                 <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
@@ -754,7 +754,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             <div class="secondary-segment-editor">
                                 {#if isLayout1Active}
                                     <!-- Layout 1: Single Row Table -->
-                                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+                                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 w-full">
                                         <div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
                                             <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                                         </div>
@@ -779,7 +779,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                                         </div>
                                     </div>
                                 {:else}
-                                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                                    <div class="flex items-start gap-x-1">
                                          <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
                                             <Dropdown
                                                 options={speakerOptions}

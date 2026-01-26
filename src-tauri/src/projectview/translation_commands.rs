@@ -1,3 +1,4 @@
+// src-tauri/src/projectview/translation_commands.rs
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, Emitter};
 use std::fs;
@@ -5,6 +6,7 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use serde_json::{Value, json};
 use log::{info, error, debug, warn};
 use super::transcription_commands::save_transcript_json;
+use super::document_commands::save_document_and_update_xml;
 use crate::welcome::config::{read_config, get_default_download_location, CommandError};
 use dashmap::DashMap;
 use crate::TranslationCancellationState;
@@ -47,6 +49,23 @@ pub struct TranslationProgressPayload {
     job_id: String,
     percent: f32,
     message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum TranslationMode {
+    Document,
+    Transcript,
+    ImportedTranscript,
+}
+
+impl std::fmt::Display for TranslationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslationMode::Document => write!(f, "document"),
+            TranslationMode::Transcript => write!(f, "transcript"),
+            TranslationMode::ImportedTranscript => write!(f, "imported_transcript"),
+        }
+    }
 }
 
 
@@ -110,6 +129,57 @@ fn emit_translation_progress<R: Runtime>(
     }
 }
 
+// Recursive helper for documents
+fn extract_texts_recursive(node: &Value, texts: &mut Vec<String>) {
+    if let Some(obj) = node.as_object() {
+        if let Some(type_) = obj.get("type").and_then(|t| t.as_str()) {
+            if matches!(type_, "paragraph" | "heading" | "quote" | "listitem") {
+                texts.push(extract_plain_text_from_lexical(node));
+                return;
+            }
+        }
+    }
+    if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+        for child in children {
+            extract_texts_recursive(child, texts);
+        }
+    } else if let Some(root) = node.get("root") {
+        extract_texts_recursive(root, texts);
+    }
+}
+
+// Recursive helper for documents
+fn apply_translations_recursive(node: &mut Value, translations: &mut std::vec::IntoIter<String>) {
+    if let Some(obj) = node.as_object() {
+        if let Some(type_) = obj.get("type").and_then(|t| t.as_str()) {
+            if matches!(type_, "paragraph" | "heading" | "quote" | "listitem") {
+                if let Some(new_text) = translations.next() {
+                     if let Some(children) = node.get_mut("children") {
+                         *children = json!([{ 
+                            "type": "text",
+                            "text": new_text,
+                            "detail": 0,
+                            "format": 0,
+                            "mode": "normal",
+                            "style": "",
+                            "version": 1
+                         }]);
+                     }
+                }
+                return;
+            }
+        }
+    }
+    
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_array_mut()) {
+        for child in children {
+            apply_translations_recursive(child, translations);
+        }
+    } else if let Some(root) = node.get_mut("root") {
+        apply_translations_recursive(root, translations);
+    }
+}
+
 
 #[tauri::command]
 pub async fn translate_transcript_command<R: Runtime>(
@@ -120,15 +190,51 @@ pub async fn translate_transcript_command<R: Runtime>(
     target_language: String,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
 ) -> Result<TranslationInitiatedPayload, String> {
+    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, cancel_state, TranslationMode::Transcript).await
+}
+
+#[tauri::command]
+pub async fn translate_document_command<R: Runtime>(
+    app_handle: AppHandle<R>,
+    project_xml_path: String,
+    document_path: String,
+    model_name: String,
+    target_language: String,
+    cancel_state: tauri::State<'_, TranslationCancellationState>,
+) -> Result<TranslationInitiatedPayload, String> {
+    translate_file_command(app_handle, project_xml_path, document_path, model_name, target_language, cancel_state, TranslationMode::Document).await
+}
+
+#[tauri::command]
+pub async fn translate_imported_transcript_command<R: Runtime>(
+    app_handle: AppHandle<R>,
+    project_xml_path: String,
+    transcript_path: String,
+    model_name: String,
+    target_language: String,
+    cancel_state: tauri::State<'_, TranslationCancellationState>,
+) -> Result<TranslationInitiatedPayload, String> {
+    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, cancel_state, TranslationMode::ImportedTranscript).await
+}
+
+async fn translate_file_command<R: Runtime>(
+    app_handle: AppHandle<R>,
+    project_xml_path: String,
+    file_path: String,
+    model_name: String,
+    target_language: String,
+    cancel_state: tauri::State<'_, TranslationCancellationState>,
+    mode: TranslationMode,
+) -> Result<TranslationInitiatedPayload, String> {
     let job_id = uuid::Uuid::new_v4().to_string();
-    info!("[Translate Command][{}] Received request for transcript: {}", job_id, transcript_path);
+    info!("[Translate Command][{}] Received request for file: {} (mode={})", job_id, file_path, mode);
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
     cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
 
     let app_handle_clone = app_handle.clone();
     let job_id_clone = job_id.clone();
-    let cancel_state_for_spawn = cancel_state.inner().0.clone(); // Clone the inner Arc<DashMap> directly
+    let cancel_state_for_spawn = cancel_state.inner().0.clone();
 
     tokio::spawn(async move {
         let _cancel_guard = CancelGuard {
@@ -139,10 +245,11 @@ pub async fn translate_transcript_command<R: Runtime>(
             app_handle_clone,
             job_id_clone.clone(),
             project_xml_path,
-            transcript_path,
+            file_path,
             model_name,
             target_language,
             cancel_flag,
+            mode,
         ).await {
             Ok(new_path) => {
                 info!("[Translate Task][{}] Translation process completed successfully.", job_id_clone);
@@ -185,15 +292,16 @@ async fn run_translation_process<R: Runtime>(
     app_handle: AppHandle<R>,
     job_id: String,
     project_xml_path: String,
-    transcript_path: String,
+    file_path: String,
     model_name: String,
     _target_language: String,
     cancel_flag: Arc<AtomicBool>,
+    mode: TranslationMode,
 ) -> Result<String, CommandError> {
     use crate::projectview::shared_utils;
 
     let normalized_project_xml_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&project_xml_path)).to_string_lossy().to_string();
-    let normalized_transcript_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&transcript_path)).to_string_lossy().to_string();
+    let normalized_file_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&file_path)).to_string_lossy().to_string();
 
     emit_translation_progress(&app_handle, &job_id, 5.0, "Preparing for translation...");
 
@@ -201,7 +309,7 @@ async fn run_translation_process<R: Runtime>(
     let download_location = if !config.download_location.trim().is_empty() {
         config.download_location.clone()
     } else {
-        get_default_download_location()?
+        get_default_download_location()? 
     };
 
     let model_cache_dir_name = format!("models--{}", model_name.replace('/', "--"));
@@ -214,30 +322,56 @@ async fn run_translation_process<R: Runtime>(
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
 
-    let content = fs::read_to_string(&normalized_transcript_path)?;
+    let content = fs::read_to_string(&normalized_file_path)?;
     let mut lexical_json: Value = serde_json::from_str(&content)?;
 
-    let texts_to_translate: Vec<String> = if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
-        if let Some(rows) = table_node.get("children").and_then(|c| c.as_array()) {
-            rows.iter().skip(1).filter_map(|row| {
-                row.get("children").and_then(|c| c.as_array()).and_then(|cells| cells.get(3)).map(|cell| extract_plain_text_from_lexical(cell))
-            }).collect()
-        } else { Vec::new() }
-    } else { Vec::new() };
+    let mut texts_to_translate: Vec<String> = Vec::new();
+
+    if mode == TranslationMode::Document {
+        // Generic document: Extract all paragraphs/headings/quotes/listitems
+        extract_texts_recursive(&lexical_json, &mut texts_to_translate);
+    } else if mode == TranslationMode::Transcript {
+        // Transcript: Extract only from table -> 4th column (Text)
+        if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
+            if let Some(rows) = table_node.get("children").and_then(|c| c.as_array()) {
+                texts_to_translate = rows.iter().skip(1).filter_map(|row| {
+                    row.get("children").and_then(|c| c.as_array()).and_then(|cells| cells.get(3)).map(|cell| extract_plain_text_from_lexical(cell))
+                }).collect();
+            }
+        }
+    } else if mode == TranslationMode::ImportedTranscript {
+        // Imported Transcript: Extract Col 3 (Speaker) and Col 4 (Text)
+        if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
+            if let Some(rows) = table_node.get("children").and_then(|c| c.as_array()) {
+                for row in rows.iter().skip(1) {
+                    if let Some(cells) = row.get("children").and_then(|c| c.as_array()) {
+                        if let Some(speaker_cell) = cells.get(2) {
+                            texts_to_translate.push(extract_plain_text_from_lexical(speaker_cell));
+                        }
+                        if let Some(text_cell) = cells.get(3) {
+                            texts_to_translate.push(extract_plain_text_from_lexical(text_cell));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     if texts_to_translate.is_empty() {
         info!("[Translate][{}] No text found to translate.", job_id);
-        return Ok(normalized_transcript_path);
+        return Ok(normalized_file_path);
     }
 
     emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
 
     let engine = HelsinkiTranslationEngine::new(app_handle.clone());
+    let mode_str = if mode == TranslationMode::Document { "document" } else { "transcript" };
     let translated_texts = engine.translate(
         texts_to_translate.clone(),
         &model_path,
         &job_id,
-        cancel_flag.clone()
+        cancel_flag.clone(),
+        mode_str
     ).await?;
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
@@ -248,15 +382,54 @@ async fn run_translation_process<R: Runtime>(
         return Err(CommandError::from("Translation count mismatch."));
     }
 
-    if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
-        if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
-            for (row, translated_text) in rows.iter_mut().skip(1).zip(translated_texts.iter()) {
-                if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
-                    if cells.len() > 3 {
-                        if let Some(text_cell) = cells.get_mut(3) {
-                            let new_lexical_text = create_lexical_with_text(translated_text);
-                            if let Some(new_children) = new_lexical_text.pointer("/root/children") {
-                                text_cell["children"] = new_children.clone();
+    let mut translations_iter = translated_texts.into_iter();
+
+    if mode == TranslationMode::Document {
+        apply_translations_recursive(&mut lexical_json, &mut translations_iter);
+    } else if mode == TranslationMode::Transcript {
+        // Transcript update logic (Col 4 only)
+        if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
+            if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
+                for row in rows.iter_mut().skip(1) {
+                    if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
+                        if cells.len() > 3 {
+                            if let Some(text_cell) = cells.get_mut(3) {
+                                if let Some(translated_text) = translations_iter.next() {
+                                    let new_lexical_text = create_lexical_with_text(&translated_text);
+                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
+                                        text_cell["children"] = new_children.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if mode == TranslationMode::ImportedTranscript {
+        // Imported Transcript update logic (Col 3 & 4)
+        if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
+            if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
+                for row in rows.iter_mut().skip(1) {
+                    if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
+                        if cells.len() > 3 {
+                            // Update Speaker (Col 3)
+                            if let Some(speaker_cell) = cells.get_mut(2) {
+                                if let Some(translated_speaker) = translations_iter.next() {
+                                    let new_lexical_text = create_lexical_with_text(&translated_speaker);
+                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
+                                        speaker_cell["children"] = new_children.clone();
+                                    }
+                                }
+                            }
+                            // Update Text (Col 4)
+                            if let Some(text_cell) = cells.get_mut(3) {
+                                if let Some(translated_text) = translations_iter.next() {
+                                    let new_lexical_text = create_lexical_with_text(&translated_text);
+                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
+                                        text_cell["children"] = new_children.clone();
+                                    }
+                                }
                             }
                         }
                     }
@@ -271,15 +444,15 @@ async fn run_translation_process<R: Runtime>(
     let source_lang = lang_parts.get(2).unwrap_or(&"unk"); // e.g., en
     let target_lang_code = lang_parts.get(3).unwrap_or(&"unk"); // e.g., jap
 
-    let original_file_stem = std::path::Path::new(&normalized_transcript_path)
+    let original_file_stem = std::path::Path::new(&normalized_file_path)
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("transcript");
+        .unwrap_or("file");
 
     let base_new_filename_stem = format!("{}-{}-{}", original_file_stem, source_lang, target_lang_code);
     let mut new_filename = format!("{}.json", base_new_filename_stem);
     let mut counter = 0;
-    let mut new_path_buf = std::path::PathBuf::from(&normalized_transcript_path);
+    let mut new_path_buf = std::path::PathBuf::from(&normalized_file_path);
     new_path_buf.set_file_name(&new_filename);
 
     while new_path_buf.exists() {
@@ -292,9 +465,43 @@ async fn run_translation_process<R: Runtime>(
     let new_content = serde_json::to_string_pretty(&lexical_json)?;
     fs::write(&new_path, &new_content)?;
 
-    emit_translation_progress(&app_handle, &job_id, 95.0, "Saving translated transcript...");
+    emit_translation_progress(&app_handle, &job_id, 95.0, "Saving translated file...");
 
-    save_transcript_json(normalized_project_xml_path, new_path.clone(), new_content, Some(format!("{}-{}", source_lang, target_lang_code))).await?;
+    // Determine saving logic
+    match mode {
+        TranslationMode::Document => {
+            save_document_and_update_xml(
+                normalized_project_xml_path,
+                new_path.clone(),
+                new_filename,
+                new_content
+            ).await?;
+        },
+        TranslationMode::Transcript => {
+            save_transcript_json(
+                normalized_project_xml_path,
+                new_path.clone(),
+                new_content,
+                Some(format!("{}-{}", source_lang, target_lang_code))
+            ).await?;
+        },
+        TranslationMode::ImportedTranscript => {
+            // For imported transcripts, we want to save them as new imported transcripts (in XML),
+            // similar to documents but specifically in the ImportedTranscript list if applicable.
+            // However, `save_document_and_update_xml` puts them in the Document list.
+            // We should use `save_imported_transcript_and_update_xml` if we want them in that list.
+            // But wait, `save_imported_transcript_and_update_xml` requires it to be in `Transcripts` folder.
+            // `new_path` is derived from `normalized_file_path`, so if original was in `Transcripts`, new one is too.
+            // So we should use the imported transcript save command.
+            use crate::projectview::transcription_handler::save_imported_transcript_and_update_xml;
+            save_imported_transcript_and_update_xml(
+                normalized_project_xml_path,
+                new_path.clone(),
+                new_filename,
+                new_content
+            ).await?;
+        }
+    }
 
     emit_translation_progress(&app_handle, &job_id, 100.0, "Translation complete.");
 
@@ -315,3 +522,4 @@ pub async fn cancel_translation_command(
     }
     Ok(())
 }
+

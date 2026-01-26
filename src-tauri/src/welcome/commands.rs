@@ -746,3 +746,36 @@ pub async fn install_python_libraries<R: Runtime>(app: AppHandle<R>) -> Result<(
     let shell = app.shell();
     python_env::install_python_libraries(&app, &shell).await
 }
+
+#[command]
+pub async fn fetch_available_models_command(app: AppHandle) -> Result<serde_json::Value, CommandError> {
+    log::info!("CMD: fetch_available_models_command");
+
+    let script_path = app.path().resource_dir().unwrap().join("scripts/fetch_available_models.py");
+    
+    // Check if script exists
+    if !script_path.exists() {
+         return Err(CommandError::from(format!("Script not found at: {:?}", script_path)));
+    }
+
+    let python_path = python_env::get_python_path()?; 
+
+    let output = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[script_path.to_str().unwrap()])
+        .output()
+        .await
+        .map_err(|e| CommandError::from(format!("Failed to execute python script: {}", e)))?;
+
+    if output.status.success() {
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let json_result: serde_json::Value = serde_json::from_str(&stdout_str)
+            .map_err(|e| CommandError::from(format!("Failed to parse JSON output: {}", e)))?;
+        log::info!("Successfully fetched available models.");
+        Ok(json_result)
+    } else {
+        let stderr_str = String::from_utf8_lossy(&output.stderr);
+        log::error!("Python script failed: {}", stderr_str);
+        Err(CommandError::from(format!("Python script failed: {}", stderr_str)))
+    }
+}

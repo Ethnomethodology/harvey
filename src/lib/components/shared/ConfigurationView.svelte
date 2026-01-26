@@ -16,11 +16,12 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
+	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
 	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
-	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
+	let activeTab = 'application'; // 'application', 'transcription', 'diarization', or 'translation'
 	let isWinArm64 = false;
 	let isFFmpegInstalled = false;
 	let downloadLocation = '';
@@ -149,8 +150,31 @@
 				aria-current={activeTab === 'transcription' ? 'page' : undefined}
 			>
 				<span>Transcription</span>
-				{#if !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-red-500" viewBox="0 0 16 16">
+				{#if !$configStatus.transcription_models_downloaded}
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
+						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
+						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
+					</svg>
+				{/if}
+			</button>
+			<button
+				on:click={() => activeTab = 'diarization'}
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:border-blue-500={activeTab === 'diarization'}
+				class:text-blue-600={activeTab === 'diarization'}
+				class:dark:text-blue-400={activeTab === 'diarization'}
+				class:border-transparent={activeTab !== 'diarization'}
+				class:text-gray-500={activeTab !== 'diarization'}
+				class:dark:text-gray-400={activeTab !== 'diarization'}
+				class:hover:text-gray-700={activeTab !== 'diarization'}
+				class:dark:hover:text-gray-200={activeTab !== 'diarization'}
+				class:hover:border-gray-300={activeTab !== 'diarization'}
+				class:dark:hover:border-gray-500={activeTab !== 'diarization'}
+				aria-current={activeTab === 'diarization' ? 'page' : undefined}
+			>
+				<span>Diarization</span>
+				{#if !$configStatus.diarization_model_downloaded}
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
 						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
 						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
 					</svg>
@@ -173,7 +197,7 @@
 			>
 				<span>Translation</span>
 				{#if !$configStatus.translation_models_downloaded}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-red-500" viewBox="0 0 16 16">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
 						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
 						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
 					</svg>
@@ -247,6 +271,10 @@
             </div>
 		{:else if activeTab === 'transcription'}
 			<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
+		{:else if activeTab === 'diarization'}
+			<div class="p-1">
+				<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
+			</div>
 		{:else if activeTab === 'translation'}
 			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
 		{/if}

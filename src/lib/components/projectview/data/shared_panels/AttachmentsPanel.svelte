@@ -5,9 +5,11 @@
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import MinimalMediaPlayer from './MinimalMediaPlayer.svelte';
+    import notificationStore from '$lib/stores/notificationStore.js';
 
     export let itemPath = null;
     export let itemType = null;
+    export let refreshKey = null;
 
     let attachments = [];
     let isLoading = true;
@@ -17,6 +19,7 @@
 
     const MUSIC_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-music" viewBox="0 0 16 16"><path d="M11 6.64a1 1 0 0 0-1.243-.97l-1 .25A1 1 0 0 0 8 6.89v4.306A2.6 2.6 0 0 0 7 11c-.5 0-.974.134-1.338.377-.36.24-.662.628-.662 1.123s.301.883.662 1.123c.364.243.839.377 1.338.377s.974-.134 1.338-.377c.36-.24.662.628.662-1.123V8.89l2-.5z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/></svg>`;
     const PLAY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-circle-fill" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814z"/></svg>`;
+    const ADD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg>`;
 
     function getFileName(path) {
         return path.split(/[\/\\]/).pop() || path;
@@ -37,6 +40,42 @@
     function playPrevious() {
         const prevIndex = (currentTrackIndex - 1 + attachments.length) % attachments.length;
         playTrack(prevIndex);
+    }
+
+    async function handleAddAttachment() {
+        const projectStoreState = get(project);
+        if (!projectStoreState.xmlPath || !itemPath) return;
+
+        try {
+            const { open } = await import('@tauri-apps/plugin-dialog');
+            const selected = await open({
+                multiple: true,
+                filters: [
+                    { name: 'Audio/Video Files', extensions: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm'] }
+                ]
+            });
+
+            if (selected) {
+                const sourceFiles = Array.isArray(selected) ? selected : [selected];
+                const originalDetails = await getOriginalAssetDetails(itemPath, projectStoreState);
+                const assetRelativePath = originalDetails?.originalRelativePath;
+                
+                if (assetRelativePath) {
+                    for (const sourceFilePath of sourceFiles) {
+                        await invoke('upload_attachment', {
+                            projectXmlPathStr: projectStoreState.xmlPath,
+                            assetRelativePath: assetRelativePath,
+                            sourceFilePathStr: sourceFilePath
+                        });
+                    }
+                    await loadAttachments(assetRelativePath);
+                    notificationStore.add('Attachment(s) added successfully.', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('[AttachmentsPanel] Error adding attachment:', error);
+            notificationStore.add(`Error adding attachment: ${error.message || error}`, 'error');
+        }
     }
 
     async function getOriginalAssetDetails(selectedPath, projectStoreState) {
@@ -81,11 +120,12 @@
     $: {
         (async () => {
             const currentProjectStoreState = get(project);
-            if (itemPath && itemType === 'doc' && currentProjectStoreState?.baseDirectory) {
+            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript';
+            if (itemPath && isSupportedType && currentProjectStoreState?.baseDirectory) {
                 const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
-                if (newDerivedRelativePath && newDerivedRelativePath !== previousProcessedItemPath) {
+                if (newDerivedRelativePath && (newDerivedRelativePath !== previousProcessedItemPath || refreshKey)) {
                     await loadAttachments(newDerivedRelativePath);
                 } else if (!newDerivedRelativePath) {
                     attachments = [];
@@ -106,6 +146,15 @@
 <div class="h-full bg-white dark:bg-dark-bg-secondary flex flex-col overflow-hidden">
     <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-dark-bg-tertiary text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
         <span class="ml-1">Attachments</span>
+        {#if itemType !== 'doc'}
+            <button 
+                on:click={handleAddAttachment}
+                class="p-1 hover:bg-gray-200 dark:hover:bg-dark-bg-tertiary rounded-full transition-colors text-blue-600 dark:text-blue-400"
+                title="Add Attachment"
+            >
+                {@html ADD_ICON_SVG}
+            </button>
+        {/if}
     </div>
     <div class="flex-grow overflow-y-auto min-h-0">
         {#if isLoading}
@@ -133,7 +182,7 @@
             </ul>
         {:else}
             <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">
-                No attachments found for this document.
+                No attachments found.
             </p>
         {/if}
     </div>
@@ -141,8 +190,6 @@
         <MinimalMediaPlayer
             src={currentSrc}
             on:ended={playNext}
-            on:next={playNext}
-            on:previous={playPrevious}
         />
     </div>
 </div>

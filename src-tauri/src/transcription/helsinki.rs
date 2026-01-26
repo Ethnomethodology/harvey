@@ -30,6 +30,7 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
         model_path: &Path,
         job_id: &str,
         cancel_flag: Arc<AtomicBool>,
+        mode: &str,
     ) -> Result<Vec<String>, CommandError> {
         if texts.is_empty() {
             return Ok(Vec::new());
@@ -51,6 +52,8 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
             model_path.to_string_lossy().to_string(),
             "--text".to_string(),
             input_json,
+            "--mode".to_string(),
+            mode.to_string(),
         ];
 
         info!("[HelsinkiEngine][{}] Executing python script: {:?}", job_id, python_args);

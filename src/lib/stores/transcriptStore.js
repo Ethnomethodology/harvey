@@ -57,6 +57,14 @@ export const initialTranscriptState = {
     translateToEnglish: false,
     diarizationEnabledForNextJob: false,
 
+    // Transcription Mode & Manual Settings
+    transcriptionMode: 'automatic', // 'automatic' | 'manual'
+    manualSegmentSettings: {
+        duration: 60,
+        speakerMode: 'unassigned', // 'unassigned' | 'alternate'
+        lastUsedSpeakerIndex: -1
+    },
+
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
     secondaryTranscriptPath: null,
@@ -75,6 +83,51 @@ export const initialTranscriptState = {
 export const transcriptStore = writable({ ...initialTranscriptState });
 
 export const MAX_UNDO_STACK_SIZE = 50;
+
+const DEFAULT_MANUAL_SETTINGS = {
+    duration: 60,
+    speakerMode: 'unassigned',
+    lastUsedSpeakerIndex: -1
+};
+
+function getManualSettingsKey(projectId, transcriptPath) {
+    if (!projectId || !transcriptPath) return null;
+    return `harvey-manual-settings-${projectId}-${normalizePath(transcriptPath)}`;
+}
+
+export function saveManualSettingsForTranscript(transcriptPath, settings) {
+    if (typeof window === 'undefined') return;
+    const projectData = get(projectMainStore);
+    if (!projectData.id) return;
+    
+    const key = getManualSettingsKey(projectData.id, transcriptPath);
+    if (key) {
+        try {
+            localStorage.setItem(key, JSON.stringify(settings));
+        } catch (e) {
+            console.error('[TranscriptStore] Failed to save manual settings:', e);
+        }
+    }
+}
+
+export function loadManualSettingsForTranscript(transcriptPath) {
+    if (typeof window === 'undefined') return DEFAULT_MANUAL_SETTINGS;
+    const projectData = get(projectMainStore);
+    if (!projectData.id) return DEFAULT_MANUAL_SETTINGS;
+
+    const key = getManualSettingsKey(projectData.id, transcriptPath);
+    if (key) {
+        try {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                return { ...DEFAULT_MANUAL_SETTINGS, ...JSON.parse(stored) };
+            }
+        } catch (e) {
+            console.error('[TranscriptStore] Failed to load manual settings:', e);
+        }
+    }
+    return DEFAULT_MANUAL_SETTINGS;
+}
 
 // --- Transcript Management Functions ---
 
@@ -441,6 +494,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         updateProjectStoreState({ statusMessage: `Media transcript loaded: ${path.split(/[\\/]/).pop()}` });
 
+        const loadedSettings = loadManualSettingsForTranscript(path);
+
         return {
             ...ts,
             segments: finalSegmentsForDisplay,
@@ -455,6 +510,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            manualSegmentSettings: loadedSettings
         };
     });
 }
@@ -628,6 +684,23 @@ export function setSelectedModel(modelName) {
 
 export function setSelectedLanguage(languageCode) {
     transcriptStore.update((ts) => ({ ...ts, selectedLanguage: languageCode || null }));
+}
+
+export function setTranscriptionMode(mode) {
+    transcriptStore.update((ts) => ({ ...ts, transcriptionMode: mode }));
+}
+
+export function updateManualSegmentSettings(settings) {
+    transcriptStore.update((ts) => {
+        const newSettings = { ...ts.manualSegmentSettings, ...settings };
+        if (ts.currentTranscriptPath) {
+            saveManualSettingsForTranscript(ts.currentTranscriptPath, newSettings);
+        }
+        return {
+            ...ts,
+            manualSegmentSettings: newSettings
+        };
+    });
 }
 
 export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = null) {
@@ -1300,41 +1373,43 @@ listen('translation_job_completed', async (event) => {
         if (status === 'done') {
             try {
                 const service = await import('../services/projectService.js');
-                if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
-                    console.log('[TranscriptStore] Refreshing project files to update transcript associations after translation.');
-                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                if (service.refreshProjectFiles) {
+                    console.log('[TranscriptStore] Refreshing project files after translation completion.');
+                    const mediaPath = currentStore.selectedMediaFile?.path;
+                    await service.refreshProjectFiles(mediaPath);
 
-                    // After refreshing project files, re-select the media to ensure transcriptStore is updated
-                    // with the newly available translated transcript.
-                    const latestProjectStore = get(projectMainStore);
-                    const allFiles = latestProjectStore.files;
-                    const mediaPath = currentStore.selectedMediaFile.path;
+                    if (mediaPath) {
+                        // After refreshing project files, re-select the media to ensure transcriptStore is updated
+                        // with the newly available translated transcript.
+                        const latestProjectStore = get(projectMainStore);
+                        const allFiles = latestProjectStore.files;
 
-                    let updatedMediaFile = null;
+                        let updatedMediaFile = null;
 
-                    function findMediaNodeByPath(nodes, path) {
-                        if (!Array.isArray(nodes)) return null;
-                        for (const node of nodes) {
-                            if (node.path === path && node.file_type === 'media' && !node.is_directory) {
-                                return node;
-                            }
-                            if (node.children && node.children.length > 0) {
-                                const found = findMediaNodeByPath(node.children, path);
-                                if (found) {
-                                    return found;
+                        function findMediaNodeByPath(nodes, path) {
+                            if (!Array.isArray(nodes)) return null;
+                            for (const node of nodes) {
+                                if (node.path === path && node.file_type === 'media' && !node.is_directory) {
+                                    return node;
+                                }
+                                if (node.children && node.children.length > 0) {
+                                    const found = findMediaNodeByPath(node.children, path);
+                                    if (found) {
+                                        return found;
+                                    }
                                 }
                             }
+                            return null;
                         }
-                        return null;
-                    }
 
-                    updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
+                        updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
-                    if (updatedMediaFile) {
-                        console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
-                        selectMedia(updatedMediaFile, newTranscriptPath);
-                    } else {
-                        console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
+                        if (updatedMediaFile) {
+                            console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
+                            selectMedia(updatedMediaFile, newTranscriptPath);
+                        } else {
+                            console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
+                        }
                     }
                 }
             } catch (e) {

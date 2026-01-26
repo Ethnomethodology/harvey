@@ -349,6 +349,56 @@
         showAnnotationCreationDialog = false;
     }
 
+    function scrollToAnnotation(id) {
+        if (!id || !osdViewer || !$currentAnnotations) return;
+        const annotation = $currentAnnotations.find(a => a.id === id);
+        if (annotation && annotation.target && annotation.target.selector && annotation.target.selector.value) {
+            const shape = annotation.target.selector.value;
+            let rect;
+            if (shape.shape === 'rectangle') {
+                rect = new OpenSeadragon.Rect(shape.x, shape.y, shape.width, shape.height);
+            } else if (shape.shape === 'circle') {
+                rect = new OpenSeadragon.Rect(shape.cx - shape.r, shape.cy - shape.r, shape.r * 2, shape.r * 2);
+            } else if (shape.shape === 'polygon') {
+                const xs = shape.points.map(p => p.x);
+                const ys = shape.points.map(p => p.y);
+                const minX = Math.min(...xs);
+                const minY = Math.min(...ys);
+                const maxX = Math.max(...xs);
+                const maxY = Math.max(...ys);
+                rect = new OpenSeadragon.Rect(minX, minY, maxX - minX, maxY - minY);
+            }
+
+            if (rect) {
+                osdViewer.viewport.fitBounds(rect);
+                osdViewer.viewport.zoomBy(0.5); // Zoom out to show context
+                
+                // Pulse effect
+                if (svgOverlay) {
+                    const shapeEl = svgOverlay.querySelector(`[data-annotation-id="${id}"]`);
+                    if (shapeEl) {
+                        shapeEl.style.transition = 'stroke-width 0.3s ease, stroke 0.3s ease';
+                        const originalStrokeWidth = shapeEl.getAttribute('stroke-width');
+                        const originalStroke = shapeEl.getAttribute('stroke');
+                        
+                        shapeEl.setAttribute('stroke-width', '0.005'); // Make it thick
+                        shapeEl.setAttribute('stroke', 'blue');
+
+                        setTimeout(() => {
+                            shapeEl.setAttribute('stroke-width', originalStrokeWidth);
+                            shapeEl.setAttribute('stroke', originalStroke);
+                        }, 1000);
+                    }
+                }
+            }
+            project.update(p => ({ ...p, requestedHighlightId: null }));
+        }
+    }
+
+    $: if ($project.requestedHighlightId && osdViewer && !isLoading) {
+        scrollToAnnotation($project.requestedHighlightId);
+    }
+
     onMount(() => {
         console.log('[ImageViewerPanel] Mounted. Initial Path:', imagePath);
         if (imagePath && osdViewerElement) { initializeViewer(imagePath); }
@@ -473,7 +523,8 @@
                         stroke={strokeColor}
                         stroke-width="1px"
                         vector-effect="non-scaling-stroke"
-                        class="pointer-events-auto cursor-pointer"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
                         on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
                     />
                 {:else if shapeData.shape === 'circle'}
@@ -485,7 +536,8 @@
                         stroke={strokeColor}
                         stroke-width="1px"
                         vector-effect="non-scaling-stroke"
-                        class="pointer-events-auto cursor-pointer"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
                         on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
                     />
                 {:else if shapeData.shape === 'polygon'}
@@ -494,7 +546,8 @@
                         fill={fillColor}
                         stroke={strokeColor}
                         stroke-width="0.002"
-                        class="pointer-events-auto cursor-pointer"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
                         on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
                     />
                 {/if}

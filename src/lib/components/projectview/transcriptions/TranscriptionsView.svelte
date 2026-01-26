@@ -13,6 +13,7 @@
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         switchDualModeTranscripts,
+        updatePlayerCurrentSegmentIndex
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -32,6 +33,8 @@
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte'; // <-- Added this import
+    import ManualSettingsModal from '$lib/components/projectview/modals/ManualSettingsModal.svelte';
+    import { updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -111,6 +114,9 @@
     let pendingLoadItemName = ''; // Name for the modal
     let pendingLoadItemType = ''; // Type for the modal (e.g., 'media', 'transcript')
 
+    // State for ManualSettingsModal
+    let isManualSettingsModalOpen = false;
+
     async function handlePreviousRequest() {
         if (get(transcriptStore).transcriptDirty) {
             await handleSaveTranscript();
@@ -137,6 +143,10 @@
                     message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
                 }
             }
+            
+            // Sync store index
+            updatePlayerCurrentSegmentIndex(index);
+            
             editableTranscriptRef?.loadSegment?.(index);
             if (mediaPlayerRef) {
                 mediaPlayerRef.seekTo(segment.start_time);
@@ -249,6 +259,30 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
+    export async function enterManualEditMode() {
+        console.log("[TranscriptionsView] enterManualEditMode called.");
+        panelEditModeActive = true;
+        
+        // Ensure store knows we are on segment 0
+        updatePlayerCurrentSegmentIndex(0);
+        
+        await tick();
+        
+        // Check if segments are available in the store
+        const store = get(transcriptStore);
+        if (store.segments && store.segments.length > 0) {
+            // Add a small delay to ensure EditableTranscript has received the store update
+            // and updated its local 'segments' array via subscription.
+            setTimeout(async () => {
+                // Automatically select the first segment
+                await handleSegmentClick({ detail: 0 });
+                editableTranscriptRef?.focusEditor?.();
+            }, 100);
+        } else {
+             console.warn("[TranscriptionsView] enterManualEditMode: No segments found in store to select.");
+        }
+    }
+
     export async function handleSaveTranscript() {
         console.log("[TranscriptionsView] handleSaveTranscript called. Current transcriptDirty:", get(transcriptStore).transcriptDirty);
         const tsStore = get(transcriptStore);
@@ -292,7 +326,17 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
-    export function handleInsertSegmentRequest(event) { const { index, startTime, endTime } = event.detail; if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return; const newSegment = { start_time: startTime, end_time: endTime, speaker: "Unknown", text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), }; insertTranscriptSegment(index, newSegment); }
+    export function handleInsertSegmentRequest(event) {
+        const { index, startTime, endTime, speaker } = event.detail;
+        if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return;
+        const newSegment = {
+            start_time: startTime,
+            end_time: endTime,
+            speaker: speaker || "Unknown",
+            text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }),
+        };
+        insertTranscriptSegment(index, newSegment);
+    }
 
     export function activateTrimModeOnPlayer() {
         if (mediaPlayerRef && typeof mediaPlayerRef.enterTrimMode === 'function') {
@@ -330,6 +374,16 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         } else if (event.type === 'requestmediaselection') {
             dispatch('requestmediaselection', event.detail);
         }
+    }
+
+    // Handlers for Manual Transcription Settings
+    function handleRequestManualSettings() {
+        isManualSettingsModalOpen = true;
+    }
+
+    function handleManualSettingsConfirm(event) {
+        const { duration, speakerMode } = event.detail;
+        updateManualSegmentSettings({ duration, speakerMode });
     }
 
     
@@ -542,6 +596,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
+                on:requestmanualsettings={handleRequestManualSettings}
              />
         </div>
     </div>
@@ -590,6 +645,17 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         on:cancel={handleModalCancel}
     />
 {/if}
+
+{#if isManualSettingsModalOpen}
+    <ManualSettingsModal
+        bind:showModal={isManualSettingsModalOpen}
+        currentSettings={$transcriptStore.manualSegmentSettings}
+        speakerList={$transcriptStore.speakers?.names || []}
+        on:confirm={handleManualSettingsConfirm}
+        on:close={() => isManualSettingsModalOpen = false}
+    />
+{/if}
+
 </div>
 <style lang="postcss">
     .min-h-0 { min-height: 0; }

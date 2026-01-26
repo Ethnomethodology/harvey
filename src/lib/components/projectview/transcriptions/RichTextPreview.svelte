@@ -1,12 +1,12 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
-	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript, setSecondaryTranscript } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript, setSecondaryTranscript, updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
+	import { convertAndSaveTranscriptAsDoc, convertAndSaveTranscriptAsTranscript } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
     import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
@@ -532,7 +532,7 @@
 	async function handleAddToDocumentsClick() {
 		const confirmationMessage = `This will create a copy of the current transcript as a new document.\n\nThis document will not sync with the media player.`;
 		const userConfirmed = await confirm(confirmationMessage, {
-			title: 'Export to Documents?',
+			title: 'Save in Documents?',
 			type: 'info',
 			okLabel: 'Yes, Create Document',
 			cancelLabel: 'Cancel'
@@ -554,6 +554,34 @@
                 await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
             }
         } else {
+        }
+    }
+
+	async function handleAddToTranscriptsClick() {
+		const confirmationMessage = `This will create a copy of the current transcript as a new imported transcript.\n\nThis transcript will not sync with the media player.`;
+		const userConfirmed = await confirm(confirmationMessage, {
+			title: 'Save in Transcripts?',
+			type: 'info',
+			okLabel: 'Yes, Save Transcript',
+			cancelLabel: 'Cancel'
+		});
+
+		if (userConfirmed) {
+            try {
+                const newTranscriptPath = await convertAndSaveTranscriptAsTranscript();
+                if (newTranscriptPath) {
+                    await message(`Transcript saved to Transcripts:\n${newTranscriptPath.split(/[\\/]/).pop()}`, {title: "Transcript Saved", type: "info"});
+                    // Imported transcripts are viewed in the 'data' tab, similar to documents.
+                     dispatch('requestopentab', { tabName: 'data', loadNotePath: newTranscriptPath });
+                } else {
+                     console.error("[RichTextPreview] Transcript saving process did not return a path.");
+                     await message("Failed to save transcript file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
+                }
+            } catch (error) {
+                console.error("[RichTextPreview] Error during transcript saving process:", error);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                await message(`Failed to save transcript file: ${errorMsg}`, {title: "Error", type: "error"});
+            }
         }
     }
 
@@ -582,13 +610,12 @@
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) {
         if (!previewEditMode) return;
-        const MIN_GAP_SECONDS = 1.0;
-        const TIME_TOLERANCE = 0.001;
-        const currentSegments = get(transcriptStore).segments;
-        const mediaDuration = get(transcriptStore).player.duration;
+        const store = get(transcriptStore);
+        const mode = store.transcriptionMode;
+        const currentSegments = store.segments;
+        const mediaDuration = store.player.duration;
 
         let finalIndex = index;
-
         let prevEndTime = 0.0;
         let nextStartTime = mediaDuration;
 
@@ -598,6 +625,81 @@
         if (finalIndex < currentSegments.length) {
             nextStartTime = currentSegments[finalIndex]?.start_time ?? mediaDuration;
         }
+
+        // --- MANUAL MODE LOGIC ---
+        if (mode === 'manual') {
+            const settings = store.manualSegmentSettings;
+            const duration = settings.duration || 60;
+            
+            let newStartTime = prevEndTime;
+            let newEndTime = Math.min(mediaDuration, newStartTime + duration);
+            
+            const availableGap = nextStartTime - prevEndTime;
+            
+            if (newEndTime > nextStartTime + 0.001) {
+                 if (finalIndex < currentSegments.length) {
+                     if (availableGap < 0.5) {
+                         await message(`Not enough space to insert a segment here. Gap is ${availableGap.toFixed(2)}s.`, { title: "No Space", type: "warning" });
+                         return;
+                     }
+                     // Fill available gap if preferred duration is too long
+                     newEndTime = nextStartTime; 
+                 }
+            }
+
+            if (newEndTime <= newStartTime + 0.001) {
+                 await message("Cannot insert segment: No duration available.", { title: "Error", type: "warning" });
+                 return;
+            }
+
+            // Speaker Logic
+            let speaker = "Unknown";
+            if (settings.speakerMode === 'alternate') {
+                const names = store.speakers.names;
+                if (names.length >= 2) {
+                    let lastIndex = settings.lastUsedSpeakerIndex;
+                    if (lastIndex === -1 && finalIndex > 0) {
+                         // Try to infer from previous segment if state is fresh
+                         const prevSpeaker = currentSegments[finalIndex - 1]?.speaker;
+                         if (prevSpeaker && names.includes(prevSpeaker)) {
+                             lastIndex = names.indexOf(prevSpeaker);
+                         }
+                    }
+                    
+                    const nextSpeakerIndex = (lastIndex + 1) % names.length;
+                    speaker = names[nextSpeakerIndex];
+                    
+                    // Update store for next time
+                    updateManualSegmentSettings({ lastUsedSpeakerIndex: nextSpeakerIndex });
+                }
+            } else {
+                 // Unassigned mode: "Unknown" or just leave it empty? User said "unassigned".
+                 // In our system "Unknown" is the unassigned state usually.
+                 speaker = "Unknown"; 
+            }
+
+            // Construct new segment with empty text structure
+            const newSegment = {
+                start_time: newStartTime,
+                end_time: newEndTime,
+                speaker: speaker,
+                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
+            };
+
+            // We need to call the store function directly because dispatch('insertnewsegment') 
+            // in TranscriptionsView currently hardcodes speaker to "Unknown".
+            // To support custom speakers, we should import insertTranscriptSegment directly here.
+            // But wait, insertTranscriptSegment is an exported function from transcriptStore.js.
+            // I need to import it at the top of this file to use it.
+            // I'll assume I can add it to the imports in a separate step or just rely on dispatch if I update TranscriptionsView?
+            // Updating TranscriptionsView to accept 'speaker' in event detail is cleaner.
+            
+            dispatch('insertnewsegment', { index: finalIndex, startTime: newStartTime, endTime: newEndTime, speaker: speaker });
+            return;
+        }
+
+        const MIN_GAP_SECONDS = 1.0;
+        const TIME_TOLERANCE = 0.001;
 
         const gap = nextStartTime - prevEndTime;
         if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) {
@@ -719,10 +821,22 @@
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
                   <div class="absolute right-0 mt-2 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
                     <button
+                      on:click={() => { showExportMenu = false; dispatch('requestmanualsettings'); }}
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                    >
+                      Manual Transcription Settings
+                    </button>
+                    <button
+                      on:click={() => { showExportMenu = false; handleAddToTranscriptsClick(); }}
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                    >
+                      Save in Transcripts
+                    </button>
+                    <button
                       on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
                       class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200"
                     >
-                      Export to Documents
+                      Save in Documents
                     </button>
                   </div>
                 {/if}

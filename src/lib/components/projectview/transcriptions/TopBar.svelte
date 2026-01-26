@@ -69,7 +69,7 @@
 		        }
 		toggleTranslateModal(true);
 	}
-	let transcriptionMode = 'automatic';
+	
 	// Variable to hold transcript path for export modal
 	let transcriptPathForExport = '';
 
@@ -321,16 +321,6 @@
 			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
 		/>
 
-		<!-- Transcription Mode -->
-		<Dropdown
-			containerClasses="w-48"
-			options={[
-				{ value: 'automatic', label: 'Automatic Transcription' },
-				{ value: 'manual', label: 'Manual Transcription' },
-			]}
-			bind:value={transcriptionMode}
-		/>
-
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
 			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
@@ -365,6 +355,7 @@
 				<span class="text-xs">Transcribe</span>
 				{/if}
 			</button>
+
 
 			<!-- Translate Button -->
 			<button
@@ -436,6 +427,7 @@
         await requestTranslation(e.detail.transcript.path, e.detail.model);
     }}
     on:cancelRequest={() => dispatch('cancelTranslationRequest')}
+    on:openConfig={() => dispatch('openConfig')}
     on:closeAndReset={() => toggleTranslateModal(false)}
     on:runInBackgroundAndClose={() => {
         dispatch('runTranslationInBackground');

@@ -229,6 +229,14 @@
             saveTableHighlights();
         }
     }
+
+    function handleHighlightClick(highlight) {
+        if (!highlight) return;
+        project.update(p => ({
+            ...p,
+            requestedHighlightId: highlight.id
+        }));
+    }
 </script>
 
 <div class="h-full bg-white dark:bg-dark-bg-secondary flex flex-col overflow-hidden">
@@ -243,7 +251,7 @@
             <ul class="space-y-2">
                 {#each processedHighlights as highlight (highlight.id)}
                     <li class="border" style="border-left-color: {highlight.color}; border-left-width: 4px;">
-                        <div class="p-2 bg-white dark:bg-surface-3">
+                        <div class="p-2 bg-white dark:bg-surface-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-bg-tertiary transition-colors" on:click={() => handleHighlightClick(highlight)}>
                             {#if effectiveType === 'image'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
                                 <p class="text-gray-600 dark:text-gray-300 mt-1">{highlight.description || 'No Description'}</p>

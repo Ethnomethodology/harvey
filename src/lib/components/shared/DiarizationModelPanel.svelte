@@ -8,7 +8,6 @@
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   export let arePythonLibrariesInstalled = false;
-  let isPanelOpen = false;
   let hasAccess = false;
   let isLoading = true;
   let isDownloading = false;
@@ -123,40 +122,27 @@
   }
 </script>
 
-<div class="border-y border-gray-200 dark:border-gray-700">
-  <button
-    on:click={() => (isPanelOpen = !isPanelOpen)}
-    class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
-  >
+<div class="flex flex-col space-y-4 p-1">
+  <div class="flex justify-between items-center mb-2 px-1">
+    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">
-      <h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
+      {#if isLoading}
+        <span class="text-xs text-gray-500 dark:text-gray-400">Checking...</span>
+      {:else if hasAccess}
+        <span class="text-sm font-medium text-green-600 dark:text-green-400">Downloaded</span>
+      {:else}
+        <span class="text-sm font-medium text-red-600 dark:text-red-400">Download Required</span>
+      {/if}
     </div>
-    		<div class="flex items-center">
-    			{#if isLoading}
-				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
-    			{:else if hasAccess}
-				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Downloaded</span>
-    			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2">Download Required</span>
-    			{/if}
-			<svg        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''} text-gray-500 dark:text-gray-400"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-        stroke="currentColor"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-      </svg>
-    </div>
-  </button>
-</div>
+  </div>
 
-{#if isPanelOpen}
-  <div class="p-4 bg-gray-100 dark:bg-[var(--color-surface-2)] border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
+  <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm text-gray-700 dark:text-gray-300">
     <div class="mb-4">
         <p class="mb-2">
-            Harvey uses the <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">pyannote/speaker-diarization-3.1</code> model for speaker diarization.
+            Speaker diarization is the process of automatically identifying and separating different speakers in an audio file.
+        </p>
+        <p class="mb-2">
+            Harvey uses the <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline">pyannote/speaker-diarization-3.1</a> model for this purpose.
         </p>
         <p class="mb-4">
             Access is gated, so you must first accept the user agreement on the model's HuggingFace page before you can download it.
@@ -181,10 +167,10 @@
 
     {#if hasAccess && cachePath}
         <div class="flex items-center justify-between mt-2">
-            <p class="text-green-600 dark:text-green-400 text-xs">
+            <p class="text-green-600 dark:text-green-400 text-xs truncate mr-2">
                 Model downloaded at <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">{cachePath}</code>
             </p>
-            <button on:click={handleDeleteModel} class="btn-red-small" disabled={isDeleting}>
+            <button on:click={handleDeleteModel} class="btn-red-small flex-shrink-0" disabled={isDeleting}>
                 {#if isDeleting}Deleting...{:else}Delete{/if}
             </button>
         </div>
@@ -199,7 +185,7 @@
       <p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
     {/if}
   </div>
-{/if}
+</div>
 
 <InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isDownloading} title="Diarization Model Download" inProgressText="Download in progress..." buttonInProgressText="Downloading..." />
 

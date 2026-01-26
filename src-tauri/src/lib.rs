@@ -154,6 +154,7 @@ pub fn run() {
             welcome::commands::download_model_command,
             welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
+            welcome::commands::fetch_available_models_command,
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::get_platform_info,
             welcome::commands::check_python_libraries_installed,
@@ -192,6 +193,7 @@ pub fn run() {
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
             projectview::metadata_commands::update_asset_metadata_command,
+            projectview::attachment_commands::upload_attachment,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
             projectview::metadata_commands::get_all_custom_field_definitions_command,
@@ -225,6 +227,8 @@ pub fn run() {
             
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,
+            projectview::translation_commands::translate_document_command,
+            projectview::translation_commands::translate_imported_transcript_command,
             projectview::translation_commands::cancel_translation_command,
 
 
@@ -283,7 +287,8 @@ pub fn run() {
             projectview::image_handler::save_screenshot,
 
             // --- Project view TRANSCRIPT IMPORT command ---
-            projectview::transcription_handler::import_word_transcript
+            projectview::transcription_handler::import_word_transcript,
+            projectview::transcription_handler::save_imported_transcript_and_update_xml
 
         ])
         .run(tauri::generate_context!())

@@ -111,11 +111,35 @@ const initialState = {
 
     activeTranscriptPathInDataTab: null,
     fileRenamed: null,
+    importedTranscriptSplits: {}, // Maps path -> { partner: path, orientation: 'horizontal' | 'vertical' }
+    showSplitTranscriptModal: false,
+    pendingSplitOrientation: 'horizontal', // Track orientation for next split
 };
 
 export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
+
+export function setImportedTranscriptSplit(pathA, pathB, orientation = 'horizontal') {
+    project.update(p => {
+        const newSplits = { ...p.importedTranscriptSplits };
+        if (pathB) {
+            newSplits[pathA] = { partner: pathB, orientation };
+            newSplits[pathB] = { partner: pathA, orientation };
+        } else {
+            const partnerInfo = newSplits[pathA];
+            delete newSplits[pathA];
+            if (partnerInfo && partnerInfo.partner) {
+                delete newSplits[partnerInfo.partner];
+            }
+        }
+        return { ...p, importedTranscriptSplits: newSplits };
+    });
+}
+
+export function clearImportedTranscriptSplit(path) {
+    setImportedTranscriptSplit(path, null);
+}
 
 export const currentProjectGroupsList = writable([]);
 
@@ -932,14 +956,35 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
 
 export async function switchTranscriptInDataTab(newTranscriptPath) {
     const proj = get(project);
+    
+    // Check if the requested transcript is already active
+    if (proj.activeTranscriptPathInDataTab === newTranscriptPath) {
+        console.log(`[ProjectStore] Transcript ${newTranscriptPath} is already active. Skipping switch.`);
+        return;
+    }
+
     if (proj.isMediaNoteTranscriptDirty) {
-        const { confirm } = await import('@tauri-apps/plugin-dialog');
-        const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
-            title: 'Unsaved Changes',
-            type: 'warning',
-        });
-        if (!userConfirmed) {
-            return;
+        let savedSuccessfully = false;
+        if (proj.autosaveEnabled && proj.activeMediaNoteEditorRef?.ref && typeof proj.activeMediaNoteEditorRef.ref.save === 'function') {
+             console.log('[ProjectStore] Autosaving dirty transcript before switch...');
+             try {
+                 await proj.activeMediaNoteEditorRef.ref.save();
+                 savedSuccessfully = true;
+             } catch (e) {
+                 console.error('[ProjectStore] Autosave failed during switch:', e);
+                 // Proceed to prompt if save failed
+             }
+        }
+
+        if (!savedSuccessfully) {
+            const { confirm } = await import('@tauri-apps/plugin-dialog');
+            const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
+                title: 'Unsaved Changes',
+                type: 'warning',
+            });
+            if (!userConfirmed) {
+                return;
+            }
         }
     }
 
