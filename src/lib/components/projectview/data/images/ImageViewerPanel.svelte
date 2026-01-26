@@ -65,6 +65,7 @@
 
     // State for dragging tail
     let isDraggingTail = false;
+    let isDraggingTailWidth = false;
     let isDraggingShape = false;
     let isDraggingResizeHandle = false;
     let selectedAnnotationId = null;
@@ -84,13 +85,10 @@
         return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${newOpacity})`;
     }
 
-    // Helper to generate speech bubble path
-    function getBubblePath(shapeData, isCircle) {
-        const { x, y, width, height, cx, cy, r, tail } = shapeData;
-        if (!tail) return '';
-
-        // Scale factor for 1000x1000 viewBox
-        const S = 1000;
+    // Helper to generate speech bubble info including path and base points
+    function getBubbleTailInfo(shapeData, isCircle, S = 1000) {
+        const { x, y, width, height, cx, cy, r, tail, tailWidth } = shapeData;
+        if (!tail) return null;
 
         let tx = tail.x * S;
         let ty = tail.y * S;
@@ -137,14 +135,17 @@
         const dir = { x: dx / len, y: dy / len };
 
         if (isCircle) {
-            const angle = 15 * (Math.PI / 180);
+            const angle = (tailWidth || 15) * (Math.PI / 180);
             const cosA = Math.cos(angle);
             const sinA = Math.sin(angle);
             const b1Dir = { x: dir.x * cosA - dir.y * -sinA, y: dir.x * -sinA + dir.y * cosA };
             const b2Dir = { x: dir.x * cosA - dir.y * sinA, y: dir.x * sinA + dir.y * cosA };
             const b1 = { x: center.x + b1Dir.x * (r * S), y: center.y + b1Dir.y * (r * S) };
             const b2 = { x: center.x + b2Dir.x * (r * S), y: center.y + b2Dir.y * (r * S) };
-            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
+            return {
+                path: `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`,
+                b1, b2, center, side: 'circle'
+            };
         } else {
             // Robust side-based rectangle logic
             let side = "";
@@ -154,27 +155,43 @@
             else side = dir.y > 0 ? "bottom" : "top";
 
             const sizeParam = Math.min(bounds.width, bounds.height);
-            const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01 * S);
+            const baseHalfWidth = tailWidth !== undefined ? (tailWidth * S / 2) : Math.max(sizeParam * 0.1, 0.01 * S);
 
             const TL = { x: bounds.x, y: bounds.y };
             const TR = { x: bounds.x + bounds.width, y: bounds.y };
             const BR = { x: bounds.x + bounds.width, y: bounds.y + bounds.height };
             const BL = { x: bounds.x, y: bounds.y + bounds.height };
 
+            let b1, b2, path, bx, by;
             if (side === "top") {
-                const bx = Math.max(TL.x + baseHalfWidth, Math.min(TR.x - baseHalfWidth, center.x + (dir.x * t)));
-                return `M ${TL.x} ${TL.y} L ${bx - baseHalfWidth} ${TL.y} L ${tx} ${ty} L ${bx + baseHalfWidth} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                bx = Math.max(TL.x + baseHalfWidth, Math.min(TR.x - baseHalfWidth, center.x + (dir.x * t)));
+                b1 = { x: bx - baseHalfWidth, y: TL.y };
+                b2 = { x: bx + baseHalfWidth, y: TL.y };
+                path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
             } else if (side === "right") {
-                const by = Math.max(TR.y + baseHalfWidth, Math.min(BR.y - baseHalfWidth, center.y + (dir.y * t)));
-                return `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${TR.x} ${by - baseHalfWidth} L ${tx} ${ty} L ${TR.x} ${by + baseHalfWidth} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                by = Math.max(TR.y + baseHalfWidth, Math.min(BR.y - baseHalfWidth, center.y + (dir.y * t)));
+                b1 = { x: TR.x, y: by - baseHalfWidth };
+                b2 = { x: TR.x, y: by + baseHalfWidth };
+                path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
             } else if (side === "bottom") {
-                const bx = Math.max(BL.x + baseHalfWidth, Math.min(BR.x - baseHalfWidth, center.x + (dir.x * t)));
-                return `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${bx + baseHalfWidth} ${BR.y} L ${tx} ${ty} L ${bx - baseHalfWidth} ${BR.y} L ${BL.x} ${BL.y} Z`;
+                bx = Math.max(BL.x + baseHalfWidth, Math.min(BR.x - baseHalfWidth, center.x + (dir.x * t)));
+                b1 = { x: bx + baseHalfWidth, y: BR.y };
+                b2 = { x: bx - baseHalfWidth, y: BR.y };
+                path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
             } else { // left
-                const by = Math.max(TL.y + baseHalfWidth, Math.min(BL.y - baseHalfWidth, center.y + (dir.y * t)));
-                return `M ${TL.x} ${TL.y} L ${TL.x} ${by - baseHalfWidth} L ${tx} ${ty} L ${TL.x} ${by + baseHalfWidth} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
+                by = Math.max(TL.y + baseHalfWidth, Math.min(BL.y - baseHalfWidth, center.y + (dir.y * t)));
+                b1 = { x: TL.x, y: by + baseHalfWidth };
+                b2 = { x: TL.x, y: by - baseHalfWidth };
+                path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} L ${tx} ${ty} L ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
             }
+            return { path, b1, b2, side, baseCenter: { x: (bx || (side === 'left' || side === 'right' ? center.x + dir.x * t : null)), y: (by || (side === 'top' || side === 'bottom' ? center.y + dir.y * t : null)) } };
         }
+    }
+
+    // Helper to generate speech bubble path
+    function getBubblePath(shapeData, isCircle) {
+        const info = getBubbleTailInfo(shapeData, isCircle);
+        return info ? info.path : '';
     }
 
 
@@ -329,6 +346,40 @@
             return;
         }
 
+        if (isDraggingTailWidth && draggedAnnotationId) {
+            const updatedAnnotations = $currentAnnotations.map(a => {
+                if (a.id === draggedAnnotationId) {
+                    const selector = { ...a.target.selector.value };
+                    const isCircle = selector.shape === 'speech-bubble-circle';
+                    const info = getBubbleTailInfo(selector, isCircle, 1);
+                    if (info) {
+                        if (isCircle) {
+                            const dx = currentViewportPoint.x - selector.cx;
+                            const dy = currentViewportPoint.y - selector.cy;
+                            const mouseAngle = Math.atan2(dy, dx);
+                            const tailAngle = Math.atan2(selector.tail.y - selector.cy, selector.tail.x - selector.cx);
+                            let diff = Math.abs(mouseAngle - tailAngle);
+                            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                            selector.tailWidth = diff * (180 / Math.PI);
+                        } else if (info.baseCenter) {
+                            let newHalfWidth;
+                            if (info.side === 'top' || info.side === 'bottom') {
+                                newHalfWidth = Math.abs(currentViewportPoint.x - info.baseCenter.x);
+                            } else {
+                                newHalfWidth = Math.abs(currentViewportPoint.y - info.baseCenter.y);
+                            }
+                            selector.tailWidth = newHalfWidth * 2;
+                        }
+                    }
+                    return { ...a, target: { ...a.target, selector: { ...a.target.selector, value: selector } } };
+                }
+                return a;
+            });
+            updateImageAnnotations(updatedAnnotations, false);
+            event.preventDefaultAction = true;
+            return;
+        }
+
         if (isDraggingShape && draggedAnnotationId && dragStartViewportPoint) {
             const dx = currentViewportPoint.x - dragStartViewportPoint.x;
             const dy = currentViewportPoint.y - dragStartViewportPoint.y;
@@ -449,8 +500,9 @@
     }
 
     async function onMouseUp(event) {
-        if (isDraggingTail || isDraggingShape || isDraggingResizeHandle) {
+        if (isDraggingTail || isDraggingTailWidth || isDraggingShape || isDraggingResizeHandle) {
             isDraggingTail = false;
+            isDraggingTailWidth = false;
             isDraggingShape = false;
             isDraggingResizeHandle = false;
             draggedAnnotationId = null;
@@ -491,6 +543,7 @@
                 if (isSpeech) {
                     // Default tail: bottom right, slightly offset
                     shapeData.tail = { x: viewportRect.x + viewportRect.width, y: viewportRect.y + viewportRect.height + 0.05 }; 
+                    shapeData.tailWidth = 0.03;
                 }
 
                 newAnnotation = {
@@ -511,6 +564,7 @@
                 const shapeData = { cx, cy, r, shape: isSpeech ? 'speech-bubble-circle' : 'circle' };
                  if (isSpeech) {
                     shapeData.tail = { x: cx + r, y: cy + r + 0.05 };
+                    shapeData.tailWidth = 15;
                 }
 
                 newAnnotation = {
@@ -678,6 +732,16 @@
         closeAnnotationDialog();
     }
     
+    function startTailWidthDrag(event, annotationId) {
+        event.preventDefault();
+        isDraggingTailWidth = true;
+        draggedAnnotationId = annotationId;
+        selectedAnnotationId = annotationId;
+        const viewerRect = osdViewerElement.getBoundingClientRect();
+        const mousePoint = new OpenSeadragon.Point(event.clientX - viewerRect.left, event.clientY - viewerRect.top);
+        dragStartViewportPoint = osdViewer.viewport.pointFromPixel(mousePoint);
+    }
+
     function startTailDrag(event, annotationId) {
         // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
         // event.stopPropagation(); 
@@ -1112,8 +1176,9 @@
                         <circle cx={shapeData.cx * S} cy={(shapeData.cy - shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                     {/if}
                 {:else if shapeData.shape === 'speech-bubble-rect'}
+                     {@const tailInfo = getBubbleTailInfo(shapeData, false, S)}
                      <path
-                        d={getBubblePath(shapeData, false)}
+                        d={tailInfo?.path || ''}
                         fill={fillColor}
                         stroke={strokeColor}
                         stroke-width={strokeWidth}
@@ -1124,16 +1189,21 @@
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
                     {#if selectedAnnotationId === annotation.id}
-                        <circle
-                            cx={shapeData.tail.x * S}
-                            cy={shapeData.tail.y * S}
-                            r={handleRadius * 1.2 * S}
-                            fill="white"
-                            stroke="black"
-                            stroke-width="1"
-                            class="pointer-events-auto cursor-pointer hover:fill-blue-500"
-                            on:pointerdown={(e) => startTailDrag(e, annotation.id)}
-                        />
+                        {#if tailInfo}
+                            <circle
+                                cx={shapeData.tail.x * S}
+                                cy={shapeData.tail.y * S}
+                                r={handleRadius * 1.2 * S}
+                                fill="white"
+                                stroke="black"
+                                stroke-width="1"
+                                class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                                on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                            />
+                            <!-- Base handles -->
+                            <circle cx={tailInfo.b1.x} cy={tailInfo.b1.y} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startTailWidthDrag(e, annotation.id)} />
+                            <circle cx={tailInfo.b2.x} cy={tailInfo.b2.y} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startTailWidthDrag(e, annotation.id)} />
+                        {/if}
                         <!-- 8 handles for speech rect -->
                         <circle cx={shapeData.x * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
                         <circle cx={(shapeData.x + shapeData.width) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
@@ -1167,8 +1237,9 @@
                         <circle cx={shapeData.cx * S} cy={(shapeData.cy - shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                     {/if}
                 {:else if shapeData.shape === 'speech-bubble-circle'}
+                     {@const tailInfo = getBubbleTailInfo(shapeData, true, S)}
                      <path
-                        d={getBubblePath(shapeData, true)}
+                        d={tailInfo?.path || ''}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
                         stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
@@ -1179,16 +1250,21 @@
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
                     {#if selectedAnnotationId === annotation.id}
-                        <circle
-                            cx={shapeData.tail.x * S}
-                            cy={shapeData.tail.y * S}
-                            r={handleRadius * 1.2 * S}
-                            fill="white"
-                            stroke="black"
-                            stroke-width="1"
-                            class="pointer-events-auto cursor-pointer hover:fill-blue-500"
-                            on:pointerdown={(e) => startTailDrag(e, annotation.id)}
-                        />
+                        {#if tailInfo}
+                            <circle
+                                cx={shapeData.tail.x * S}
+                                cy={shapeData.tail.y * S}
+                                r={handleRadius * 1.2 * S}
+                                fill="white"
+                                stroke="black"
+                                stroke-width="1"
+                                class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                                on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                            />
+                            <!-- Base handles -->
+                            <circle cx={tailInfo.b1.x} cy={tailInfo.b1.y} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startTailWidthDrag(e, annotation.id)} />
+                            <circle cx={tailInfo.b2.x} cy={tailInfo.b2.y} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startTailWidthDrag(e, annotation.id)} />
+                        {/if}
                         <circle cx={(shapeData.cx + shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                         <circle cx={(shapeData.cx - shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                         <circle cx={shapeData.cx * S} cy={(shapeData.cy + shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
