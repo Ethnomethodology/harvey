@@ -11,15 +11,21 @@
     let secondaryPanel;
     let cleanupSync = () => {};
 
-    function handleSyncManager(path) {
-        if (path) {
+    let isScrollSyncEnabled = true;
+
+    function handleSyncManager(path, enabled) {
+        if (path && enabled) {
             attemptSetupSync();
         } else {
             cleanupSync();
         }
     }
 
-    $: handleSyncManager(splitPartnerPath);
+    $: handleSyncManager(splitPartnerPath, isScrollSyncEnabled);
+
+    function toggleScrollSync() {
+        isScrollSyncEnabled = !isScrollSyncEnabled;
+    }
 
     function attemptSetupSync() {
         console.log('[ImportedTranscriptView] attemptSetupSync called. splitPartnerPath:', splitPartnerPath);
@@ -107,6 +113,18 @@
                     <div class="flex items-center min-w-0 flex-grow">
                         <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
                     </div>
+                    <button 
+                        class="ml-2 flex-shrink-0" 
+                        class:text-black={!isScrollSyncEnabled} 
+                        class:text-blue-500={isScrollSyncEnabled}
+                        class:dark:text-gray-400={!isScrollSyncEnabled} 
+                        title={isScrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"}
+                        on:click={toggleScrollSync}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-down-up" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M11.5 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L11 2.707V14.5a.5.5 0 0 0 .5.5m-7-14a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L4 13.293V1.5a.5.5 0 0 1 .5-.5"/>
+                        </svg>
+                    </button>
                     <button 
                         class="hover:text-red-500 ml-2 flex-shrink-0" 
                         title="Close Split"
