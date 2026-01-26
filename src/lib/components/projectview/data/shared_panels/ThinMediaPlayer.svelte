@@ -3,6 +3,7 @@
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
+    import { mediaState, sendMediaCommand } from '$lib/stores/mediaPlayerStore.js';
 
     export let itemPath = null;
 
@@ -25,10 +26,27 @@
     let repeat = false;
     let lastLoadedSrc = null;
     let lastActiveTranscriptPath = null;
+    let remoteMode = false;
 
     let attachments = [];
     let showMenu = false;
     let menuButton;
+
+    $: remoteMode = $mediaState.sourceComponent === 'minimal';
+
+    $: if (remoteMode) {
+        if (audio && audio.src) {
+            audio.pause();
+            audio.removeAttribute('src'); 
+            audio.load();
+        }
+        currentTime = $mediaState.currentTime;
+        duration = $mediaState.duration;
+        paused = $mediaState.paused;
+        volume = $mediaState.volume;
+        repeat = $mediaState.repeat || false;
+        if (src) lastLoadedSrc = null; // Force reload when switching back
+    }
 
     async function loadAttachments() {
         const projectStoreState = get(project);
@@ -53,7 +71,7 @@
             lastLoadedSrc = null;
         }
 
-        // Derive relative path
+        // Derived relative path
         let assetRelativePath = activePath.startsWith(projectStoreState.baseDirectory) 
             ? activePath.substring(projectStoreState.baseDirectory.length) 
             : activePath;
@@ -97,7 +115,7 @@
         showMenu = false;
     }
 
-    $: if (audio && src && src !== lastLoadedSrc) {
+    $: if (audio && src && src !== lastLoadedSrc && !remoteMode) {
         console.log("[ThinMediaPlayer] Reactive src update. New src:", src);
         lastLoadedSrc = src;
         audio.src = src;
@@ -115,6 +133,12 @@
             e.preventDefault();
             e.stopPropagation();
         }
+        
+        if (remoteMode) {
+            sendMediaCommand('togglePlay', null, 'thin');
+            return;
+        }
+
         console.log("[ThinMediaPlayer] togglePlay. Current state - paused:", paused, "src:", src);
         if (!src) {
             console.warn("[ThinMediaPlayer] Cannot play: No src set.");
@@ -145,6 +169,12 @@
             e.preventDefault();
             e.stopPropagation();
         }
+        if (remoteMode) {
+            // Use store values for calculation
+            const cur = get(mediaState).currentTime;
+            sendMediaCommand('seek', Math.max(0, cur - 10), 'thin');
+            return;
+        }
         if (!audio) return;
         currentTime = Math.max(0, currentTime - 10);
     }
@@ -153,6 +183,12 @@
         if (e) {
             e.preventDefault();
             e.stopPropagation();
+        }
+        if (remoteMode) {
+            const st = get(mediaState);
+            const dur = st.duration || Infinity;
+            sendMediaCommand('seek', Math.min(dur, st.currentTime + 10), 'thin');
+            return;
         }
         if (!audio || !duration) return;
         currentTime = Math.min(duration, currentTime + 10);
@@ -163,8 +199,23 @@
             e.preventDefault();
             e.stopPropagation();
         }
+        if (remoteMode) {
+            sendMediaCommand('toggleRepeat', null, 'thin');
+            // Optimistic update will be overwritten by store sync
+            return;
+        }
         repeat = !repeat;
         console.log("[ThinMediaPlayer] Repeat toggled:", repeat);
+    }
+
+    function handleVolumeChange(e) {
+        const val = parseFloat(e.target.value) / 100;
+        if (remoteMode) {
+            sendMediaCommand('setVolume', val, 'thin');
+            volume = val;
+        } else {
+            volume = val;
+        }
     }
 
     function handleEnded() {
@@ -174,6 +225,17 @@
             audio.play().catch(e => console.error("ThinMediaPlayer repeat failed:", e));
         } else {
             paused = true;
+        }
+    }
+
+    function handleSeek(e) {
+        const t = parseFloat(e.target.value);
+        if (remoteMode) {
+            sendMediaCommand('seek', t, 'thin');
+            // Optimistic update
+            currentTime = t;
+        } else {
+            currentTime = t;
         }
     }
 
@@ -291,8 +353,9 @@
                 min="0" 
                 max={duration || 1} 
                 step="0.001"
-                bind:value={currentTime}
-                disabled={!src}
+                value={currentTime}
+                on:input={handleSeek}
+                disabled={!src && !remoteMode}
                 on:click|stopPropagation
                 on:mousedown|stopPropagation
                 on:mousemove={handleMouseMoveOnProgressBar}
@@ -311,7 +374,7 @@
 
     <div class="flex items-center space-x-1 flex-shrink-0">
         <span class="text-gray-600 dark:text-text-secondary">{@html VOLUME_HIGH_ICON}</span>
-        <input type="range" class="w-16 h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={(e) => volume = e.target.value / 100} on:click|stopPropagation on:mousedown|stopPropagation>
+        <input type="range" class="w-16 h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange} on:click|stopPropagation on:mousedown|stopPropagation>
     </div>
 
     <div class="relative flex-shrink-0 h-full flex items-center">

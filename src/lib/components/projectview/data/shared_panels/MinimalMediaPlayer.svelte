@@ -1,5 +1,6 @@
 <script>
-    import { createEventDispatcher, onDestroy } from 'svelte';
+    import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+    import { mediaState, mediaCommands } from '$lib/stores/mediaPlayerStore.js';
 
     export let src = null;
 
@@ -119,6 +120,48 @@
     function onVolumeInput(e) {
         volume = parseFloat(e.target.value) / 100;
     }
+
+    // --- Media Sync Logic ---
+    $: if (src) {
+        mediaState.updateState({
+            sourceComponent: 'minimal',
+            src,
+            currentTime,
+            duration,
+            paused,
+            volume,
+            repeat
+        });
+    }
+
+    onMount(() => {
+        const unsub = mediaCommands.subscribe(cmd => {
+            if (!cmd || cmd.origin === 'minimal') return;
+            
+            if (cmd.type === 'play') {
+                if (paused && mediaElement) mediaElement.play().catch(e => console.error(e));
+            } else if (cmd.type === 'pause') {
+                if (!paused && mediaElement) mediaElement.pause();
+            } else if (cmd.type === 'togglePlay') {
+                togglePlay();
+            } else if (cmd.type === 'seek') {
+                if (mediaElement) {
+                    mediaElement.currentTime = cmd.value;
+                    currentTime = cmd.value;
+                }
+            } else if (cmd.type === 'setVolume') {
+                volume = cmd.value;
+            } else if (cmd.type === 'toggleRepeat') {
+                toggleRepeat();
+            }
+        });
+        
+        return () => {
+            unsub();
+            mediaState.update(s => s.sourceComponent === 'minimal' ? { ...s, sourceComponent: null } : s);
+        };
+    });
+    // ------------------------
 
     function formatTime(seconds) {
         if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
