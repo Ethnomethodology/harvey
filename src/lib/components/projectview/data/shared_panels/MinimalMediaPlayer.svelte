@@ -11,34 +11,43 @@
     const FORWARD_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/></svg>`;
     const VOLUME_HIGH_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-volume-up-fill" viewBox="0 0 16 16"><path d="M11.536 14.01A8.47 8.47 0 0 0 14.026 8a8.47 8.47 0 0 0-2.49-6.01l-.708.707A7.48 7.48 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303z"/><path d="M10.121 12.59A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.59l-.707.707A5.48 5.48 0 0 1 11.025 8a5.48 5.48 0 0 1-1.61 3.88z"/><path d="M8.707 11.18A4.5 4.5 0 0 0 10.025 8a4.5 4.5 0 0 0-1.318-3.18l-.707.707A3.5 3.5 0 0 1 9.025 8a3.5 3.5 0 0 1-1.025 2.47zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.393-1.85A.5.5 0 0 1 6.717 3.55"/></svg>`;
     const REPEAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-repeat" viewBox="0 0 16 16"><path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/></svg>`;
+    const ICON_MINIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-collapse" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m-.5 11.707-1.146 1.147a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 11.707V15.5a.5.5 0 0 1-1 0z"/></svg>`;
+    const ICON_MAXIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-expand" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10"/></svg>`;
 
-    let audio;
+    let mediaElement;
     let paused = true;
     let currentTime = 0;
     let duration = 0;
     let volume = 1;
     let lastLoadedSrc = null;
     let repeat = false;
+    let showVideo = false;
 
-    $: if (src && audio && src !== lastLoadedSrc) {
+    $: isVideo = src && /\.(mp4|mov|avi|mkv|webm)$/i.test(src);
+
+    $: if (src && mediaElement && src !== lastLoadedSrc) {
         lastLoadedSrc = src;
         currentTime = 0;
-        audio.src = src;
-        audio.load();
-        audio.play().catch(e => console.error("Audio play failed:", e));
+        mediaElement.src = src;
+        mediaElement.load();
+        mediaElement.play().catch(e => console.error("Media play failed:", e));
     }
 
     function togglePlay() {
         paused = !paused;
     }
 
+    function toggleVideo() {
+        showVideo = !showVideo;
+    }
+
     function rewind10s() {
-        if (!audio) return;
+        if (!mediaElement) return;
         currentTime = Math.max(0, currentTime - 10);
     }
 
     function forward10s() {
-        if (!audio || !duration) return;
+        if (!mediaElement || !duration) return;
         currentTime = Math.min(duration, currentTime + 10);
     }
 
@@ -49,7 +58,7 @@
     function handleEnded() {
         if (repeat) {
             currentTime = 0;
-            audio.play().catch(e => console.error("Audio repeat play failed:", e));
+            mediaElement.play().catch(e => console.error("Media repeat play failed:", e));
         } else {
             dispatch('ended');
         }
@@ -116,14 +125,22 @@
 
 {#if src}
 <div class="p-2 border-t border-gray-200 dark:border-border bg-gray-50 dark:bg-surface-3">
-    <audio
-        bind:this={audio}
-        bind:paused
-        bind:currentTime
-        bind:duration
-        bind:volume
-        on:ended={handleEnded}
-    ></audio>
+    <div class="relative w-full aspect-video bg-black mb-2 rounded-md overflow-hidden" class:hidden={!showVideo}>
+        <video
+            bind:this={mediaElement}
+            class="w-full h-full object-contain"
+            bind:paused
+            bind:currentTime
+            bind:duration
+            bind:volume
+            on:ended={handleEnded}
+        ></video>
+    </div>
+    {#if !showVideo}
+        <!-- Ensure video element is still in DOM when hidden to play audio, but we need to bind to it. 
+             If showVideo is false, the div above is hidden but present. 
+             Ideally we want the video element to always exist. -->
+    {/if}
 
     <div class="flex items-center space-x-2 text-xs">
         <span class="text-gray-600 dark:text-text-secondary w-10 text-right">{formatTime(currentTime)}</span>
@@ -166,7 +183,12 @@
                     {@html FORWARD_ICON}
                 </button>
             </div>
-            <div class="flex justify-end">
+            <div class="flex justify-end items-center space-x-1">
+                {#if isVideo}
+                    <button on:click={toggleVideo} class="p-1 text-gray-600 dark:text-text-secondary hover:text-black dark:hover:text-text-primary" title={showVideo ? 'Hide Video' : 'Show Video'}>
+                        {@html showVideo ? ICON_MINIMIZE_VIDEO : ICON_MAXIMIZE_VIDEO}
+                    </button>
+                {/if}
                 <button on:click={toggleRepeat} class="p-1 transition-colors" class:text-blue-500={repeat} class:text-black={!repeat} class:dark:text-text-primary={!repeat} title="Repeat">
                     {@html REPEAT_ICON}
                 </button>
