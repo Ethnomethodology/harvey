@@ -2,6 +2,7 @@
 <script>
   export let categoryName = '';
   export let files = []; // Expected: array of objects like { name: string, path: string }
+  export let activePath = null;
   export let visible = false;
   export let x = 0;
   export let y = 0;
@@ -25,7 +26,15 @@
     {#if files && files.length > 0}
       <ul class="list-none p-0 m-0 max-h-48 overflow-y-auto">
         {#each files as file (file.path || file.name)}
-          <li class="truncate" title={file.name}>{file.name}</li>
+          <li 
+            class="truncate" 
+            class:text-blue-600={file.path === activePath}
+            class:dark:text-blue-400={file.path === activePath}
+            class:font-medium={file.path === activePath}
+            title={file.name}
+          >
+            {file.name}
+          </li>
         {/each}
       </ul>
     {:else}

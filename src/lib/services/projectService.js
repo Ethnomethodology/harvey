@@ -1338,6 +1338,53 @@ export function cleanupProgressListener() { if (progressUnlistenFn) { progressUn
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
+async function processJsonToRemoveHighlights(jsonString) {
+    if (!jsonString) return jsonString;
+    const editor = createHeadlessEditor({ 
+        nodes: ALL_EDITOR_NODES, 
+        namespace: `highlight-remover-${Date.now()}`, 
+        onError: (e) => console.error("[HighlightRemover] Error:", e) 
+    });
+    
+    let parsedState;
+    try {
+        parsedState = editor.parseEditorState(jsonString);
+    } catch (e) {
+        console.warn("Failed to parse JSON for highlight removal, returning original.", e);
+        return jsonString;
+    }
+    
+    editor.setEditorState(parsedState);
+    
+    await editor.update(() => {
+        const root = _getRoot();
+        const nodes = [];
+        
+        const traverse = (node) => {
+            nodes.push(node);
+            if (node.getChildren) {
+                Array.from(node.getChildren()).forEach(traverse);
+            }
+        };
+        traverse(root);
+
+        nodes.forEach(node => {
+            if ((node.getType() === 'extended-text' || node instanceof ExtendedTextNode) && node.setHighlightId) {
+                node.setHighlightId(null);
+            }
+            if (node instanceof TextNode || node.getType() === 'text' || node.getType() === 'extended-text') {
+                const style = node.getStyle();
+                if (style && typeof style === 'string' && style.includes('background-color')) {
+                    const newStyle = style.replace(/background-color\s*:\s*[^;]+;?/gi, '');
+                    node.setStyle(newStyle);
+                }
+            }
+        });
+    });
+    
+    return JSON.stringify(editor.getEditorState().toJSON());
+}
+
 export async function convertAndSaveTranscriptAsDoc() {
     const projData = get(project);
     const tsData = get(transcriptStore);
@@ -1355,8 +1402,9 @@ export async function convertAndSaveTranscriptAsDoc() {
     try {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
-        finalLexicalJsonString = fullLexicalTableString;
-                const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
+        finalLexicalJsonString = await processJsonToRemoveHighlights(fullLexicalTableString);
+        
+        const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
                 console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
                 const originalTranscriptStem = originalTranscriptFilename.includes('.')
                     ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
@@ -1436,8 +1484,9 @@ export async function convertAndSaveTranscriptAsTranscript() {
     project.update(p => ({ ...p, statusMessage: `Saving as imported transcript...` }));
 
     try {
-        const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
-        if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
+        const rawLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
+        if (!rawLexicalTableString) throw new Error("Transcript file content is empty.");
+        const fullLexicalTableString = await processJsonToRemoveHighlights(rawLexicalTableString);
         
         const originalTranscriptFilename = await basename(transcriptPath); 
         const originalTranscriptStem = originalTranscriptFilename.includes('.')

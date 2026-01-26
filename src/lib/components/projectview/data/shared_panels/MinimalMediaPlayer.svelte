@@ -28,6 +28,11 @@
     $: if (src && mediaElement && src !== lastLoadedSrc) {
         lastLoadedSrc = src;
         currentTime = 0;
+        
+        // Auto-show video for video files, hide for audio
+        const isVideoFile = /\.(mp4|mov|avi|mkv|webm)$/i.test(src);
+        showVideo = isVideoFile;
+
         mediaElement.src = src;
         mediaElement.load();
         mediaElement.play().catch(e => console.error("Media play failed:", e));
