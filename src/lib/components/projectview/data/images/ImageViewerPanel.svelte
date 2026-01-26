@@ -38,16 +38,18 @@
     let selectedBaseColorIndex = 0; // Index into baseColors
 
     const baseColors = [
+        { name: 'White', rgb: '255, 255, 255' },
         { name: 'Yellow', rgb: '255, 242, 117' },
         { name: 'Green', rgb: '168, 255, 158' },
         { name: 'Blue', rgb: '174, 239, 255' },
         { name: 'Pink', rgb: '255, 176, 207' },
         { name: 'Purple', rgb: '208, 160, 255' },
-        { name: 'White', rgb: '255, 255, 255' },
+        { name: 'Transparent', rgb: 'transparent' },
     ];
 
     function getSelectedColor(isSpeechBubble) {
         const base = baseColors[selectedBaseColorIndex];
+        if (base.rgb === 'transparent') return 'transparent';
         return `rgba(${base.rgb}, ${isSpeechBubble ? '1' : '0.5'})`;
     }
 
@@ -278,7 +280,7 @@
         } else {
             isDrawing = true;
             startViewportPoint = viewportPoint;
-            if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
+            if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect' || activeDrawingTool === 'text-area') {
                 currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
             } else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') {
                 currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
@@ -333,7 +335,7 @@
             const updatedAnnotations = $currentAnnotations.map(a => {
                 if (a.id === draggedAnnotationId) {
                     const selector = { ...a.target.selector.value };
-                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect') {
+                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect' || selector.shape === 'text-area') {
                         selector.x += dx;
                         selector.y += dy;
                     } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
@@ -375,7 +377,7 @@
             const updatedAnnotations = $currentAnnotations.map(a => {
                 if (a.id === draggedAnnotationId) {
                     const selector = { ...a.target.selector.value };
-                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect') {
+                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect' || selector.shape === 'text-area') {
                         if (draggedHandleType === 'nw') {
                             selector.x += dx; selector.y += dy;
                             selector.width -= dx; selector.height -= dy;
@@ -425,7 +427,7 @@
 
         if (!isDrawing || !activeDrawingTool) return;
 
-        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
+        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect' || activeDrawingTool === 'text-area') {
             const x = Math.min(startViewportPoint.x, currentViewportPoint.x);
             const y = Math.min(startViewportPoint.y, currentViewportPoint.y);
             const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
@@ -468,7 +470,7 @@
         const endViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
         let newAnnotation = null;
 
-        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
+        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect' || activeDrawingTool === 'text-area') {
             const viewportRect = new OpenSeadragon.Rect(
                 Math.min(startViewportPoint.x, endViewportPoint.x),
                 Math.min(startViewportPoint.y, endViewportPoint.y),
@@ -477,7 +479,12 @@
             );
             if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
                 const isSpeech = activeDrawingTool === 'speech-bubble-rect';
-                const shapeData = { ...viewportRect, shape: isSpeech ? 'speech-bubble-rect' : 'rectangle' };
+                const isTextArea = activeDrawingTool === 'text-area';
+                let shapeType = 'rectangle';
+                if (isSpeech) shapeType = 'speech-bubble-rect';
+                else if (isTextArea) shapeType = 'text-area';
+
+                const shapeData = { ...viewportRect, shape: shapeType };
                 if (isSpeech) {
                     // Default tail: bottom right, slightly offset
                     shapeData.tail = { x: viewportRect.x + viewportRect.width, y: viewportRect.y + viewportRect.height + 0.05 }; 
@@ -487,7 +494,7 @@
                     id: uuidv4(),
                     type: 'Annotation',
                     target: { selector: { type: 'FragmentSelector', value: shapeData } },
-                    body: [{ type: 'Color', value: getSelectedColor(isSpeech), purpose: 'highlighting' }]
+                    body: [{ type: 'Color', value: getSelectedColor(isSpeech || isTextArea), purpose: 'highlighting' }]
                 };
             }
         } else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') {
@@ -516,11 +523,23 @@
             updateImageAnnotations([...$currentAnnotations, newAnnotation]);
             await saveImageAnnotations();
             
-            // Don't open dialog immediately for any shape.
-            // Reset states that would otherwise be handled by dialog actions
-            annotationBeingEdited = null;
-            isEditingExisting = false;
-            activeDrawingTool = null; // Deactivate tool
+            const shapeType = newAnnotation.target.selector.value.shape;
+            const isSpeechBubble = shapeType.startsWith('speech-bubble');
+            const isTextArea = shapeType === 'text-area';
+            
+            if (!isSpeechBubble && !isTextArea) {
+                annotationBeingEdited = newAnnotation;
+                isEditingExisting = false;
+                // event.position is already relative to the viewer element
+                dialogX = event.position.x;
+                dialogY = event.position.y;
+                showAnnotationCreationDialog = true;
+            } else {
+                // For speech bubbles and text areas, don't open dialog immediately.
+                annotationBeingEdited = null;
+                isEditingExisting = false;
+                activeDrawingTool = null; // Deactivate tool
+            }
         }
         currentRect = null;
         currentCircle = null;
@@ -586,7 +605,7 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text } = event.detail;
+        const { title, description, color, text, textColor, fontSize, borderColor, borderSize } = event.detail;
         if (!annotationBeingEdited) return;
 
         const newBody = [
@@ -597,6 +616,10 @@
         if (text !== undefined && text !== null && text !== '') {
             newBody.push({ type: 'TextualBody', value: text, purpose: 'content' });
         }
+        if (textColor) newBody.push({ type: 'TextColor', value: textColor, purpose: 'rendering' });
+        if (fontSize) newBody.push({ type: 'FontSize', value: fontSize, purpose: 'rendering' });
+        if (borderColor) newBody.push({ type: 'BorderColor', value: borderColor, purpose: 'rendering' });
+        if (borderSize) newBody.push({ type: 'BorderSize', value: borderSize, purpose: 'rendering' });
 
         const updatedAnnotation = {
             ...annotationBeingEdited,
@@ -837,6 +860,18 @@
                     <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
                 </svg>
             </button>
+
+            <button
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'text-area'}
+                on:click={() => activeDrawingTool = activeDrawingTool === 'text-area' ? null : 'text-area'}
+                title="Draw Text Area"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-textarea-t" viewBox="0 0 16 16">
+                    <path d="M1.5 2.5A1.5 1.5 0 0 1 3 1h10a1.5 1.5 0 0 1 1.5 1.5v3.563a2 2 0 0 1 0 3.874V13.5A1.5 1.5 0 0 1 13 15H3a1.5 1.5 0 0 1-1.5-1.5V9.937a2 2 0 0 1 0-3.874zm1 3.563a2 2 0 0 1 0 3.874V13.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.937a2 2 0 0 1 0-3.874V2.5A.5.5 0 0 0 13 2H3a.5.5 0 0 0-.5.5zM2 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2m12 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
+                    <path d="M11.434 4H4.566L4.5 5.994h.386c.21-1.252.612-1.446 2.173-1.495l.343-.011v6.343c0 .537-.116.665-1.049.748V12h3.294v-.421c-.938-.083-1.054-.21-1.054-.748V4.488l.348.01c1.56.05 1.963.244 2.173 1.496h.386z"/>
+                </svg>
+            </button>
             <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
             <div class="flex items-center space-x-1.5">
                 {#each baseColors as color, i}
@@ -844,7 +879,7 @@
                         class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
                         class:ring-2={selectedBaseColorIndex === i}
                         class:ring-blue-500={selectedBaseColorIndex === i}
-                        style="background-color: rgba({color.rgb}, 1);"
+                        style="background: {color.rgb === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : `rgba(${color.rgb}, 1)`};"
                         on:click={() => selectedBaseColorIndex = i}
                         title={color.name}
                     ></button>
@@ -871,8 +906,12 @@
                 {@const S = 1000}
                 {@const shapeData = annotation.target.selector.value}
                 {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
+                {@const borderColorBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor')}
+                {@const borderSizeBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize')}
+                
                 {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
-                {@const strokeColor = adjustOpacity(fillColor, 1)}
+                {@const strokeColor = selectedAnnotationId === annotation.id ? 'blue' : (borderColorBody ? borderColorBody.value : (fillColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : adjustOpacity(fillColor, 1)))}
+                {@const strokeWidth = selectedAnnotationId === annotation.id ? '2' : (borderSizeBody ? borderSizeBody.value.toString() : '1')}
 
                 {#if shapeData.shape === 'rectangle'}
                     <rect
@@ -900,12 +939,38 @@
                         <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
                         <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
                     {/if}
+                {:else if shapeData.shape === 'text-area'}
+                    <rect
+                        x={shapeData.x * S}
+                        y={shapeData.y * S}
+                        width={shapeData.width * S}
+                        height={shapeData.height * S}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        stroke-width={strokeWidth}
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
+                    />
+                    {#if selectedAnnotationId === annotation.id}
+                        <!-- 8 handles for text area -->
+                        <circle cx={shapeData.x * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
+                        <circle cx={(shapeData.x + shapeData.width / 2) * S} cy={(shapeData.y + shapeData.height) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
+                        <circle cx={shapeData.x * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
+                        <circle cx={(shapeData.x + shapeData.width) * S} cy={(shapeData.y + shapeData.height / 2) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
+                    {/if}
                 {:else if shapeData.shape === 'speech-bubble-rect'}
                      <path
                         d={getBubblePath(shapeData, false)}
                         fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
+                        stroke={strokeColor}
+                        stroke-width={strokeWidth}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -988,8 +1053,8 @@
                     <polygon
                         points={shapeData.points.map(p => `${p.x * S},${p.y * S}`).join(' ')}
                         fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
+                        stroke={strokeColor}
+                        stroke-width={strokeWidth}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1008,12 +1073,18 @@
             {#each $currentAnnotations as annotation (annotation.id)}
                 {@const shapeData = annotation.target.selector.value}
                 {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
+                {@const textColorBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'TextColor')}
+                {@const fontSizeBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'FontSize')}
+                
+                {@const textColor = textColorBody ? textColorBody.value : 'black'}
+                {@const fontSize = fontSizeBody ? `${fontSizeBody.value}px` : '14px'}
+                
                 {@const S = 1000}
                 {#if textBody}
-                    {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect'}
+                    {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
                         <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: black; font-family: sans-serif; font-weight: 600; font-size: 14px; line-height: 1.2; word-break: break-word; width: 100%;">
+                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
                                 </p>
                             </div>
@@ -1021,7 +1092,7 @@
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
                         <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: black; font-family: sans-serif; font-weight: 600; font-size: 14px; line-height: 1.2; word-break: break-word; width: 100%;">
+                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
                                 </p>
                             </div>
@@ -1094,12 +1165,16 @@
                 <AnnotationCreationDialog
                     x={dialogX}
                     y={dialogY}
-                    initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || (annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') ? '' : null)}
+                    initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || (annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area' ? '' : null)}
+                    initialTextColor={annotationBeingEdited?.body?.find(b => b.type === 'TextColor' && b.purpose === 'rendering')?.value || 'black'}
+                    initialFontSize={annotationBeingEdited?.body?.find(b => b.type === 'FontSize' && b.purpose === 'rendering')?.value || 14}
+                    initialBorderColor={annotationBeingEdited?.body?.find(b => b.type === 'BorderColor' && b.purpose === 'rendering')?.value || null}
+                    initialBorderSize={annotationBeingEdited?.body?.find(b => b.type === 'BorderSize' && b.purpose === 'rendering')?.value || 1}
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
                     isEditing={isEditingExisting}
-                    useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble')}
+                    useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area'}
                     panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
                     on:save={handleAnnotationDialogSave}
                     on:cancel={handleAnnotationDialogCancel}
