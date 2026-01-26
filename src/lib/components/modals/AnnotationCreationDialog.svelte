@@ -13,9 +13,11 @@
     export let initialFontSize = 14;
     export let initialBorderColor = null;
     export let initialBorderSize = 1;
+    export let initialShape = 'rectangle';
     export let isEditing = false; // New prop to indicate if we are editing an existing annotation
     export let panelBounds = null; // New prop to receive the bounding rectangle of the parent panel
     export let useSolidColors = false; // New prop to determine color palette
+    export let isCensoredMode = false; // New prop for censored-only mode
 
     let title = initialTitle;
     let description = initialDescription;
@@ -23,11 +25,13 @@
     let selectedColor = initialColor;
     let selectedTextColor = initialTextColor;
     let selectedFontSize = initialFontSize;
-    let selectedBorderColor = initialBorderColor || (initialColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : initialColor.replace(', 0.5', ', 1'));
+    let selectedBorderColor = selectedColor === 'url(#censoredPattern)' ? 'black' : (initialBorderColor || (initialColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : initialColor.replace(', 0.5', ', 1')));
     let selectedBorderSize = initialBorderSize;
+    let selectedShape = (initialShape && initialShape.includes('circle')) ? 'circle' : 'rectangle';
 
     const transparentColors = [
         { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
+        { value: 'rgba(0, 0, 0, 0.5)', label: 'Black' },
         { value: 'rgba(255, 242, 117, 0.5)', label: 'Yellow' },
         { value: 'rgba(168, 255, 158, 0.5)', label: 'Green' },
         { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
@@ -38,12 +42,19 @@
 
     const solidColors = [
         { value: 'rgba(255, 255, 255, 1)', label: 'White' },
+        { value: 'rgba(0, 0, 0, 1)', label: 'Black' },
         { value: 'rgba(255, 242, 117, 1)', label: 'Yellow' },
         { value: 'rgba(168, 255, 158, 1)', label: 'Green' },
         { value: 'rgba(174, 239, 255, 1)', label: 'Blue' },
         { value: 'rgba(255, 176, 207, 1)', label: 'Pink' },
         { value: 'rgba(208, 160, 255, 1)', label: 'Purple' },
         { value: 'transparent', label: 'Transparent' },
+    ];
+
+    const censoredColors = [
+        { value: 'url(#censoredPattern)', label: 'Anonymise' },
+        { value: 'rgba(255, 255, 255, 1)', label: 'White' },
+        { value: 'rgba(0, 0, 0, 1)', label: 'Black' },
     ];
 
     const textColors = [
@@ -55,14 +66,13 @@
         { value: 'transparent', label: 'Transparent' },
     ];
 
+    const borderSizes = [1, 2, 3, 4, 5];
     const fontSizes = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36];
 
-    const borderSizes = [1, 2, 3, 4, 5];
-
-    $: highlightOptions = useSolidColors ? solidColors : transparentColors;
+    $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
     function handleSave() {
-        dispatch('save', { title, description, color: selectedColor, text, textColor: selectedTextColor, fontSize: selectedFontSize, borderColor: selectedBorderColor, borderSize: selectedBorderSize });
+        dispatch('save', { title, description, color: selectedColor, text, textColor: selectedTextColor, fontSize: selectedFontSize, borderColor: selectedBorderColor, borderSize: selectedBorderSize, shape: selectedShape });
     }
 
     function handleCancel() {
@@ -109,43 +119,79 @@
     class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; min-width: 200px;"
 >
-    {#if initialText !== null}
-        <div class="mb-3">
-            <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
-            <textarea
-                id="annotation-text"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                bind:value={text}
-                placeholder="Enter text..."
-                rows="2"
-            ></textarea>
-        </div>
-    {:else}
-        <div class="mb-3">
-            <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
-            <input
-                type="text"
-                id="annotation-title"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                bind:value={title}
-                placeholder="Enter title"
-                autocomplete="off"
-            />
-        </div>
-        <div class="mb-3">
-            <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-            <textarea
-                id="annotation-description"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                bind:value={description}
-                placeholder="Enter description"
-                rows="2"
-            ></textarea>
+    {#if !isCensoredMode}
+        {#if initialText !== null || selectedShape === 'circle'}
+            <div class="mb-3">
+                <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
+                <textarea
+                    id="annotation-text"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    bind:value={text}
+                    placeholder="Enter text..."
+                    rows="2"
+                ></textarea>
+            </div>
+        {:else}
+            <div class="mb-3">
+                <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                <input
+                    type="text"
+                    id="annotation-title"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    bind:value={title}
+                    placeholder="Enter title"
+                    autocomplete="off"
+                />
+            </div>
+            <div class="mb-3">
+                <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <textarea
+                    id="annotation-description"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    bind:value={description}
+                    placeholder="Enter description"
+                    rows="2"
+                ></textarea>
+            </div>
+        {/if}
+    {/if}
+
+    {#if isCensoredMode}
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shape</label>
+            <div class="flex space-x-2">
+                <button
+                    class="flex-1 flex justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                    class:bg-blue-600={selectedShape === 'rectangle'}
+                    class:text-white={selectedShape === 'rectangle'}
+                    class:bg-gray-100={selectedShape !== 'rectangle'}
+                    class:dark:bg-gray-700={selectedShape !== 'rectangle'}
+                    title="Rectangle"
+                    on:click={() => (selectedShape = 'rectangle')}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zM2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/>
+                    </svg>
+                </button>
+                <button
+                    class="flex-1 flex justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                    class:bg-blue-600={selectedShape === 'circle'}
+                    class:text-white={selectedShape === 'circle'}
+                    class:bg-gray-100={selectedShape !== 'circle'}
+                    class:dark:bg-gray-700={selectedShape !== 'circle'}
+                    title="Circle"
+                    on:click={() => (selectedShape = 'circle')}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                    </svg>
+                </button>
+            </div>
         </div>
     {/if}
 
     <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Background Color</label>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{isCensoredMode ? 'Anonymise Style' : 'Background Color'}</label>
         <div class="flex items-center space-x-1.5">
             {#each highlightOptions as option}
                 <button
@@ -153,7 +199,7 @@
                     class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
                     class:ring-2={selectedColor === option.value}
                     class:ring-blue-500={selectedColor === option.value}
-                    style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : option.value.replace(', 0.5', ', 1')};"
+                    style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : (option.value === 'url(#censoredPattern)' ? 'linear-gradient(to bottom right, #fff 25%, #888 25%, #888 50%, #444 50%, #444 75%, #000 75%)' : option.value.replace(', 0.5', ', 1'))};"
                     on:click={() => {
                         selectedColor = option.value;
                         if (initialText === null && isEditing) handleSave(); // Auto-save color change if no text
@@ -234,6 +280,17 @@
                         {size}
                     </button>
                 {/each}
+            </div>
+        </div>
+    {/if}
+
+    {#if isCensoredMode}
+        <div class="mb-4 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-[10px] text-amber-800 dark:text-amber-200 leading-tight">
+            <div class="flex items-start space-x-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="mt-0.5 flex-shrink-0" viewBox="0 0 16 16">
+                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.93-9.412-1 4.705c-.07.34.029.533.308.533.19 0 .452-.113.688-.273l.111.19c-.3.213-.662.338-.958.338-.589 0-.813-.41-.699-1.112l1.047-4.973c.067-.318-.05-.562-.38-.562-.286 0-.633.163-.84.294l-.11-.191c.217-.152.56-.322.896-.322.604 0 .822.424.71.105zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2"/>
+                </svg>
+                <span>Anonymization is only permanent when the image is <strong>exported with annotations</strong>.</span>
             </div>
         </div>
     {/if}
