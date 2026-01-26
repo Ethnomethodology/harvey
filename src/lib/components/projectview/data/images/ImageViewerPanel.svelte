@@ -912,17 +912,17 @@
                         on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
-                    <circle
-                        cx={shapeData.tail.x * S}
-                        cy={shapeData.tail.y * S}
-                        r={handleRadius * 1.2 * S}
-                        fill="white"
-                        stroke="black"
-                        stroke-width="1"
-                        class="pointer-events-auto cursor-pointer hover:fill-blue-500"
-                        on:pointerdown={(e) => startTailDrag(e, annotation.id)}
-                    />
                     {#if selectedAnnotationId === annotation.id}
+                        <circle
+                            cx={shapeData.tail.x * S}
+                            cy={shapeData.tail.y * S}
+                            r={handleRadius * 1.2 * S}
+                            fill="white"
+                            stroke="black"
+                            stroke-width="1"
+                            class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                            on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                        />
                         <!-- 8 handles for speech rect -->
                         <circle cx={shapeData.x * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
                         <circle cx={(shapeData.x + shapeData.width) * S} cy={shapeData.y * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
@@ -967,17 +967,17 @@
                         on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
                         on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
-                    <circle
-                        cx={shapeData.tail.x * S}
-                        cy={shapeData.tail.y * S}
-                        r={handleRadius * 1.2 * S}
-                        fill="white"
-                        stroke="black"
-                        stroke-width="1"
-                        class="pointer-events-auto cursor-pointer hover:fill-blue-500"
-                        on:pointerdown={(e) => startTailDrag(e, annotation.id)}
-                    />
                     {#if selectedAnnotationId === annotation.id}
+                        <circle
+                            cx={shapeData.tail.x * S}
+                            cy={shapeData.tail.y * S}
+                            r={handleRadius * 1.2 * S}
+                            fill="white"
+                            stroke="black"
+                            stroke-width="1"
+                            class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                            on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                        />
                         <circle cx={(shapeData.cx + shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                         <circle cx={(shapeData.cx - shapeData.r) * S} cy={shapeData.cy * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                         <circle cx={shapeData.cx * S} cy={(shapeData.cy + shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
