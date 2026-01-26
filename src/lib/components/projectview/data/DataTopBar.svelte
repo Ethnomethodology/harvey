@@ -536,11 +536,10 @@
 
     <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
         <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-icon flex items-center ml-1 mr-1 hover-scale-effect" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                <span class="text-xs ml-1">Import</span>
             </button>
         </div>
         
@@ -706,6 +705,7 @@
         @apply text-gray-700 dark:text-white;
         @apply border border-gray-300 dark:border-border;
         @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:text-blue-500 dark:hover:text-blue-400;
         @apply hover:border-blue-500 dark:hover:border-blue-500;
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
         @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-border dark:disabled:hover:!bg-transparent;
