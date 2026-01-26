@@ -147,7 +147,7 @@
             if (tailStyle === 'curved') {
                 const bc = { x: center.x + dir.x * (r * S), y: center.y + dir.y * (r * S) };
                 const spineV = { x: tx - bc.x, y: ty - bc.y };
-                const sign = tailFlipped ? 1 : -1;
+                const sign = tailFlipped ? -1 : 1;
                 const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                 const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                 path = `M ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} A ${r * S} ${r * S} 0 1 1 ${b1.x} ${b1.y} Z`;
@@ -180,7 +180,7 @@
                 bc = { x: bx, y: TL.y };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? 1 : -1;
+                    const sign = tailFlipped ? -1 : 1;
                     const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
@@ -194,7 +194,7 @@
                 bc = { x: TR.x, y: by };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? 1 : -1;
+                    const sign = tailFlipped ? -1 : 1;
                     const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
@@ -208,7 +208,7 @@
                 bc = { x: bx, y: BR.y };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? 1 : -1;
+                    const sign = tailFlipped ? -1 : 1;
                     const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${b1.x} ${b1.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b2.x} ${b2.y} L ${BL.x} ${BL.y} Z`;
@@ -222,7 +222,7 @@
                 bc = { x: TL.x, y: by };
                 if (tailStyle === 'curved') {
                     const spineV = { x: tx - bc.x, y: ty - bc.y };
-                    const sign = tailFlipped ? 1 : -1;
+                    const sign = tailFlipped ? -1 : 1;
                     const perp = { x: sign * -spineV.y * 0.25, y: sign * spineV.x * 0.25 };
                     const cp = { x: bc.x + spineV.x * 0.5 + perp.x, y: bc.y + spineV.y * 0.5 + perp.y };
                     path = `M ${TL.x} ${TL.y} L ${b2.x} ${b2.y} Q ${cp.x} ${cp.y} ${tx} ${ty} Q ${cp.x} ${cp.y} ${b1.x} ${b1.y} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
