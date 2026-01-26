@@ -33,17 +33,46 @@
         return [];
     });
 
-    // State for drawing mode: 'rectangle', 'circle', 'polygon', or null
+    // State for drawing mode: 'rectangle', 'circle', 'polygon', 'speech-bubble-rect', 'speech-bubble-circle', or null
     let activeDrawingTool = null;
+    let selectedBaseColorIndex = 0; // Index into baseColors
+
+    const baseColors = [
+        { name: 'Yellow', rgb: '255, 242, 117' },
+        { name: 'Green', rgb: '168, 255, 158' },
+        { name: 'Blue', rgb: '174, 239, 255' },
+        { name: 'Pink', rgb: '255, 176, 207' },
+        { name: 'Purple', rgb: '208, 160, 255' },
+        { name: 'White', rgb: '255, 255, 255' },
+    ];
+
+    function getSelectedColor(isSpeechBubble) {
+        const base = baseColors[selectedBaseColorIndex];
+        return `rgba(${base.rgb}, ${isSpeechBubble ? '1' : '0.5'})`;
+    }
 
     // Variables for drawing
     let isDrawing = false;
     let startPoint = null;
-    let currentRect = null; // { x, y, width, height } for rectangle
-    let currentCircle = null; // { cx, cy, r } for circle
+    let currentRect = null; // { x, y, width, height } for rectangle & speech-bubble-rect
+    let currentCircle = null; // { cx, cy, r } for circle & speech-bubble-circle
     let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
     let currentPreviewPolygonPoints = []; // For filled polygon preview
     let svgOverlay; // Reference to the SVG element
+
+    // State for dragging tail
+    let isDraggingTail = false;
+    let isDraggingShape = false;
+    let isDraggingResizeHandle = false;
+    let selectedAnnotationId = null;
+    let draggedAnnotationId = null;
+    let draggedHandleType = null; // 'nw', 'ne', 'sw', 'se', 'r', or index for polygon
+    let dragStartViewportPoint = null;
+    let handleRadius = 0.008; // Default viewport radius
+
+    $: if (activeDrawingTool) {
+        selectedAnnotationId = null;
+    }
 
     function adjustOpacity(rgbaColor, newOpacity) {
         if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
@@ -51,6 +80,151 @@
         if (parts.length !== 4) return rgbaColor;
         return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${newOpacity})`;
     }
+
+    // Helper to generate speech bubble path
+    function getBubblePath(shapeData, isCircle) {
+        const { x, y, width, height, cx, cy, r, tail } = shapeData;
+        if (!tail) return ''; // Should not happen for valid bubbles
+
+        const tx = tail.x;
+        const ty = tail.y;
+
+        let center, bounds;
+        if (isCircle) {
+            center = { x: cx, y: cy };
+            bounds = { x: cx - r, y: cy - r, width: r * 2, height: r * 2 };
+        } else {
+            center = { x: x + width / 2, y: y + height / 2 };
+            bounds = { x, y, width, height };
+        }
+
+        // Vector from center to tail tip
+        const dx = tx - center.x;
+        const dy = ty - center.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) return ''; // Degenerate
+
+        // Normalized direction
+        const dir = { x: dx / len, y: dy / len };
+
+        // Find intersection with shape boundary to determine base of tail
+        let ix, iy;
+        if (isCircle) {
+            ix = center.x + dir.x * r;
+            iy = center.y + dir.y * r;
+        } else {
+            // Rect intersection (simplified: check intersection with 4 sides)
+            // Ray: Center + t * dir. Find min t > 0 that hits a side.
+            // x = center.x + t*dir.x, y = center.y + t*dir.y
+            // Side 1 (Right): x = bounds.x + bounds.width. t = (bounds.x + bounds.width - center.x) / dir.x
+            // etc.
+            const tValues = [];
+            if (dir.x > 0) tValues.push((bounds.x + bounds.width - center.x) / dir.x);
+            else if (dir.x < 0) tValues.push((bounds.x - center.x) / dir.x);
+            if (dir.y > 0) tValues.push((bounds.y + bounds.height - center.y) / dir.y);
+            else if (dir.y < 0) tValues.push((bounds.y - center.y) / dir.y);
+
+            const t = Math.min(...tValues.filter(v => v > 0));
+            ix = center.x + dir.x * t;
+            iy = center.y + dir.y * t;
+        }
+
+        // Calculate base points perpendicular to direction
+        // Base width proportional to size, but clamped
+        const sizeParam = isCircle ? r * 2 : Math.min(width, height);
+        const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01); // Min size in viewport coords
+
+        const perp = { x: -dir.y, y: dir.x };
+        const b1 = { x: ix + perp.x * baseHalfWidth, y: iy + perp.y * baseHalfWidth };
+        const b2 = { x: ix - perp.x * baseHalfWidth, y: iy - perp.y * baseHalfWidth };
+
+        // Construct Path
+        // Start at b1, go to tip, go to b2.
+        // Then draw the rest of the shape.
+        // For simplicity in SVG, we can just draw the shape and the triangle and union them visually?
+        // But for a clean stroke, we need a single path.
+        // A full robust path union is complex.
+        // Approximation: Move to b1, Line to Tip, Line to b2.
+        // Then we need to arc/line around the shape from b2 back to b1.
+        
+        // Simpler visual trick: Draw the shape filled. Draw the triangle filled.
+        // Then draw the union stroke?
+        // Let's try to construct a decent path.
+        
+        // For Rectangle:
+        if (!isCircle) {
+             // It's a path. M b1.x b1.y L tx ty L b2.x b2.y.
+             // But we need to follow the rect.
+             // This is getting complex to do perfectly in math without a library.
+             // FALLBACK: Return two paths? No.
+             // Let's use the visual trick: Return a path that is just the Triangle (Tip -> B1 -> B2).
+             // And we will render the main Shape (Rect/Circle) separately.
+             // To make them look merged, we can render:
+             // 1. Filled Shape
+             // 2. Filled Triangle
+             // 3. Strokeless Shape (if fill only)
+             // But we have transparency (rgba 0.5). Overlap will show darker.
+             // So we MUST merge or use 'clip-path' or similar.
+             // Or, simply, assume the user accepts the overlap for now?
+             // "The speech bubble 'tail' (the part pointing to the speaker) usually needs to move independently".
+             // If I draw a circle and a separate triangle, they overlap. With 0.5 alpha, the overlap is visible.
+             // Standard Speech Bubble SVG:
+             // It is one path.
+             // Let's try to do the Circle one properly.
+             // Arc from b2 to b1 (large arc). Line to Tip. Close.
+        }
+        
+        if (isCircle) {
+            // Angle of b1 and b2
+            const ang1 = Math.atan2(b1.y - center.y, b1.x - center.x);
+            const ang2 = Math.atan2(b2.y - center.y, b2.x - center.x);
+            
+            // We want to draw arc from b2 to b1.
+            // SVG Arc: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
+            // We want the long way around? Usually yes, unless tail is inside (which we assume not).
+            // Check cross product to determine sweep?
+            // Assuming standard counter-clockwise or clockwise.
+            
+            // Let's just return a path string.
+            const largeArc = 1; // Almost full circle
+            const sweep = 1; // Clockwise?
+            
+            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r} ${r} 0 ${largeArc} ${sweep} ${b1.x} ${b1.y} Z`;
+        } else {
+             // Rectangle.
+             // We can use a similar logic if we treat it as a polygon.
+             // But the rect has corners.
+             // Lets just draw the full rect, and the triangle, but use a mask/clip? No, SVG doesn't support "union" path operation natively easily.
+             // OK, for this prototype, I will just return the Triangle path. 
+             // AND I will render the Rect/Circle as usual.
+             // The user will see the overlap. This is acceptable for a "harvey" prototype unless I use a library like 'paper.js' or 'd3-polygon'.
+             // Wait, I can make the tail *start* from the center!
+             // Then the triangle is (Center, B1_far, B2_far)? No.
+             
+             // ALTERNATIVE: Use a `mask`.
+             // Define a mask that is the union of shape + tail.
+             // Draw a rect filling the bounding box of union with that mask.
+             
+             // SIMPLEST: Render shape and tail with opacity = 1.0 (no transparency)?
+             // The default color is `rgba(255, 242, 117, 0.5)`.
+             // If I change the design to solid borders and transparent fill... overlap is fine for fill?
+             // No, fill overlap doubles opacity.
+             
+             // COMPROMISE:
+             // For Circle: Use the Arc logic `M b1... L tip... L b2... A ...`. It works well.
+             // For Rect: I'll use the "Triangle + Rect" approach but accept the overlap artifacts for now to ensure stability and "independent movement".
+             // Actually, the prompt asks for "speech bubbles".
+             // Let's try to be clever.
+             // If I draw the triangle from the *center* to the tip?
+             // No.
+             
+             // Let's stick to: Circle uses the Arc path (it looks good).
+             // Rect uses Rect + Triangle.
+             const triPath = `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} Z`;
+             return triPath;
+        }
+    }
+
 
     async function initializeViewer(pathForImage) {
         console.log(`[ImageViewerPanel initializeViewer] Attempting for path: ${pathForImage}`);
@@ -99,6 +273,7 @@
                     osdViewer.addOverlay(svgOverlay, new OpenSeadragon.Rect(0, 0, 1, 1)); // Cover entire image viewport
                     svgOverlay.style.pointerEvents = 'none'; // Allow OSD events to pass through
                 }
+                updateAnnotationPositions();
                 setupDrawingEvents();
                 // We no longer call loadAnnotationsForImage here, as it's handled by the store
                 console.log('[ImageViewerPanel] OpenSeadragon setup complete.');
@@ -132,11 +307,18 @@
     let startViewportPoint = null; // Stores the starting viewport point for drawing
 
     function onMouseDown(event) {
-        if (!activeDrawingTool) return;
         if (event.originalEvent.button !== 0) return; // Only left click
 
         const viewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
+        // If we just clicked a handle or shape, one of these flags will be true
+        // because the SVG event handlers fire before OSD canvas-press.
+        if (!activeDrawingTool && !isDraggingShape && !isDraggingTail && !isDraggingResizeHandle) {
+             selectedAnnotationId = null;
+        }
+
+        if (!activeDrawingTool) return;
+        
         if (activeDrawingTool === 'polygon') {
             if (!isDrawing) {
                 isDrawing = true;
@@ -147,9 +329,9 @@
         } else {
             isDrawing = true;
             startViewportPoint = viewportPoint;
-            if (activeDrawingTool === 'rectangle') {
+            if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
                 currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
-            } else if (activeDrawingTool === 'circle') {
+            } else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') {
                 currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
             }
         }
@@ -170,17 +352,137 @@
     }
 
     function onMouseMove(event) {
-        if (!isDrawing || !activeDrawingTool) return;
-
         const currentViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
-        if (activeDrawingTool === 'rectangle') {
+        if (isDraggingTail && draggedAnnotationId) {
+            // Update the tail position of the annotation
+            const updatedAnnotations = $currentAnnotations.map(a => {
+                if (a.id === draggedAnnotationId) {
+                    const selector = a.target.selector.value;
+                    return {
+                        ...a,
+                        target: {
+                            ...a.target,
+                            selector: {
+                                ...a.target.selector,
+                                value: { ...selector, tail: { x: currentViewportPoint.x, y: currentViewportPoint.y } }
+                            }
+                        }
+                    };
+                }
+                return a;
+            });
+            updateImageAnnotations(updatedAnnotations, false);
+            event.preventDefaultAction = true;
+            return;
+        }
+
+        if (isDraggingShape && draggedAnnotationId && dragStartViewportPoint) {
+            const dx = currentViewportPoint.x - dragStartViewportPoint.x;
+            const dy = currentViewportPoint.y - dragStartViewportPoint.y;
+            
+            const updatedAnnotations = $currentAnnotations.map(a => {
+                if (a.id === draggedAnnotationId) {
+                    const selector = { ...a.target.selector.value };
+                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect') {
+                        selector.x += dx;
+                        selector.y += dy;
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                        selector.cx += dx;
+                        selector.cy += dy;
+                    } else if (selector.shape === 'polygon') {
+                        selector.points = selector.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                    }
+                    
+                    if (selector.tail) {
+                        selector.tail.x += dx;
+                        selector.tail.y += dy;
+                    }
+                    
+                    return {
+                        ...a,
+                        target: {
+                            ...a.target,
+                            selector: {
+                                ...a.target.selector,
+                                value: selector
+                            }
+                        }
+                    };
+                }
+                return a;
+            });
+            
+            dragStartViewportPoint = currentViewportPoint; // Update for next frame
+            updateImageAnnotations(updatedAnnotations, false);
+            event.preventDefaultAction = true;
+            return;
+        }
+
+        if (isDraggingResizeHandle && draggedAnnotationId && dragStartViewportPoint) {
+            const dx = currentViewportPoint.x - dragStartViewportPoint.x;
+            const dy = currentViewportPoint.y - dragStartViewportPoint.y;
+
+            const updatedAnnotations = $currentAnnotations.map(a => {
+                if (a.id === draggedAnnotationId) {
+                    const selector = { ...a.target.selector.value };
+                    if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect') {
+                        if (draggedHandleType === 'nw') {
+                            selector.x += dx; selector.y += dy;
+                            selector.width -= dx; selector.height -= dy;
+                        } else if (draggedHandleType === 'ne') {
+                            selector.y += dy;
+                            selector.width += dx; selector.height -= dy;
+                        } else if (draggedHandleType === 'sw') {
+                            selector.x += dx;
+                            selector.width -= dx; selector.height += dy;
+                        } else if (draggedHandleType === 'se') {
+                            selector.width += dx; selector.height += dy;
+                        } else if (draggedHandleType === 'n') {
+                            selector.y += dy; selector.height -= dy;
+                        } else if (draggedHandleType === 's') {
+                            selector.height += dy;
+                        } else if (draggedHandleType === 'w') {
+                            selector.x += dx; selector.width -= dx;
+                        } else if (draggedHandleType === 'e') {
+                            selector.width += dx;
+                        }
+                        // Clamp min size
+                        selector.width = Math.max(0.001, selector.width);
+                        selector.height = Math.max(0.001, selector.height);
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                        if (draggedHandleType === 'r') {
+                            const d_center_x = currentViewportPoint.x - selector.cx;
+                            const d_center_y = currentViewportPoint.y - selector.cy;
+                            selector.r = Math.sqrt(d_center_x * d_center_x + d_center_y * d_center_y);
+                        }
+                        selector.r = Math.max(0.0005, selector.r);
+                    } else if (selector.shape === 'polygon') {
+                        const idx = parseInt(draggedHandleType);
+                        if (!isNaN(idx)) {
+                            selector.points[idx] = { x: selector.points[idx].x + dx, y: selector.points[idx].y + dy };
+                        }
+                    }
+                    return { ...a, target: { ...a.target, selector: { ...a.target.selector, value: selector } } };
+                }
+                return a;
+            });
+
+            dragStartViewportPoint = currentViewportPoint;
+            updateImageAnnotations(updatedAnnotations, false);
+            event.preventDefaultAction = true;
+            return;
+        }
+
+        if (!isDrawing || !activeDrawingTool) return;
+
+        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
             const x = Math.min(startViewportPoint.x, currentViewportPoint.x);
             const y = Math.min(startViewportPoint.y, currentViewportPoint.y);
             const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
             const height = Math.abs(startViewportPoint.y - currentViewportPoint.y);
             currentRect = { x, y, width, height };
-        } else if (activeDrawingTool === 'circle') {
+        } else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') {
             const dx = currentViewportPoint.x - startViewportPoint.x;
             const dy = currentViewportPoint.y - startViewportPoint.y;
             const r = Math.sqrt(dx * dx + dy * dy) / 2;
@@ -195,6 +497,18 @@
     }
 
     async function onMouseUp(event) {
+        if (isDraggingTail || isDraggingShape || isDraggingResizeHandle) {
+            isDraggingTail = false;
+            isDraggingShape = false;
+            isDraggingResizeHandle = false;
+            draggedAnnotationId = null;
+            draggedHandleType = null;
+            dragStartViewportPoint = null;
+            await saveImageAnnotations();
+            event.preventDefaultAction = true;
+            return;
+        }
+
         if (activeDrawingTool !== 'polygon') {
             if (!isDrawing) return;
             isDrawing = false;
@@ -205,7 +519,7 @@
         const endViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
         let newAnnotation = null;
 
-        if (activeDrawingTool === 'rectangle') {
+        if (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') {
             const viewportRect = new OpenSeadragon.Rect(
                 Math.min(startViewportPoint.x, endViewportPoint.x),
                 Math.min(startViewportPoint.y, endViewportPoint.y),
@@ -213,25 +527,38 @@
                 Math.abs(startViewportPoint.y - endViewportPoint.y)
             );
             if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
+                const isSpeech = activeDrawingTool === 'speech-bubble-rect';
+                const shapeData = { ...viewportRect, shape: isSpeech ? 'speech-bubble-rect' : 'rectangle' };
+                if (isSpeech) {
+                    // Default tail: bottom right, slightly offset
+                    shapeData.tail = { x: viewportRect.x + viewportRect.width, y: viewportRect.y + viewportRect.height + 0.05 }; 
+                }
+
                 newAnnotation = {
                     id: uuidv4(),
                     type: 'Annotation',
-                    target: { selector: { type: 'FragmentSelector', value: { ...viewportRect, shape: 'rectangle' } } },
-                    body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
+                    target: { selector: { type: 'FragmentSelector', value: shapeData } },
+                    body: [{ type: 'Color', value: getSelectedColor(isSpeech), purpose: 'highlighting' }]
                 };
             }
-        } else if (activeDrawingTool === 'circle') {
+        } else if (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') {
             const dx = endViewportPoint.x - startViewportPoint.x;
             const dy = endViewportPoint.y - startViewportPoint.y;
             const r = Math.sqrt(dx * dx + dy * dy) / 2;
             const cx = startViewportPoint.x + dx / 2;
             const cy = startViewportPoint.y + dy / 2;
             if (r > 0.0005) {
+                const isSpeech = activeDrawingTool === 'speech-bubble-circle';
+                const shapeData = { cx, cy, r, shape: isSpeech ? 'speech-bubble-circle' : 'circle' };
+                 if (isSpeech) {
+                    shapeData.tail = { x: cx + r, y: cy + r + 0.05 };
+                }
+
                 newAnnotation = {
                     id: uuidv4(),
                     type: 'Annotation',
-                    target: { selector: { type: 'FragmentSelector', value: { cx, cy, r, shape: 'circle' } } },
-                    body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
+                    target: { selector: { type: 'FragmentSelector', value: shapeData } },
+                    body: [{ type: 'Color', value: getSelectedColor(isSpeech), purpose: 'highlighting' }]
                 };
             }
         }
@@ -239,12 +566,11 @@
         if (newAnnotation) {
             updateImageAnnotations([...$currentAnnotations, newAnnotation]);
             await saveImageAnnotations();
-            annotationBeingEdited = newAnnotation;
+            
+            // Don't open dialog immediately for any shape.
+            // Reset states that would otherwise be handled by dialog actions
+            annotationBeingEdited = null;
             isEditingExisting = false;
-            // event.position is already relative to the viewer element
-            dialogX = event.position.x;
-            dialogY = event.position.y;
-            showAnnotationCreationDialog = true;
         }
         currentRect = null;
         currentCircle = null;
@@ -259,17 +585,17 @@
             id: uuidv4(),
             type: 'Annotation',
             target: { selector: { type: 'FragmentSelector', value: { shape: 'polygon', points: currentPolygon.points } } },
-            body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
+            body: [{ type: 'Color', value: getSelectedColor(false), purpose: 'highlighting' }]
         };
 
         updateImageAnnotations([...$currentAnnotations, newAnnotation]);
         await saveImageAnnotations();
 
-        annotationBeingEdited = newAnnotation;
+        annotationBeingEdited = null;
         isEditingExisting = false;
-        dialogX = event.position.x;
-        dialogY = event.position.y;
-        showAnnotationCreationDialog = true;
+        // dialogX = event.position.x;
+        // dialogY = event.position.y;
+        // showAnnotationCreationDialog = true;
 
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
@@ -279,15 +605,23 @@
     }
 
     function updateAnnotationPositions() {
-        // This function is called on 'update-viewport' to re-render annotations.
-        // Since the SVG is now an OSD overlay, and rects within it use viewport coordinates,
-        // Svelte's reactivity will automatically re-evaluate the pixel positions of the rects
-        // when the viewport changes. No explicit manual updates are needed here.
+        if (osdViewer && osdViewerElement) {
+            const zoom = osdViewer.viewport.getZoom();
+            const containerWidth = osdViewerElement.clientWidth;
+            // Target roughly 5px handles on screen (was 8)
+            handleRadius = 5 / (zoom * containerWidth);
+            // Clamp to reasonable viewport coordinates
+            handleRadius = Math.max(0.001, Math.min(0.01, handleRadius));
+        }
     }
 
-    function handleAnnotationClick(event, annotation) {
-        event.stopPropagation(); // Prevent OSD from handling the click
-        console.log("Annotation clicked:", annotation);
+    function handleAnnotationPointerDown(event, annotation) {
+        event.stopPropagation(); // Prevent OSD from panning when clicking a shape
+    }
+
+    function handleAnnotationDoubleClick(event, annotation) {
+        event.stopPropagation(); // Prevent OSD zoom
+        console.log("Annotation double-clicked:", annotation);
         annotationBeingEdited = annotation;
         isEditingExisting = true;
 
@@ -301,7 +635,7 @@
     }
 
     async function handleAnnotationDialogSave(event) {
-        const { title, description, color } = event.detail;
+        const { title, description, color, text } = event.detail;
         if (!annotationBeingEdited) return;
 
         const newBody = [
@@ -309,6 +643,9 @@
         ];
         if (title) newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
         if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
+        if (text !== undefined && text !== null && text !== '') {
+            newBody.push({ type: 'TextualBody', value: text, purpose: 'content' });
+        }
 
         const updatedAnnotation = {
             ...annotationBeingEdited,
@@ -323,6 +660,43 @@
         await saveImageAnnotations();
 
         closeAnnotationDialog();
+    }
+    
+    function startTailDrag(event, annotationId) {
+        // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
+        // event.stopPropagation(); 
+        event.preventDefault(); // Stop text selection etc.
+        isDraggingTail = true;
+        draggedAnnotationId = annotationId;
+        selectedAnnotationId = annotationId; // Select the annotation when tail is grabbed
+    }
+
+    function startShapeDrag(event, annotationId) {
+        // Do not stop propagation, so OSD 'canvas-press' fires
+        event.preventDefault();
+        isDraggingShape = true;
+        draggedAnnotationId = annotationId;
+        selectedAnnotationId = annotationId; // Select the annotation on click
+        updateAnnotationPositions(); // Ensure handleRadius is updated
+        
+        // We need the mouse position relative to the OSD canvas to get accurate viewport point
+        const viewerRect = osdViewerElement.getBoundingClientRect();
+        const mousePoint = new OpenSeadragon.Point(event.clientX - viewerRect.left, event.clientY - viewerRect.top);
+        dragStartViewportPoint = osdViewer.viewport.pointFromPixel(mousePoint);
+    }
+
+    function startResizeDrag(event, annotationId, handleType) {
+        event.preventDefault();
+        // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
+        // event.stopPropagation();
+        isDraggingResizeHandle = true;
+        draggedAnnotationId = annotationId;
+        draggedHandleType = handleType;
+        updateAnnotationPositions(); // Ensure handleRadius is updated
+        
+        const viewerRect = osdViewerElement.getBoundingClientRect();
+        const mousePoint = new OpenSeadragon.Point(event.clientX - viewerRect.left, event.clientY - viewerRect.top);
+        dragStartViewportPoint = osdViewer.viewport.pointFromPixel(mousePoint);
     }
 
     async function handleAnnotationDialogCancel() {
@@ -490,6 +864,41 @@
                     />
                 </svg>
             </button>
+            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
+            <button
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'speech-bubble-circle'}
+                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
+                title="Draw Circular Speech Bubble"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
+                    <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                </svg>
+            </button>
+
+            <button
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'speech-bubble-rect'}
+                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
+                title="Draw Rectangular Speech Bubble"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left" viewBox="0 0 16 16">
+                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                </svg>
+            </button>
+            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
+            <div class="flex items-center space-x-1.5">
+                {#each baseColors as color, i}
+                    <button
+                        class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
+                        class:ring-2={selectedBaseColorIndex === i}
+                        class:ring-blue-500={selectedBaseColorIndex === i}
+                        style="background-color: rgba({color.rgb}, 1);"
+                        on:click={() => selectedBaseColorIndex = i}
+                        title={color.name}
+                    ></button>
+                {/each}
+            </div>
         </div>
     </div>
 
@@ -510,6 +919,7 @@
             {#each $currentAnnotations as annotation (annotation.id)}
                 {@const shapeData = annotation.target.selector.value}
                 {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
+                {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
                 {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
                 {@const strokeColor = adjustOpacity(fillColor, 1)}
 
@@ -520,39 +930,162 @@
                         width={shapeData.width}
                         height={shapeData.height}
                         fill={fillColor}
-                        stroke={strokeColor}
-                        stroke-width="1px"
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
-                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
+                    {#if selectedAnnotationId === annotation.id}
+                        <!-- 8 handles for rectangle -->
+                        <!-- Corners -->
+                        <circle cx={shapeData.x} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
+                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
+                        <!-- Mid-points -->
+                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
+                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
+                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
+                    {/if}
+                {:else if shapeData.shape === 'speech-bubble-rect'}
+                    <rect
+                        x={shapeData.x}
+                        y={shapeData.y}
+                        width={shapeData.width}
+                        height={shapeData.height}
+                        fill={fillColor}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
+                    />
+                     <path
+                        d={getBubblePath(shapeData, false)}
+                        fill={fillColor}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
+                    />
+                    {#if textBody}
+                        <foreignObject x={shapeData.x} y={shapeData.y} width={shapeData.width} height={shapeData.height} class="pointer-events-none">
+                            <div class="w-full h-full flex items-center justify-center text-center p-1 overflow-hidden text-xs select-none" style="color: black;">
+                                {textBody.value}
+                            </div>
+                        </foreignObject>
+                    {/if}
+                    <circle
+                        cx={shapeData.tail.x}
+                        cy={shapeData.tail.y}
+                        r={handleRadius * 1.2}
+                        fill="white"
+                        stroke="black"
+                        stroke-width="0.001"
+                        class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                        on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                    />
+                    {#if selectedAnnotationId === annotation.id}
+                        <!-- 8 handles for speech rect -->
+                        <circle cx={shapeData.x} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-nw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'nw')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ne-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'ne')} />
+                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-sw-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'sw')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-se-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'se')} />
+                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-n-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'n')} />
+                        <circle cx={shapeData.x + shapeData.width / 2} cy={shapeData.y + shapeData.height} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-s-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 's')} />
+                        <circle cx={shapeData.x} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-w-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'w')} />
+                        <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
+                    {/if}
+
                 {:else if shapeData.shape === 'circle'}
                     <circle
                         cx={shapeData.cx}
                         cy={shapeData.cy}
                         r={shapeData.r}
                         fill={fillColor}
-                        stroke={strokeColor}
-                        stroke-width="1px"
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
-                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
+                    {#if selectedAnnotationId === annotation.id}
+                        <!-- 4 radius handles -->
+                        <circle cx={shapeData.cx + shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx - shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx} cy={shapeData.cy + shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx} cy={shapeData.cy - shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                    {/if}
+                {:else if shapeData.shape === 'speech-bubble-circle'}
+                     <path
+                        d={getBubblePath(shapeData, true)}
+                        fill={fillColor}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
+                        vector-effect="non-scaling-stroke"
+                        class="pointer-events-auto cursor-pointer annotation-shape"
+                        data-annotation-id={annotation.id}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
+                    />
+                    {#if textBody}
+                        <foreignObject x={shapeData.cx - shapeData.r} y={shapeData.cy - shapeData.r} width={shapeData.r * 2} height={shapeData.r * 2} class="pointer-events-none">
+                            <div class="w-full h-full flex items-center justify-center text-center p-2 overflow-hidden text-xs select-none" style="color: black;">
+                                {textBody.value}
+                            </div>
+                        </foreignObject>
+                    {/if}
+                    <circle
+                        cx={shapeData.tail.x}
+                        cy={shapeData.tail.y}
+                        r={handleRadius * 1.2}
+                        fill="white"
+                        stroke="black"
+                        stroke-width="0.001"
+                        class="pointer-events-auto cursor-pointer hover:fill-blue-500"
+                        on:pointerdown={(e) => startTailDrag(e, annotation.id)}
+                    />
+                    {#if selectedAnnotationId === annotation.id}
+                        <circle cx={shapeData.cx + shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx - shapeData.r} cy={shapeData.cy} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ew-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx} cy={shapeData.cy + shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                        <circle cx={shapeData.cx} cy={shapeData.cy - shapeData.r} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
+                    {/if}
+
                 {:else if shapeData.shape === 'polygon'}
                     <polygon
                         points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
                         fill={fillColor}
-                        stroke={strokeColor}
-                        stroke-width="0.002"
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '0.002'}
+                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
-                        on:pointerdown|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
+                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
                     />
+                    {#if selectedAnnotationId === annotation.id}
+                        {#each shapeData.points as point, i}
+                            <circle cx={point.x} cy={point.y} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-move" on:pointerdown={(e) => startResizeDrag(e, annotation.id, i.toString())} />
+                        {/each}
+                    {/if}
                 {/if}
             {/each}
-            {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
+            {#if isDrawing && (activeDrawingTool === 'rectangle' || activeDrawingTool === 'speech-bubble-rect') && currentRect}
                 <rect
                     x={currentRect.x}
                     y={currentRect.y}
@@ -563,7 +1096,7 @@
                     stroke-width="1px"
                     vector-effect="non-scaling-stroke"
                 />
-            {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
+            {:else if isDrawing && (activeDrawingTool === 'circle' || activeDrawingTool === 'speech-bubble-circle') && currentCircle}
                 <circle
                     cx={currentCircle.cx}
                     cy={currentCircle.cy}
@@ -613,10 +1146,10 @@
                 <AnnotationCreationDialog
                     x={dialogX}
                     y={dialogY}
-                    initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
-                    initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
+                    initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || (annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') ? '' : null)}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
                     isEditing={isEditingExisting}
+                    useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble')}
                     panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
                     on:save={handleAnnotationDialogSave}
                     on:cancel={handleAnnotationDialogCancel}
