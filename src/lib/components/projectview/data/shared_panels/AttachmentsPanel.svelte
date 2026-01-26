@@ -146,13 +146,15 @@
 <div class="h-full bg-white dark:bg-dark-bg-secondary flex flex-col overflow-hidden">
     <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-dark-bg-tertiary text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
         <span class="ml-1">Attachments</span>
-        <button 
-            on:click={handleAddAttachment}
-            class="p-1 hover:bg-gray-200 dark:hover:bg-dark-bg-tertiary rounded-full transition-colors text-blue-600 dark:text-blue-400"
-            title="Add Attachment"
-        >
-            {@html ADD_ICON_SVG}
-        </button>
+        {#if itemType !== 'doc'}
+            <button 
+                on:click={handleAddAttachment}
+                class="p-1 hover:bg-gray-200 dark:hover:bg-dark-bg-tertiary rounded-full transition-colors text-blue-600 dark:text-blue-400"
+                title="Add Attachment"
+            >
+                {@html ADD_ICON_SVG}
+            </button>
+        {/if}
     </div>
     <div class="flex-grow overflow-y-auto min-h-0">
         {#if isLoading}
@@ -188,8 +190,6 @@
         <MinimalMediaPlayer
             src={currentSrc}
             on:ended={playNext}
-            on:next={playNext}
-            on:previous={playPrevious}
         />
     </div>
 </div>

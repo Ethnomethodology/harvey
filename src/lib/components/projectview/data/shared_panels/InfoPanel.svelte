@@ -584,7 +584,7 @@
                 </div>
 
                 <!-- Attachments Section -->
-                {#if itemType === 'doc' && currentFileMetadata?.customFields}
+                {#if (itemType === 'doc' || itemType === 'imported_transcript') && currentFileMetadata?.customFields}
                     {@const attachmentsField = currentFileMetadata.customFields.find(f => f.key === 'attachments')}
                     {#if attachmentsField && attachmentsField.value}
                         {@const attachments = JSON.parse(attachmentsField.value)}
