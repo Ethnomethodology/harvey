@@ -300,7 +300,7 @@
             >
             <span
                 bind:this={progressTooltipElement}
-                class="absolute bottom-full mb-1 bg-black text-white text-[10px] px-1 rounded pointer-events-none whitespace-nowrap z-50"
+                class="absolute top-full mt-1 bg-black text-white text-[10px] px-1 rounded pointer-events-none whitespace-nowrap z-50"
                 style="left: {progressTooltipLeft}; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'};"
             >
                 {progressTooltipText}
