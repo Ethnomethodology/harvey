@@ -455,7 +455,61 @@
     // Removed local fetchProjectGroups function and reactive call
     // projectGroups is now $currentProjectGroupsList
 
+    // --- Divider State ---
+    const LS_KEY_DATA_PANEL_HEIGHT = 'harveyDataPanelHeightPercent';
+    let categoriesHeightPercent = 66.66;
+    let isDraggingDivider = false;
+    let startY = 0;
+    let startHeightPercent = 0;
+    let panelContainer;
+
+    function handleDividerMouseDown(event) {
+        isDraggingDivider = true;
+        startY = event.clientY;
+        startHeightPercent = categoriesHeightPercent;
+        document.addEventListener('mousemove', handleDividerMouseMove);
+        document.addEventListener('mouseup', handleDividerMouseUp);
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    }
+
+    function handleDividerMouseMove(event) {
+        if (!isDraggingDivider || !panelContainer) return;
+        const deltaY = event.clientY - startY;
+        const containerHeight = panelContainer.clientHeight;
+        const deltaPercent = (deltaY / containerHeight) * 100;
+        
+        let newPercent = startHeightPercent + deltaPercent;
+        // Constraints: Groups 20% - 50% -> Categories 80% - 50%
+        newPercent = Math.max(50, Math.min(80, newPercent));
+        
+        categoriesHeightPercent = newPercent;
+    }
+
+    function handleDividerMouseUp() {
+        isDraggingDivider = false;
+        document.removeEventListener('mousemove', handleDividerMouseMove);
+        document.removeEventListener('mouseup', handleDividerMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+
+        try {
+            localStorage.setItem(LS_KEY_DATA_PANEL_HEIGHT, categoriesHeightPercent.toString());
+        } catch (e) {
+            console.error("[DataLeftPanel] Failed to save height state:", e);
+        }
+    }
+
     onMount(async () => {
+        try {
+            const savedHeight = localStorage.getItem(LS_KEY_DATA_PANEL_HEIGHT);
+            if (savedHeight) {
+                categoriesHeightPercent = parseFloat(savedHeight);
+            }
+        } catch (e) {
+            console.error("[DataLeftPanel] Failed to load height state:", e);
+        }
+
       // projectStore's loadProjectDataAndUpdateStore should call updateProjectGroupsList
       // So, direct call to fetchProjectGroups() or updateProjectGroupsList() might be redundant here
       // if $project.id change reliably triggers it in projectStore.
@@ -914,9 +968,9 @@
             </div>
         </h2>
 
-            <div class="flex flex-col flex-grow overflow-hidden">
+            <div class="flex flex-col flex-grow overflow-hidden" bind:this={panelContainer}>
                 <!-- Top 2/3 for Categories -->
-                <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: 66.66%;">
+                <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: {categoriesHeightPercent}%;">
                     <ul class="space-y-2 text-xs">
                         {#each filteredCategories as category (category.type)}
                             <li>
@@ -975,11 +1029,16 @@
                     {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-d-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
                 </div>
 
-                <!-- Separator 1: Below Data section -->
-                <hr class="border-gray-200 dark:border-border my-2 mx-0">
+                <!-- Draggable Divider -->
+                <div 
+                    class="h-2 w-full cursor-row-resize flex items-center justify-center hover:bg-gray-200 dark:hover:bg-dark-bg-tertiary transition-colors -my-1 z-10 select-none"
+                    on:mousedown={handleDividerMouseDown}
+                >
+                    <div class="w-full border-t border-gray-200 dark:border-border pointer-events-none"></div>
+                </div>
 
                 <!-- Bottom 1/3 for Groups -->
-                <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
+                <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: {100 - categoriesHeightPercent}%;">
                     <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-d-gray-400 px-1 mb-1.5">
                         <span class="mr-1.5 flex-shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
