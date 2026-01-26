@@ -84,144 +84,90 @@
     // Helper to generate speech bubble path
     function getBubblePath(shapeData, isCircle) {
         const { x, y, width, height, cx, cy, r, tail } = shapeData;
-        if (!tail) return ''; // Should not happen for valid bubbles
+        if (!tail) return '';
 
-        const tx = tail.x;
-        const ty = tail.y;
+        let tx = tail.x;
+        let ty = tail.y;
 
         let center, bounds;
         if (isCircle) {
             center = { x: cx, y: cy };
-            bounds = { x: cx - r, y: cy - r, width: r * 2, height: r * 2 };
         } else {
             center = { x: x + width / 2, y: y + height / 2 };
             bounds = { x, y, width, height };
         }
 
         // Vector from center to tail tip
-        const dx = tx - center.x;
-        const dy = ty - center.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len === 0) return ''; // Degenerate
+        let dx = tx - center.x;
+        let dy = ty - center.y;
+        let len = Math.sqrt(dx * dx + dy * dy);
+        
+        // Find intersection with shape boundary
+        let t;
+        const dir_check = { x: dx / (len || 1), y: dy / (len || 1) };
 
-        // Normalized direction
+        if (isCircle) {
+            t = r;
+        } else {
+            const tValues = [];
+            if (dir_check.x > 0) tValues.push((bounds.x + bounds.width - center.x) / dir_check.x);
+            else if (dir_check.x < 0) tValues.push((bounds.x - center.x) / dir_check.x);
+            if (dir_check.y > 0) tValues.push((bounds.y + bounds.height - center.y) / dir_check.y);
+            else if (dir_check.y < 0) tValues.push((bounds.y - center.y) / dir_check.y);
+            t = Math.min(...tValues.filter(v => v > 0));
+        }
+
+        // Ensure tail tip is outside
+        const minLen = t + 0.01;
+        if (len < minLen) {
+            const factor = minLen / (len || 0.001);
+            tx = center.x + dx * factor;
+            ty = center.y + dy * factor;
+            dx = tx - center.x;
+            dy = ty - center.y;
+            len = minLen;
+        }
+
         const dir = { x: dx / len, y: dy / len };
 
-        // Find intersection with shape boundary to determine base of tail
-        let ix, iy;
         if (isCircle) {
-            ix = center.x + dir.x * r;
-            iy = center.y + dir.y * r;
+            const angle = 15 * (Math.PI / 180);
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const b1Dir = { x: dir.x * cosA - dir.y * -sinA, y: dir.x * -sinA + dir.y * cosA };
+            const b2Dir = { x: dir.x * cosA - dir.y * sinA, y: dir.x * sinA + dir.y * cosA };
+            const b1 = { x: center.x + b1Dir.x * r, y: center.y + b1Dir.y * r };
+            const b2 = { x: center.x + b2Dir.x * r, y: center.y + b2Dir.y * r };
+            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r} ${r} 0 1 1 ${b1.x} ${b1.y} Z`;
         } else {
-            // Rect intersection (simplified: check intersection with 4 sides)
-            // Ray: Center + t * dir. Find min t > 0 that hits a side.
-            // x = center.x + t*dir.x, y = center.y + t*dir.y
-            // Side 1 (Right): x = bounds.x + bounds.width. t = (bounds.x + bounds.width - center.x) / dir.x
-            // etc.
-            const tValues = [];
-            if (dir.x > 0) tValues.push((bounds.x + bounds.width - center.x) / dir.x);
-            else if (dir.x < 0) tValues.push((bounds.x - center.x) / dir.x);
-            if (dir.y > 0) tValues.push((bounds.y + bounds.height - center.y) / dir.y);
-            else if (dir.y < 0) tValues.push((bounds.y - center.y) / dir.y);
+            // Robust side-based rectangle logic
+            let side = "";
+            const absDirX = Math.abs(dir.x * height);
+            const absDirY = Math.abs(dir.y * width);
+            if (absDirX > absDirY) side = dir.x > 0 ? "right" : "left";
+            else side = dir.y > 0 ? "bottom" : "top";
 
-            const t = Math.min(...tValues.filter(v => v > 0));
-            ix = center.x + dir.x * t;
-            iy = center.y + dir.y * t;
-        }
+            const sizeParam = Math.min(width, height);
+            const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01);
 
-        // Calculate base points perpendicular to direction
-        // Base width proportional to size, but clamped
-        const sizeParam = isCircle ? r * 2 : Math.min(width, height);
-        const baseHalfWidth = Math.max(sizeParam * 0.1, 0.01); // Min size in viewport coords
+            const TL = { x: bounds.x, y: bounds.y };
+            const TR = { x: bounds.x + bounds.width, y: bounds.y };
+            const BR = { x: bounds.x + bounds.width, y: bounds.y + bounds.height };
+            const BL = { x: bounds.x, y: bounds.y + bounds.height };
 
-        const perp = { x: -dir.y, y: dir.x };
-        const b1 = { x: ix + perp.x * baseHalfWidth, y: iy + perp.y * baseHalfWidth };
-        const b2 = { x: ix - perp.x * baseHalfWidth, y: iy - perp.y * baseHalfWidth };
-
-        // Construct Path
-        // Start at b1, go to tip, go to b2.
-        // Then draw the rest of the shape.
-        // For simplicity in SVG, we can just draw the shape and the triangle and union them visually?
-        // But for a clean stroke, we need a single path.
-        // A full robust path union is complex.
-        // Approximation: Move to b1, Line to Tip, Line to b2.
-        // Then we need to arc/line around the shape from b2 back to b1.
-        
-        // Simpler visual trick: Draw the shape filled. Draw the triangle filled.
-        // Then draw the union stroke?
-        // Let's try to construct a decent path.
-        
-        // For Rectangle:
-        if (!isCircle) {
-             // It's a path. M b1.x b1.y L tx ty L b2.x b2.y.
-             // But we need to follow the rect.
-             // This is getting complex to do perfectly in math without a library.
-             // FALLBACK: Return two paths? No.
-             // Let's use the visual trick: Return a path that is just the Triangle (Tip -> B1 -> B2).
-             // And we will render the main Shape (Rect/Circle) separately.
-             // To make them look merged, we can render:
-             // 1. Filled Shape
-             // 2. Filled Triangle
-             // 3. Strokeless Shape (if fill only)
-             // But we have transparency (rgba 0.5). Overlap will show darker.
-             // So we MUST merge or use 'clip-path' or similar.
-             // Or, simply, assume the user accepts the overlap for now?
-             // "The speech bubble 'tail' (the part pointing to the speaker) usually needs to move independently".
-             // If I draw a circle and a separate triangle, they overlap. With 0.5 alpha, the overlap is visible.
-             // Standard Speech Bubble SVG:
-             // It is one path.
-             // Let's try to do the Circle one properly.
-             // Arc from b2 to b1 (large arc). Line to Tip. Close.
-        }
-        
-        if (isCircle) {
-            // Angle of b1 and b2
-            const ang1 = Math.atan2(b1.y - center.y, b1.x - center.x);
-            const ang2 = Math.atan2(b2.y - center.y, b2.x - center.x);
-            
-            // We want to draw arc from b2 to b1.
-            // SVG Arc: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
-            // We want the long way around? Usually yes, unless tail is inside (which we assume not).
-            // Check cross product to determine sweep?
-            // Assuming standard counter-clockwise or clockwise.
-            
-            // Let's just return a path string.
-            const largeArc = 1; // Almost full circle
-            const sweep = 1; // Clockwise?
-            
-            return `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} A ${r} ${r} 0 ${largeArc} ${sweep} ${b1.x} ${b1.y} Z`;
-        } else {
-             // Rectangle.
-             // We can use a similar logic if we treat it as a polygon.
-             // But the rect has corners.
-             // Lets just draw the full rect, and the triangle, but use a mask/clip? No, SVG doesn't support "union" path operation natively easily.
-             // OK, for this prototype, I will just return the Triangle path. 
-             // AND I will render the Rect/Circle as usual.
-             // The user will see the overlap. This is acceptable for a "harvey" prototype unless I use a library like 'paper.js' or 'd3-polygon'.
-             // Wait, I can make the tail *start* from the center!
-             // Then the triangle is (Center, B1_far, B2_far)? No.
-             
-             // ALTERNATIVE: Use a `mask`.
-             // Define a mask that is the union of shape + tail.
-             // Draw a rect filling the bounding box of union with that mask.
-             
-             // SIMPLEST: Render shape and tail with opacity = 1.0 (no transparency)?
-             // The default color is `rgba(255, 242, 117, 0.5)`.
-             // If I change the design to solid borders and transparent fill... overlap is fine for fill?
-             // No, fill overlap doubles opacity.
-             
-             // COMPROMISE:
-             // For Circle: Use the Arc logic `M b1... L tip... L b2... A ...`. It works well.
-             // For Rect: I'll use the "Triangle + Rect" approach but accept the overlap artifacts for now to ensure stability and "independent movement".
-             // Actually, the prompt asks for "speech bubbles".
-             // Let's try to be clever.
-             // If I draw the triangle from the *center* to the tip?
-             // No.
-             
-             // Let's stick to: Circle uses the Arc path (it looks good).
-             // Rect uses Rect + Triangle.
-             const triPath = `M ${b1.x} ${b1.y} L ${tx} ${ty} L ${b2.x} ${b2.y} Z`;
-             return triPath;
+            if (side === "top") {
+                const bx = Math.max(TL.x + baseHalfWidth, Math.min(TR.x - baseHalfWidth, center.x + (dir.x * t)));
+                return `M ${TL.x} ${TL.y} L ${bx - baseHalfWidth} ${TL.y} L ${tx} ${ty} L ${bx + baseHalfWidth} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+            } else if (side === "right") {
+                const by = Math.max(TR.y + baseHalfWidth, Math.min(BR.y - baseHalfWidth, center.y + (dir.y * t)));
+                return `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${TR.x} ${by - baseHalfWidth} L ${tx} ${ty} L ${TR.x} ${by + baseHalfWidth} L ${BR.x} ${BR.y} L ${BL.x} ${BL.y} Z`;
+            } else if (side === "bottom") {
+                const bx = Math.max(BL.x + baseHalfWidth, Math.min(BR.x - baseHalfWidth, center.x + (dir.x * t)));
+                return `M ${TL.x} ${TL.y} L ${TR.x} ${TR.y} L ${BR.x} ${BR.y} L ${bx + baseHalfWidth} ${BR.y} L ${tx} ${ty} L ${bx - baseHalfWidth} ${BR.y} L ${BL.x} ${BL.y} Z`;
+            } else { // left
+                const by = Math.max(TL.y + baseHalfWidth, Math.min(BL.y - baseHalfWidth, center.y + (dir.y * t)));
+                return `M ${TL.x} ${TL.y} L ${TL.x} ${by - baseHalfWidth} L ${tx} ${ty} L ${TL.x} ${by + baseHalfWidth} L ${BL.x} ${BL.y} L ${BR.x} ${BR.y} L ${TR.x} ${TR.y} Z`;
+            }
         }
     }
 
@@ -953,21 +899,6 @@
                         <circle cx={shapeData.x + shapeData.width} cy={shapeData.y + shapeData.height / 2} r={handleRadius} fill="white" stroke="blue" stroke-width="0.001" class="pointer-events-auto cursor-e-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'e')} />
                     {/if}
                 {:else if shapeData.shape === 'speech-bubble-rect'}
-                    <rect
-                        x={shapeData.x}
-                        y={shapeData.y}
-                        width={shapeData.width}
-                        height={shapeData.height}
-                        fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={selectedAnnotationId === annotation.id ? '2px' : '1px'}
-                        stroke-dasharray={selectedAnnotationId === annotation.id ? '0.01, 0.005' : 'none'}
-                        vector-effect="non-scaling-stroke"
-                        class="pointer-events-auto cursor-pointer annotation-shape"
-                        data-annotation-id={annotation.id}
-                        on:pointerdown={(e) => startShapeDrag(e, annotation.id)}
-                        on:dblclick={(e) => handleAnnotationDoubleClick(e, annotation)}
-                    />
                      <path
                         d={getBubblePath(shapeData, false)}
                         fill={fillColor}
