@@ -2,6 +2,7 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import { project, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
     import TranscriptEditorPanel from './TranscriptEditorPanel.svelte';
+    import ThinMediaPlayer from '../shared_panels/ThinMediaPlayer.svelte';
 
     export let itemPath = null; // Receives the full path from DataView
 
@@ -27,8 +28,8 @@
     {#if splitPartnerPath}
         <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
             <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 truncate">
-                    {itemPath.split(/[\\/]/).pop()}
+                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                    <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
                 </div>
                 <div class="flex-grow overflow-hidden">
                     {#key itemPath}
@@ -37,10 +38,12 @@
                 </div>
             </div>
             <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 truncate flex justify-between items-center">
-                    <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
+                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                    <div class="flex items-center min-w-0 flex-grow">
+                        <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
+                    </div>
                     <button 
-                        class="hover:text-red-500" 
+                        class="hover:text-red-500 ml-2 flex-shrink-0" 
                         title="Close Split"
                         on:click={() => clearImportedTranscriptSplit(itemPath)}
                     >
@@ -59,7 +62,14 @@
     {:else}
         {#key itemPath}
             {#if itemPath}
-                <TranscriptEditorPanel itemPath={itemPath} isPrimary={true} />
+                <div class="h-full flex flex-col">
+                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                        <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
+                    </div>
+                    <div class="flex-grow overflow-hidden">
+                        <TranscriptEditorPanel itemPath={itemPath} isPrimary={true} />
+                    </div>
+                </div>
             {:else}
                 <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500">
                     <span>No transcript path provided to ImportedTranscriptView.</span>

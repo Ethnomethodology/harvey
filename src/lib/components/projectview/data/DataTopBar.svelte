@@ -19,6 +19,7 @@
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
+    import ThinMediaPlayer from './shared_panels/ThinMediaPlayer.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
@@ -527,11 +528,13 @@
   </script>
   
   <div
-    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
-    data-tauri-drag-region
+    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary relative z-50"
     on:requestTranscriptionTabWithMediaAndDialog
   >
-    <div class="flex items-center space-x-1.5 min-w-0"> <!-- Added min-w-0 for truncate to work -->
+    <!-- Drag Handle Background -->
+    <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
+
+    <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <button title="Import" aria-label="Import" class="ui-button-icon flex items-center ml-1 mr-1 hover-scale-effect" on:click={(e) => dispatch('requestImport', e)}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -570,8 +573,16 @@
         </button>
         {/if}
     </div>
+
+    <div class="flex justify-center min-w-0 z-10"> <!-- Middle Column -->
+        {#if isLexicalDocument}
+            <div class="ui-button-icon rounded-md h-8 px-1">
+                <ThinMediaPlayer />
+            </div>
+        {/if}
+    </div>
   
-    <div class="flex items-center space-x-2 flex-shrink-0">
+    <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
             <Dropdown
