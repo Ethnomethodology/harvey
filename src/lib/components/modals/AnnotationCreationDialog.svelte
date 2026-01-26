@@ -155,7 +155,6 @@
             </div>
 
             <div class="mb-3">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tail Style</label>
                 <div class="flex space-x-2">
                     <button
                         class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
@@ -165,7 +164,7 @@
                         class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
                         on:click={() => (selectedTailStyle = 'straight')}
                     >
-                        Straight
+                        Straight Tail
                     </button>
                     <button
                         class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
@@ -175,7 +174,7 @@
                         class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
                         on:click={() => (selectedTailStyle = 'curved')}
                     >
-                        Curved
+                        Curved Tail
                     </button>
                 </div>
             </div>
@@ -188,7 +187,7 @@
                             class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                             bind:checked={tailFlipped}
                         />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Curve</span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Tail</span>
                     </label>
                 </div>
             {/if}
