@@ -897,6 +897,7 @@
 
     function handleToggleDataLeftPanel() {
         panelStateStore.toggleDataLeftPanel();
+        hideTooltip();
     }
 
     onMount(async () => {
@@ -1301,6 +1302,7 @@
     visible={tooltipVisible}
     categoryName={tooltipCategoryName}
     files={tooltipFiles}
+    activePath={selectedItemPathInStore}
     x={tooltipX}
     y={tooltipY}
 />
