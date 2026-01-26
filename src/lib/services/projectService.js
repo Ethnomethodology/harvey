@@ -1475,7 +1475,9 @@ export async function convertAndSaveTranscriptAsTranscript() {
 
         // Save metadata
         // Construct relative path manually to ensure it's correct for DB key
-        let relativePath = targetFullPath.substring(projectBaseDir.length);
+        // Normalize targetFullPath to ensure consistent separators and prefix handling
+        const normalizedTargetFullPath = normalizePath(targetFullPath);
+        let relativePath = normalizedTargetFullPath.substring(projectBaseDir.length);
         if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
             relativePath = relativePath.substring(1);
         }
@@ -1508,6 +1510,23 @@ export async function convertAndSaveTranscriptAsTranscript() {
             customFieldsPayload: null,
             assetType: 'imported_transcript',
         });
+
+        // Attach the original media file to the new transcript
+        if (selectedMedia?.path) {
+            try {
+                project.update(p => ({ ...p, statusMessage: `Attaching media to transcript...` }));
+                await invoke('upload_attachment', {
+                    projectXmlPathStr: projectXmlPath,
+                    assetRelativePath: relativePath,
+                    sourceFilePathStr: selectedMedia.path
+                });
+                console.log(`[ProjectService] Media attached to transcript: ${relativePath}`);
+            } catch (attachErr) {
+                console.error(`[ProjectService] Failed to attach media:`, attachErr);
+                // Don't fail the whole operation if attachment fails, just log it.
+                await message(`Transcript saved, but failed to attach media: ${attachErr}`, { title: "Attachment Warning", type: "warning" });
+            }
+        }
 
         project.update(p => ({ ...p, statusMessage: `Transcript saved as imported: ${transcriptFilename}` }));
         await refreshProjectFiles();
