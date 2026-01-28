@@ -18,6 +18,7 @@
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
+    import DocumentExportModal from '../modals/DocumentExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import ThinMediaPlayer from './shared_panels/ThinMediaPlayer.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
@@ -29,6 +30,7 @@
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
     let showTranslateDocumentModal = false;
+    let showDocumentExportModal = false;
     let isLexicalDocument = false;
     let isImportedTranscript = false;
     let isImage = false;
@@ -606,6 +608,10 @@
                 </svg>
                 <span class="text-xs">Translate</span>
             </button>
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showDocumentExportModal = true}" title="Export Document" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+                <span class="text-xs">Export</span>
+            </button>
         {/if}
         {#if isImage}
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => dispatch('requestImageExport')}" title="Export Image" >
@@ -754,6 +760,13 @@
     activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
     on:closeAndReset={() => showTranslateDocumentModal = false}
+/>
+
+<DocumentExportModal 
+    bind:showModal={showDocumentExportModal} 
+    documentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
+    on:confirm={() => message('Document exported successfully.', { title: 'Success', type: 'info' })}
+    on:close={() => showDocumentExportModal = false}
 />
 
 <SplitTranscriptModal />
