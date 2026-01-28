@@ -2,11 +2,13 @@
     import { onMount, onDestroy, tick } from 'svelte';
     import { convertFileSrc } from '@tauri-apps/api/core';
     import { sep } from '@tauri-apps/api/path';
+    import { writeFile } from '@tauri-apps/plugin-fs';
     import { get, derived } from 'svelte/store';
     import { project, updateImageAnnotations } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations } from '$lib/services/projectService.js';
     import OpenSeadragon from 'openseadragon';
     import { v4 as uuidv4 } from 'uuid';
+    import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
 
     export let imagePath = '';
 
@@ -24,10 +26,16 @@
     import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
     let showAnnotationCreationDialog = false;
+    let showExportModal = false;
     let dialogX = 0;
     let dialogY = 0;
     let annotationBeingEdited = null; // Stores the annotation data when editing
     let isEditingExisting = false; // Flag to indicate if we are editing or creating
+
+    // Export modal trigger for external components (like DataTopBar)
+    export function openExportModal() {
+        showExportModal = true;
+    }
 
     // Get annotations from the central store
     const currentAnnotations = derived(project, $project => {
@@ -81,6 +89,230 @@
     $: if (activeDrawingTool) {
         selectedAnnotationId = null;
     }
+
+    async function handleExportImage(event) {
+        const { filePath, includeAnnotations } = event.detail;
+        if (!osdViewer || !currentAssetUrl) return;
+
+        selectedAnnotationId = null;
+        await tick();
+
+        try {
+            const tiledImage = osdViewer.world.getItemAt(0);
+            const originalSize = tiledImage.getContentSize();
+            const width = originalSize.x;
+            const height = originalSize.y;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            // Load and draw original image
+            const response = await fetch(currentAssetUrl);
+            const blobBody = await response.blob();
+            const imgUrl = URL.createObjectURL(blobBody);
+
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = imgUrl;
+            });
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(imgUrl);
+
+            if (includeAnnotations) {
+                const annotations = get(currentAnnotations);
+                const S = 1000;
+                // OSD coordinates are relative to WIDTH. Uniform scale.
+                const scale = width / S;
+                const sx = scale;
+                const sy = scale;
+
+                // Helper for manual pixelation
+                const pixelateRegion = (px, py, pw, ph) => {
+                    // Clamp to canvas
+                    px = Math.floor(px); py = Math.floor(py);
+                    pw = Math.floor(pw); ph = Math.floor(ph);
+                    if (pw <= 0 || ph <= 0) return;
+
+                    // Ensure we don't read/write outside canvas bounds
+                    const safeX = Math.max(0, px);
+                    const safeY = Math.max(0, py);
+                    const safeW = Math.min(width - safeX, pw - (safeX - px));
+                    const safeH = Math.min(height - safeY, ph - (safeY - py));
+                    
+                    if (safeW <= 0 || safeH <= 0) return;
+
+                    const imageData = ctx.getImageData(safeX, safeY, safeW, safeH);
+                    const data = imageData.data;
+                    const sampleSize = Math.max(Math.floor(Math.min(safeW, safeH) / 20), 10);
+
+                    for (let y = 0; y < safeH; y += sampleSize) {
+                        for (let x = 0; x < safeW; x += sampleSize) {
+                            let r = 0, g = 0, b = 0, count = 0;
+                            // Average color
+                            for (let sy = 0; sy < sampleSize && y + sy < safeH; sy++) {
+                                for (let sx = 0; sx < sampleSize && x + sx < safeW; sx++) {
+                                    const i = ((y + sy) * safeW + (x + sx)) * 4;
+                                    r += data[i];
+                                    g += data[i + 1];
+                                    b += data[i + 2];
+                                    count++;
+                                }
+                            }
+                            if (count > 0) {
+                                r = Math.floor(r / count);
+                                g = Math.floor(g / count);
+                                b = Math.floor(b / count);
+
+                                // Fill block
+                                for (let sy = 0; sy < sampleSize && y + sy < safeH; sy++) {
+                                    for (let sx = 0; sx < sampleSize && x + sx < safeW; sx++) {
+                                        const i = ((y + sy) * safeW + (x + sx)) * 4;
+                                        data[i] = r;
+                                        data[i + 1] = g;
+                                        data[i + 2] = b;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ctx.putImageData(imageData, safeX, safeY);
+                };
+
+                for (const annotation of annotations) {
+                    const shapeData = annotation.target.selector.value;
+                    const s = shapeData.shape;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+
+                    const body = annotation.body || [];
+                    const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
+                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const borderColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor');
+                    const borderSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize');
+                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
+                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
+
+                    const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)';
+                    const strokeColor = borderColorBody ? borderColorBody.value : (fillColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : adjustOpacity(fillColor, 1));
+                    const strokeWidth = borderSizeBody ? parseFloat(borderSizeBody.value) : 1;
+
+                    // 1. Prepare Path in Pixel Space
+                    let path = new Path2D();
+                    
+                    const matrix = new DOMMatrix();
+                    matrix.a = sx; 
+                    matrix.d = sy;
+                    
+                    if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+                        const px = shapeData.x * S * sx;
+                        const py = shapeData.y * S * sy;
+                        const pw = shapeData.width * S * sx;
+                        const ph = shapeData.height * S * sy;
+                        path.rect(px, py, pw, ph);
+                    } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
+                        const pcx = shapeData.cx * S * sx;
+                        const pcy = shapeData.cy * S * sy;
+                        const prx = shapeData.r * S * sx;
+                        const pry = shapeData.r * S * sy;
+                        path.ellipse(pcx, pcy, prx, pry, 0, 0, 2 * Math.PI);
+                    } else if (s.startsWith('speech-bubble')) {
+                        const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                        if (pathStr) {
+                            const svgPath = new Path2D(pathStr);
+                            path.addPath(svgPath, matrix);
+                        }
+                    }
+
+                    // 2. Handle Censored vs Normal
+                    if (s === 'censored' || s === 'censored-circle') {
+                        if (s === 'censored') {
+                            pixelateRegion(shapeData.x * S * sx, shapeData.y * S * sy, shapeData.width * S * sx, shapeData.height * S * sy);
+                        } else {
+                            // Circular censorship: Use fallback draw-clip-pixelate method
+                            const bboxX = (shapeData.cx - shapeData.r) * S * sx;
+                            const bboxY = (shapeData.cy - shapeData.r) * S * sy;
+                            const bboxW = shapeData.r * 2 * S * sx;
+                            const bboxH = shapeData.r * 2 * S * sy;
+                            
+                            // Safe bounds
+                            const safeX = Math.max(0, bboxX);
+                            const safeY = Math.max(0, bboxY);
+                            const safeW = Math.min(width - safeX, bboxW - (safeX - bboxX));
+                            const safeH = Math.min(height - safeY, bboxH - (safeY - py));
+
+                            if (safeW > 0 && safeH > 0) {
+                                // Extract original image data for the bounding box
+                                const tempC = document.createElement('canvas');
+                                tempC.width = safeW; tempC.height = safeH;
+                                const tCtx = tempC.getContext('2d');
+                                tCtx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, safeW, safeH);
+                                
+                                // Pixelate it
+                                // (Reuse logic or draw small)
+                                tCtx.imageSmoothingEnabled = false;
+                                const smallW = Math.max(1, safeW/20);
+                                const smallH = Math.max(1, safeH/20);
+                                tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
+                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH); // scale back up
+
+                                // Draw back to main canvas with clip
+                                ctx.save();
+                                ctx.clip(path); // Use the elliptical path defined earlier
+                                ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
+                                ctx.restore();
+                            }
+                        }
+                    } else {
+                        // Normal Shape Draw
+                        ctx.fillStyle = fillColor;
+                        ctx.fill(path);
+                        ctx.strokeStyle = strokeColor;
+                        ctx.lineWidth = strokeWidth; 
+                        ctx.stroke(path);
+                    }
+
+                    // 3. Draw Text
+                    if (textBody && textBody.value) {
+                        const text = textBody.value;
+                        const fontSize = fontSizeBody ? fontSizeBody.value : 14;
+                        const textColor = textColorBody ? textColorBody.value : 'black';
+                        
+                        ctx.fillStyle = textColor;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = `600 ${fontSize * Math.min(sx, sy)}px sans-serif`;
+
+                        let tx, ty, tw, th;
+                        if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
+                            tx = shapeData.x * S * sx;
+                            ty = shapeData.y * S * sy;
+                            tw = shapeData.width * S * sx;
+                            th = shapeData.height * S * sy;
+                        } else {
+                            tx = (shapeData.cx - shapeData.r) * S * sx;
+                            ty = (shapeData.cy - shapeData.r) * S * sy;
+                            tw = shapeData.r * 2 * S * sx;
+                            th = shapeData.r * 2 * S * sy;
+                        }
+                        ctx.fillText(text, tx + tw/2, ty + th/2);
+                    }
+                }
+            }
+
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const buffer = await blob.arrayBuffer();
+            await writeFile(filePath, new Uint8Array(buffer));
+            
+        } catch (err) {
+            console.error('Export failed:', err);
+            error = `Export failed: ${err.message}`;
+        }
+    }
+
+
 
     function adjustOpacity(rgbaColor, newOpacity) {
         if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
@@ -1424,7 +1656,7 @@
                 {@const S = 1000}
                 {#if textBody}
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
-                        <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
+                        <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
@@ -1432,7 +1664,7 @@
                             </div>
                         </foreignObject>
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
-                        <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
+                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
@@ -1531,6 +1763,15 @@
                     on:delete={handleAnnotationDialogDelete}
                 />
             {/key}
+        {/if}
+
+        {#if showExportModal}
+            <ImageExportModal 
+                showModal={showExportModal} 
+                defaultFileName={imagePath ? `export_${imagePath.split(/[\/\\]/).pop()}` : 'export.png'}
+                on:export={handleExportImage}
+                on:close={() => showExportModal = false}
+            />
         {/if}
     </div>
 </div>

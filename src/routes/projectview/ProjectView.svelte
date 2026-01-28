@@ -924,6 +924,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 				tableViewRef={dataViewRef?.tableViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
+                on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'transcriptions'}

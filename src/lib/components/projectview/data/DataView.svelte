@@ -34,6 +34,15 @@
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
     export let tableViewRef;
+    let imageViewRef;
+
+    export function triggerImageExport() {
+        if (imageViewRef) {
+            imageViewRef.triggerExport();
+        } else {
+            console.warn("[DataView] triggerImageExport called but imageViewRef is missing.");
+        }
+    }
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
@@ -204,7 +213,7 @@
                 {:else if activeViewType === 'tables'}
                      <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
                  {:else if activeViewType === 'images'}
-                     <ImageView itemPath={activeItemPath} />
+                     <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView itemPath={activeItemPath} />
                 {:else if activeViewType === 'media_note'}
