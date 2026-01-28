@@ -7,6 +7,9 @@
     import { saveImageAnnotations } from '$lib/services/projectService.js';
     import OpenSeadragon from 'openseadragon';
     import { v4 as uuidv4 } from 'uuid';
+    import { listen } from '@tauri-apps/api/event';
+    import { writeFile } from '@tauri-apps/plugin-fs';
+    import { message } from '@tauri-apps/plugin-dialog';
 
     export let imagePath = '';
 
@@ -1013,6 +1016,162 @@
         // which is exactly what we want to keep the SVG overlay in sync with the store.
         // Svelte's reactivity handles the re-rendering of the {#each} block below.
     }
+
+    let exportUnlisten;
+
+    async function handleExportImage(payload) {
+        const { filePath, format, includeAnnotations } = payload;
+        if (!currentAssetUrl || !osdViewer) {
+            await message("Cannot export: Image not loaded.", { title: "Export Error", type: "error" });
+            return;
+        }
+
+        try {
+            // 1. Prepare offscreen canvas matching full image size
+            const imageSize = osdViewer.world.getItemAt(0).getContentSize();
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = imageSize.x;
+            exportCanvas.height = imageSize.y;
+            const ctx = exportCanvas.getContext('2d');
+
+            // 2. Load the base image
+            const baseImg = new Image();
+            baseImg.crossOrigin = "Anonymous";
+            await new Promise((resolve, reject) => {
+                baseImg.onload = resolve;
+                baseImg.onerror = reject;
+                baseImg.src = currentAssetUrl;
+            });
+            ctx.drawImage(baseImg, 0, 0, imageSize.x, imageSize.y);
+
+            // 3. Composite Annotations if requested
+            if (includeAnnotations && svgOverlay) {
+                // Clone the SVG overlay to manipulate it for export
+                const clonedSvg = svgOverlay.cloneNode(true);
+
+                // Set explicit dimensions on the SVG to match image
+                clonedSvg.setAttribute('width', imageSize.x);
+                clonedSvg.setAttribute('height', imageSize.y);
+                clonedSvg.setAttribute('viewBox', `0 0 1000 1000`); // Keep logical coords
+
+                // Filter annotations: Remove Highlights (rect, circle, polygon) if they are NOT the "annotation" types.
+                // Request says: "no need to export highlights (added using 1st 3 buttons)"
+                // Highlight types: 'rectangle', 'circle', 'polygon'
+                // Annotation types: 'speech-bubble-rect', 'speech-bubble-circle', 'text-area', 'censored', 'censored-circle'
+                const highlightTypes = ['rectangle', 'circle', 'polygon'];
+                const shapes = clonedSvg.querySelectorAll('.annotation-shape');
+                const handles = clonedSvg.querySelectorAll('.pointer-events-auto'); // handles etc
+
+                // Remove resize handles from export
+                handles.forEach(el => {
+                    if (el.tagName === 'circle' && el.getAttribute('fill') === 'white') el.remove();
+                });
+
+                // Remove Highlight shapes
+                shapes.forEach(shapeEl => {
+                    // We need to trace back to the data-annotation-id to check type?
+                    // Or check geometry?
+                    // Actually, the shape types are distinct in structure, but easier to just check against the store logic.
+                    // But here we are in DOM land.
+                    // The easiest way is to filter the store first, generate a string, or iterate DOM.
+                    // Let's iterate DOM and check specific attributes? No.
+                    // Best way: Use the Svelte store to generate a clean SVG string specifically for export.
+                    // But that requires duplicating render logic.
+
+                    // Pragmatic approach: Iterate cloned DOM.
+                    // Identifying type is hard from just <rect>.
+                    // Let's filter the SVG string generation instead?
+                    // Or: rely on the `currentAnnotations` to build a *new* temporary SVG string for export.
+                });
+
+                // Better strategy: Build a new SVG string from data
+                const annotationsToExport = $currentAnnotations.filter(a => {
+                    const shape = a.target?.selector?.value?.shape;
+                    // Keep only "Annotate" types
+                    return !highlightTypes.includes(shape);
+                });
+
+                // We need to construct the SVG string manually or use a helper.
+                // Since we already have the DOM, let's filter the DOM based on ID.
+                // The DOM elements have `data-annotation-id`.
+                const idsToKeep = new Set(annotationsToExport.map(a => a.id));
+
+                // Remove elements that are NOT in idsToKeep
+                // Also need to handle <foreignObject> for text
+                // The structure in DOM is flat.
+                const allElements = clonedSvg.querySelectorAll('[data-annotation-id]');
+                allElements.forEach(el => {
+                    const id = el.getAttribute('data-annotation-id');
+                    if (!idsToKeep.has(id)) {
+                        el.remove();
+                    }
+                });
+
+                // Also remove text foreignObjects which don't have data-annotation-id on the foreignObject itself in current render?
+                // Looking at render: <foreignObject ...> <p>{textBody}</p> </foreignObject>
+                // The foreignObject doesn't have data-annotation-id in the template above!
+                // Fix: I will add `data-annotation-id` to the foreignObject in the template for consistency.
+
+                // For now, assuming I update the template to include data-annotation-id on foreignObject too.
+                // If not, I can't filter text easily. I MUST add it.
+
+                // Serialize
+                const svgString = new XMLSerializer().serializeToString(clonedSvg);
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const svgUrl = URL.createObjectURL(svgBlob);
+
+                const svgImg = new Image();
+                await new Promise((resolve, reject) => {
+                    svgImg.onload = resolve;
+                    svgImg.onerror = reject;
+                    svgImg.src = svgUrl;
+                });
+                // The SVG overlay maps to a square OSD Rect(0,0,1,1) where '1' = image width.
+                // We must draw it as a square based on width to maintain aspect ratio alignment.
+                // Annotations outside the image bounds (if any) will simply be clipped by the canvas size.
+                ctx.drawImage(svgImg, 0, 0, imageSize.x, imageSize.x);
+                URL.revokeObjectURL(svgUrl);
+            }
+
+            // 4. Export
+            const blob = await new Promise(resolve => exportCanvas.toBlob(resolve, format === 'png' ? 'image/png' : 'image/jpeg'));
+            const arrayBuffer = await blob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            await writeFile(filePath, uint8Array);
+            await message("Image exported successfully.", { title: "Export Success", type: "info" });
+
+        } catch (err) {
+            console.error("Export failed:", err);
+            await message(`Export failed: ${err.message || err}`, { title: "Export Error", type: "error" });
+        }
+    }
+
+    onMount(async () => {
+        console.log('[ImageViewerPanel] Mounted. Initial Path:', imagePath);
+        if (imagePath && osdViewerElement) { initializeViewer(imagePath); }
+        else { isLoading = false; console.log("[ImageViewerPanel onMount] No imagePath or osdViewerElement, not initializing."); }
+
+        exportUnlisten = await listen('request-image-export', (event) => {
+            handleExportImage(event.payload);
+        });
+    });
+
+    onDestroy(() => {
+        if (exportUnlisten) exportUnlisten();
+        if (osdViewer) {
+            osdViewer.removeHandler('canvas-press', onMouseDown);
+            osdViewer.removeHandler('canvas-drag', onMouseMove);
+            osdViewer.removeHandler('canvas-release', onMouseUp);
+            osdViewer.removeHandler('canvas-double-click', onDoubleClick);
+            osdViewer.removeHandler('update-viewport', updateAnnotationPositions);
+            if (svgOverlay && osdViewer.getOverlayById(svgOverlay)) {
+                osdViewer.removeOverlay(svgOverlay);
+            }
+            osdViewer.destroy();
+            osdViewer = null;
+        }
+    });
 </script>
 
 <svelte:head>
@@ -1021,90 +1180,103 @@
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
-        <div id="image-annotation-toolbar-container" class="flex items-center space-x-2">
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'rectangle'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
-                title="Draw Rectangle"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
-                </svg>
-            </button>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'circle'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
-                title="Draw Circle"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                </svg>
-            </button>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'polygon'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
-                title="Draw Polygon"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <polygon 
-                        points="2,2 14,4 12,14 4,12 6,7" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        stroke-width="1" 
-                    />
-                </svg>
-            </button>
-            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'speech-bubble-circle'}
-                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
-                title="Draw Circular Speech Bubble"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
-                    <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
-                </svg>
-            </button>
+        <div id="image-annotation-toolbar-container" class="flex items-center space-x-4">
+            <!-- Add Highlights Group -->
+            <div class="flex items-center space-x-2">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline-block">Highlights</span>
+                <div class="flex items-center space-x-1 bg-gray-200 dark:bg-d-gray-700 rounded-lg p-1">
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'rectangle'}
+                        on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
+                        title="Draw Rectangle"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                        </svg>
+                    </button>
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'circle'}
+                        on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+                        title="Draw Circle"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                        </svg>
+                    </button>
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'polygon'}
+                        on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+                        title="Draw Polygon"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <polygon
+                                points="2,2 14,4 12,14 4,12 6,7"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1"
+                            />
+                        </svg>
+                    </button>
+                </div>
+            </div>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'speech-bubble-rect'}
-                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
-                title="Draw Rectangular Speech Bubble"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left" viewBox="0 0 16 16">
-                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
-                </svg>
-            </button>
+            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'text-area'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'text-area' ? null : 'text-area')}
-                title="Draw Text Area"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-textarea-t" viewBox="0 0 16 16">
-                    <path d="M1.5 2.5A1.5 1.5 0 0 1 3 1h10a1.5 1.5 0 0 1 1.5 1.5v3.563a2 2 0 0 1 0 3.874V13.5A1.5 1.5 0 0 1 13 15H3a1.5 1.5 0 0 1-1.5-1.5V9.937a2 2 0 0 1 0-3.874zm1 3.563a2 2 0 0 1 0 3.874V13.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.937a2 2 0 0 1 0-3.874V2.5A.5.5 0 0 0 13 2H3a.5.5 0 0 0-.5.5zM2 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2m12 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
-                    <path d="M11.434 4H4.566L4.5 5.994h.386c.21-1.252.612-1.446 2.173-1.495l.343-.011v6.343c0 .537-.116.665-1.049.748V12h3.294v-.421c-.938-.083-1.054-.21-1.054-.748V4.488l.348.01c1.56.05 1.963.244 2.173 1.496h.386z"/>
-                </svg>
-            </button>
+            <!-- Annotate Group -->
+            <div class="flex items-center space-x-2">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline-block">Annotate</span>
+                <div class="flex items-center space-x-1 bg-gray-200 dark:bg-d-gray-700 rounded-lg p-1">
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'speech-bubble-circle'}
+                        on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
+                        title="Draw Circular Speech Bubble"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
+                            <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                        </svg>
+                    </button>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'censored'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'censored' ? null : 'censored')}
-                title="Anonymise (Pixelate)"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-incognito" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="m4.736 1.968-.892 3.269-.014.058C2.113 5.568 1 6.006 1 6.5 1 7.328 4.134 8 8 8s7-.672 7-1.5c0-.494-1.113-.932-2.83-1.205l-.014-.058-.892-3.27c-.146-.533-.698-.849-1.239-.734C9.411 1.363 8.62 1.5 8 1.5s-1.411-.136-2.025-.267c-.541-.115-1.093.2-1.239.735m.015 3.867a.25.25 0 0 1 .274-.224c.9.092 1.91.143 2.975.143a30 30 0 0 0 2.975-.143.25.25 0 0 1 .05.498c-.918.093-1.944.145-3.025.145s-2.107-.052-3.025-.145a.25.25 0 0 1-.224-.274M3.5 10h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5m-1.5.5q.001-.264.085-.5H2a.5.5 0 0 1 0-1h3.5a1.5 1.5 0 0 1 1.488 1.312 3.5 3.5 0 0 1 2.024 0A1.5 1.5 0 0 1 10.5 9H14a.5.5 0 0 1 0 1h-.085q.084.236.085.5v1a2.5 2.5 0 0 1-5 0v-.14l-.21-.07a2.5 2.5 0 0 0-1.58 0l-.21.07v.14a2.5 2.5 0 0 1-5 0zm8.5-.5h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5"/>
-                </svg>
-            </button>
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'speech-bubble-rect'}
+                        on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
+                        title="Draw Rectangular Speech Bubble"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left" viewBox="0 0 16 16">
+                            <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                        </svg>
+                    </button>
 
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'text-area'}
+                        on:click={() => activeDrawingTool = (activeDrawingTool === 'text-area' ? null : 'text-area')}
+                        title="Draw Text Area"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-textarea-t" viewBox="0 0 16 16">
+                            <path d="M1.5 2.5A1.5 1.5 0 0 1 3 1h10a1.5 1.5 0 0 1 1.5 1.5v3.563a2 2 0 0 1 0 3.874V13.5A1.5 1.5 0 0 1 13 15H3a1.5 1.5 0 0 1-1.5-1.5V9.937a2 2 0 0 1 0-3.874zm1 3.563a2 2 0 0 1 0 3.874V13.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.937a2 2 0 0 1 0-3.874V2.5A.5.5 0 0 0 13 2H3a.5.5 0 0 0-.5.5zM2 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2m12 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
+                            <path d="M11.434 4H4.566L4.5 5.994h.386c.21-1.252.612-1.446 2.173-1.495l.343-.011v6.343c0 .537-.116.665-1.049.748V12h3.294v-.421c-.938-.083-1.054-.21-1.054-.748V4.488l.348.01c1.56.05 1.963.244 2.173 1.496h.386z"/>
+                        </svg>
+                    </button>
 
-            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
+                    <button
+                        class="ui-button-icon"
+                        class:active={activeDrawingTool === 'censored'}
+                        on:click={() => activeDrawingTool = (activeDrawingTool === 'censored' ? null : 'censored')}
+                        title="Anonymise (Pixelate)"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-incognito" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="m4.736 1.968-.892 3.269-.014.058C2.113 5.568 1 6.006 1 6.5 1 7.328 4.134 8 8 8s7-.672 7-1.5c0-.494-1.113-.932-2.83-1.205l-.014-.058-.892-3.27c-.146-.533-.698-.849-1.239-.734C9.411 1.363 8.62 1.5 8 1.5s-1.411-.136-2.025-.267c-.541-.115-1.093.2-1.239.735m.015 3.867a.25.25 0 0 1 .274-.224c.9.092 1.91.143 2.975.143a30 30 0 0 0 2.975-.143.25.25 0 0 1 .05.498c-.918.093-1.944.145-3.025.145s-2.107-.052-3.025-.145a.25.25 0 0 1-.224-.274M3.5 10h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5m-1.5.5q.001-.264.085-.5H2a.5.5 0 0 1 0-1h3.5a1.5 1.5 0 0 1 1.488 1.312 3.5 3.5 0 0 1 2.024 0A1.5 1.5 0 0 1 10.5 9H14a.5.5 0 0 1 0 1h-.085q.084.236.085.5v1a2.5 2.5 0 0 1-5 0v-.14l-.21-.07a2.5 2.5 0 0 0-1.58 0l-.21.07v.14a2.5 2.5 0 0 1-5 0zm8.5-.5h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
             <div class="flex items-center space-x-1.5">
                 {#each baseColors as color, i}
                     <button
@@ -1230,8 +1402,8 @@
                         width={shapeData.width * S}
                         height={shapeData.height * S}
                         fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={strokeWidth}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1255,8 +1427,8 @@
                         cy={shapeData.cy * S}
                         r={shapeData.r * S}
                         fill="url(#censoredPattern)"
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'black'}
-                        stroke-width={strokeWidth}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1418,7 +1590,7 @@
                 {@const S = 1000}
                 {#if textBody}
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
-                        <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
+                        <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none" data-annotation-id={annotation.id}>
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
@@ -1426,7 +1598,7 @@
                             </div>
                         </foreignObject>
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
-                        <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
+                        <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none" data-annotation-id={annotation.id}>
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
