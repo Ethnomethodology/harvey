@@ -201,7 +201,15 @@
                     width: result.width, height: result.height, frame_rate: result.frame_rate,
                     bit_rate: result.bit_rate, audio_codec: result.audio_codec, video_codec: result.video_codec,
                     creation_time: result.creation_time,
-                    customFields: result.custom_fields_json ? JSON.parse(result.custom_fields_json) : [],
+                    customFields: result.custom_fields_json ? (() => {
+                        try {
+                            const parsed = JSON.parse(result.custom_fields_json);
+                            return Array.isArray(parsed) ? parsed : [];
+                        } catch (e) {
+                            console.error("Error parsing custom_fields_json:", e);
+                            return [];
+                        }
+                    })() : [],
                 };
             } else {
                 // console.log(`[InfoPanel loadMetadata] No metadata for ${assetRelativePathToLoad}. Setting defaults.`);
@@ -584,7 +592,7 @@
                 </div>
 
                 <!-- Attachments Section -->
-                {#if (itemType === 'doc' || itemType === 'imported_transcript') && currentFileMetadata?.customFields}
+                {#if (itemType === 'doc' || itemType === 'imported_transcript') && currentFileMetadata?.customFields && Array.isArray(currentFileMetadata.customFields)}
                     {@const attachmentsField = currentFileMetadata.customFields.find(f => f.key === 'attachments')}
                     {#if attachmentsField && attachmentsField.value}
                         {@const attachments = JSON.parse(attachmentsField.value)}
@@ -610,7 +618,7 @@
                     {/if}
                 {/if}
 
-                {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(currentFileMetadata.customFields && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
+                {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(Array.isArray(currentFileMetadata.customFields) && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
                     <hr class="my-4 border-gray-300 dark:border-border">
                     <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Technical Details</h3>
                     {#if currentFileMetadata.duration_seconds}

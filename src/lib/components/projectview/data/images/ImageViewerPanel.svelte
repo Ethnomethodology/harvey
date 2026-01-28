@@ -490,7 +490,7 @@
                     if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect' || selector.shape === 'text-area' || selector.shape === 'censored') {
                         selector.x += dx;
                         selector.y += dy;
-                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle' || selector.shape === 'censored-circle' || selector.shape === 'text-area-circle') {
                         selector.cx += dx;
                         selector.cy += dy;
                     } else if (selector.shape === 'polygon') {
@@ -553,7 +553,7 @@
                         // Clamp min size
                         selector.width = Math.max(0.001, selector.width);
                         selector.height = Math.max(0.001, selector.height);
-                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle' || selector.shape === 'censored-circle' || selector.shape === 'text-area-circle') {
                         if (draggedHandleType === 'r') {
                             const d_center_x = currentViewportPoint.x - selector.cx;
                             const d_center_y = currentViewportPoint.y - selector.cy;
@@ -1230,8 +1230,8 @@
                         width={shapeData.width * S}
                         height={shapeData.height * S}
                         fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={strokeWidth}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1254,9 +1254,9 @@
                         cx={shapeData.cx * S}
                         cy={shapeData.cy * S}
                         r={shapeData.r * S}
-                        fill="url(#censoredPattern)"
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'black'}
-                        stroke-width={strokeWidth}
+                        fill={fillColor}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}

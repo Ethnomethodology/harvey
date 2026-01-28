@@ -288,7 +288,6 @@
                     style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : (option.value === 'url(#censoredPattern)' ? 'linear-gradient(to bottom right, #fff 25%, #888 25%, #888 50%, #444 50%, #444 75%, #000 75%)' : option.value.replace(', 0.5', ', 1'))};"
                     on:click={() => {
                         selectedColor = option.value;
-                        if (initialText === null && isEditing) handleSave(); // Auto-save color change if no text
                     }}
                 >
                 </button>
