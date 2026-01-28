@@ -108,26 +108,20 @@
         if (!highlights || highlights.length === 0) return [];
 
         if (type === 'image') {
-            const annotationShapesToExclude = ['censored', 'censored-circle', 'text-area', 'text-area-circle', 'speech-bubble-rect', 'speech-bubble-circle'];
-            return highlights
-                .filter(annotation => {
-                    const shape = annotation.target?.selector?.value?.shape;
-                    return !annotationShapesToExclude.includes(shape);
-                })
-                .map(annotation => {
-                    const titleBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Title');
-                    const descriptionBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Description');
-                    const colorBody = annotation.body.find(b => b.purpose === 'highlighting');
+            return highlights.map(annotation => {
+                const titleBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Title');
+                const descriptionBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Description');
+                const colorBody = annotation.body.find(b => b.purpose === 'highlighting');
 
-                    return {
-                        id: annotation.id,
-                        color: colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)',
-                        title: titleBody ? titleBody.value : 'No title',
-                        description: descriptionBody ? descriptionBody.value : 'No description',
-                        tags: annotation.tags || [],
-                        comments: annotation.comments || []
-                    };
-                });
+                return {
+                    id: annotation.id,
+                    color: colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)',
+                    title: titleBody ? titleBody.value : 'No title',
+                    description: descriptionBody ? descriptionBody.value : 'No description',
+                    tags: annotation.tags || [],
+                    comments: annotation.comments || []
+                };
+            });
         } else if (type === 'table') {
             return highlights.map(h => ({
                 id: h.id,

@@ -7,7 +7,6 @@
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
-    import ImageExportModal from '../modals/ImageExportModal.svelte';
     import { transcriptStore } from '$lib/stores/transcriptStore.js';
     import { exportTranscript } from '$lib/services/configureActions.js';
     import { activeLayout } from '$lib/stores/layoutStore.js';
@@ -15,7 +14,7 @@
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-    import { listen, emit } from '@tauri-apps/api/event';
+    import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
@@ -32,8 +31,6 @@
     let showTranslateDocumentModal = false;
     let isLexicalDocument = false;
     let isImportedTranscript = false;
-    let isImage = false;
-    let isImageExportModalOpen = false;
 
     $: {
         const p = $project;
@@ -42,27 +39,16 @@
              // Check if it's an imported transcript (exists in project.importedTranscriptFiles)
              // or by path location if baseDirectory is available (less robust than store check but quick)
              isImportedTranscript = !!p.currentImportedTranscriptPath;
-             isImage = false;
         } else if (p.currentImportedTranscriptPath) {
              // Case where user is viewing an imported transcript but selectedDocumentPath might be null/different?
              // Actually DataView sets selectedDocumentPath OR currentImportedTranscriptPath.
              // If currentImportedTranscriptPath is set, we are in imported transcript mode.
              isLexicalDocument = true;
              isImportedTranscript = true;
-             isImage = false;
-        } else if (p.selectedImagePath) {
-            isLexicalDocument = false;
-            isImportedTranscript = false;
-            isImage = true;
         } else {
             isLexicalDocument = false;
             isImportedTranscript = false;
-            isImage = false;
         }
-    }
-
-    async function handleImageExportConfirm(event) {
-        await emit('request-image-export', event.detail);
     }
 
     function handleDocumentTranslateConfirm(event) {
@@ -618,12 +604,6 @@
                 <span class="text-xs">Translate</span>
             </button>
         {/if}
-        {#if isImage}
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => isImageExportModalOpen = true}" title="Export Image" >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-                <span class="text-xs">Export</span>
-            </button>
-        {/if}
         {#if isImportedTranscript}
             <button 
                 class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
@@ -752,11 +732,6 @@
     transcriptPath={$project.activeTranscriptPathInDataTab}
     on:confirm={handleExportConfirm}
     on:close={() => isExportModalOpen = false}
-/>
-
-<ImageExportModal
-    bind:showModal={isImageExportModalOpen}
-    on:confirm={handleImageExportConfirm}
 />
 
 <LiveTranscribeModelModal
