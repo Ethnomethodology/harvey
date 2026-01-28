@@ -17,7 +17,9 @@
     let error = null;
     let currentLoadedPath = null;
     let currentAssetUrl = null;
+    let pixelatedAssetUrl = null; // New variable for the low-res version
     let imgAspectRatio = 1;
+    let pixelationCanvas; // Binding for the hidden canvas
 
     import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
@@ -308,6 +310,31 @@
                     const size = osdViewer.world.getItemAt(0).getContentSize();
                     if (size.x > 0) imgAspectRatio = size.y / size.x;
                 }
+
+                // Generate pixelated version
+                if (pixelationCanvas && currentAssetUrl) {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => {
+                        // Set canvas size to 5% of original (or similar small size)
+                        // A fixed width like 50px is often safer to guarantee specific blockiness
+                        const targetWidth = 50;
+                        const targetHeight = 50 * imgAspectRatio;
+
+                        pixelationCanvas.width = targetWidth;
+                        pixelationCanvas.height = targetHeight;
+
+                        const ctx = pixelationCanvas.getContext('2d');
+                        // Use low-quality smoothing if possible, or just default draw
+                        ctx.imageSmoothingEnabled = false;
+                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+                        // Export as Data URL
+                        pixelatedAssetUrl = pixelationCanvas.toDataURL('image/jpeg', 0.5);
+                    };
+                    img.src = currentAssetUrl;
+                }
+
                 isLoading = false;
                 await tick(); // Ensure SVG element is rendered before adding as overlay
                 // Add SVG overlay after OSD viewer is open
@@ -1102,6 +1129,9 @@
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
         </div>
 
+        <!-- Hidden canvas for generating pixelated assets -->
+        <canvas bind:this={pixelationCanvas} style="display: none;"></canvas>
+
         <!-- SVG overlay for drawing and displaying annotations -->
         <!-- Moved outside osdViewerElement to prevent OSD initialization from clearing it -->
         <svg bind:this={svgOverlay} class="pointer-events-none z-20 absolute inset-0" viewBox="0 0 1000 1000"
@@ -1109,43 +1139,23 @@
                 class:cursor-pan={activeDrawingTool === null}>
             <defs>
                 <!-- Pattern for pixelated censorship.
-                     Uses 1000 width to match the SVG viewBox (0 0 1000 1000), which OSD maps to the full image width.
-                     Height is scaled by aspect ratio to ensure coverage of non-square images. -->
-                <pattern id="censoredPattern" x="0" y="0" width="1000" height={Math.max(1000, 1000 * imgAspectRatio)} patternUnits="userSpaceOnUse">
-                    {#if currentAssetUrl}
+                     It fills the shape with the *low-resolution* data URL generated on load.
+                     Because the source image is tiny (50px wide), stretching it to 1000px forces genuine pixelation. -->
+                <pattern id="censoredPattern"
+                    patternUnits="userSpaceOnUse"
+                    x="0" y="0"
+                    width="1000"
+                    height={1000 * imgAspectRatio}
+                    preserveAspectRatio="none">
+                    {#if pixelatedAssetUrl}
                         <image
-                            href={currentAssetUrl}
+                            href={pixelatedAssetUrl}
                             x="0" y="0"
-                            width="50"
-                            height={50 * imgAspectRatio}
+                            width="1000"
+                            height={1000 * imgAspectRatio}
                             preserveAspectRatio="none"
-                            transform="scale(20)"
                             style="image-rendering: pixelated; image-rendering: crisp-edges;"
                         />
-                    {:else}
-                        <!-- 4x4 grid of 2px squares for a noisier 'static' look fallback -->
-                        <pattern id="censoredPatternFallback" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
-                            <rect x="0" y="0" width="2" height="2" fill="#fff" />
-                            <rect x="2" y="0" width="2" height="2" fill="#444" />
-                            <rect x="4" y="0" width="2" height="2" fill="#888" />
-                            <rect x="6" y="0" width="2" height="2" fill="#000" />
-
-                            <rect x="0" y="2" width="2" height="2" fill="#888" />
-                            <rect x="2" y="2" width="2" height="2" fill="#000" />
-                            <rect x="4" y="2" width="2" height="2" fill="#fff" />
-                            <rect x="6" y="2" width="2" height="2" fill="#444" />
-
-                            <rect x="0" y="4" width="2" height="2" fill="#444" />
-                            <rect x="2" y="4" width="2" height="2" fill="#fff" />
-                            <rect x="4" y="4" width="2" height="2" fill="#000" />
-                            <rect x="6" y="4" width="2" height="2" fill="#888" />
-
-                            <rect x="0" y="6" width="2" height="2" fill="#000" />
-                            <rect x="2" y="6" width="2" height="2" fill="#888" />
-                            <rect x="4" y="6" width="2" height="2" fill="#444" />
-                            <rect x="6" y="6" width="2" height="2" fill="#fff" />
-                        </pattern>
-                        <rect width="1000" height="1000" fill="url(#censoredPatternFallback)" />
                     {/if}
                 </pattern>
             </defs>
