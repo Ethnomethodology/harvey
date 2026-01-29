@@ -41,27 +41,37 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config.verification_status.python_libraries_verified = false;
         config_changed = true;
     }
-    if transcription_models_downloaded {
-        let download_location = get_download_location().await?;
-        if !std::path::Path::new(&download_location).exists() {
-            transcription_models_downloaded = false;
-            config.verification_status.transcription_models_verified = false;
-            config_changed = true;
-        }
+
+    // Always re-verify model presence if config says they are there
+    let models = get_downloaded_models().await?;
+    let has_transcription = models.iter().any(|m| !m.name.contains("opus-mt") && !m.name.contains("paraphrase"));
+    let has_translation = !get_local_translation_models().await?.is_empty();
+
+    if !transcription_models_downloaded && has_transcription {
+        transcription_models_downloaded = true;
+        config.verification_status.transcription_models_verified = true;
+        config_changed = true;
+    } else if transcription_models_downloaded && !has_transcription {
+        transcription_models_downloaded = false;
+        config.verification_status.transcription_models_verified = false;
+        config_changed = true;
     }
+
+    if translation_models_downloaded && !has_translation {
+        translation_models_downloaded = false;
+        config.verification_status.translation_models_verified = false;
+        config_changed = true;
+    } else if !translation_models_downloaded && has_translation {
+        translation_models_downloaded = true;
+        config.verification_status.translation_models_verified = true;
+        config_changed = true;
+    }
+
     if diarization_model_downloaded {
         let hf_hub_path = dirs::home_dir().map(|h| h.join(".cache/huggingface/hub")).unwrap_or_default();
         if !hf_hub_path.exists() {
             diarization_model_downloaded = false;
             config.verification_status.diarization_model_verified = false;
-            config_changed = true;
-        }
-    }
-    if translation_models_downloaded {
-        let download_location = get_download_location().await?;
-        if !std::path::Path::new(&download_location).exists() {
-            translation_models_downloaded = false;
-            config.verification_status.translation_models_verified = false;
             config_changed = true;
         }
     }
@@ -78,19 +88,10 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config.verification_status.hf_token_verified = hf_token_present;
         config_changed = true;
     }
-    if !transcription_models_downloaded && !get_downloaded_models().await?.is_empty() {
-        transcription_models_downloaded = true;
-        config.verification_status.transcription_models_verified = true;
-        config_changed = true;
-    }
+    // (Transcription and Translation checks removed here as they are covered above)
     if !diarization_model_downloaded && check_diarization_model_access(app_handle.clone()).await.unwrap_or(false) {
         diarization_model_downloaded = true;
         config.verification_status.diarization_model_verified = true;
-        config_changed = true;
-    }
-    if !translation_models_downloaded && !get_local_translation_models().await?.is_empty() {
-        translation_models_downloaded = true;
-        config.verification_status.translation_models_verified = true;
         config_changed = true;
     }
 

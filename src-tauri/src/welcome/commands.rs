@@ -54,7 +54,9 @@ pub async fn download_translation_model_command(
 ) -> Result<(), CommandError> {
     log::info!("CMD: download_translation_model: {} -> {}", model_info.name, download_location);
     let model_name = model_info.name.clone();
-    let target_dir = PathBuf::from(&download_location);
+    // Update target directory to include organization structure
+    let target_dir = PathBuf::from(&download_location).join("translation").join("helsinki-nlp");
+    let target_dir_str = target_dir.to_string_lossy().to_string();
 
     if download_location.trim().is_empty() {
         return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
@@ -79,7 +81,8 @@ pub async fn download_translation_model_command(
 
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &download_location, &token])
+        // Pass the new target_dir_str instead of raw download_location
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
@@ -121,6 +124,7 @@ pub async fn download_translation_model_command(
         match || -> Result<(), CommandError> {
             let mut config = read_config()?;
             let mut downloaded_model_info = model_info.clone();
+            // Store the BASE download location in config, consistent with other models
             downloaded_model_info.download_location = Some(download_location.clone());
 
             if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
@@ -148,7 +152,8 @@ pub async fn download_translation_model_command(
 #[command]
 pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandError> {
     log::info!("CMD: get_local_translation_models");
-    let download_dir = PathBuf::from(get_download_location().await?);
+    // Look in the specific subdirectory
+    let download_dir = PathBuf::from(get_download_location().await?).join("translation").join("helsinki-nlp");
     let mut models = Vec::new();
 
     if !download_dir.exists() {
@@ -627,7 +632,17 @@ fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), Command
 #[command] pub async fn get_download_location() -> Result<String, CommandError> { /* ... */ let mut config = read_config()?; let mut needs_save = false; let mut final_location = config.download_location.clone(); if final_location.trim().is_empty() { log::info!("Config: Download location empty, computing default."); final_location = get_default_download_location()?; config.download_location = final_location.clone(); needs_save = true; } let dir_path = PathBuf::from(&final_location); if !dir_path.exists() { log::info!("Config: Download directory '{}' missing. Creating...", final_location); fs::create_dir_all(&dir_path)?; } else if !dir_path.is_dir() { return Err(format!("Config Error: Download path '{}' is not a directory.", final_location).into()); } if needs_save { write_config(&config)?; log::info!("Config: Saved default download location: {}", final_location); } else { log::info!("Config: Using download location: {}", final_location); } Ok(final_location) }
 #[command]
 pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
-    let config = read_config()?;
+    let mut config = read_config()?;
+    let initial_len = config.downloaded_models.len();
+    
+    // Automatically clean up paraphrase models if they exist in config
+    config.downloaded_models.retain(|m| !m.name.contains("paraphrase"));
+    
+    if config.downloaded_models.len() < initial_len {
+        log::info!("Cleaned up {} legacy paraphrase model(s) from config.", initial_len - config.downloaded_models.len());
+        write_config(&config)?;
+    }
+
     log::info!("Config: Returning {} downloaded models.", config.downloaded_models.len());
     Ok(config.downloaded_models)
 }
@@ -658,7 +673,13 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
         model_to_delete.name.clone()
     };
 
-    let model_path = PathBuf::from(&base_location).join(&folder_name);
+    let sub_dir = if model_to_delete.name.contains("opus-mt") {
+         PathBuf::from("translation").join("helsinki-nlp")
+    } else {
+         PathBuf::from("transcription").join("whisper-cpp")
+    };
+
+    let model_path = PathBuf::from(&base_location).join(sub_dir).join(&folder_name);
 
     if model_path.exists() {
         log::info!("Deleting model from filesystem at path: {:?}", model_path);
@@ -698,9 +719,265 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     Ok(())
 }
-#[command] pub async fn change_download_location_and_move_models(new_location: String) -> Result<(), CommandError> { /* ... */ log::info!("CMD: change_dl_loc_move: {}", new_location); let trimmed = new_location.trim(); if trimmed.is_empty() { return Err("New download location empty.".into()); } let new_path = PathBuf::from(trimmed); if !new_path.exists() { log::info!("New location {:?} missing. Creating...", new_path); fs::create_dir_all(&new_path)?; } else if !new_path.is_dir() { return Err(format!("New location '{}' is not a directory.", trimmed).into()); } let mut config = read_config()?; let old_location_str = config.download_location.clone(); let old_path = if old_location_str.trim().is_empty() { PathBuf::from(get_default_download_location()?) } else { PathBuf::from(&old_location_str) }; log::info!("Old loc: {:?}, New loc: {:?}", old_path, new_path); if old_path == new_path { log::info!("Locations same. Ensuring config reflects input."); if config.download_location != trimmed { config.download_location = trimmed.to_string(); write_config(&config)?; log::info!("Config location updated to match input."); } else { log::info!("Config location already matches."); } return Ok(()); } let models_in_config = config.downloaded_models.clone(); log::info!("Found {} models in config to move.", models_in_config.len()); let mut move_errors : Vec<String> = Vec::new(); for model in &models_in_config { let old_model_dir = old_path.join(&model.name); let new_model_dir = new_path.join(&model.name); log::info!("Check model '{}': Old {:?}, New {:?}", model.name, old_model_dir, new_model_dir); if old_model_dir.exists() { if old_model_dir.is_dir() { log::info!("Attempt move {:?} -> {:?}", old_model_dir, new_model_dir); if new_model_dir.exists() { log::warn!("Target {:?} exists. Removing before move.", new_model_dir); if let Err(e)=fs::remove_dir_all(&new_model_dir){let m=format!("Failed remove target {:?} for '{}': {}", new_model_dir,model.name,e); log::error!("{}", m); move_errors.push(m); continue;} } if let Err(e)=fs::rename(&old_model_dir,&new_model_dir){let m=format!("Failed move '{}' {:?}->{:?}: {}", model.name,old_model_dir,new_model_dir,e); log::error!("{}", m); move_errors.push(m);} else { log::info!("Moved '{}'.", model.name); } } else { log::warn!("Source path {:?} not dir. Skip.", old_model_dir); } } else { log::info!("Old path {:?} missing. Skip.", old_model_dir); if new_model_dir.exists()&&new_model_dir.is_dir(){ log::info!("Model '{}' already at new loc {:?}.", model.name, new_model_dir);} } } if !move_errors.is_empty() { log::error!("Errors moving models. Aborting config update."); return Err(CommandError::from(move_errors.join("\n"))); } log::info!("Moves done. Updating config loc to '{}'.", trimmed); config.download_location=trimmed.to_string(); log::info!("Updating model download_location entries..."); for model_cfg in config.downloaded_models.iter_mut() { log::info!("Set stored loc for '{}' to '{}'", model_cfg.name, trimmed); model_cfg.download_location=Some(trimmed.to_string()); } write_config(&config)?; log::info!("Config updated."); Ok(()) }
+#[command]
+pub async fn change_download_location_and_move_models(new_location: String) -> Result<(), CommandError> {
+    log::info!("CMD: change_dl_loc_move: {}", new_location);
+    let trimmed = new_location.trim();
+    if trimmed.is_empty() {
+        return Err("New download location empty.".into());
+    }
+    let new_path = PathBuf::from(trimmed);
+    if !new_path.exists() {
+        log::info!("New location {:?} missing. Creating...", new_path);
+        fs::create_dir_all(&new_path)?;
+    } else if !new_path.is_dir() {
+        return Err(format!("New location '{}' is not a directory.", trimmed).into());
+    }
+
+    let mut config = read_config()?;
+    let old_location_str = config.download_location.clone();
+    let old_path = if old_location_str.trim().is_empty() {
+        PathBuf::from(get_default_download_location()?)
+    } else {
+        PathBuf::from(&old_location_str)
+    };
+    log::info!("Old loc: {:?}, New loc: {:?}", old_path, new_path);
+
+    if old_path == new_path {
+        log::info!("Locations same. Ensuring config reflects input.");
+        if config.download_location != trimmed {
+            config.download_location = trimmed.to_string();
+            write_config(&config)?;
+            log::info!("Config location updated to match input.");
+        } else {
+            log::info!("Config location already matches.");
+        }
+        return Ok(());
+    }
+
+    let models_in_config = config.downloaded_models.clone();
+    log::info!("Found {} models in config to move.", models_in_config.len());
+    let mut move_errors : Vec<String> = Vec::new();
+
+    for model in &models_in_config {
+        // Determine subdirectory based on model type
+        let sub_dir = if model.name.contains("opus-mt") {
+             PathBuf::from("translation").join("helsinki-nlp")
+        } else {
+             PathBuf::from("transcription").join("whisper-cpp")
+        };
+
+        let old_model_dir = old_path.join(&sub_dir).join(&model.name);
+        let new_model_dir = new_path.join(&sub_dir).join(&model.name);
+
+        log::info!("Check model '{}': Old {:?}, New {:?}", model.name, old_model_dir, new_model_dir);
+
+        if old_model_dir.exists() {
+            if old_model_dir.is_dir() {
+                log::info!("Attempt move {:?} -> {:?}", old_model_dir, new_model_dir);
+
+                 // Ensure parent dir exists
+                 if let Some(parent) = new_model_dir.parent() {
+                     if !parent.exists() {
+                         let _ = fs::create_dir_all(parent);
+                     }
+                 }
+
+                if new_model_dir.exists() {
+                    log::warn!("Target {:?} exists. Removing before move.", new_model_dir);
+                    if let Err(e) = fs::remove_dir_all(&new_model_dir) {
+                        let m = format!("Failed remove target {:?} for '{}': {}", new_model_dir, model.name, e);
+                        log::error!("{}", m);
+                        move_errors.push(m);
+                        continue;
+                    }
+                }
+                if let Err(e) = fs::rename(&old_model_dir, &new_model_dir) {
+                    let m = format!("Failed move '{}' {:?}->{:?}: {}", model.name, old_model_dir, new_model_dir, e);
+                    log::error!("{}", m);
+                    move_errors.push(m);
+                } else {
+                    log::info!("Moved '{}'.", model.name);
+                }
+            } else {
+                log::warn!("Source path {:?} not dir. Skip.", old_model_dir);
+            }
+        } else {
+             // Fallback check for legacy structure (Root/ModelName)
+             let legacy_old_model_dir = old_path.join(&model.name);
+             if legacy_old_model_dir.exists() && legacy_old_model_dir.is_dir() {
+                 log::info!("Found model at legacy path {:?}. Moving to new structure {:?}.", legacy_old_model_dir, new_model_dir);
+                  // Ensure parent dir exists
+                 if let Some(parent) = new_model_dir.parent() {
+                     if !parent.exists() {
+                         let _ = fs::create_dir_all(parent);
+                     }
+                 }
+                  if new_model_dir.exists() {
+                     log::warn!("Target {:?} exists. Removing before move.", new_model_dir);
+                     if let Err(e)=fs::remove_dir_all(&new_model_dir){let m=format!("Failed remove target {:?} for '{}': {}", new_model_dir,model.name,e); log::error!("{}", m); move_errors.push(m); continue;}
+                 }
+                 if let Err(e)=fs::rename(&legacy_old_model_dir,&new_model_dir){let m=format!("Failed move '{}' {:?}->{:?}: {}", model.name,legacy_old_model_dir,new_model_dir,e); log::error!("{}", m); move_errors.push(m);} else { log::info!("Moved '{}' (from legacy).", model.name); }
+             } else {
+                 log::info!("Old path {:?} missing (and legacy check failed). Skip.", old_model_dir);
+                 if new_model_dir.exists() && new_model_dir.is_dir() {
+                     log::info!("Model '{}' already at new loc {:?}.", model.name, new_model_dir);
+                 }
+             }
+        }
+    }
+
+    if !move_errors.is_empty() {
+        log::error!("Errors moving models. Aborting config update.");
+        return Err(CommandError::from(move_errors.join("\n")));
+    }
+
+    log::info!("Moves done. Updating config loc to '{}'.", trimmed);
+    config.download_location = trimmed.to_string();
+    log::info!("Updating model download_location entries...");
+    for model_cfg in config.downloaded_models.iter_mut() {
+        log::info!("Set stored loc for '{}' to '{}'", model_cfg.name, trimmed);
+        model_cfg.download_location = Some(trimmed.to_string());
+    }
+    write_config(&config)?;
+    log::info!("Config updated.");
+    Ok(())
+}
 #[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: download_model: {} -> {}", model_info.name, download_location); let model_name = model_info.name.clone(); let target_dir = PathBuf::from(&download_location); if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); } if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); } let cancel_flag = Arc::new(AtomicBool::new(false)); cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag)); log::info!("Cancel token stored for {}", model_name); let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await; if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); } match download_result { Ok(_) => { log::info!("Download success for {}", model_name); app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?; Ok(()) } Err(e) => { log::error!("Download error for {}: {}", model_name, e); let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err)); Err(e) } } }
-async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, model_info: ModelInfo, download_base_location: String, ) -> Result<(), CommandError> { /* ... */ let model_name = model_info.name.clone(); let model_url = model_info.download_url.as_ref().filter(|url| !url.trim().is_empty()).ok_or_else(|| CommandError::from(format!("Model '{}' missing URL.", model_name)))?; let bin_filename = Path::new(model_url).file_name().and_then(|n|n.to_str()).ok_or_else(|| CommandError::from(format!("Bad URL filename: {}", model_url)))?.to_string(); let model_dest_dir=PathBuf::from(&download_base_location).join(&model_name); let bin_filepath=model_dest_dir.join(&bin_filename); let temp_bin_filepath=model_dest_dir.join(format!("{}.part",bin_filename)); if !model_dest_dir.exists(){log::info!("Creating model dir: {:?}", model_dest_dir); fs::create_dir_all(&model_dest_dir).map_err(|e|format!("Failed create dir {:?}: {}",model_dest_dir,e))?; } else if !model_dest_dir.is_dir(){log::warn!("Expected dir {:?} not dir. Removing.", model_dest_dir); fs::remove_file(&model_dest_dir).map_err(|e|format!("Failed remove file {:?}: {}",model_dest_dir,e))?; fs::create_dir_all(&model_dest_dir).map_err(|e|format!("Failed re-create dir {:?}: {}",model_dest_dir,e))?; } if temp_bin_filepath.exists(){log::info!("Clean partial: {:?}", temp_bin_filepath); fs::remove_file(&temp_bin_filepath).map_err(|e|format!("Failed clean partial {:?}: {}",temp_bin_filepath,e))?; } if bin_filepath.exists(){log::info!("Clean existing model: {:?}", bin_filepath); fs::remove_file(&bin_filepath).map_err(|e|format!("Failed clean existing model {:?}: {}",bin_filepath,e))?; } log::info!("Starting download '{}': {}", model_name, model_url); let _=app.emit("download-start",&model_name); let client=reqwest::Client::new(); let response=client.get(model_url).send().await?; if !response.status().is_success(){return Err(format!("Download fail '{}': Status {} URL {}",model_name,response.status(),model_url).into());} let total_size=response.content_length(); match total_size{ Some(s)=>log::info!("Download size: {} bytes",s), None=>log::warn!("No Content-Length."), } let mut dest_file=File::create(&temp_bin_filepath).map_err(|e|format!("Failed create temp {:?}: {}",temp_bin_filepath,e))?; let mut stream=response.bytes_stream(); let mut downloaded:u64=0; let _=app.emit("download-progress",&DownloadProgress{model_name:model_name.clone(),downloaded_bytes:0,total_bytes:total_size}); while let Some(item_result)=stream.next().await{ if cancel_flag.load(Ordering::Relaxed){log::warn!("Cancel {}. Abort download.",model_name); drop(dest_file); let _=fs::remove_file(&temp_bin_filepath); return Err(CommandError::from(format!("Download cancelled for '{}'.",model_name)));} match item_result{ Ok(chunk)=>{ dest_file.write_all(&chunk).map_err(|e|format!("Failed write chunk: {}",e))?; downloaded+=chunk.len() as u64; let _=app.emit("download-progress",&DownloadProgress{model_name:model_name.clone(),downloaded_bytes:downloaded,total_bytes:total_size}); } Err(e)=>{drop(dest_file); let _=fs::remove_file(&temp_bin_filepath); return Err(format!("Error read stream '{}': {}",model_name,e).into());} } } drop(dest_file); log::info!("Download stream finished '{}'. Bytes: {}",model_name,downloaded); if cancel_flag.load(Ordering::Relaxed){log::warn!("Cancel {} after download. Abort.",model_name); let _=fs::remove_file(&temp_bin_filepath); return Err(CommandError::from(format!("Download cancelled post-dl '{}'.",model_name)));} if let Some(total)=total_size{ if downloaded!=total{ let _=fs::remove_file(&temp_bin_filepath); return Err(format!("Incomplete '{}': Expected {}, got {}.",model_name,total,downloaded).into()); } log::info!("Size matches Content-Length '{}'.", model_name); } log::info!("Rename temp {:?} -> {:?}", temp_bin_filepath, bin_filepath); fs::rename(&temp_bin_filepath,&bin_filepath).map_err(|e|format!("Failed rename {:?}->{:?}: {}",temp_bin_filepath,bin_filepath,e))?; log::info!("Update config for '{}'...", model_name); let mut config=read_config()?; let mut downloaded_model_info=model_info.clone(); downloaded_model_info.download_location=Some(download_base_location.clone()); if let Some(idx)=config.downloaded_models.iter().position(|m|m.name==downloaded_model_info.name){log::info!("Model '{}' already in config. Updating.", model_info.name); config.downloaded_models[idx]=downloaded_model_info;} else {log::info!("Adding new model '{}' to config.", model_info.name); config.downloaded_models.push(downloaded_model_info);} write_config(&config)?; log::info!("Config updated for '{}'.", model_info.name); Ok(()) }
+async fn download_and_save_bin(
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+    model_info: ModelInfo,
+    download_base_location: String,
+) -> Result<(), CommandError> {
+    log::info!("CMD: download_and_save_bin: {} -> {}", model_info.name, download_base_location);
+    let model_name = model_info.name.clone();
+    let model_url = model_info.download_url.as_ref()
+        .filter(|url| !url.trim().is_empty())
+        .ok_or_else(|| CommandError::from(format!("Model '{}' missing URL.", model_name)))?;
+
+    let bin_filename = Path::new(model_url).file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| CommandError::from(format!("Bad URL filename: {}", model_url)))?
+        .to_string();
+
+    // Updated logic: Save to transcription/whisper-cpp subdirectory
+    let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
+    let model_dest_dir = PathBuf::from(&download_base_location).join(sub_dir).join(&model_name);
+
+    let bin_filepath = model_dest_dir.join(&bin_filename);
+    let temp_bin_filepath = model_dest_dir.join(format!("{}.part", bin_filename));
+
+    if !model_dest_dir.exists() {
+        log::info!("Creating model dir: {:?}", model_dest_dir);
+        fs::create_dir_all(&model_dest_dir)
+            .map_err(|e| format!("Failed create dir {:?}: {}", model_dest_dir, e))?;
+    } else if !model_dest_dir.is_dir() {
+        log::warn!("Expected dir {:?} not dir. Removing.", model_dest_dir);
+        fs::remove_file(&model_dest_dir)
+            .map_err(|e| format!("Failed remove file {:?}: {}", model_dest_dir, e))?;
+        fs::create_dir_all(&model_dest_dir)
+            .map_err(|e| format!("Failed re-create dir {:?}: {}", model_dest_dir, e))?;
+    }
+
+    if temp_bin_filepath.exists() {
+        log::info!("Clean partial: {:?}", temp_bin_filepath);
+        fs::remove_file(&temp_bin_filepath)
+            .map_err(|e| format!("Failed clean partial {:?}: {}", temp_bin_filepath, e))?;
+    }
+    if bin_filepath.exists() {
+        log::info!("Clean existing model: {:?}", bin_filepath);
+        fs::remove_file(&bin_filepath)
+            .map_err(|e| format!("Failed clean existing model {:?}: {}", bin_filepath, e))?;
+    }
+
+    log::info!("Starting download '{}': {}", model_name, model_url);
+    let _ = app.emit("download-start", &model_name);
+    let client = reqwest::Client::new();
+    let response = client.get(model_url).send().await?;
+    if !response.status().is_success() {
+        return Err(format!("Download fail '{}': Status {} URL {}", model_name, response.status(), model_url).into());
+    }
+
+    let total_size = response.content_length();
+    match total_size {
+        Some(s) => log::info!("Download size: {} bytes", s),
+        None => log::warn!("No Content-Length."),
+    }
+
+    let mut dest_file = File::create(&temp_bin_filepath)
+        .map_err(|e| format!("Failed create temp {:?}: {}", temp_bin_filepath, e))?;
+
+    let mut stream = response.bytes_stream();
+    let mut downloaded: u64 = 0;
+    let _ = app.emit("download-progress", &DownloadProgress {
+        model_name: model_name.clone(),
+        downloaded_bytes: 0,
+        total_bytes: total_size
+    });
+
+    while let Some(item_result) = stream.next().await {
+        if cancel_flag.load(Ordering::Relaxed) {
+            log::warn!("Cancel {}. Abort download.", model_name);
+            drop(dest_file);
+            let _ = fs::remove_file(&temp_bin_filepath);
+            return Err(CommandError::from(format!("Download cancelled for '{}'.", model_name)));
+        }
+        match item_result {
+            Ok(chunk) => {
+                dest_file.write_all(&chunk).map_err(|e| format!("Failed write chunk: {}", e))?;
+                downloaded += chunk.len() as u64;
+                let _ = app.emit("download-progress", &DownloadProgress {
+                    model_name: model_name.clone(),
+                    downloaded_bytes: downloaded,
+                    total_bytes: total_size
+                });
+            }
+            Err(e) => {
+                drop(dest_file);
+                let _ = fs::remove_file(&temp_bin_filepath);
+                return Err(format!("Error read stream '{}': {}", model_name, e).into());
+            }
+        }
+    }
+    drop(dest_file);
+    log::info!("Download stream finished '{}'. Bytes: {}", model_name, downloaded);
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        log::warn!("Cancel {} after download. Abort.", model_name);
+        let _ = fs::remove_file(&temp_bin_filepath);
+        return Err(CommandError::from(format!("Download cancelled post-dl '{}'.", model_name)));
+    }
+
+    if let Some(total) = total_size {
+        if downloaded != total {
+            let _ = fs::remove_file(&temp_bin_filepath);
+            return Err(format!("Incomplete '{}': Expected {}, got {}.", model_name, total, downloaded).into());
+        }
+        log::info!("Size matches Content-Length '{}'.", model_name);
+    }
+
+    log::info!("Rename temp {:?} -> {:?}", temp_bin_filepath, bin_filepath);
+    fs::rename(&temp_bin_filepath, &bin_filepath)
+        .map_err(|e| format!("Failed rename {:?}->{:?}: {}", temp_bin_filepath, bin_filepath, e))?;
+
+    log::info!("Update config for '{}'...", model_name);
+    let mut config = read_config()?;
+    let mut downloaded_model_info = model_info.clone();
+    // Keep storing the ROOT location in config for consistency
+    downloaded_model_info.download_location = Some(download_base_location.clone());
+
+    if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+        log::info!("Model '{}' already in config. Updating.", model_info.name);
+        config.downloaded_models[idx] = downloaded_model_info;
+    } else {
+        log::info!("Adding new model '{}' to config.", model_info.name);
+        config.downloaded_models.push(downloaded_model_info);
+    }
+    write_config(&config)?;
+    log::info!("Config updated for '{}'.", model_info.name);
+    Ok(())
+}
 #[command] pub async fn cancel_download_command( cancellation_state: State<'_, DownloadCancellationState>, model_name: String, ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: cancel_download: {}", model_name); if let Some(flag_entry)=cancellation_state.0.get(&model_name){let flag=flag_entry.value(); flag.store(true,Ordering::Relaxed); log::info!("Cancel flag set for {}",model_name);} else {log::warn!("No active download token for '{}'.",model_name);} Ok(()) }
 
  

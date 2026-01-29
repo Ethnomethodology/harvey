@@ -1803,7 +1803,23 @@ pub(crate) fn resolve_whisper_model_path_cmd(
     } else {
         get_default_download_location()? // This is synchronous
     };
-    let model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
+    
+    // New directory structure: transcription/whisper-cpp/model_name
+    let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
+    let model_dir_path = PathBuf::from(&base_model_dir_str).join(sub_dir).join(model_name);
+
+    // Fallback logic
+    let model_dir_path = if model_dir_path.exists() {
+        model_dir_path
+    } else {
+        let legacy_model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
+        if legacy_model_dir_path.exists() {
+             legacy_model_dir_path
+        } else {
+             // If neither exists, default to new structure so error message reflects preferred path
+             model_dir_path
+        }
+    };
 
     if !model_dir_path.exists() || !model_dir_path.is_dir() {
         let e_msg = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());

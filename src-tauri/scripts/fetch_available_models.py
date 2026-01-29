@@ -13,8 +13,8 @@ def fetch_models():
     """
     try:
         api = HfApi()
-        # Fetch models with full metadata to get downloads/likes
-        models = api.list_models(author="Helsinki-NLP", limit=5000, full=True) 
+        # Fetch models - removed full=True to avoid timeouts
+        models = api.list_models(author="Helsinki-NLP", limit=3000) 
 
         model_list = []
 
