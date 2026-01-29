@@ -1400,3 +1400,201 @@ pub async fn export_transcript_to_ass(
     info!("[export_transcript_to_ass] ASS export successful to {}", output_path_str);
     Ok(output_path_str)
 }
+
+// --- Generic Document Export Commands ---
+
+#[tauri::command]
+pub async fn export_document_to_docx<R: Runtime>(
+    app_handle: AppHandle<R>,
+    document_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!(
+        "[export_document_to_docx] Starting export from JSON: {}, Target DOCX: {}",
+        document_path_str, output_path_str
+    );
+
+    let source_path = PathBuf::from(&document_path_str);
+    if !source_path.exists() || !source_path.is_file() {
+        let msg = format!("Document JSON file not found: {}", document_path_str);
+        error!("[export_document_to_docx] {}", msg);
+        return Err(CommandError::from(msg));
+    }
+
+     let base_dir = source_path
+         .parent()
+         .and_then(|p| p.parent()) // .../documents/
+         .and_then(|p| p.parent()) // .../data/
+         .and_then(|p| p.parent()) // .../Harvery_Data/
+         .ok_or_else(|| {
+             // Fallback or just assume a standard structure if strict parent navigation fails
+             // But for temp dir generation, we need a valid base.
+             // Let's try to find the project root via known structure.
+             // If source is /path/to/project/files/docs/doc.json, we need /path/to/project
+             let msg = format!("Could not determine project base directory from document path: {}", document_path_str);
+            //  error!("[export_document_to_docx] {}", msg);
+            //  CommandError::from(msg)
+            // Just use the parent of the document for now as base for temp lookup if full tree walk fails?
+            // ensure_base_asset_dirs logic usually expects the root "ProjectName" folder or "files" inside it.
+            // Let's rely on standard path manipulation used in other commands if possible.
+             msg // Propagate error
+         })?;
+    
+    // We can just use the document's directory to find the 'files' dir context if needed,
+    // but for get_unique_temp_path_for_conversion, we need the "project root" ideally.
+    // However, get_unique_temp_path_for_conversion takes `base_dir`.
+    // Let's assume `base_dir` found above is roughly correct or sufficient to find `files/documents/.tmp`.
+    // Actually, ensure_base_asset_dirs expects the `files` parent (Project Root).
+    // Let's try to be robust.
+
+    let output_path = PathBuf::from(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| CommandError::from(format!("Failed to create output directory {}: {}", parent.display(), e)))?;
+    }
+
+    let json_content = fs::read_to_string(&source_path)?;
+    let json_value: Value = serde_json::from_str(&json_content)
+        .map_err(|e| CommandError::from(format!("Failed to parse document JSON: {}", e)))?;
+
+    // Convert Lexical JSON to HTML
+    let body_html = lexical_value_to_html(&json_value);
+
+    let mut html_output = String::new();
+    html_output.push_str("<!DOCTYPE html>\n");
+    html_output.push_str("<html><head><meta charset=\"utf-8\"/><style>\n");
+    html_output.push_str("body { \
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; \
+        font-size: 11pt; \
+        line-height: 1.5; \
+    }\n");
+    html_output.push_str("</style></head><body>\n");
+    html_output.push_str(&body_html);
+    html_output.push_str("</body></html>\n");
+
+    // Use a simpler base dir for temp file if the elaborate parent traversal is risky.
+    // We just need A directory. source_path parent is safe.
+    let safe_base_dir = source_path.parent().unwrap_or(&source_path); 
+    // But get_unique_temp_path_for_conversion builds path: base_dir/files/documents/.tmp/...
+    // So if safe_base_dir is .../documents, joining files/documents/.tmp will fail.
+    // We need the Project Root.
+    // Assuming standard structure: Project/files/documents/doc.json
+    let project_root = source_path
+        .parent().and_then(|p| p.parent()).and_then(|p| p.parent())
+        .ok_or(CommandError::from("Invalid project structure"))?;
+
+    let stem = source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("document_export");
+    let temp_html_path = get_unique_temp_path_for_conversion(project_root, stem, "html")?;
+    
+    debug!("[export_document_to_docx] Writing generated HTML to temp file: {}", temp_html_path.display());
+    fs::write(&temp_html_path, &html_output)?;
+
+    let python_path = get_python_path()?;
+    let script_path = app_handle.path()
+        .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+
+    let pandoc_args = vec![
+        temp_html_path.to_string_lossy().to_string(),
+        output_path_str.clone(),
+        "docx".to_string(),
+    ];
+
+    info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
+
+    let (mut rx, _child) = app_handle
+        .shell()
+        .command(python_path.to_string_lossy().to_string())
+        .args(&[script_path.to_string_lossy().to_string()])
+        .args(&pandoc_args)
+        .spawn()
+        .map_err(|e| {
+            let msg = format!("Pandoc script execution failed: {}", e);
+            error!("[export_document_to_docx] Pandoc script spawn failed: {}", e);
+            CommandError::from(msg)
+        })?;
+
+    let mut pandoc_stderr = String::new();
+    let mut exit_code = None;
+
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line);
+                pandoc_stderr.push_str(&line_str);
+            },
+            CommandEvent::Terminated(payload) => {
+                exit_code = payload.code;
+                break;
+            }
+            _ => { }
+        }
+    }
+
+    if exit_code != Some(0) {
+        let err_msg = format!("Pandoc conversion failed (exit code {:?}). Stderr:\n{}", exit_code, pandoc_stderr);
+        error!("[export_document_to_docx] {}", err_msg);
+        let _ = fs::remove_file(&temp_html_path);
+        return Err(CommandError::from(err_msg));
+    }
+
+    let _ = fs::remove_file(&temp_html_path);
+    
+    info!("[export_document_to_docx] Export successful. DOCX saved to {}", output_path.display());
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn export_document_to_markdown(
+    _app_handle: AppHandle,
+    document_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_document_to_markdown] Exporting to Markdown: {}", output_path_str);
+
+    let source_path = PathBuf::from(&document_path_str);
+    let json_content = fs::read_to_string(&source_path)
+        .map_err(|e| CommandError::from(format!("Failed to read document file: {}", e)))?;
+
+    let md_content = get_markdown_text_from_lexical_string(&json_content);
+
+    fs::write(&output_path_str, md_content)
+        .map_err(|e| CommandError::from(format!("Failed to write Markdown file {}: {}", output_path_str, e)))?;
+
+    info!("[export_document_to_markdown] Markdown export successful to {}", output_path_str);
+    Ok(output_path_str)
+}
+
+#[tauri::command]
+pub async fn export_document_to_txt(
+    _app_handle: AppHandle,
+    document_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_document_to_txt] Exporting to TXT: {}", output_path_str);
+
+    let source_path = PathBuf::from(&document_path_str);
+    let json_content = fs::read_to_string(&source_path)
+        .map_err(|e| CommandError::from(format!("Failed to read document file: {}", e)))?;
+
+    let mut txt_content = String::new();
+    match serde_json::from_str::<Value>(&json_content) {
+        Ok(parsed_json) => {
+            if parsed_json.get("root").is_some() {
+                 extract_plain_text_from_lexical_value(&parsed_json, &mut txt_content);
+            } else if parsed_json.is_string() {
+                txt_content = parsed_json.as_str().unwrap_or("").to_string();
+            } else {
+                 txt_content = json_content; // Fallback
+            }
+        }
+        Err(_) => {
+            txt_content = json_content; // Fallback
+        }
+    }
+
+    fs::write(&output_path_str, txt_content.trim())
+        .map_err(|e| CommandError::from(format!("Failed to write TXT file {}: {}", output_path_str, e)))?;
+
+    info!("[export_document_to_txt] TXT export successful to {}", output_path_str);
+    Ok(output_path_str)
+}

@@ -7,6 +7,16 @@
 
     export let itemPath = null; // Receives the full path from DataView
 
+    let imageViewerPanelRef;
+
+    export function triggerExport() {
+        if (imageViewerPanelRef && typeof imageViewerPanelRef.openExportModal === 'function') {
+            imageViewerPanelRef.openExportModal();
+        } else {
+            console.warn('[ImageView] triggerExport called but imageViewerPanelRef is missing or invalid.');
+        }
+    }
+
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
@@ -28,7 +38,7 @@
 <div class="h-full flex-grow min-w-0 bg-white dark:bg-d-gray-800">
     {#key itemPath}
         {#if itemPath}
-            <ImageViewerPanel imagePath={itemPath} />
+            <ImageViewerPanel bind:this={imageViewerPanelRef} imagePath={itemPath} />
         {:else}
             <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
                 <span>No image path provided to ImageView.</span>

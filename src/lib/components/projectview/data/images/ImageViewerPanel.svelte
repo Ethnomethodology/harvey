@@ -2,11 +2,13 @@
     import { onMount, onDestroy, tick } from 'svelte';
     import { convertFileSrc } from '@tauri-apps/api/core';
     import { sep } from '@tauri-apps/api/path';
+    import { writeFile } from '@tauri-apps/plugin-fs';
     import { get, derived } from 'svelte/store';
     import { project, updateImageAnnotations } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations } from '$lib/services/projectService.js';
     import OpenSeadragon from 'openseadragon';
     import { v4 as uuidv4 } from 'uuid';
+    import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
 
     export let imagePath = '';
 
@@ -16,14 +18,24 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
+    let currentAssetUrl = null;
+    let pixelatedAssetUrl = null; // New variable for the low-res version
+    let imgAspectRatio = 1;
+    let pixelationCanvas; // Binding for the hidden canvas
 
     import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
     let showAnnotationCreationDialog = false;
+    let showExportModal = false;
     let dialogX = 0;
     let dialogY = 0;
     let annotationBeingEdited = null; // Stores the annotation data when editing
     let isEditingExisting = false; // Flag to indicate if we are editing or creating
+
+    // Export modal trigger for external components (like DataTopBar)
+    export function openExportModal() {
+        showExportModal = true;
+    }
 
     // Get annotations from the central store
     const currentAnnotations = derived(project, $project => {
@@ -77,6 +89,230 @@
     $: if (activeDrawingTool) {
         selectedAnnotationId = null;
     }
+
+    async function handleExportImage(event) {
+        const { filePath, includeAnnotations } = event.detail;
+        if (!osdViewer || !currentAssetUrl) return;
+
+        selectedAnnotationId = null;
+        await tick();
+
+        try {
+            const tiledImage = osdViewer.world.getItemAt(0);
+            const originalSize = tiledImage.getContentSize();
+            const width = originalSize.x;
+            const height = originalSize.y;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            // Load and draw original image
+            const response = await fetch(currentAssetUrl);
+            const blobBody = await response.blob();
+            const imgUrl = URL.createObjectURL(blobBody);
+
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = imgUrl;
+            });
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(imgUrl);
+
+            if (includeAnnotations) {
+                const annotations = get(currentAnnotations);
+                const S = 1000;
+                // OSD coordinates are relative to WIDTH. Uniform scale.
+                const scale = width / S;
+                const sx = scale;
+                const sy = scale;
+
+                // Helper for manual pixelation
+                const pixelateRegion = (px, py, pw, ph) => {
+                    // Clamp to canvas
+                    px = Math.floor(px); py = Math.floor(py);
+                    pw = Math.floor(pw); ph = Math.floor(ph);
+                    if (pw <= 0 || ph <= 0) return;
+
+                    // Ensure we don't read/write outside canvas bounds
+                    const safeX = Math.max(0, px);
+                    const safeY = Math.max(0, py);
+                    const safeW = Math.min(width - safeX, pw - (safeX - px));
+                    const safeH = Math.min(height - safeY, ph - (safeY - py));
+                    
+                    if (safeW <= 0 || safeH <= 0) return;
+
+                    const imageData = ctx.getImageData(safeX, safeY, safeW, safeH);
+                    const data = imageData.data;
+                    const sampleSize = Math.max(Math.floor(Math.min(safeW, safeH) / 20), 10);
+
+                    for (let y = 0; y < safeH; y += sampleSize) {
+                        for (let x = 0; x < safeW; x += sampleSize) {
+                            let r = 0, g = 0, b = 0, count = 0;
+                            // Average color
+                            for (let sy = 0; sy < sampleSize && y + sy < safeH; sy++) {
+                                for (let sx = 0; sx < sampleSize && x + sx < safeW; sx++) {
+                                    const i = ((y + sy) * safeW + (x + sx)) * 4;
+                                    r += data[i];
+                                    g += data[i + 1];
+                                    b += data[i + 2];
+                                    count++;
+                                }
+                            }
+                            if (count > 0) {
+                                r = Math.floor(r / count);
+                                g = Math.floor(g / count);
+                                b = Math.floor(b / count);
+
+                                // Fill block
+                                for (let sy = 0; sy < sampleSize && y + sy < safeH; sy++) {
+                                    for (let sx = 0; sx < sampleSize && x + sx < safeW; sx++) {
+                                        const i = ((y + sy) * safeW + (x + sx)) * 4;
+                                        data[i] = r;
+                                        data[i + 1] = g;
+                                        data[i + 2] = b;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ctx.putImageData(imageData, safeX, safeY);
+                };
+
+                for (const annotation of annotations) {
+                    const shapeData = annotation.target.selector.value;
+                    const s = shapeData.shape;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+
+                    const body = annotation.body || [];
+                    const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
+                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const borderColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor');
+                    const borderSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize');
+                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
+                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
+
+                    const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)';
+                    const strokeColor = borderColorBody ? borderColorBody.value : (fillColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : adjustOpacity(fillColor, 1));
+                    const strokeWidth = borderSizeBody ? parseFloat(borderSizeBody.value) : 1;
+
+                    // 1. Prepare Path in Pixel Space
+                    let path = new Path2D();
+                    
+                    const matrix = new DOMMatrix();
+                    matrix.a = sx; 
+                    matrix.d = sy;
+                    
+                    if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+                        const px = shapeData.x * S * sx;
+                        const py = shapeData.y * S * sy;
+                        const pw = shapeData.width * S * sx;
+                        const ph = shapeData.height * S * sy;
+                        path.rect(px, py, pw, ph);
+                    } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
+                        const pcx = shapeData.cx * S * sx;
+                        const pcy = shapeData.cy * S * sy;
+                        const prx = shapeData.r * S * sx;
+                        const pry = shapeData.r * S * sy;
+                        path.ellipse(pcx, pcy, prx, pry, 0, 0, 2 * Math.PI);
+                    } else if (s.startsWith('speech-bubble')) {
+                        const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                        if (pathStr) {
+                            const svgPath = new Path2D(pathStr);
+                            path.addPath(svgPath, matrix);
+                        }
+                    }
+
+                    // 2. Handle Censored vs Normal
+                    if (s === 'censored' || s === 'censored-circle') {
+                        if (s === 'censored') {
+                            pixelateRegion(shapeData.x * S * sx, shapeData.y * S * sy, shapeData.width * S * sx, shapeData.height * S * sy);
+                        } else {
+                            // Circular censorship: Use fallback draw-clip-pixelate method
+                            const bboxX = (shapeData.cx - shapeData.r) * S * sx;
+                            const bboxY = (shapeData.cy - shapeData.r) * S * sy;
+                            const bboxW = shapeData.r * 2 * S * sx;
+                            const bboxH = shapeData.r * 2 * S * sy;
+                            
+                            // Safe bounds
+                            const safeX = Math.max(0, bboxX);
+                            const safeY = Math.max(0, bboxY);
+                            const safeW = Math.min(width - safeX, bboxW - (safeX - bboxX));
+                            const safeH = Math.min(height - safeY, bboxH - (safeY - py));
+
+                            if (safeW > 0 && safeH > 0) {
+                                // Extract original image data for the bounding box
+                                const tempC = document.createElement('canvas');
+                                tempC.width = safeW; tempC.height = safeH;
+                                const tCtx = tempC.getContext('2d');
+                                tCtx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, safeW, safeH);
+                                
+                                // Pixelate it
+                                // (Reuse logic or draw small)
+                                tCtx.imageSmoothingEnabled = false;
+                                const smallW = Math.max(1, safeW/20);
+                                const smallH = Math.max(1, safeH/20);
+                                tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
+                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH); // scale back up
+
+                                // Draw back to main canvas with clip
+                                ctx.save();
+                                ctx.clip(path); // Use the elliptical path defined earlier
+                                ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
+                                ctx.restore();
+                            }
+                        }
+                    } else {
+                        // Normal Shape Draw
+                        ctx.fillStyle = fillColor;
+                        ctx.fill(path);
+                        ctx.strokeStyle = strokeColor;
+                        ctx.lineWidth = strokeWidth; 
+                        ctx.stroke(path);
+                    }
+
+                    // 3. Draw Text
+                    if (textBody && textBody.value) {
+                        const text = textBody.value;
+                        const fontSize = fontSizeBody ? fontSizeBody.value : 14;
+                        const textColor = textColorBody ? textColorBody.value : 'black';
+                        
+                        ctx.fillStyle = textColor;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = `600 ${fontSize * Math.min(sx, sy)}px sans-serif`;
+
+                        let tx, ty, tw, th;
+                        if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
+                            tx = shapeData.x * S * sx;
+                            ty = shapeData.y * S * sy;
+                            tw = shapeData.width * S * sx;
+                            th = shapeData.height * S * sy;
+                        } else {
+                            tx = (shapeData.cx - shapeData.r) * S * sx;
+                            ty = (shapeData.cy - shapeData.r) * S * sy;
+                            tw = shapeData.r * 2 * S * sx;
+                            th = shapeData.r * 2 * S * sy;
+                        }
+                        ctx.fillText(text, tx + tw/2, ty + th/2);
+                    }
+                }
+            }
+
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const buffer = await blob.arrayBuffer();
+            await writeFile(filePath, new Uint8Array(buffer));
+            
+        } catch (err) {
+            console.error('Export failed:', err);
+            error = `Export failed: ${err.message}`;
+        }
+    }
+
+
 
     function adjustOpacity(rgbaColor, newOpacity) {
         if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
@@ -276,6 +512,7 @@
 
         try {
             const assetUrl = convertFileSrc(pathForImage);
+            currentAssetUrl = assetUrl;
             console.log(`[ImageViewerPanel] Converted asset URL: ${assetUrl}`);
             await tick();
             if (!osdViewerElement) {
@@ -301,6 +538,35 @@
 
             osdViewer.addHandler('open', async () => {
                 console.log('[ImageViewerPanel OSD Event] "open" event triggered.');
+                if (osdViewer && osdViewer.world.getItemCount() > 0) {
+                    const size = osdViewer.world.getItemAt(0).getContentSize();
+                    if (size.x > 0) imgAspectRatio = size.y / size.x;
+                }
+
+                // Generate pixelated version
+                if (pixelationCanvas && currentAssetUrl) {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => {
+                        // Set canvas size to 5% of original (or similar small size)
+                        // A fixed width like 50px is often safer to guarantee specific blockiness
+                        const targetWidth = 50;
+                        const targetHeight = 50 * imgAspectRatio;
+
+                        pixelationCanvas.width = targetWidth;
+                        pixelationCanvas.height = targetHeight;
+
+                        const ctx = pixelationCanvas.getContext('2d');
+                        // Use low-quality smoothing if possible, or just default draw
+                        ctx.imageSmoothingEnabled = false;
+                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+                        // Export as Data URL
+                        pixelatedAssetUrl = pixelationCanvas.toDataURL('image/jpeg', 0.5);
+                    };
+                    img.src = currentAssetUrl;
+                }
+
                 isLoading = false;
                 await tick(); // Ensure SVG element is rendered before adding as overlay
                 // Add SVG overlay after OSD viewer is open
@@ -456,7 +722,7 @@
                     if (selector.shape === 'rectangle' || selector.shape === 'speech-bubble-rect' || selector.shape === 'text-area' || selector.shape === 'censored') {
                         selector.x += dx;
                         selector.y += dy;
-                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle' || selector.shape === 'censored-circle' || selector.shape === 'text-area-circle') {
                         selector.cx += dx;
                         selector.cy += dy;
                     } else if (selector.shape === 'polygon') {
@@ -519,7 +785,7 @@
                         // Clamp min size
                         selector.width = Math.max(0.001, selector.width);
                         selector.height = Math.max(0.001, selector.height);
-                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle') {
+                    } else if (selector.shape === 'circle' || selector.shape === 'speech-bubble-circle' || selector.shape === 'censored-circle' || selector.shape === 'text-area-circle') {
                         if (draggedHandleType === 'r') {
                             const d_center_x = currentViewportPoint.x - selector.cx;
                             const d_center_y = currentViewportPoint.y - selector.cy;
@@ -987,90 +1253,96 @@
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
-        <div id="image-annotation-toolbar-container" class="flex items-center space-x-2">
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'rectangle'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
-                title="Draw Rectangle"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
-                </svg>
-            </button>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'circle'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
-                title="Draw Circle"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                </svg>
-            </button>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'polygon'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
-                title="Draw Polygon"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <polygon 
-                        points="2,2 14,4 12,14 4,12 6,7" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        stroke-width="1" 
-                    />
-                </svg>
-            </button>
-            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'speech-bubble-circle'}
-                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
-                title="Draw Circular Speech Bubble"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
-                    <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
-                </svg>
-            </button>
+        <div id="image-annotation-toolbar-container" class="flex items-center">
+            <!-- Highlights Group -->
+            <div class="flex items-center space-x-1 border-r border-gray-300 dark:border-gray-600 pr-2 mr-2">
+                <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mr-1 uppercase tracking-wider hidden lg:inline-block">Highlight</span>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'rectangle'}
+                    on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
+                    title="Draw Rectangle"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                    </svg>
+                </button>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'circle'}
+                    on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+                    title="Draw Circle"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                    </svg>
+                </button>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'polygon'}
+                    on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+                    title="Draw Polygon"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <polygon 
+                            points="2,2 14,4 12,14 4,12 6,7" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            stroke-width="1" 
+                        />
+                    </svg>
+                </button>
+            </div>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'speech-bubble-rect'}
-                on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
-                title="Draw Rectangular Speech Bubble"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left" viewBox="0 0 16 16">
-                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
-                </svg>
-            </button>
+            <!-- Annotate Group -->
+            <div class="flex items-center space-x-1 border-r border-gray-300 dark:border-gray-600 pr-2 mr-2">
+                <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mr-1 uppercase tracking-wider hidden lg:inline-block">Annotate</span>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'speech-bubble-circle'}
+                    on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
+                    title="Draw Circular Speech Bubble"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
+                        <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                    </svg>
+                </button>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'text-area'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'text-area' ? null : 'text-area')}
-                title="Draw Text Area"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-textarea-t" viewBox="0 0 16 16">
-                    <path d="M1.5 2.5A1.5 1.5 0 0 1 3 1h10a1.5 1.5 0 0 1 1.5 1.5v3.563a2 2 0 0 1 0 3.874V13.5A1.5 1.5 0 0 1 13 15H3a1.5 1.5 0 0 1-1.5-1.5V9.937a2 2 0 0 1 0-3.874zm1 3.563a2 2 0 0 1 0 3.874V13.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.937a2 2 0 0 1 0-3.874V2.5A.5.5 0 0 0 13 2H3a.5.5 0 0 0-.5.5zM2 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2m12 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
-                    <path d="M11.434 4H4.566L4.5 5.994h.386c.21-1.252.612-1.446 2.173-1.495l.343-.011v6.343c0 .537-.116.665-1.049.748V12h3.294v-.421c-.938-.083-1.054-.21-1.054-.748V4.488l.348.01c1.56.05 1.963.244 2.173 1.496h.386z"/>
-                </svg>
-            </button>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'speech-bubble-rect'}
+                    on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
+                    title="Draw Rectangular Speech Bubble"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                    </svg>
+                </button>
 
-            <button
-                class="ui-button-icon"
-                class:active={activeDrawingTool === 'censored'}
-                on:click={() => activeDrawingTool = (activeDrawingTool === 'censored' ? null : 'censored')}
-                title="Anonymise (Pixelate)"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-incognito" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="m4.736 1.968-.892 3.269-.014.058C2.113 5.568 1 6.006 1 6.5 1 7.328 4.134 8 8 8s7-.672 7-1.5c0-.494-1.113-.932-2.83-1.205l-.014-.058-.892-3.27c-.146-.533-.698-.849-1.239-.734C9.411 1.363 8.62 1.5 8 1.5s-1.411-.136-2.025-.267c-.541-.115-1.093.2-1.239.735m.015 3.867a.25.25 0 0 1 .274-.224c.9.092 1.91.143 2.975.143a30 30 0 0 0 2.975-.143.25.25 0 0 1 .05.498c-.918.093-1.944.145-3.025.145s-2.107-.052-3.025-.145a.25.25 0 0 1-.224-.274M3.5 10h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5m-1.5.5q.001-.264.085-.5H2a.5.5 0 0 1 0-1h3.5a1.5 1.5 0 0 1 1.488 1.312 3.5 3.5 0 0 1 2.024 0A1.5 1.5 0 0 1 10.5 9H14a.5.5 0 0 1 0 1h-.085q.084.236.085.5v1a2.5 2.5 0 0 1-5 0v-.14l-.21-.07a2.5 2.5 0 0 0-1.58 0l-.21.07v.14a2.5 2.5 0 0 1-5 0zm8.5-.5h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5"/>
-                </svg>
-            </button>
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'text-area'}
+                    on:click={() => activeDrawingTool = (activeDrawingTool === 'text-area' ? null : 'text-area')}
+                    title="Draw Text Area"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-textarea-t" viewBox="0 0 16 16">
+                        <path d="M1.5 2.5A1.5 1.5 0 0 1 3 1h10a1.5 1.5 0 0 1 1.5 1.5v3.563a2 2 0 0 1 0 3.874V13.5A1.5 1.5 0 0 1 13 15H3a1.5 1.5 0 0 1-1.5-1.5V9.937a2 2 0 0 1 0-3.874zm1 3.563a2 2 0 0 1 0 3.874V13.5a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.937a2 2 0 0 1 0-3.874V2.5A.5.5 0 0 0 13 2H3a.5.5 0 0 0-.5.5zM2 7a1 1 0 1 0 0 2 1 1 0 0 0 0-2m12 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
+                        <path d="M11.434 4H4.566L4.5 5.994h.386c.21-1.252.612-1.446 2.173-1.495l.343-.011v6.343c0 .537-.116.665-1.049.748V12h3.294v-.421c-.938-.083-1.054-.21-1.054-.748V4.488l.348.01c1.56.05 1.963.244 2.173 1.496h.386z"/>
+                    </svg>
+                </button>
 
+                <button
+                    class="ui-button-icon"
+                    class:active={activeDrawingTool === 'censored'}
+                    on:click={() => activeDrawingTool = (activeDrawingTool === 'censored' ? null : 'censored')}
+                    title="Anonymise (Pixelate)"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-incognito" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="m4.736 1.968-.892 3.269-.014.058C2.113 5.568 1 6.006 1 6.5 1 7.328 4.134 8 8 8s7-.672 7-1.5c0-.494-1.113-.932-2.83-1.205l-.014-.058-.892-3.27c-.146-.533-.698-.849-1.239-.734C9.411 1.363 8.62 1.5 8 1.5s-1.411-.136-2.025-.267c-.541-.115-1.093.2-1.239.735m.015 3.867a.25.25 0 0 1 .274-.224c.9.092 1.91.143 2.975.143a30 30 0 0 0 2.975-.143.25.25 0 0 1 .05.498c-.918.093-1.944.145-3.025.145s-2.107-.052-3.025-.145a.25.25 0 0 1-.224-.274M3.5 10h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5m-1.5.5q.001-.264.085-.5H2a.5.5 0 0 1 0-1h3.5a1.5 1.5 0 0 1 1.488 1.312 3.5 3.5 0 0 1 2.024 0A1.5 1.5 0 0 1 10.5 9H14a.5.5 0 0 1 0 1h-.085q.084.236.085.5v1a2.5 2.5 0 0 1-5 0v-.14l-.21-.07a2.5 2.5 0 0 0-1.58 0l-.21.07v.14a2.5 2.5 0 0 1-5 0zm8.5-.5h2a.5.5 0 0 1 .5.5v1a1.5 1.5 0 0 1-3 0v-1a.5.5 0 0 1 .5-.5"/>
+                    </svg>
+                </button>
+            </div>
 
-            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-2"></div>
             <div class="flex items-center space-x-1.5">
                 {#each baseColors as color, i}
                     <button
@@ -1095,33 +1367,34 @@
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
         </div>
 
+        <!-- Hidden canvas for generating pixelated assets -->
+        <canvas bind:this={pixelationCanvas} style="display: none;"></canvas>
+
         <!-- SVG overlay for drawing and displaying annotations -->
         <!-- Moved outside osdViewerElement to prevent OSD initialization from clearing it -->
         <svg bind:this={svgOverlay} class="pointer-events-none z-20 absolute inset-0" viewBox="0 0 1000 1000"
                 class:cursor-draw={activeDrawingTool !== null}
                 class:cursor-pan={activeDrawingTool === null}>
             <defs>
-                <pattern id="censoredPattern" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
-                    <!-- 4x4 grid of 2px squares for a noisier 'static' look -->
-                    <rect x="0" y="0" width="2" height="2" fill="#fff" />
-                    <rect x="2" y="0" width="2" height="2" fill="#444" />
-                    <rect x="4" y="0" width="2" height="2" fill="#888" />
-                    <rect x="6" y="0" width="2" height="2" fill="#000" />
-                    
-                    <rect x="0" y="2" width="2" height="2" fill="#888" />
-                    <rect x="2" y="2" width="2" height="2" fill="#000" />
-                    <rect x="4" y="2" width="2" height="2" fill="#fff" />
-                    <rect x="6" y="2" width="2" height="2" fill="#444" />
-                    
-                    <rect x="0" y="4" width="2" height="2" fill="#444" />
-                    <rect x="2" y="4" width="2" height="2" fill="#fff" />
-                    <rect x="4" y="4" width="2" height="2" fill="#000" />
-                    <rect x="6" y="4" width="2" height="2" fill="#888" />
-                    
-                    <rect x="0" y="6" width="2" height="2" fill="#000" />
-                    <rect x="2" y="6" width="2" height="2" fill="#888" />
-                    <rect x="4" y="6" width="2" height="2" fill="#444" />
-                    <rect x="6" y="6" width="2" height="2" fill="#fff" />
+                <!-- Pattern for pixelated censorship.
+                     It fills the shape with the *low-resolution* data URL generated on load.
+                     Because the source image is tiny (50px wide), stretching it to 1000px forces genuine pixelation. -->
+                <pattern id="censoredPattern"
+                    patternUnits="userSpaceOnUse"
+                    x="0" y="0"
+                    width="1000"
+                    height={1000 * imgAspectRatio}
+                    preserveAspectRatio="none">
+                    {#if pixelatedAssetUrl}
+                        <image
+                            href={pixelatedAssetUrl}
+                            x="0" y="0"
+                            width="1000"
+                            height={1000 * imgAspectRatio}
+                            preserveAspectRatio="none"
+                            style="image-rendering: pixelated; image-rendering: crisp-edges;"
+                        />
+                    {/if}
                 </pattern>
             </defs>
 
@@ -1195,8 +1468,8 @@
                         width={shapeData.width * S}
                         height={shapeData.height * S}
                         fill={fillColor}
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
-                        stroke-width={strokeWidth}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1219,9 +1492,9 @@
                         cx={shapeData.cx * S}
                         cy={shapeData.cy * S}
                         r={shapeData.r * S}
-                        fill="url(#censoredPattern)"
-                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'black'}
-                        stroke-width={strokeWidth}
+                        fill={fillColor}
+                        stroke={selectedAnnotationId === annotation.id ? 'blue' : 'none'}
+                        stroke-width={selectedAnnotationId === annotation.id ? '2' : '0'}
                         vector-effect="non-scaling-stroke"
                         class="pointer-events-auto cursor-pointer annotation-shape"
                         data-annotation-id={annotation.id}
@@ -1383,7 +1656,7 @@
                 {@const S = 1000}
                 {#if textBody}
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
-                        <foreignObject x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
+                        <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
@@ -1391,7 +1664,7 @@
                             </div>
                         </foreignObject>
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
-                        <foreignObject x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
+                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
                                 <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
                                     {textBody.value}
@@ -1490,6 +1763,15 @@
                     on:delete={handleAnnotationDialogDelete}
                 />
             {/key}
+        {/if}
+
+        {#if showExportModal}
+            <ImageExportModal 
+                showModal={showExportModal} 
+                defaultFileName={imagePath ? `export_${imagePath.split(/[\/\\]/).pop()}` : 'export.png'}
+                on:export={handleExportImage}
+                on:close={() => showExportModal = false}
+            />
         {/if}
     </div>
 </div>

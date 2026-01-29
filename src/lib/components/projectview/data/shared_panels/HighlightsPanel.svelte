@@ -108,7 +108,12 @@
         if (!highlights || highlights.length === 0) return [];
 
         if (type === 'image') {
-            return highlights.map(annotation => {
+            return highlights
+                .filter(annotation => {
+                    const shape = annotation.target?.selector?.value?.shape;
+                    return ['rectangle', 'circle', 'polygon'].includes(shape);
+                })
+                .map(annotation => {
                 const titleBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Title');
                 const descriptionBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Description');
                 const colorBody = annotation.body.find(b => b.purpose === 'highlighting');

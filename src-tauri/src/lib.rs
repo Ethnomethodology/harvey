@@ -260,6 +260,9 @@ pub fn run() {
             projectview::export_handler::export_transcript_to_vtt,
             projectview::export_handler::export_transcript_to_markdown,
             projectview::export_handler::export_transcript_to_ass, // Added ASS export command
+            projectview::export_handler::export_document_to_docx,
+            projectview::export_handler::export_document_to_markdown,
+            projectview::export_handler::export_document_to_txt,
 
             // --- Project view transcription PROCESS commands ---
             projectview::local_handler::transcription::run_transcription,
