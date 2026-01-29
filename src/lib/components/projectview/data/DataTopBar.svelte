@@ -34,6 +34,7 @@
     let isLexicalDocument = false;
     let isImportedTranscript = false;
     let isImage = false;
+    let pathForExportModal = '';
 
     $: {
         const p = $project;
@@ -353,7 +354,7 @@
     }
     async function handleExportConfirm(event) {
         const { filePath, format, layoutChoice } = event.detail;
-        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
+        const activeTranscriptPath = pathForExportModal;
 
         if (!activeTranscriptPath) {
             message("No active transcript selected to export.", { title: "Export Failed", type: "error" });
@@ -596,7 +597,7 @@
                 on:change={(e) => switchTranscriptInDataTab(e.detail)}
                 placeholder="Select Transcript"
             />
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }}" title="Export Transcript" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
             </button>
@@ -608,7 +609,17 @@
                 </svg>
                 <span class="text-xs">Translate</span>
             </button>
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showDocumentExportModal = true}" title="Export Document" >
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
+                on:click="{() => {
+                    if (isImportedTranscript) {
+                        pathForExportModal = $project.currentImportedTranscriptPath;
+                        isExportModalOpen = true;
+                    } else {
+                        showDocumentExportModal = true;
+                    }
+                }}" 
+                title={isImportedTranscript ? "Export Transcript" : "Export Document"} 
+            >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
             </button>
@@ -744,7 +755,7 @@
 			/>
 <ExportModal
     bind:showModal={isExportModalOpen}
-    transcriptPath={$project.activeTranscriptPathInDataTab}
+    transcriptPath={pathForExportModal}
     on:confirm={handleExportConfirm}
     on:close={() => isExportModalOpen = false}
 />
