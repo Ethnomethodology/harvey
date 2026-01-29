@@ -498,6 +498,12 @@ fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
         "whisper-cli.exe",
         "whisper-stream.exe",
         "SDL2.dll",
+        "libopenblas.dll",
+        "ggml-base.dll",
+        "ggml-blas.dll",
+        "ggml-cpu.dll",
+        "ggml.dll",
+        "whisper.dll",
     ];
 
     let release_dir = temp_extract_dir.join("Release");
