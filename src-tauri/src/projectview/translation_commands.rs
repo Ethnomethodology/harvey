@@ -313,7 +313,22 @@ async fn run_translation_process<R: Runtime>(
     };
 
     let model_cache_dir_name = format!("models--{}", model_name.replace('/', "--"));
-    let model_base_path = std::path::Path::new(&download_location).join(model_cache_dir_name);
+    let sub_dir = PathBuf::from("translation").join("helsinki-nlp");
+    let model_base_path = std::path::Path::new(&download_location).join(&sub_dir).join(&model_cache_dir_name);
+    
+    // Fallback: check legacy path if new path doesn't exist
+    let model_base_path = if model_base_path.exists() {
+        model_base_path
+    } else {
+        let legacy_path = std::path::Path::new(&download_location).join(&model_cache_dir_name);
+        if legacy_path.exists() {
+             legacy_path
+        } else {
+             // If neither exists, default to new structure so error message reflects preferred path
+             model_base_path
+        }
+    };
+
     let refs_path = model_base_path.join("refs/main");
     let commit_hash = fs::read_to_string(refs_path).map_err(|e| CommandError::from(format!("Failed to read commit hash for model '{}': {}", model_name, e)))?.trim().to_string();
     let model_path = model_base_path.join("snapshots").join(commit_hash);
