@@ -2,6 +2,7 @@
 <script>
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { open } from '@tauri-apps/plugin-dialog';
+    import { documentDir } from '@tauri-apps/api/path';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
     export let showModal = false;
@@ -24,7 +25,7 @@
 
     const PATH_SEPARATOR = '/';
 
-    function initializeModalState() {
+    async function initializeModalState() {
         if (defaultFileName) {
             // Normalize path separators to forward slash without regex to avoid parser issues
             const normalized = defaultFileName.split('\\').join('/');
@@ -43,6 +44,15 @@
             exportFileName = 'export';
             exportFormat = 'png';
         }
+
+        if (!exportDirectory) {
+            try {
+                exportDirectory = await documentDir();
+            } catch (e) {
+                console.warn('[ImageExportModal] Failed to get document directory:', e);
+            }
+        }
+
         modalTitle = `Export Image: ${exportFileName}.${exportFormat}`;
     }
 
