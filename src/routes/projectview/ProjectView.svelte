@@ -177,8 +177,8 @@ async function onConfirmTranscriptionStart(event) {
 }
 
 // Reactive declaration for config issues
-$: hasCriticalConfigIssues = !$configStatus.python_libraries_installed || !$configStatus.transcription_models_downloaded;
-$: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded);
+$: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
+$: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded);
 $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onMount(async () => {
