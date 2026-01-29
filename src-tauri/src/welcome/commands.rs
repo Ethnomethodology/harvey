@@ -632,7 +632,17 @@ fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), Command
 #[command] pub async fn get_download_location() -> Result<String, CommandError> { /* ... */ let mut config = read_config()?; let mut needs_save = false; let mut final_location = config.download_location.clone(); if final_location.trim().is_empty() { log::info!("Config: Download location empty, computing default."); final_location = get_default_download_location()?; config.download_location = final_location.clone(); needs_save = true; } let dir_path = PathBuf::from(&final_location); if !dir_path.exists() { log::info!("Config: Download directory '{}' missing. Creating...", final_location); fs::create_dir_all(&dir_path)?; } else if !dir_path.is_dir() { return Err(format!("Config Error: Download path '{}' is not a directory.", final_location).into()); } if needs_save { write_config(&config)?; log::info!("Config: Saved default download location: {}", final_location); } else { log::info!("Config: Using download location: {}", final_location); } Ok(final_location) }
 #[command]
 pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
-    let config = read_config()?;
+    let mut config = read_config()?;
+    let initial_len = config.downloaded_models.len();
+    
+    // Automatically clean up paraphrase models if they exist in config
+    config.downloaded_models.retain(|m| !m.name.contains("paraphrase"));
+    
+    if config.downloaded_models.len() < initial_len {
+        log::info!("Cleaned up {} legacy paraphrase model(s) from config.", initial_len - config.downloaded_models.len());
+        write_config(&config)?;
+    }
+
     log::info!("Config: Returning {} downloaded models.", config.downloaded_models.len());
     Ok(config.downloaded_models)
 }

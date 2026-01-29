@@ -44,16 +44,16 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
 
     // Always re-verify model presence if config says they are there
     let models = get_downloaded_models().await?;
-    let has_transcription = models.iter().any(|m| !m.name.contains("opus-mt"));
+    let has_transcription = models.iter().any(|m| !m.name.contains("opus-mt") && !m.name.contains("paraphrase"));
     let has_translation = !get_local_translation_models().await?.is_empty();
 
-    if transcription_models_downloaded && !has_transcription {
-        transcription_models_downloaded = false;
-        config.verification_status.transcription_models_verified = false;
-        config_changed = true;
-    } else if !transcription_models_downloaded && has_transcription {
+    if !transcription_models_downloaded && has_transcription {
         transcription_models_downloaded = true;
         config.verification_status.transcription_models_verified = true;
+        config_changed = true;
+    } else if transcription_models_downloaded && !has_transcription {
+        transcription_models_downloaded = false;
+        config.verification_status.transcription_models_verified = false;
         config_changed = true;
     }
 
