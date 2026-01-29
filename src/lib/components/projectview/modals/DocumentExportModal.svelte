@@ -2,6 +2,7 @@
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
+    import { documentDir } from '@tauri-apps/api/path';
 	import { invoke } from '@tauri-apps/api/core';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
@@ -34,33 +35,41 @@
         return normalizedPath.substring(0, lastSeparatorIndex);
     }
 
-	function initializeModalState() {
-		if (documentPath) {
-			 const fileName = documentPath.split(/[\\/]/).pop() || '';
-			 if (fileName) {
-				 exportFileName = fileName.replace(/\.json$/i, '');
-				 modalTitle = `Export Document: ${fileName}`;
-			 } else {
-				  modalTitle = 'Export Document';
-                  exportFileName = 'document';
-			 }
-             // Default to same directory as document (or parent if needed)
-             // But actually, documents are deep in the structure. 
-             // Maybe default to empty/Downloads/Desktop or let user pick.
-             // Using document's dir might be internal app dir which isn't great for export.
-             // Let's leave exportDirectory empty to force selection or default to last used if we were persisting it.
-             // ExportModal uses transcript path's dir.
-			 exportDirectory = simpleDirname(documentPath); 
-		} else {
-             modalTitle = 'Export Document';
-			exportFileName = 'document';
-             exportDirectory = '';
-		}
-		exportFormat = 'docx';
-        isExporting = false;
-	}
-
-	$: if (showModal) {
+		async function initializeModalState() {
+			if (documentPath) {
+				 const fileName = documentPath.split(/[\\/]/).pop() || '';
+				 if (fileName) {
+					 exportFileName = fileName.replace(/\.json$/i, '');
+					 modalTitle = `Export Document: ${fileName}`;
+				 } else {
+					  modalTitle = 'Export Document';
+	                  exportFileName = 'document';
+				 }
+	                          // Default to same directory as document (or parent if needed)
+	                          // But actually, documents are deep in the structure. 
+	                          // Maybe default to empty/Downloads/Desktop or let user pick.
+	                          // Using document's dir might be internal app dir which isn't great for export.
+	                          // Let's leave exportDirectory empty to force selection or default to last used if we were persisting it.
+	                          // ExportModal uses transcript path's dir.
+	             			 // exportDirectory = simpleDirname(documentPath); 
+	             		} else {
+	                          modalTitle = 'Export Document';
+	             			 exportFileName = 'document';
+	                          // exportDirectory = '';
+	             		}
+	             
+	                     if (!exportDirectory) {
+	                         try {
+	                             const docDir = await documentDir();
+	                             exportDirectory = docDir;
+	                         } catch (e) {
+	                             console.warn('[DocumentExportModal] Failed to get document directory:', e);
+	                         }
+	                     }
+	             
+	             		exportFormat = 'docx';
+	                     isExporting = false;
+	             	}	$: if (showModal) {
 		initializeModalState();
 	}
 

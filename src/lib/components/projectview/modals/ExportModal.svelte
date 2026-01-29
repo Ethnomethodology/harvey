@@ -6,6 +6,7 @@
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 	import { activeLayout } from '$lib/stores/layoutStore.js'; // Re-added
 	import { open } from '@tauri-apps/plugin-dialog';
+    import { documentDir } from '@tauri-apps/api/path';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	// --- REMOVED: No fs functions imported for path manipulation ---
 
@@ -82,17 +83,18 @@
 		exportFileName = baseName;
 
 		// Simplified default directory logic
-		exportDirectory = ''; // Initialize
-		if (currentTranscriptPath) {
-			exportDirectory = simpleDirname(currentTranscriptPath);
-			if (exportDirectory) {
-				console.log('[ExportModal] Default export directory set from transcriptPath:', exportDirectory);
-			}
-		}
+		// We do NOT reset exportDirectory here to preserve the last used location during the session.
+        // If it's the first time (empty), we default to the user's Documents folder.
 
-		if (!exportDirectory) { // This will be true if transcriptPath was empty or simpleDirname returned empty
-			exportDirectory = ''; // Ensure it's explicitly empty
-			console.warn('[ExportModal] Could not determine directory from transcriptPath. Defaulting to empty.');
+		if (!exportDirectory) { 
+            try {
+                const docDir = await documentDir();
+                exportDirectory = docDir;
+                console.log('[ExportModal] Default export directory set to User Documents:', exportDirectory);
+            } catch (err) {
+			    // exportDirectory = ''; // It's already empty/falsy
+			    console.warn('[ExportModal] Could not determine User Documents directory.', err);
+            }
 		}
 		// END Simplified default directory logic
 
