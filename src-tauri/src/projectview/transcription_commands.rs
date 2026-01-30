@@ -2142,15 +2142,30 @@ pub async fn list_subtitle_files_command(media_path_str: String) -> Result<Vec<S
 #[tauri::command]
 pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, CommandError> {
     info!("[convert_srt_to_vtt_command] Converting SRT: {}", srt_path_str);
-    // Placeholder: Implement actual SRT to VTT conversion logic here.
-    // For now, let's assume it just returns the path or an error if not an SRT.
     let srt_path = PathBuf::from(&srt_path_str);
     if srt_path.extension().and_then(|e| e.to_str()) != Some("srt") {
         return Err(CommandError::from("Not an SRT file.".to_string()));
     }
-    // This should return the content of the VTT file or path to a new VTT file.
-    // For this stub, we'll just return a message.
-    Ok(format!("Successfully processed (stubbed) SRT file: {}", srt_path_str))
+
+    let srt_content = fs::read_to_string(&srt_path)
+        .map_err(|e| CommandError::from(format!("Failed to read SRT file: {}", e)))?;
+
+    let mut vtt_content = String::from("WEBVTT\n\n");
+    // Simple SRT to VTT conversion: 
+    // 1. Prepend WEBVTT
+    // 2. Change time separator from ',' to '.'
+    
+    for line in srt_content.lines() {
+        if line.contains(" --> ") {
+            // Replace ',' with '.' in timecode line
+            vtt_content.push_str(&line.replace(',', "."));
+        } else {
+            vtt_content.push_str(line);
+        }
+        vtt_content.push('\n');
+    }
+
+    Ok(vtt_content)
 }
 
 // --- cancel_transcription Command (moved from local_handler/transcription.rs) ---

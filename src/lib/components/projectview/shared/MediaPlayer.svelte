@@ -12,6 +12,7 @@
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store'; // Ensure get is imported
 	import { readFile } from '@tauri-apps/plugin-fs';
+	import { open } from '@tauri-apps/plugin-dialog';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
@@ -242,12 +243,9 @@
 	const ICON_CC = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-badge-cc" viewBox="0 0 16 16"><path d="M3.708 7.755c0-1.111.488-1.753 1.319-1.753.681 0 1.138.47 1.186 1.107H7.36V7c-.052-1.186-1.024-2-2.342-2C3.414 5 2.5 6.05 2.5 7.751v.747c0 1.7.905 2.73 2.518 2.73 1.314 0 2.285-.792 2.342-1.939v-.114H6.213c-.048.615-.496 1.05-1.186 1.05-.84 0-1.319-.62-1.319-1.727zm6.14 0c0-1.111.488-1.753 1.318-1.753.682 0 1.139.47 1.187 1.107H13.5V7c-.053-1.186-1.024-2-2.342-2C9.554 5 8.64 6.05 8.64 7.751v.747c0 1.7.905 2.73 2.518 2.73 1.314 0 2.285-.792 2.342-1.939v-.114h-1.147c-.048.615-.497 1.05-1.187 1.05-.839 0-1.318-.62-1.318-1.727z"/><path d="M14 3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>`;
 
 	// --- Subtitle State ---
-	let availableSubtitles = [];
-	let showSubtitleMenu = false;
-	let subtitleMenuPosition = { x: 0, y: 0 };
+    // availableSubtitles and menu state removed
 	let ccButtonElement = null;
 	let activeSubtitleTrackPath = null;
-	let subtitleMenuRef = null;
 	let activeSubtitleUrl = null;
 	let activeSubtitleLang = 'en';
 	let activeSubtitleLabel = 'Subtitles';
@@ -264,46 +262,31 @@
 	}
 
 	async function handleSelectSubtitles() {
-		if (showSubtitleMenu) {
-			showSubtitleMenu = false;
-			return;
-		}
+        try {
+            const selected = await open({
+                multiple: false,
+                filters: [{
+                    name: 'Subtitles',
+                    extensions: ['srt', 'vtt', 'ass']
+                }]
+            });
 
-		if (!explicitMediaPath) {
-			console.warn('[MediaPlayer] Cannot fetch subtitles: explicitMediaPath is not set.');
-			availableSubtitles = [];
-			showSubtitleMenu = false;
-			return;
-		}
-
-		console.log('[MediaPlayer] Fetching subtitles for:', explicitMediaPath);
-		try {
-			const subs = await invoke('list_subtitle_files_command', { mediaPathStr: explicitMediaPath });
-			availableSubtitles = subs || [];
-			if (availableSubtitles.length > 0) {
-				if (ccButtonElement) {
-					const rect = ccButtonElement.getBoundingClientRect();
-					subtitleMenuPosition = {
-						x: rect.left,
-						y: rect.bottom + window.scrollY + 2
-					};
-				}
-				showSubtitleMenu = true;
-			} else {
-				availableSubtitles = [{ name: "No subtitles found", path: null, isInfo: true }];
-				if (ccButtonElement) { // Ensure menu is positioned and shown
-					const rect = ccButtonElement.getBoundingClientRect();
-					subtitleMenuPosition = { x: rect.left, y: rect.bottom + window.scrollY + 2 };
-				}
-				showSubtitleMenu = true; // Show menu to display the message
-			}
-		} catch (error) {
-			console.error('[MediaPlayer] Error fetching subtitle files:', error);
-			project.update(p => ({ ...p, statusMessage: 'Error fetching subtitles.', error: String(error) }));
-			availableSubtitles = [];
-			showSubtitleMenu = false;
-		}
+            if (selected && typeof selected === 'string') {
+                const name = selected.split(/[\\/]/).pop();
+                await selectSubtitleTrack({ path: selected, name: name });
+            }
+        } catch (error) {
+            console.error('[MediaPlayer] Error opening subtitle dialog:', error);
+        }
 	}
+
+    function handleSubtitleContextMenu(event) {
+        event.preventDefault();
+        if (activeSubtitleUrl) {
+             selectSubtitleTrack(null); // Turn off
+             console.log('[MediaPlayer] Subtitles disabled via context menu.');
+        }
+    }
 
 	async function selectSubtitleTrack(subtitleEntry) {
 		console.log('[MediaPlayer] Attempting to select subtitle track:', subtitleEntry);
@@ -312,6 +295,9 @@
 			URL.revokeObjectURL(activeSubtitleUrl);
 			console.log('[MediaPlayer] Revoked previous subtitle object URL:', activeSubtitleUrl);
 		}
+        
+        activeSubtitleUrl = null;
+        await tick();
 
 		if (subtitleEntry && subtitleEntry.path) {
 			activeSubtitleTrackPath = subtitleEntry.path;
@@ -331,11 +317,34 @@
 						throw new Error('SRT to VTT conversion did not return a string.');
 					}
 				} else { // Assume .vtt or other directly supported format
-					subtitleDataUrl = await convertFileSrc(subtitleEntry.path);
-					console.log('[MediaPlayer] VTT/other file, using convertFileSrc URL:', subtitleDataUrl);
+                    console.log('[MediaPlayer] Reading subtitle file directly:', subtitleEntry.path);
+                    const fileData = await readFile(subtitleEntry.path);
+                    
+                    // Convert to string to check for WEBVTT header
+                    const decoder = new TextDecoder('utf-8');
+                    let content = decoder.decode(fileData);
+                    
+                    if (!content.trim().startsWith('WEBVTT')) {
+                        console.log('[MediaPlayer] Missing WEBVTT header, prepending...');
+                        content = 'WEBVTT\n\n' + content;
+                    }
+
+                    const blob = new Blob([content], { type: 'text/vtt' });
+                    subtitleDataUrl = URL.createObjectURL(blob);
+                    console.log('[MediaPlayer] Created Blob URL for subtitle:', subtitleDataUrl);
 				}
 				activeSubtitleUrl = subtitleDataUrl;
 				console.log(`[MediaPlayer] Set active subtitle: URL=${activeSubtitleUrl}, Lang=${activeSubtitleLang}, Label=${activeSubtitleLabel}`);
+
+                await tick();
+                if (videoElement && videoElement.textTracks && videoElement.textTracks.length > 0) {
+                    // Enable the last added track (which should correspond to our new activeSubtitleUrl)
+                    // Or just enable all for now, or find the one matching.
+                    // Usually there's only one if we replace activeSubtitleUrl.
+                    for (let i = 0; i < videoElement.textTracks.length; i++) {
+                        videoElement.textTracks[i].mode = 'showing';
+                    }
+                }
 
 			} catch (e) {
 				console.error('[MediaPlayer] Error processing subtitle file:', e);
@@ -349,14 +358,6 @@
 			activeSubtitleUrl = null; // This will trigger the #key block to remove the <track>
 			activeSubtitleLang = 'en';
 			activeSubtitleLabel = 'Subtitles';
-		}
-		showSubtitleMenu = false;
-	}
-
-
-	function handleClickOutsideSubtitleMenu(event) {
-		if (showSubtitleMenu && subtitleMenuRef && !subtitleMenuRef.contains(event.target) && ccButtonElement && !ccButtonElement.contains(event.target)) {
-			showSubtitleMenu = false;
 		}
 	}
 
@@ -474,7 +475,6 @@
 	onMount(async () => {
 		initializeWaveformWorker();
 
-		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
 
 		const setupShortcutListener = async () => {
@@ -505,7 +505,6 @@
 				waveformWorker.terminate();
 				waveformWorker = null;
 			}
-			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
 			if (unlistenShortcutFn) { // Use renamed variable
 				console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onMount return.');
@@ -519,7 +518,6 @@
 			waveformWorker.terminate();
 			waveformWorker = null;
 		}
-		document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
 			URL.revokeObjectURL(activeSubtitleUrl);
 			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
@@ -1326,8 +1324,9 @@
 			<button
 				bind:this={ccButtonElement}
 				on:click={handleSelectSubtitles}
+				on:contextmenu={handleSubtitleContextMenu}
 				class="ui-button-icon"
-				title="Select Subtitles"
+				title="Select Subtitles (Right-click to disable)"
 				aria-label="Select Subtitles"
 				disabled={!localMediaUrl || isLoadingMedia || isAudio}
 			>
@@ -1379,37 +1378,7 @@
 	</div>
 </div>
 
-{#if showSubtitleMenu}
-	<div
-		bind:this={subtitleMenuRef}
-		class="subtitle-menu fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[150px]"
-		style="left: {subtitleMenuPosition.x}px; top: {subtitleMenuPosition.y}px;"
-	>
-		{#if !(availableSubtitles.length === 1 && availableSubtitles[0].isInfo)}
-			<button
-				on:click={() => selectSubtitleTrack(null)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
-				class:bg-blue-100={!activeSubtitleTrackPath}
-				class:dark:bg-blue-800={!activeSubtitleTrackPath}
-			>
-				(Off)
-			</button>
-		{/if}
-		{#each availableSubtitles as sub (sub.path || sub.name)}
-			<button
-				on:click={() => sub.isInfo ? null : selectSubtitleTrack(sub)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
-				class:bg-blue-100={!sub.isInfo && activeSubtitleTrackPath === sub.path}
-				class:dark:bg-blue-800={!sub.isInfo && activeSubtitleTrackPath === sub.path}
-				class:text-gray-500={sub.isInfo} class:dark:text-d-gray-400={sub.isInfo} class:italic={sub.isInfo}
-				class:cursor-default={sub.isInfo}
-				disabled={sub.isInfo}
-			>
-				{sub.name}
-			</button>
-		{/each}
-	</div>
-{/if}
+<!-- Subtitle menu removed -->
 
 {#if showPlaybackSpeedMenu}
 	<div
