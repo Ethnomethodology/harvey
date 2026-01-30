@@ -99,6 +99,12 @@
 		dispatch(event.type, event.detail);
 	}
 
+    export function playMedia(path) {
+        if (path) {
+            mediaPath = path;
+        }
+    }
+
     async function loadAttachments(path) {
         const projectStoreState = get(project);
         if (!projectStoreState.id || !path) {
@@ -125,19 +131,24 @@
                 if (attachmentsField && attachmentsField.value) {
                     attachments = JSON.parse(attachmentsField.value);
                     console.log("[ImportedTranscriptView] Loaded attachments:", attachments);
-                    if (attachments.length > 0) {
-                        // Use convertFileSrc to ensure valid URL for media player
-                        mediaPath = convertFileSrc(attachments[0]);
-                    } else {
-                        mediaPath = null;
-                    }
+                    // Do not auto-load mediaPath. Wait for user request.
+                    // if (attachments.length > 0) {
+                    //    mediaPath = convertFileSrc(attachments[0]);
+                    // } else {
+                    //    mediaPath = null;
+                    // }
+                    // Reset mediaPath if it was previously set but now invalid? 
+                    // Or just leave it? Let's reset if path changed.
+                    // Actually, if we switch transcripts, we want to reset.
+                    // The reactive statement `$: if (itemPath)` calls this. 
+                    // We should probably reset mediaPath at start of loadAttachments or when itemPath changes.
                 } else {
                     attachments = [];
-                    mediaPath = null;
+                    // mediaPath = null;
                 }
             } else {
                 attachments = [];
-                mediaPath = null;
+                // mediaPath = null;
             }
         } catch (error) {
             console.error(`[ImportedTranscriptView] Error loading attachments:`, error);
@@ -146,8 +157,9 @@
         }
     }
 
-    // Reload attachments when itemPath changes
+    // Reset mediaPath when itemPath changes
     $: if (itemPath) {
+        mediaPath = null;
         loadAttachments(itemPath);
     }
 
@@ -168,6 +180,7 @@
                 bind:localCurrentTime={currentTime}
                 bind:localIsPlaying={isPlaying}
                 explicitMediaPath={mediaPath}
+                autoPlay={true}
                 projectId={$project.id}
                 showLoopPauseButton={false}
                 showDataTranscribeButton={false}

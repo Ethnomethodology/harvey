@@ -45,6 +45,12 @@
         }
     }
 
+    export function playMedia(path) {
+        if (path) {
+            mediaPath = path;
+        }
+    }
+
     async function loadAttachments(path) {
         const projectStoreState = get(project);
         if (!projectStoreState.id || !path) {
@@ -71,19 +77,19 @@
                 if (attachmentsField && attachmentsField.value) {
                     attachments = JSON.parse(attachmentsField.value);
                     console.log("[DocumentView] Loaded attachments:", attachments);
-                    if (attachments.length > 0) {
-                        // Use convertFileSrc to ensure valid URL for media player
-                        mediaPath = convertFileSrc(attachments[0]);
-                    } else {
-                        mediaPath = null;
-                    }
+                    // Do not auto-set mediaPath
+                    // if (attachments.length > 0) {
+                    //    mediaPath = convertFileSrc(attachments[0]);
+                    // } else {
+                    //    mediaPath = null;
+                    // }
                 } else {
                     attachments = [];
-                    mediaPath = null;
+                    // mediaPath = null;
                 }
             } else {
                 attachments = [];
-                mediaPath = null;
+                // mediaPath = null;
             }
         } catch (error) {
             console.error(`[DocumentView] Error loading attachments:`, error);
@@ -94,6 +100,7 @@
 
     // Reload attachments when itemPath changes
     $: if (itemPath) {
+        mediaPath = null;
         loadAttachments(itemPath);
     }
 
@@ -118,6 +125,7 @@
                 bind:localCurrentTime={currentTime}
                 bind:localIsPlaying={isPlaying}
                 explicitMediaPath={mediaPath}
+                autoPlay={true}
                 projectId={$project.id}
                 showLoopPauseButton={false}
                 showDataTranscribeButton={false}

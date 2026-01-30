@@ -118,6 +118,7 @@
     export let xmlPath = null;
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
+    export let autoPlay = false;
 
 	// Props for inline trim looping
 	export let loopStartTime = 0;
@@ -731,6 +732,9 @@
             }
         }
         if (videoElement) {
+            if (autoPlay) {
+                videoElement.play().catch(e => console.warn("[MediaPlayer] Auto-play failed:", e));
+            }
             localIsPlaying = !videoElement.paused;
             if (!explicitMediaPath) togglePlayerPlaying(!videoElement.paused);
             videoElement.playbackRate = selectedPlaybackRate;

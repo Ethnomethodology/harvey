@@ -1,21 +1,21 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
-    import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+    import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
-    import MinimalMediaPlayer from './MinimalMediaPlayer.svelte';
     import notificationStore from '$lib/stores/notificationStore.js';
 
     export let itemPath = null;
     export let itemType = null;
     export let refreshKey = null;
 
+    const dispatch = createEventDispatcher();
+
     let attachments = [];
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
-    let currentSrc = null;
 
     const MUSIC_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-music" viewBox="0 0 16 16"><path d="M11 6.64a1 1 0 0 0-1.243-.97l-1 .25A1 1 0 0 0 8 6.89v4.306A2.6 2.6 0 0 0 7 11c-.5 0-.974.134-1.338.377-.36.24-.662.628-.662 1.123s.301.883.662 1.123c.364.243.839.377 1.338.377s.974-.134 1.338-.377c.36-.24.662.628.662-1.123V8.89l2-.5z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/></svg>`;
     const PLAY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-circle-fill" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814z"/></svg>`;
@@ -28,18 +28,8 @@
     function playTrack(index) {
         if (index >= 0 && index < attachments.length) {
             currentTrackIndex = index;
-            currentSrc = convertFileSrc(attachments[index]);
+            dispatch('requestPlayMedia', { mediaPath: attachments[index] });
         }
-    }
-
-    function playNext() {
-        const nextIndex = (currentTrackIndex + 1) % attachments.length;
-        playTrack(nextIndex);
-    }
-
-    function playPrevious() {
-        const prevIndex = (currentTrackIndex - 1 + attachments.length) % attachments.length;
-        playTrack(prevIndex);
     }
 
     async function handleAddAttachment() {
@@ -88,7 +78,6 @@
     async function loadAttachments(assetRelativePathToLoad) {
         isLoading = true;
         attachments = [];
-        currentSrc = null;
         currentTrackIndex = -1;
         const projectStoreState = get(project);
         if (!projectStoreState.id || !assetRelativePathToLoad) {
@@ -130,13 +119,11 @@
                 } else if (!newDerivedRelativePath) {
                     attachments = [];
                     previousProcessedItemPath = null;
-                    currentSrc = null;
                     currentTrackIndex = -1;
                 }
             } else {
                 attachments = [];
                 previousProcessedItemPath = null;
-                currentSrc = null;
                 currentTrackIndex = -1;
             }
         })();
@@ -185,11 +172,5 @@
                 No attachments found.
             </p>
         {/if}
-    </div>
-    <div class="flex-shrink-0">
-        <MinimalMediaPlayer
-            src={currentSrc}
-            on:ended={playNext}
-        />
     </div>
 </div>
