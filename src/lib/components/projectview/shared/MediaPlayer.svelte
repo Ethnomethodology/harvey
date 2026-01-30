@@ -549,6 +549,10 @@
         }
     }
 
+    let isAudio = false;
+    $: isAudio = loadedPathFromProp ? getMimeType(loadedPathFromProp).startsWith('audio/') : false;
+    $: if (isAudio) isVideoMinimized = true;
+
 	// Reactive block to load media when explicitMediaPath changes or (if not explicit) when global selectedMediaFile changes
 	$: {
         const mediaPathToLoad = explicitMediaPath || $transcriptStore.selectedMediaFile?.path;
@@ -1265,7 +1269,7 @@
 				class="ui-button-icon"
 				title="Take screenshot"
 				aria-label="Take screenshot of current video frame"
-				disabled={!localMediaUrl || isLoadingMedia || !projectId}
+				disabled={!localMediaUrl || isLoadingMedia || !projectId || isAudio}
 			>
 				{@html ICON_CAMERA}
 			</button>
@@ -1307,7 +1311,7 @@
 				class="ui-button-icon"
 				title="Select Subtitles"
 				aria-label="Select Subtitles"
-				disabled={!localMediaUrl || isLoadingMedia}
+				disabled={!localMediaUrl || isLoadingMedia || isAudio}
 			>
 				{@html ICON_CC}
 			</button>
@@ -1345,7 +1349,7 @@
 				class="ui-button-icon"
 				title={isVideoMinimized ? 'Show Media' : 'Hide Media'}
 				aria-label={isVideoMinimized ? 'Show Media' : 'Hide Media'}
-				disabled={!localMediaUrl || isLoadingMedia}
+				disabled={!localMediaUrl || isLoadingMedia || isAudio}
 			>
 				{#if isVideoMinimized}
 					{@html ICON_MAXIMIZE_VIDEO}
