@@ -228,6 +228,7 @@
 	let showProgressTooltip = false;
 	let progressTooltipText = '00:00:00';
 	let progressTooltipLeft = '0px';
+    let progressTooltipTop = '0px';
 
 	// --- Overlay Icon State & Icons ---
 	let isHoveringVideo = false;
@@ -864,6 +865,17 @@
         console.log(`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || 'unknown media'}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`);
     }
 
+	function portal(node) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			}
+		};
+	}
+
 	// --- Utility Functions ---
 	function formatTime(totalSeconds) {
         if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00';
@@ -907,7 +919,8 @@
 			clampedTooltipCenter = Math.max(minAllowedCenter, Math.min(idealTooltipCenter, maxAllowedCenter));
 		}
 
-		progressTooltipLeft = `${clampedTooltipCenter}px`;
+		progressTooltipLeft = `${progressBarRect.left + clampedTooltipCenter}px`;
+        progressTooltipTop = `${progressBarRect.top - 10}px`;
 		showProgressTooltip = true;
 	}
 
@@ -1160,7 +1173,7 @@
 	<!-- Custom Controls Bar -->
 	<div
 		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
-		style="position: relative; z-index: 30;"
+		style="position: relative; z-index: 100;"
 	>
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full" style="z-index: 20;"> <!-- Stacking for timeline within control bar -->
@@ -1181,9 +1194,10 @@
 				autocorrect="off"
 			/>
 			<span
+				use:portal
 				bind:this={progressTooltipElement}
-				class="absolute bg-black text-white text-xs p-1 rounded pointer-events-none whitespace-nowrap"
-				style="bottom: 16px; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'}; left: {progressTooltipLeft}; z-index: 50;"
+				class="fixed bg-black text-white text-xs p-1 rounded pointer-events-none whitespace-nowrap z-[9999]"
+				style="top: {progressTooltipTop}; left: {progressTooltipLeft}; transform: translate(-50%, -100%); display: {showProgressTooltip ? 'block' : 'none'};"
 			>
 				{progressTooltipText}
 			</span>
