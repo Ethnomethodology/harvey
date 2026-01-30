@@ -1,11 +1,13 @@
 <!-- src/lib/components/projectview/data/documents/DocumentView.svelte -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
-    import { get } from 'svelte/store'; 
+    import { get } from 'svelte/store';
+    import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     // LeftInfoPanel and RightInfoPanel are removed
     import DocumentEditorPanel from './DocumentEditorPanel.svelte'; 
     import PDFViewerPanel from './PDFViewerPanel.svelte';          
     import { project, updateDocumentHighlights } from '$lib/stores/projectStore.js'; 
+    import MediaPlayer from '../../shared/MediaPlayer.svelte';
     // panelStateStore might not be needed here anymore if panel collapsing is handled by parent (DataView)
 
     export let itemPath = null; 
@@ -17,6 +19,14 @@
     $: currentHighlightsFromStore = $project.selectedDocumentPath === itemPath ? $project.currentDocumentHighlights : [];
 
     const dispatch = createEventDispatcher();
+
+    // Media Player State
+    let mediaPath = null;
+    let attachments = [];
+    let mediaPlayerRef;
+    let isVideoHidden = false;
+    let currentTime = 0;
+    let isPlaying = false;
 
     // Forwarding events might still be needed if DocumentEditorPanel or PDFViewerPanel emit them
     function forwardEvent(event) {
@@ -35,8 +45,61 @@
         }
     }
 
+    async function loadAttachments(path) {
+        const projectStoreState = get(project);
+        if (!projectStoreState.id || !path) {
+            attachments = [];
+            mediaPath = null;
+            return;
+        }
+
+        // Derived relative path
+        let assetRelativePath = path.startsWith(projectStoreState.baseDirectory) 
+            ? path.substring(projectStoreState.baseDirectory.length) 
+            : path;
+        assetRelativePath = assetRelativePath.replace(/\\/g, '/').replace(/^\//, '');
+
+        try {
+            const result = await invoke('get_asset_metadata_command', {
+                projectId: projectStoreState.id,
+                assetRelativePath: assetRelativePath
+            });
+
+            if (result && result.custom_fields_json) {
+                const customFields = JSON.parse(result.custom_fields_json);
+                const attachmentsField = customFields.find(f => f.key === 'attachments');
+                if (attachmentsField && attachmentsField.value) {
+                    attachments = JSON.parse(attachmentsField.value);
+                    console.log("[DocumentView] Loaded attachments:", attachments);
+                    if (attachments.length > 0) {
+                        // Use convertFileSrc to ensure valid URL for media player
+                        mediaPath = convertFileSrc(attachments[0]);
+                    } else {
+                        mediaPath = null;
+                    }
+                } else {
+                    attachments = [];
+                    mediaPath = null;
+                }
+            } else {
+                attachments = [];
+                mediaPath = null;
+            }
+        } catch (error) {
+            console.error(`[DocumentView] Error loading attachments:`, error);
+            attachments = [];
+            mediaPath = null;
+        }
+    }
+
+    // Reload attachments when itemPath changes
+    $: if (itemPath) {
+        loadAttachments(itemPath);
+    }
+
     onMount(() => {
 		console.log('[DocumentView] Component container mounted. Document path:', itemPath, 'Is PDF:', isPdf);
+        if (itemPath) loadAttachments(itemPath);
 	});
 
     $: { 
@@ -46,28 +109,47 @@
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-d-gray-800">
-    {#key itemPath}
-        {#if itemPath}
-            {#if isPdf}
-                <PDFViewerPanel
-                    pdfPath={itemPath}
-                    initialHighlights={currentHighlightsFromStore}
-                    on:pdfhighlightevent={handlePdfHighlight}
-                />
-            {:else if isJsonDoc} <!-- Assuming .json documents are handled by DocumentEditorPanel -->
-                <DocumentEditorPanel />
-            {:else} <!-- Fallback for other non-PDF, non-JSON document types -->
+<div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-d-gray-800">
+    {#if mediaPath}
+        <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
+            <MediaPlayer
+                bind:this={mediaPlayerRef}
+                bind:isVideoMinimized={isVideoHidden}
+                bind:localCurrentTime={currentTime}
+                bind:localIsPlaying={isPlaying}
+                explicitMediaPath={mediaPath}
+                projectId={$project.id}
+                showLoopPauseButton={false}
+                showDataTranscribeButton={false}
+                showDataTrimButton={false} 
+                class="{!isVideoHidden ? 'flex-grow min-h-0' : ''}"
+            />
+        </div>
+    {/if}
+
+    <div class="flex-grow min-h-0 overflow-hidden {mediaPath && !isVideoHidden ? 'h-1/2' : 'h-full'}">
+        {#key itemPath}
+            {#if itemPath}
+                {#if isPdf}
+                    <PDFViewerPanel
+                        pdfPath={itemPath}
+                        initialHighlights={currentHighlightsFromStore}
+                        on:pdfhighlightevent={handlePdfHighlight}
+                    />
+                {:else if isJsonDoc} <!-- Assuming .json documents are handled by DocumentEditorPanel -->
+                    <DocumentEditorPanel />
+                {:else} <!-- Fallback for other non-PDF, non-JSON document types -->
+                    <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
+                        <span>Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span>
+                    </div>
+                {/if} 
+            {:else}
                 <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
-                    <span>Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span>
+                    <span>No document path provided to DocumentView.</span>
                 </div>
-            {/if} 
-        {:else}
-            <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
-                <span>No document path provided to DocumentView.</span>
-            </div>
-        {/if}
-    {/key}
+            {/if}
+        {/key}
+    </div>
 </div>
 
 <style>

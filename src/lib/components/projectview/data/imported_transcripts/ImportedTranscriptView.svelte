@@ -1,7 +1,10 @@
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     import { project, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
+    import { get } from 'svelte/store';
+    import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import TranscriptEditorPanel from './TranscriptEditorPanel.svelte';
+    import MediaPlayer from '../../shared/MediaPlayer.svelte';
 
     export let itemPath = null; // Receives the full path from DataView
 
@@ -12,6 +15,14 @@
     let cleanupSync = () => {};
 
     let isScrollSyncEnabled = true;
+
+    // Media Player State
+    let mediaPath = null;
+    let attachments = [];
+    let mediaPlayerRef;
+    let isVideoHidden = false;
+    let currentTime = 0;
+    let isPlaying = false;
 
     function handleSyncManager(path, enabled) {
         if (path && enabled) {
@@ -88,78 +99,147 @@
 		dispatch(event.type, event.detail);
 	}
 
+    async function loadAttachments(path) {
+        const projectStoreState = get(project);
+        if (!projectStoreState.id || !path) {
+            attachments = [];
+            mediaPath = null;
+            return;
+        }
+
+        // Derived relative path
+        let assetRelativePath = path.startsWith(projectStoreState.baseDirectory) 
+            ? path.substring(projectStoreState.baseDirectory.length) 
+            : path;
+        assetRelativePath = assetRelativePath.replace(/\\/g, '/').replace(/^\//, '');
+
+        try {
+            const result = await invoke('get_asset_metadata_command', {
+                projectId: projectStoreState.id,
+                assetRelativePath: assetRelativePath
+            });
+
+            if (result && result.custom_fields_json) {
+                const customFields = JSON.parse(result.custom_fields_json);
+                const attachmentsField = customFields.find(f => f.key === 'attachments');
+                if (attachmentsField && attachmentsField.value) {
+                    attachments = JSON.parse(attachmentsField.value);
+                    console.log("[ImportedTranscriptView] Loaded attachments:", attachments);
+                    if (attachments.length > 0) {
+                        // Use convertFileSrc to ensure valid URL for media player
+                        mediaPath = convertFileSrc(attachments[0]);
+                    } else {
+                        mediaPath = null;
+                    }
+                } else {
+                    attachments = [];
+                    mediaPath = null;
+                }
+            } else {
+                attachments = [];
+                mediaPath = null;
+            }
+        } catch (error) {
+            console.error(`[ImportedTranscriptView] Error loading attachments:`, error);
+            attachments = [];
+            mediaPath = null;
+        }
+    }
+
+    // Reload attachments when itemPath changes
+    $: if (itemPath) {
+        loadAttachments(itemPath);
+    }
+
     onMount(() => {
 		console.log('[ImportedTranscriptView] Component container mounted. Transcript path:', itemPath);
+        if (itemPath) loadAttachments(itemPath);
 	});
 
 </script>
 
 <!-- Main container for the Imported Transcript View -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-surface-2 overflow-hidden">
-    {#if splitPartnerPath}
-        <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
-            <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
-                    <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
-                </div>
-                <div class="flex-grow overflow-hidden">
-                    {#key itemPath}
-                        <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
-                    {/key}
-                </div>
-            </div>
-            <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
-                    <div class="flex items-center min-w-0 flex-grow">
-                        <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
-                    </div>
-                    <button 
-                        class="ml-2 flex-shrink-0" 
-                        class:text-black={!isScrollSyncEnabled} 
-                        class:text-blue-500={isScrollSyncEnabled}
-                        class:dark:text-gray-400={!isScrollSyncEnabled} 
-                        title={isScrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"}
-                        on:click={toggleScrollSync}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-down-up" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M11.5 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L11 2.707V14.5a.5.5 0 0 0 .5.5m-7-14a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L4 13.293V1.5a.5.5 0 0 1 .5-.5"/>
-                        </svg>
-                    </button>
-                    <button 
-                        class="hover:text-red-500 ml-2 flex-shrink-0" 
-                        title="Close Split"
-                        on:click={() => clearImportedTranscriptSplit(itemPath)}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-                            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="flex-grow overflow-hidden">
-                    {#key splitPartnerPath}
-                        <TranscriptEditorPanel bind:this={secondaryPanel} itemPath={splitPartnerPath} isPrimary={false} />
-                    {/key}
-                </div>
-            </div>
+<div class="h-full flex flex-col w-full bg-white dark:bg-surface-2 overflow-hidden">
+    {#if mediaPath}
+        <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
+            <MediaPlayer
+                bind:this={mediaPlayerRef}
+                bind:isVideoMinimized={isVideoHidden}
+                bind:localCurrentTime={currentTime}
+                bind:localIsPlaying={isPlaying}
+                explicitMediaPath={mediaPath}
+                projectId={$project.id}
+                showLoopPauseButton={false}
+                showDataTranscribeButton={false}
+                showDataTrimButton={false} 
+                class="{!isVideoHidden ? 'flex-grow min-h-0' : ''}"
+            />
         </div>
-    {:else}
-        {#key itemPath}
-            {#if itemPath}
-                <div class="h-full flex flex-col">
+    {/if}
+
+    <div class="flex-grow min-h-0 overflow-hidden {mediaPath && !isVideoHidden ? 'h-1/2' : 'h-full'}">
+        {#if splitPartnerPath}
+            <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
+                <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
                     <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
                         <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
                     </div>
                     <div class="flex-grow overflow-hidden">
-                        <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                        {#key itemPath}
+                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                        {/key}
                     </div>
                 </div>
-            {:else}
-                <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500">
-                    <span>No transcript path provided to ImportedTranscriptView.</span>
+                <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
+                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                        <div class="flex items-center min-w-0 flex-grow">
+                            <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
+                        </div>
+                        <button 
+                            class="ml-2 flex-shrink-0" 
+                            class:text-black={!isScrollSyncEnabled} 
+                            class:text-blue-500={isScrollSyncEnabled}
+                            class:dark:text-gray-400={!isScrollSyncEnabled} 
+                            title={isScrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"}
+                            on:click={toggleScrollSync}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-down-up" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd" d="M11.5 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L11 2.707V14.5a.5.5 0 0 0 .5.5m-7-14a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L4 13.293V1.5a.5.5 0 0 1 .5-.5"/>
+                            </svg>
+                        </button>
+                        <button 
+                            class="hover:text-red-500 ml-2 flex-shrink-0" 
+                            title="Close Split"
+                            on:click={() => clearImportedTranscriptSplit(itemPath)}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex-grow overflow-hidden">
+                        {#key splitPartnerPath}
+                            <TranscriptEditorPanel bind:this={secondaryPanel} itemPath={splitPartnerPath} isPrimary={false} />
+                        {/key}
+                    </div>
                 </div>
-            {/if}
-        {/key}
-    {/if}
+            </div>
+        {:else}
+            {#key itemPath}
+                {#if itemPath}
+                    <div class="h-full flex flex-col">
+                        <div class="flex-grow overflow-hidden">
+                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                        </div>
+                    </div>
+                {:else}
+                    <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500">
+                        <span>No transcript path provided to ImportedTranscriptView.</span>
+                    </div>
+                {/if}
+            {/key}
+        {/if}
+    </div>
 </div>
 
 <style>
