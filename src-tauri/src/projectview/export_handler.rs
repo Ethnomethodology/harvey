@@ -1257,17 +1257,24 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
             "linebreak" => {
                 ass_buffer.push_str("\\N");
             }
-            "paragraph" | "heading" | "listitem" | "quote" => { // Treat as block, recurse children
+            "quote" | "list" => { // Block containers: Quote contains Paragraphs, List contains ListItems. Join with \N.
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for (i, child) in children.iter().enumerate() {
                         lexical_node_to_ass_tags(child, ass_buffer);
+                        if i < children.len() - 1 {
+                             if !ass_buffer.ends_with("\\N") {
+                                 ass_buffer.push_str("\\N");
+                             }
+                        }
                     }
                 }
-                // Always ensure block elements end with a newline if they are not empty/pure containers
-                // But since we are likely inside a recursive call, we rely on the caller to separate blocks if needed,
-                // OR we append \N here if this function is responsible for the full serialization.
-                // However, get_ass_dialogue_line_from_lexical_string handles top-level separation.
-                // If we have nested paragraphs (unlikely in standard Lexical but possible), we might want breaks.
+            }
+            "paragraph" | "heading" | "listitem" => { // Inline containers: Text flows, explicit linebreaks handled by nodes.
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for (_i, child) in children.iter().enumerate() {
+                        lexical_node_to_ass_tags(child, ass_buffer);
+                    }
+                }
             }
             "link" => { // Inline container
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
