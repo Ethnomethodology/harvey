@@ -1,7 +1,7 @@
 use crate::welcome::config::CommandError;
 use super::{TranscriptionEngine, TranscriptionOptions};
 use crate::projectview::shared_types::TranscriptSegment;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Runtime, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ use std::fs::{self, File};
 use std::io::BufReader;
 use serde::Deserialize;
 use tokio::sync::Mutex;
+use dunce;
 
 pub struct WhisperCppEngine<R: Runtime> {
     app_handle: AppHandle<R>,
@@ -40,6 +41,17 @@ struct WhisperJsonTimestamps {
     to: String,
 }
 
+// Helper function to normalize paths for the CLI, inspired by shared_utils
+fn normalize_path_for_cli(path_str: &str) -> String {
+    if cfg!(target_os = "windows") {
+        // Strip the UNC prefix and convert to forward slashes
+        let stripped_path = path_str.strip_prefix("\\\\?\\").unwrap_or(path_str);
+        stripped_path.replace('\\', "/")
+    } else {
+        path_str.to_string()
+    }
+}
+
 #[async_trait]
 impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
     async fn transcribe(
@@ -52,20 +64,22 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
         let sidecar_name = "whisper-cli";
         let lang_arg = options.language_code.as_deref().unwrap_or("auto");
         
-        // Prepare output path
-        // whisper-cli appends .json to the output filename provided via -of
-        // We use a temp base name in the output directory
+        // Prepare output path and normalize it for the CLI
         let temp_base_name = format!("whisper_{}_temp", job_id);
         let output_base_path = options.output_dir.join(&temp_base_name);
-        let output_base_path_str = output_base_path.to_string_lossy().to_string();
+        let output_base_path_str = normalize_path_for_cli(&output_base_path.to_string_lossy());
         let expected_json_path = output_base_path.with_extension("json");
 
+        // Normalize all paths for the CLI
+        let model_path_str = normalize_path_for_cli(&options.model_path);
+        let audio_path_str = normalize_path_for_cli(&audio_path.to_string_lossy());
+
         let mut args: Vec<String> = vec![
-            "-m".into(), options.model_path.clone(),
-            "-f".into(), audio_path.to_string_lossy().to_string(),
+            "-m".into(), model_path_str,
+            "-f".into(), audio_path_str,
             "-l".into(), lang_arg.to_string(),
             "-oj".into(), // Output JSON
-            "-of".into(), output_base_path_str.clone(),
+            "-of".into(), output_base_path_str,
         ];
 
         if options.translate {
@@ -75,10 +89,42 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
         info!("[WhisperCppEngine][{}] Executing sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
 
         let shell_scope = self.app_handle.shell();
-        let (mut rx, child) = shell_scope.sidecar(sidecar_name)
+        let mut command = shell_scope.sidecar(sidecar_name)
             .map_err(|e| CommandError::from(format!("Failed to create sidecar command: {}", e)))?
-            .args(args)
-            .spawn()
+            .args(args.clone());
+
+        // Set the library path for the sidecar process
+        if cfg!(target_os = "windows") {
+            if let Ok(resource_dir) = self.app_handle.path().resource_dir() {
+                let sidecars_path = resource_dir.join("sidecars");
+                if sidecars_path.exists() {
+                    if let Ok(cleaned_sidecars_path) = dunce::canonicalize(&sidecars_path) {
+                        let sidecars_path_str = cleaned_sidecars_path.to_string_lossy();
+                        info!("[WhisperCppEngine][{}] Setting PATH to include sidecars: {}", job_id, sidecars_path_str);
+                        if let Ok(existing_path) = std::env::var("PATH") {
+                            command = command.env("PATH", format!("{};{}", sidecars_path_str, existing_path));
+                        } else {
+                            command = command.env("PATH", sidecars_path_str.to_string());
+                        }
+                    }
+                }
+            }
+        } else if cfg!(target_os = "macos") {
+             if let Ok(resource_dir) = self.app_handle.path().resource_dir() {
+                let sidecars_path = resource_dir.join("sidecars");
+                 if sidecars_path.exists() {
+                    let sidecars_path_str = sidecars_path.to_string_lossy();
+                     info!("[WhisperCppEngine][{}] Setting DYLD_LIBRARY_PATH for macOS: {}", job_id, sidecars_path_str);
+                    if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                        command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                    } else {
+                        command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                    }
+                }
+            }
+        }
+
+        let (mut rx, child) = command.spawn()
             .map_err(|e| CommandError::from(format!("Failed to spawn whisper-cli sidecar: {}", e)))?;
 
         info!("[WhisperCppEngine][{}] Spawned sidecar (PID: {:?})", job_id, child.pid());
@@ -111,24 +157,24 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
                 CommandEvent::Stderr(line) => { debug!("[WhisperCppEngine][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end()); },
                 CommandEvent::Error(msg) => { process_error = Some(msg); break; },
                 CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
-                _ => {}
+                _ => {{}}
             }
         }
 
         if cancel_flag.load(Ordering::Relaxed) {
-            if expected_json_path.exists() { let _ = fs::remove_file(&expected_json_path); }
+            if expected_json_path.exists() {{ let _ = fs::remove_file(&expected_json_path); }}
             return Err(CommandError::from(format!("Transcription cancelled for job {}.", job_id)));
         }
 
         if process_error.is_some() || exit_code != Some(0) {
-            if expected_json_path.exists() { let _ = fs::remove_file(&expected_json_path); }
+            if expected_json_path.exists() {{ let _ = fs::remove_file(&expected_json_path); }}
             return Err(CommandError::from(format!("Whisper process failed. Exit: {:?}, Err: {:?}", exit_code, process_error)));
         }
 
         // Wait for file
         let mut attempts = 0;
         while !expected_json_path.exists() && attempts < 20 {
-            if cancel_flag.load(Ordering::Relaxed) { return Err(CommandError::from("Cancelled while waiting for output file.")); }
+            if cancel_flag.load(Ordering::Relaxed) {{ return Err(CommandError::from("Cancelled while waiting for output file.")); }}
             sleep(Duration::from_millis(200)).await;
             attempts += 1;
         }
@@ -161,7 +207,7 @@ fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, Comman
             let end_time = parse_ts(&w_seg.timestamps.to)
                 .map_err(|e| CommandError::from(format!("Segment {}: Invalid end time: {}", idx, e)))?;
             
-            if end_time < start_time { continue; }
+            if end_time < start_time {{ continue; }}
 
             segments.push(TranscriptSegment {
                 start_time,
@@ -187,6 +233,5 @@ fn parse_ts(ts_str: &str) -> Result<f64, String> {
          let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
          let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
          Ok(m * 60.0 + s + ms / 1000.0)
-    }
-     else { Err(format!("Invalid timestamp format: {}", ts_str)) }
+    } else {{ Err(format!("Invalid timestamp format: {}", ts_str)) }}
 }

@@ -35,12 +35,32 @@
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
     export let tableViewRef;
     let imageViewRef;
+    let documentViewRef;
+    let importedTranscriptViewRef;
 
     export function triggerImageExport() {
         if (imageViewRef) {
             imageViewRef.triggerExport();
         } else {
             console.warn("[DataView] triggerImageExport called but imageViewRef is missing.");
+        }
+    }
+
+    function handleRequestPlayMedia(event) {
+        const { mediaPath } = event.detail;
+        console.log('[DataView] Received requestPlayMedia:', mediaPath);
+        if (activeViewType === 'documents' && documentViewRef) {
+            if (typeof documentViewRef.playMedia === 'function') {
+                documentViewRef.playMedia(mediaPath);
+            } else {
+                console.warn("[DataView] documentViewRef.playMedia is not a function");
+            }
+        } else if (activeViewType === 'imported_transcript' && importedTranscriptViewRef) {
+            if (typeof importedTranscriptViewRef.playMedia === 'function') {
+                importedTranscriptViewRef.playMedia(mediaPath);
+            } else {
+                console.warn("[DataView] importedTranscriptViewRef.playMedia is not a function");
+            }
         }
     }
 
@@ -209,13 +229,13 @@
                         <span>Select an item from the Data panel to view or edit.</span>
                     </div>
                 {:else if activeViewType === 'documents'}
-                    <DocumentView itemPath={activeItemPath} />
+                    <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
                      <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
                  {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
-                     <ImportedTranscriptView itemPath={activeItemPath} />
+                     <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'media_note'}
                      <MediaView
                         itemPath={activeItemPath}
@@ -245,7 +265,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} />
                 {/if}
             </div>
         {/if}
