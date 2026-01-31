@@ -1184,148 +1184,278 @@ fn lexical_color_to_ass_color(hex_color: &str) -> String {
 }
 
 fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
+
     if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
+
         match node_type {
+
             "text" | "extended-text" => {
+
                 if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
+
                     let format_flags = node.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
+
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
+
+
                     let mut has_highlight = (format_flags & IS_HIGHLIGHT) != 0;
+
                     let mut font_color: Option<&str> = None;
 
+
+
                     let is_bold = (format_flags & IS_BOLD) != 0;
+
                     let is_italic = (format_flags & IS_ITALIC) != 0;
+
                     let mut is_underline = (format_flags & IS_UNDERLINE) != 0;
+
                     let mut is_strikethrough = (format_flags & IS_STRIKETHROUGH) != 0;
 
+
+
                     // Determine if highlight is present and extract font color and text decorations
+
                     for part in style_str.split(';') {
+
                         let p = part.trim();
+
                         if p.starts_with("color:") {
+
                             font_color = Some(p.trim_start_matches("color:").trim());
+
                         } else if p.starts_with("background-color:") {
+
                             let bg = p.trim_start_matches("background-color:").trim();
+
                             if bg != "transparent" && !bg.is_empty() {
+
                                 has_highlight = true;
+
                             }
+
                         } else if p.starts_with("text-decoration:") {
+
                             let decoration = p.trim_start_matches("text-decoration:").trim();
+
                             if decoration.contains("line-through") {
+
                                 is_strikethrough = true;
+
                             }
+
                             if decoration.contains("underline") {
+
                                 is_underline = true;
+
                             }
+
                         }
+
                     }
+
+
 
                     let mut open_tags = String::from("{");
+
                     let mut has_tags = false;
 
+
+
                     if is_bold { open_tags.push_str("\\b1"); has_tags = true; }
+
                     if is_italic { open_tags.push_str("\\i1"); has_tags = true; }
+
                     if is_underline { open_tags.push_str("\\u1"); has_tags = true; }
+
                     if is_strikethrough { open_tags.push_str("\\s1"); has_tags = true; }
 
+
+
                     // Only apply font color if there is NO highlight.
-                    // This prevents contrast colors (like black) from being exported without their background.
+
                     if !has_highlight {
+
                         if let Some(color) = font_color {
+
                             if color != "transparent" && !color.is_empty() {
+
                                 open_tags.push_str(&format!("\\1c{}", lexical_color_to_ass_color(color)));
+
                                 has_tags = true;
+
                             }
+
                         }
+
                     }
+
                     open_tags.push('}');
 
+
+
                     if has_tags {
+
                         ass_buffer.push_str(&open_tags);
+
                     }
+
+
 
                     // ASS text should not contain literal curly braces unless they are part of tags.
+
                     let ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\r\n", "\\N").replace("\n", "\\N");
+
                     ass_buffer.push_str(&ass_safe_text);
 
+
+
                     // Reset to default style to close all tags at once
+
                     if has_tags {
+
                         ass_buffer.push_str("{\\r}");
+
                     }
+
                 }
+
             }
+
             "linebreak" => {
+
                 ass_buffer.push_str("\\N");
+
             }
-            "paragraph" | "heading" | "listitem" | "quote" => { // Treat as block, recurse children
-                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                    for (i, child) in children.iter().enumerate() {
-                        lexical_node_to_ass_tags(child, ass_buffer);
-                    }
-                }
-                // Always ensure block elements end with a newline if they are not empty/pure containers
-                // But since we are likely inside a recursive call, we rely on the caller to separate blocks if needed,
-                // OR we append \N here if this function is responsible for the full serialization.
-                // However, get_ass_dialogue_line_from_lexical_string handles top-level separation.
-                // If we have nested paragraphs (unlikely in standard Lexical but possible), we might want breaks.
-            }
-            "link" => { // Inline container
-                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                    for child in children {
-                        lexical_node_to_ass_tags(child, ass_buffer);
-                    }
-                }
-            }
-             // Other node types like list, table, etc., are ignored for ASS text content for now.
+
+                        "paragraph" | "heading" | "listitem" | "quote" => { // Block elements
+
+                            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+
+                                for child in children {
+
+                                    lexical_node_to_ass_tags(child, ass_buffer);
+
+                                }
+
+                            }
+
+                            // Ensure block elements end with a newline.
+
+                            // We removed the 'ends_with("\\N")' check to allow consecutive breaks (e.g. empty paragraphs).
+
+                            if !ass_buffer.is_empty() {
+
+                                ass_buffer.push_str("\\N");
+
+                            }
+
+                        }
+
+                        "link" | "autolink" | "list" | "table" | "tablerow" | "tablecell" => { // Containers
+
+                            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+
+                                for child in children {
+
+                                    lexical_node_to_ass_tags(child, ass_buffer);
+
+                                    if node_type == "tablecell" { ass_buffer.push_str(" "); }
+
+                                }
+
+                            }
+
+                            if node_type == "tablerow" || node_type == "list" {
+
+                                if !ass_buffer.is_empty() {
+
+                                    ass_buffer.push_str("\\N");
+
+                                }
+
+                            }
+
+                        }
+
             _ => {
+
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+
                     for child in children {
+
                         lexical_node_to_ass_tags(child, ass_buffer);
+
                     }
+
                 }
+
             }
+
         }
+
     }
+
 }
+
 
 
 fn get_ass_dialogue_line_from_lexical_string(text_content: &str) -> String {
+
     match serde_json::from_str::<Value>(text_content) {
+
         Ok(parsed_json) => {
+
             if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+
                 let mut buffer = String::new();
+
                  if let Some(children) = parsed_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
-                    for (i, child_node) in children.iter().enumerate() {
+
+                    for child_node in children {
+
                         lexical_node_to_ass_tags(child_node, &mut buffer);
 
-                        // Check if this child is a block element that needs separation
-                        if i < children.len() - 1 {
-                            // If it's a paragraph or other block type, ensure we have a break
-                            if let Some(node_type) = child_node.get("type").and_then(|t| t.as_str()) {
-                                match node_type {
-                                    "paragraph" | "heading" | "listitem" | "quote" => {
-                                        if !buffer.ends_with("\\N") {
-                                            buffer.push_str("\\N");
-                                        }
-                                    },
-                                    _ => {}
-                                }
-                            }
-                        }
                     }
+
                 }
-                return buffer;
+
+                // Trim trailing \N
+
+                let mut result = buffer.as_str();
+
+                while result.ends_with("\\N") {
+
+                    result = &result[0..result.len()-2];
+
+                }
+
+                return result.to_string();
+
             }
+
             if parsed_json.is_string() { // JSON string value (already plain)
+
                 return parsed_json.as_str().unwrap_or("").replace("\r\n", "\\N").replace("\n", "\\N");
+
             }
+
             text_content.replace("\r\n", "\\N").replace("\n", "\\N")
+
         }
+
         Err(_) => { // Not valid JSON, assume it's already plain text
+
             text_content.replace("\r\n", "\\N").replace("\n", "\\N")
+
         }
+
     }
+
 }
+
+
 
 
 #[tauri::command]
