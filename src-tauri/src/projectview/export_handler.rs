@@ -1194,7 +1194,12 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
                     let mut has_highlight = (format_flags & IS_HIGHLIGHT) != 0;
                     let mut font_color: Option<&str> = None;
 
-                    // Determine if highlight is present and extract font color
+                    let is_bold = (format_flags & IS_BOLD) != 0;
+                    let is_italic = (format_flags & IS_ITALIC) != 0;
+                    let mut is_underline = (format_flags & IS_UNDERLINE) != 0;
+                    let mut is_strikethrough = (format_flags & IS_STRIKETHROUGH) != 0;
+
+                    // Determine if highlight is present and extract font color and text decorations
                     for part in style_str.split(';') {
                         let p = part.trim();
                         if p.starts_with("color:") {
@@ -1204,16 +1209,24 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
                             if bg != "transparent" && !bg.is_empty() {
                                 has_highlight = true;
                             }
+                        } else if p.starts_with("text-decoration:") {
+                            let decoration = p.trim_start_matches("text-decoration:").trim();
+                            if decoration.contains("line-through") {
+                                is_strikethrough = true;
+                            }
+                            if decoration.contains("underline") {
+                                is_underline = true;
+                            }
                         }
                     }
 
                     let mut open_tags = String::from("{");
                     let mut has_tags = false;
 
-                    if (format_flags & IS_BOLD) != 0 { open_tags.push_str("\\b1"); has_tags = true; }
-                    if (format_flags & IS_ITALIC) != 0 { open_tags.push_str("\\i1"); has_tags = true; }
-                    if (format_flags & IS_UNDERLINE) != 0 { open_tags.push_str("\\u1"); has_tags = true; }
-                    if (format_flags & IS_STRIKETHROUGH) != 0 { open_tags.push_str("\\s1"); has_tags = true; }
+                    if is_bold { open_tags.push_str("\\b1"); has_tags = true; }
+                    if is_italic { open_tags.push_str("\\i1"); has_tags = true; }
+                    if is_underline { open_tags.push_str("\\u1"); has_tags = true; }
+                    if is_strikethrough { open_tags.push_str("\\s1"); has_tags = true; }
 
                     // Only apply font color if there is NO highlight.
                     // This prevents contrast colors (like black) from being exported without their background.
