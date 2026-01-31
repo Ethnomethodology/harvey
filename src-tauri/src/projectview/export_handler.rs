@@ -1245,7 +1245,7 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
                     }
 
                     // ASS text should not contain literal curly braces unless they are part of tags.
-                    let ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\n", "\\N");
+                    let ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\r\n", "\\N").replace("\n", "\\N");
                     ass_buffer.push_str(&ass_safe_text);
 
                     // Reset to default style to close all tags at once
@@ -1257,15 +1257,24 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
             "linebreak" => {
                 ass_buffer.push_str("\\N");
             }
-            "paragraph" | "heading" | "listitem" | "quote" | "link" => { // Treat as block, recurse children
+            "paragraph" | "heading" | "listitem" | "quote" => { // Treat as block, recurse children
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for (i, child) in children.iter().enumerate() {
+                        lexical_node_to_ass_tags(child, ass_buffer);
+                    }
+                }
+                // Always ensure block elements end with a newline if they are not empty/pure containers
+                // But since we are likely inside a recursive call, we rely on the caller to separate blocks if needed,
+                // OR we append \N here if this function is responsible for the full serialization.
+                // However, get_ass_dialogue_line_from_lexical_string handles top-level separation.
+                // If we have nested paragraphs (unlikely in standard Lexical but possible), we might want breaks.
+            }
+            "link" => { // Inline container
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         lexical_node_to_ass_tags(child, ass_buffer);
                     }
                 }
-                // Add \N after paragraphs if they are not the last element within a segment's text.
-                // This logic might need refinement based on how Lexical structures multi-paragraph text within a single "text" field.
-                // For now, assuming linebreaks within Lexical are sufficient.
             }
              // Other node types like list, table, etc., are ignored for ASS text content for now.
             _ => {
@@ -1288,10 +1297,19 @@ fn get_ass_dialogue_line_from_lexical_string(text_content: &str) -> String {
                  if let Some(children) = parsed_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
                     for (i, child_node) in children.iter().enumerate() {
                         lexical_node_to_ass_tags(child_node, &mut buffer);
+
+                        // Check if this child is a block element that needs separation
                         if i < children.len() - 1 {
-                            // If there are multiple top-level blocks (e.g. paragraphs) in Lexical, separate with \N
-                            if !buffer.ends_with("\\N") {
-                                buffer.push_str("\\N");
+                            // If it's a paragraph or other block type, ensure we have a break
+                            if let Some(node_type) = child_node.get("type").and_then(|t| t.as_str()) {
+                                match node_type {
+                                    "paragraph" | "heading" | "listitem" | "quote" => {
+                                        if !buffer.ends_with("\\N") {
+                                            buffer.push_str("\\N");
+                                        }
+                                    },
+                                    _ => {}
+                                }
                             }
                         }
                     }
@@ -1299,12 +1317,12 @@ fn get_ass_dialogue_line_from_lexical_string(text_content: &str) -> String {
                 return buffer;
             }
             if parsed_json.is_string() { // JSON string value (already plain)
-                return parsed_json.as_str().unwrap_or("").replace("\n", "\\N");
+                return parsed_json.as_str().unwrap_or("").replace("\r\n", "\\N").replace("\n", "\\N");
             }
-            text_content.replace("\n", "\\N")
+            text_content.replace("\r\n", "\\N").replace("\n", "\\N")
         }
         Err(_) => { // Not valid JSON, assume it's already plain text
-            text_content.replace("\n", "\\N")
+            text_content.replace("\r\n", "\\N").replace("\n", "\\N")
         }
     }
 }
