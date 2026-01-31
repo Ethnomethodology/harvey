@@ -168,13 +168,13 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
 }
 
 export async function getSelectedTranslationFamily() {
-	try {
-		return await invoke('get_selected_translation_family');
-	} catch (error) {
-		console.error("Error invoking get_selected_translation_family:", error);
-		return 'helsinki';
-	}
+	return await invoke('get_selected_translation_family');
 }
+
+export async function isCTranslate2Installed() {
+	return await invoke('is_ctranslate2_installed');
+}
+
 
 export async function setSelectedTranslationFamily(family) {
 	try {
@@ -187,19 +187,26 @@ export async function setSelectedTranslationFamily(family) {
 }
 
 export async function deleteTranslationModel(model) {
-  console.log(`Attempting to delete translation model: ${model.name}`);
+  console.log(`Attempting to delete translation model: ${model.name || model.id} (family: ${model.family})`);
   try {
-    if (!model?.name) {
+    if (!model?.name && !model?.id) {
       const errorMsg = `Cannot delete translation model without a name.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
+    
+    // Ensure name is set correctly for the backend
+    const modelToDelete = {
+      ...model,
+      name: model.name || model.id
+    };
+
     // This uses the same backend `delete_model` command, which is fine as it just deletes the folder.
-    await invoke('delete_model', { modelToDelete: model });
-    console.log("Translation model deletion command invoked:", model.name);
+    await invoke('delete_model', { modelToDelete: modelToDelete });
+    console.log("Translation model deletion command invoked:", modelToDelete.name);
     return true;
   } catch (error) {
-    console.error(`Error invoking delete_model for translation model ${model.name}:`, error);
+    console.error(`Error invoking delete_model for translation model ${model.name || model.id}:`, error);
     throw new Error(`Failed to delete translation model: ${error?.message || error}`);
   }
 }

@@ -170,9 +170,13 @@ pub fn run() {
             welcome::diarization::get_diarization_cache_path,
             welcome::status::check_config_status,
             
-            welcome::commands::get_selected_translation_family,
             welcome::commands::set_selected_translation_family,
-            
+            welcome::commands::get_selected_translation_family,
+            welcome::commands::is_ctranslate2_installed,
+            welcome::status::check_config_status,
+            welcome::python_env::list_venv_lib_contents,
+            welcome::python_env::delete_virtual_env,
+            welcome::hf_auth::check_hf_auth_status,
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
 

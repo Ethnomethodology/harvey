@@ -43,13 +43,14 @@ def get_nllb_lang_code(lang_code):
         return lang_code
     return NLLB_LANG_MAP.get(lang_code.lower())
 
-def translate_sliding_window(segments, model, tokenizer, device, batch_size=8, src_lang=None, tgt_lang=None):
+def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, src_lang=None, tgt_lang=None):
     """
     Translates segments using a sliding window approach: [Prev] + [Target] + [Next].
     """
     final_translations = [None] * len(segments)
     
-    is_nllb = "nllb" in model.config._name_or_path.lower()
+    use_ct2 = hasattr(engine, "translate_batch")
+    is_nllb = not use_ct2 and "nllb" in engine.config._name_or_path.lower()
 
     # 1. Contextual Pass
     for i in range(0, len(segments), batch_size):
@@ -79,19 +80,21 @@ def translate_sliding_window(segments, model, tokenizer, device, batch_size=8, s
         valid_inputs = [batch_inputs[k] for k in valid_indices_map]
         
         if valid_inputs:
-            # Tokenize
-            inputs = tokenizer(valid_inputs, return_tensors="pt", padding=True, truncation=True).to(device)
-            
-            # Generate
-            with torch.no_grad():
-                if is_nllb and tgt_lang:
-                    # NLLB needs forced_bos_token_id for target language
-                    tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                    generated = model.generate(**inputs, forced_bos_token_id=tgt_lang_id)
-                else:
-                    generated = model.generate(**inputs)
-            
-            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            if use_ct2:
+                # CTranslate2
+                source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t)) for t in valid_inputs]
+                results = engine.translate_batch(source_tokens)
+                decoded = [tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results]
+            else:
+                # Transformers
+                inputs = tokenizer(valid_inputs, return_tensors="pt", padding=True, truncation=True).to(device)
+                with torch.no_grad():
+                    if is_nllb and tgt_lang:
+                        tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
+                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                    else:
+                        generated = engine.generate(**inputs)
+                decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
             
             for map_idx, output_text in zip(valid_indices_map, decoded):
                 has_prev, has_next = batch_metadata[map_idx]
@@ -119,40 +122,49 @@ def translate_sliding_window(segments, model, tokenizer, device, batch_size=8, s
             batch_ixs = failed_indices[i : i + batch_size]
             batch_texts = [segments[ix] for ix in batch_ixs]
             
-            inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
-            with torch.no_grad():
-                if is_nllb and tgt_lang:
-                    tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                    generated = model.generate(**inputs, forced_bos_token_id=tgt_lang_id)
-                else:
-                    generated = model.generate(**inputs)
-            
-            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            if use_ct2:
+                source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t)) for t in batch_texts]
+                results = engine.translate_batch(source_tokens)
+                decoded = [tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results]
+            else:
+                inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+                with torch.no_grad():
+                    if is_nllb and tgt_lang:
+                        tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
+                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                    else:
+                        generated = engine.generate(**inputs)
+                decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
             
             for ix, trans in zip(batch_ixs, decoded):
                 final_translations[ix] = trans.strip()
                 
     return final_translations
 
-def translate_bulk(segments, model, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None):
+def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None):
     """
     Standard batch translation.
     """
-    is_nllb = "nllb" in model.config._name_or_path.lower()
+    use_ct2 = hasattr(engine, "translate_batch")
+    is_nllb = not use_ct2 and "nllb" in engine.config._name_or_path.lower()
     translated = []
     for i in range(0, len(segments), batch_size):
         batch = segments[i : i + batch_size]
         batch_clean = [s if s.strip() else " " for s in batch] 
         
-        inputs = tokenizer(batch_clean, return_tensors="pt", padding=True, truncation=True).to(device)
-        with torch.no_grad():
-            if is_nllb and tgt_lang:
-                tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                generated = model.generate(**inputs, forced_bos_token_id=tgt_lang_id)
-            else:
-                generated = model.generate(**inputs)
-        
-        decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+        if use_ct2:
+            source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t)) for t in batch_clean]
+            results = engine.translate_batch(source_tokens)
+            decoded = [tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results]
+        else:
+            inputs = tokenizer(batch_clean, return_tensors="pt", padding=True, truncation=True).to(device)
+            with torch.no_grad():
+                if is_nllb and tgt_lang:
+                    tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
+                    generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                else:
+                    generated = engine.generate(**inputs)
+            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
         
         for j, text in enumerate(batch):
             if not text.strip():
@@ -185,22 +197,38 @@ if __name__ == "__main__":
 
         sys.stderr.write(f"[Python Debug] Loading model from {args.model_path} (is_nllb={is_nllb})...\n")
         
-        if is_nllb:
-            tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-            
-        model = AutoModelForSeq2SeqLM.from_pretrained(args.model_path).to(device)
+        # Check for CTranslate2 optimized model
+        ct2_model_path = os.path.join(args.model_path, "ct2_optimized")
+        use_ct2 = not is_nllb and os.path.exists(ct2_model_path)
+        
+        engine = None
+        if use_ct2:
+            try:
+                import ctranslate2
+                sys.stderr.write(f"[Python Debug] Using CTranslate2 optimized engine: {ct2_model_path}\n")
+                engine = ctranslate2.Translator(ct2_model_path, device="cpu")
+                tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+            except ImportError:
+                sys.stderr.write("[Python Debug] CTranslate2 not found, falling back to transformers.\n")
+                use_ct2 = False
+
+        if not use_ct2:
+            sys.stderr.write("[Python Debug] Loading with transformers engine.\n")
+            if is_nllb:
+                tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+            engine = AutoModelForSeq2SeqLM.from_pretrained(args.model_path).to(device)
 
         segments = json.loads(args.text)
         
         results = []
         if args.mode == "document":
             sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Document mode (bulk)...\n")
-            results = translate_bulk(segments, model, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
+            results = translate_bulk(segments, engine, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
         else:
             sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...\n")
-            results = translate_sliding_window(segments, model, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
+            results = translate_sliding_window(segments, engine, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
             
         print(json.dumps(results, ensure_ascii=False))
 

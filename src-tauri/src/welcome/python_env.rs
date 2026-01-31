@@ -365,38 +365,8 @@ pub async fn check_python_libraries_installed<R: Runtime>(
         };
 
         for (package_name, import_name) in &packages_to_check {
-            log::info!("Checking for package: {}", package_name);
-
-            let mut command = shell.command(python_path.to_str().unwrap());
-
-            // Apply the pre-calculated PATH for Windows
-            if let Some(path_val) = &windows_path_env {
-                command = command.env("PATH", path_val.clone());
-            } else if cfg!(target_os = "macos") {
-                let env_lib_path = env_path.join("lib");
-                if env_lib_path.exists() {
-                    let existing_path = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
-                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
-                    command = command.env("DYLD_LIBRARY_PATH", new_path);
-                }
-            } else if cfg!(target_os = "linux") {
-                let env_lib_path = env_path.join("lib");
-                if env_lib_path.exists() {
-                    let existing_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
-                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
-                    command = command.env("LD_LIBRARY_PATH", new_path);
-                }
-            }
-
-            let output = command
-                .args(&["-c", &format!("import {}", import_name)])
-                .output()
-                .await?;
-
-            if !output.status.success() {
+            if !check_package_installed(shell, &python_path, import_name, &windows_path_env, &env_path).await? {
                 log::warn!("Package '{}' not found.", package_name);
-                log::warn!("Import check stdout: {}", String::from_utf8_lossy(&output.stdout));
-                log::warn!("Import check stderr: {}", String::from_utf8_lossy(&output.stderr));
                 return Ok(false);
             }
         }
@@ -412,6 +382,93 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             Err(CommandError::Message("Required libraries are not installed.".to_string()))
         }
     }
+}
+
+pub async fn check_package_installed<R: Runtime>(
+    shell: &Shell<R>,
+    python_path: &std::path::Path,
+    import_name: &str,
+    windows_path_env: &Option<String>,
+    env_path: &std::path::Path,
+) -> Result<bool, CommandError> {
+    let mut command = shell.command(python_path.to_str().unwrap());
+
+    // Apply the pre-calculated PATH for Windows
+    if let Some(path_val) = &windows_path_env {
+        command = command.env("PATH", path_val.clone());
+    } else if cfg!(target_os = "macos") {
+        let env_lib_path = env_path.join("lib");
+        if env_lib_path.exists() {
+            let existing_path = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
+            let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+            command = command.env("DYLD_LIBRARY_PATH", new_path);
+        }
+    } else if cfg!(target_os = "linux") {
+        let env_lib_path = env_path.join("lib");
+        if env_lib_path.exists() {
+            let existing_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+            let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+            command = command.env("LD_LIBRARY_PATH", new_path);
+        }
+    }
+
+    let output = command
+        .args(&["-c", &format!("import {}", import_name)])
+        .output()
+        .await?;
+
+    Ok(output.status.success())
+}
+
+pub async fn install_pip_packages<R: Runtime>(
+    app: &AppHandle<R>,
+    shell: &Shell<R>,
+    packages: Vec<&str>,
+    log_event_name: &str,
+) -> Result<(), CommandError> {
+    let emitter = app.clone();
+    let env_path = get_env_path()?;
+    let config_dir = get_config_dir()?;
+
+    let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
+    pip_args.extend(packages.iter().map(|s| *s));
+
+    let mut pip_command = shell.sidecar("micromamba")?;
+    pip_command = pip_command.args(&pip_args)
+        .env("PYTHONUNBUFFERED", "1")
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+
+    if cfg!(target_os = "windows") {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
+                    .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?;
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", cleaned_sidecars_path.to_string_lossy(), existing_path);
+                pip_command = pip_command.env("PATH", new_path);
+            }
+        }
+    }
+
+    let (mut rx_pip, _child_pip) = pip_command.spawn()?;
+
+    while let Some(event) = rx_pip.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                emitter.emit(log_event_name, LogPayload { message: line_str }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    return Err(CommandError::Message(format!("Failed to install pip packages: {:?}", payload.code)));
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, serde::Serialize)]

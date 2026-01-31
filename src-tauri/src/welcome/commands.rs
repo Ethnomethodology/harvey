@@ -45,6 +45,28 @@ struct TranslationErrorPayload {
   error_message: String,
 }
 
+#[command]
+pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
+}
+
 // --- Translation Model Download Command ---
 #[command]
 pub async fn download_translation_model_command(
@@ -72,6 +94,23 @@ pub async fn download_translation_model_command(
         return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
     }
 
+    let python_path = python_env::get_python_path()?;
+    let window = app.get_webview_window("main").unwrap();
+
+    // 1. Check/Install CTranslate2 if it's a Helsinki model (optimization candidate)
+    // Actually we want to optimize ALL models eventually, but user specifically asked for Helsinki first.
+    // For now let's do it for Helsinki as requested.
+    if family == "helsinki" {
+        let ct2_installed = is_ctranslate2_installed(app.clone()).await.unwrap_or(false);
+        if !ct2_installed {
+            log::info!("CTranslate2 not found. Installing...");
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
+            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log").await?;
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 installed successfully." })).unwrap();
+        }
+    }
+
+    // 2. Download model weights
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
 
     let token_path = app.path().app_config_dir().unwrap().join("hf_token");
@@ -81,17 +120,12 @@ pub async fn download_translation_model_command(
         String::new()
     };
 
-    let python_path = python_env::get_python_path()?;
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        // Pass the new target_dir_str instead of raw download_location
         .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
-
-    let window = app.get_webview_window("main").unwrap();
 
     window.emit("translation-download-start", &model_name).unwrap();
 
@@ -111,7 +145,6 @@ pub async fn download_translation_model_command(
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);
                 if payload.code == Some(0) {
-                    window.emit("translation-download-complete", &model_name).unwrap();
                     success = true;
                 } else {
                     window.emit("translation-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
@@ -122,6 +155,36 @@ pub async fn download_translation_model_command(
         }
     }
 
+    if !success {
+        window.emit("translation-download-finished", ()).unwrap();
+        return Err(CommandError::Message("Translation model download failed.".to_string()));
+    }
+
+    // 3. Optimize model for CTranslate2 (for Helsinki)
+    if family == "helsinki" {
+        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimizing model for faster CPU inference..." })).unwrap();
+        
+        let optimize_script = app.path().resource_dir().unwrap().join("scripts/optimize_translation_model.py");
+        let folder_name = format!("models--{}", model_name.replace('/', "--"));
+        let model_path = target_dir.join(&folder_name);
+        let output_path = model_path.join("ct2_optimized");
+
+        let output = app.shell()
+            .command(python_path.to_str().unwrap())
+            .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
+            .output()
+            .await?;
+
+        if output.status.success() {
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::error!("Optimization failed: {}", stderr);
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
+        }
+    }
+
+    window.emit("translation-download-complete", &model_name).unwrap();
     window.emit("translation-download-finished", ()).unwrap();
 
     if success {

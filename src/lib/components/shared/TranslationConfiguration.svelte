@@ -11,7 +11,8 @@
 		cancelTranslationModelDownload,
 		fetchAvailableModels,
 		getSelectedTranslationFamily,
-		setSelectedTranslationFamily
+		setSelectedTranslationFamily,
+		isCTranslate2Installed
 	} from '$lib/services/configureActions';
 	import { setTranslationModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import notificationStore from '$lib/stores/notificationStore.js';
@@ -29,6 +30,7 @@
 	$: translationModelCount = downloadedModels.length;
 	let configError = '';
 	let downloadStatus = {};
+	let ct2Installed = true;
 
 	let modelName = '';
 
@@ -211,6 +213,7 @@
 		try {
 			downloadedModels = await getLocalTranslationModels();
 			selectedFamily = await getSelectedTranslationFamily() || 'helsinki';
+			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {
 			configError = `Failed to load model configuration: ${e.message || e}`;
 		}
@@ -234,6 +237,7 @@
 				downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
 				try {
 					downloadedModels = await getLocalTranslationModels();
+					ct2Installed = await isCTranslate2Installed();
 					setTranslationModelsDownloaded(downloadedModels.length > 0);
 				} catch (e) { console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e); }
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${downloadedModelName}.` }];
@@ -303,7 +307,8 @@
 		const confirmed = await ask(`Are you sure you want to delete the model "${modelNameForDelete}"? This will remove the entire model folder from disk.`, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
 		if (!confirmed) return;
 		try {
-			await deleteTranslationModel({ name: modelNameForDelete }); 
+			// Pass the full model object (which contains .family)
+			await deleteTranslationModel(model); 
 			downloadedModels = await getLocalTranslationModels(); 
             downloadStatus = { ...downloadStatus, [modelNameForDelete]: 'not_downloaded' };
 			setTranslationModelsDownloaded(downloadedModels.length > 0);
@@ -428,10 +433,25 @@
 		</div>
 		
 		{#if selectedFamily === 'helsinki'}
-			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed mb-2">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common pairs.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
 			</div>
+
+			{#if !ct2Installed}
+				<div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300">
+					<div class="flex items-start">
+						<svg class="w-3.5 h-3.5 mr-1.5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+							<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+						</svg>
+						<div>
+							<span class="font-bold uppercase tracking-wider text-[9px]">Recommendation:</span>
+							<p class="mt-0.5">Helsinki models can run <strong class="text-orange-900 dark:text-orange-200">2-4x faster</strong> on your CPU using <strong class="text-orange-900 dark:text-orange-200">CTranslate2</strong>.</p>
+							<p class="mt-1 opacity-80">It will be installed automatically along with your first model download.</p>
+						</div>
+					</div>
+				</div>
+			{/if}
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
