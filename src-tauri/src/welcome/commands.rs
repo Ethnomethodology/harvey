@@ -52,10 +52,14 @@ pub async fn download_translation_model_command(
     model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
     download_location: String,
 ) -> Result<(), CommandError> {
-    log::info!("CMD: download_translation_model: {} -> {}", model_info.name, download_location);
+    log::info!("CMD: download_translation_model: {} (family: {:?}) -> {}", model_info.name, model_info.family, download_location);
     let model_name = model_info.name.clone();
-    // Update target directory to include organization structure
-    let target_dir = PathBuf::from(&download_location).join("translation").join("helsinki-nlp");
+    
+    // Determine target directory based on family
+    let family = model_info.family.as_deref().unwrap_or("helsinki");
+    let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+    
+    let target_dir = PathBuf::from(&download_location).join("translation").join(org_dir);
     let target_dir_str = target_dir.to_string_lossy().to_string();
 
     if download_location.trim().is_empty() {
@@ -105,6 +109,7 @@ pub async fn download_translation_model_command(
                 window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);
                 if payload.code == Some(0) {
                     window.emit("translation-download-complete", &model_name).unwrap();
                     success = true;
@@ -152,36 +157,43 @@ pub async fn download_translation_model_command(
 #[command]
 pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandError> {
     log::info!("CMD: get_local_translation_models");
-    // Look in the specific subdirectory
-    let download_dir = PathBuf::from(get_download_location().await?).join("translation").join("helsinki-nlp");
+    let base_download_dir = PathBuf::from(get_download_location().await?);
     let mut models = Vec::new();
 
-    if !download_dir.exists() {
-        log::warn!("Download directory {:?} does not exist. Returning empty list.", download_dir);
-        return Ok(models);
-    }
+    let families = [
+        ("helsinki", "helsinki-nlp"),
+        ("nllb", "facebook"),
+    ];
 
-    for entry in fs::read_dir(download_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) {
-                if folder_name.contains("opus-mt") {
-                    // The folder name is like `models--Helsinki-NLP--opus-mt-ja-en`
-                    // We need to convert it back to `Helsinki-NLP/opus-mt-ja-en`
-                    let model_name = folder_name
-                        .strip_prefix("models--")
-                        .unwrap_or(folder_name)
-                        .replace("--", "/");
+    for (family_id, sub_dir) in families {
+        let download_dir = base_download_dir.join("translation").join(sub_dir);
+        if !download_dir.exists() {
+            continue;
+        }
 
-                    models.push(ModelInfo {
-                        name: model_name,
-                        language: None,
-                        size: None,
-                        description: None,
-                        download_location: Some(path.to_string_lossy().into_owned()),
-                        download_url: None,
-                    });
+        for entry in fs::read_dir(download_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if folder_name.starts_with("models--") {
+                        // The folder name is like `models--Helsinki-NLP--opus-mt-ja-en`
+                        // We need to convert it back to `Helsinki-NLP/opus-mt-ja-en`
+                        let model_name = folder_name
+                            .strip_prefix("models--")
+                            .unwrap_or(folder_name)
+                            .replace("--", "/");
+
+                        models.push(ModelInfo {
+                            name: model_name,
+                            family: Some(family_id.to_string()),
+                            language: None,
+                            size: None,
+                            description: None,
+                            download_location: Some(path.to_string_lossy().into_owned()),
+                            download_url: None,
+                        });
+                    }
                 }
             }
         }
@@ -189,6 +201,21 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
 
     log::info!("Found {} local translation models.", models.len());
     Ok(models)
+}
+
+#[command]
+pub async fn set_selected_translation_family(family: String) -> Result<(), CommandError> {
+    log::info!("CMD: set_selected_translation_family: {}", family);
+    let mut config = read_config()?;
+    config.selected_translation_family = Some(family);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
+pub async fn get_selected_translation_family() -> Result<Option<String>, CommandError> {
+    let config = read_config()?;
+    Ok(config.selected_translation_family)
 }
 
 #[command]
@@ -649,7 +676,7 @@ pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
 
 #[command]
 pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError> {
-    log::info!("CMD: delete_model: Attempting to delete '{}'", model_to_delete.name);
+    log::info!("CMD: delete_model: Attempting to delete '{}' (family: {:?})", model_to_delete.name, model_to_delete.family);
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
 
@@ -665,7 +692,9 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
     // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-    let folder_name = if model_to_delete.name.contains("opus-mt") && model_to_delete.name.contains('/') {
+    let is_translation = model_to_delete.name.contains('/') || model_to_delete.family.is_some();
+    
+    let folder_name = if is_translation && model_to_delete.name.contains('/') {
         let transformed = format!("models--{}", model_to_delete.name.replace('/', "--"));
         log::info!("Transforming translation model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
         transformed
@@ -673,8 +702,10 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
         model_to_delete.name.clone()
     };
 
-    let sub_dir = if model_to_delete.name.contains("opus-mt") {
-         PathBuf::from("translation").join("helsinki-nlp")
+    let sub_dir = if is_translation {
+         let family = model_to_delete.family.as_deref().unwrap_or("helsinki");
+         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+         PathBuf::from("translation").join(org_dir)
     } else {
          PathBuf::from("transcription").join("whisper-cpp")
     };
@@ -701,8 +732,8 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     if config.downloaded_models.len() < initial_len {
         let remaining_models = &config.downloaded_models;
-        let has_transcription_models = remaining_models.iter().any(|m| !m.name.contains("opus-mt"));
-        let has_translation_models = remaining_models.iter().any(|m| m.name.contains("opus-mt"));
+        let has_transcription_models = remaining_models.iter().any(|m| m.family.is_none() && !m.name.contains('/'));
+        let has_translation_models = remaining_models.iter().any(|m| m.family.is_some() || m.name.contains('/'));
 
         if !has_transcription_models {
             config.verification_status.transcription_models_verified = false;
@@ -719,6 +750,7 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     Ok(())
 }
+
 #[command]
 pub async fn change_download_location_and_move_models(new_location: String) -> Result<(), CommandError> {
     log::info!("CMD: change_dl_loc_move: {}", new_location);
@@ -760,15 +792,26 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     let mut move_errors : Vec<String> = Vec::new();
 
     for model in &models_in_config {
-        // Determine subdirectory based on model type
-        let sub_dir = if model.name.contains("opus-mt") {
-             PathBuf::from("translation").join("helsinki-nlp")
+        // Determine subdirectory based on model type and family
+        let is_translation = model.name.contains('/') || model.family.is_some();
+        let sub_dir = if is_translation {
+             let family = model.family.as_deref().unwrap_or("helsinki");
+             let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+             PathBuf::from("translation").join(org_dir)
         } else {
              PathBuf::from("transcription").join("whisper-cpp")
         };
 
-        let old_model_dir = old_path.join(&sub_dir).join(&model.name);
-        let new_model_dir = new_path.join(&sub_dir).join(&model.name);
+        // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
+        // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
+        let folder_name = if is_translation && model.name.contains('/') {
+            format!("models--{}", model.name.replace('/', "--"))
+        } else {
+            model.name.clone()
+        };
+
+        let old_model_dir = old_path.join(&sub_dir).join(&folder_name);
+        let new_model_dir = new_path.join(&sub_dir).join(&folder_name);
 
         log::info!("Check model '{}': Old {:?}, New {:?}", model.name, old_model_dir, new_model_dir);
 
@@ -804,7 +847,7 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
             }
         } else {
              // Fallback check for legacy structure (Root/ModelName)
-             let legacy_old_model_dir = old_path.join(&model.name);
+             let legacy_old_model_dir = old_path.join(&folder_name);
              if legacy_old_model_dir.exists() && legacy_old_model_dir.is_dir() {
                  log::info!("Found model at legacy path {:?}. Moving to new structure {:?}.", legacy_old_model_dir, new_model_dir);
                   // Ensure parent dir exists

@@ -8,6 +8,7 @@
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { getSelectedTranslationFamily } from '$lib/services/configureActions';
 
 	export let availableTranscripts = [];
 	export let activeTranscriptPath = null;
@@ -16,8 +17,10 @@
 
 	let selectedTranscript = '';
 	let localModels = [];
+	let filteredModels = [];
 	let modelOptions = [];
 	let selectedModel = '';
+	let selectedFamily = 'helsinki';
 
 	// Warning icon logic (same as ProjectView)
 	$: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
@@ -34,6 +37,15 @@
 
 	function formatModelDisplayName(modelName) {
 		const parts = modelName.split('/');
+		const baseName = parts[parts.length - 1] || modelName;
+
+		if (baseName.toLowerCase().includes('nllb')) {
+			if (baseName.includes('600M')) return "NLLB-200 Distilled (Small & Fast)";
+			if (baseName.includes('1.3B')) return "NLLB-200 (Medium)";
+			if (baseName.includes('3.3B')) return "NLLB-200 (Large)";
+			return baseName;
+		}
+
 		if (parts.length === 2) {
 			const langParts = parts[1].split('-');
 			if (langParts.length >= 3 && langParts[0] === 'opus' && langParts[1] === 'mt') {
@@ -67,33 +79,40 @@
 		selectedTranscript = '';
 	}
 
-	$: if (localModels.length > 0) {
-		modelOptions = localModels.map(model => ({
-			value: model.name,
-			label: formatModelDisplayName(model.name)
-		}));
-		if (!selectedModel || !localModels.some(m => m.name === selectedModel)) {
-			selectedModel = localModels[0]?.name || '';
+	$: {
+		filteredModels = localModels.filter(m => m.family === selectedFamily);
+		if (filteredModels.length > 0) {
+			modelOptions = filteredModels.map(model => ({
+				value: model.name,
+				label: formatModelDisplayName(model.name)
+			}));
+			if (!selectedModel || !filteredModels.some(m => m.name === selectedModel)) {
+				selectedModel = filteredModels[0]?.name || '';
+			}
+		} else {
+			modelOptions = [];
+			selectedModel = '';
 		}
-	} else {
-		modelOptions = [];
-		selectedModel = '';
 	}
 
 	$: if (showModal) {
-		loadLocalModels();
+		loadData();
 	}
 
-	async function loadLocalModels() {
+	async function loadData() {
 		try {
-			localModels = await invoke('get_local_translation_models');
+			[localModels, selectedFamily] = await Promise.all([
+				invoke('get_local_translation_models'),
+				getSelectedTranslationFamily()
+			]);
+			selectedFamily = selectedFamily || 'helsinki';
 		} catch (e) {
-			console.error("Failed to fetch local translation models:", e);
+			console.error("Failed to fetch local translation data:", e);
 		}
 	}
 
 	onMount(async () => {
-		await loadLocalModels();
+		await loadData();
 	});
 
 	function handleConfirm() {

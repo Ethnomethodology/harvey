@@ -1,6 +1,6 @@
 // src-tauri/src/projectview/translation_commands.rs
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, Runtime, Emitter};
+use tauri::{AppHandle, Runtime, Emitter};
 use std::fs;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use serde_json::{Value, json};
@@ -11,7 +11,7 @@ use crate::welcome::config::{read_config, get_default_download_location, Command
 use dashmap::DashMap;
 use crate::TranslationCancellationState;
 use crate::transcription::TranslationEngine;
-use crate::transcription::helsinki::HelsinkiTranslationEngine;
+use crate::transcription::python_engine::PythonTranslationEngine;
 
 
 // --- CancelGuard for ensuring cleanup ---
@@ -294,7 +294,7 @@ async fn run_translation_process<R: Runtime>(
     project_xml_path: String,
     file_path: String,
     model_name: String,
-    _target_language: String,
+    target_language: String,
     cancel_flag: Arc<AtomicBool>,
     mode: TranslationMode,
 ) -> Result<String, CommandError> {
@@ -312,21 +312,53 @@ async fn run_translation_process<R: Runtime>(
         get_default_download_location()? 
     };
 
+    // Determine family and source language
+    let is_nllb = model_name.to_lowercase().contains("nllb");
+    let family = if is_nllb { "nllb" } else { "helsinki" };
+    let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+
+    // Extract source language from file if possible
+    let mut source_lang = None;
+    let content = fs::read_to_string(&normalized_file_path)?;
+    let mut lexical_json: Value = serde_json::from_str(&content)?;
+
+    // Try to find language code in the file metadata if it's a transcript
+    if let Some(metadata_path) = shared_utils::get_metadata_path(&PathBuf::from(&normalized_file_path)) {
+        if metadata_path.exists() {
+            if let Ok(metadata_content) = fs::read_to_string(metadata_path) {
+                if let Ok(metadata_json) = serde_json::from_str::<Value>(&metadata_content) {
+                    if let Some(lang) = metadata_json.get("metadata").and_then(|m| m.get("language_code")).and_then(|l| l.as_str()) {
+                        source_lang = Some(lang.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback for source language if not found in metadata
+    if source_lang.is_none() && family == "helsinki" {
+        let parts: Vec<&str> = model_name.split('/').collect();
+        let model_id = parts.last().unwrap_or(&"");
+        let lang_parts: Vec<&str> = model_id.split('-').collect();
+        source_lang = lang_parts.get(2).map(|s| s.to_string());
+    }
+
     let model_cache_dir_name = format!("models--{}", model_name.replace('/', "--"));
-    let sub_dir = PathBuf::from("translation").join("helsinki-nlp");
+    let sub_dir = PathBuf::from("translation").join(org_dir);
     let model_base_path = std::path::Path::new(&download_location).join(&sub_dir).join(&model_cache_dir_name);
     
-    // Fallback: check legacy path if new path doesn't exist
+    // Fallback: check legacy path if new path doesn't exist (only for helsinki)
     let model_base_path = if model_base_path.exists() {
         model_base_path
-    } else {
+    } else if family == "helsinki" {
         let legacy_path = std::path::Path::new(&download_location).join(&model_cache_dir_name);
         if legacy_path.exists() {
              legacy_path
         } else {
-             // If neither exists, default to new structure so error message reflects preferred path
              model_base_path
         }
+    } else {
+        model_base_path
     };
 
     let refs_path = model_base_path.join("refs/main");
@@ -336,9 +368,6 @@ async fn run_translation_process<R: Runtime>(
     info!("[Translate][{}] Using model path: {}", job_id, model_path.display());
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
-
-    let content = fs::read_to_string(&normalized_file_path)?;
-    let mut lexical_json: Value = serde_json::from_str(&content)?;
 
     let mut texts_to_translate: Vec<String> = Vec::new();
 
@@ -379,14 +408,16 @@ async fn run_translation_process<R: Runtime>(
 
     emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
 
-    let engine = HelsinkiTranslationEngine::new(app_handle.clone());
+    let engine = PythonTranslationEngine::new(app_handle.clone());
     let mode_str = if mode == TranslationMode::Document { "document" } else { "transcript" };
     let translated_texts = engine.translate(
         texts_to_translate.clone(),
         &model_path,
         &job_id,
         cancel_flag.clone(),
-        mode_str
+        mode_str,
+        source_lang.as_deref(),
+        Some(&target_language),
     ).await?;
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
@@ -453,18 +484,15 @@ async fn run_translation_process<R: Runtime>(
         }
     }
 
-    let parts: Vec<&str> = model_name.split('/').collect();
-    let model_id = parts.last().unwrap_or(&""); // e.g., opus-mt-en-jap
-    let lang_parts: Vec<&str> = model_id.split('-').collect();
-    let source_lang = lang_parts.get(2).unwrap_or(&"unk"); // e.g., en
-    let target_lang_code = lang_parts.get(3).unwrap_or(&"unk"); // e.g., jap
+    let source_lang_code = source_lang.unwrap_or_else(|| "unk".to_string());
+    let target_lang_code = target_language;
 
     let original_file_stem = std::path::Path::new(&normalized_file_path)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("file");
 
-    let base_new_filename_stem = format!("{}-{}-{}", original_file_stem, source_lang, target_lang_code);
+    let base_new_filename_stem = format!("{}-{}-{}", original_file_stem, source_lang_code, target_lang_code);
     let mut new_filename = format!("{}.json", base_new_filename_stem);
     let mut counter = 0;
     let mut new_path_buf = std::path::PathBuf::from(&normalized_file_path);
@@ -497,17 +525,10 @@ async fn run_translation_process<R: Runtime>(
                 normalized_project_xml_path,
                 new_path.clone(),
                 new_content,
-                Some(format!("{}-{}", source_lang, target_lang_code))
+                Some(format!("{}-{}", source_lang_code, target_lang_code))
             ).await?;
         },
         TranslationMode::ImportedTranscript => {
-            // For imported transcripts, we want to save them as new imported transcripts (in XML),
-            // similar to documents but specifically in the ImportedTranscript list if applicable.
-            // However, `save_document_and_update_xml` puts them in the Document list.
-            // We should use `save_imported_transcript_and_update_xml` if we want them in that list.
-            // But wait, `save_imported_transcript_and_update_xml` requires it to be in `Transcripts` folder.
-            // `new_path` is derived from `normalized_file_path`, so if original was in `Transcripts`, new one is too.
-            // So we should use the imported transcript save command.
             use crate::projectview::transcription_handler::save_imported_transcript_and_update_xml;
             save_imported_transcript_and_update_xml(
                 normalized_project_xml_path,

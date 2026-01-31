@@ -251,6 +251,13 @@ pub fn truncate_filename_stem(original_filename: &str, max_stem_len: usize) -> S
     }
 }
 
+pub fn get_metadata_path(file_path: &Path) -> Option<PathBuf> {
+    let mut metadata_path = file_path.to_path_buf();
+    let file_name = file_path.file_name()?.to_str()?;
+    metadata_path.set_file_name(format!("{}.{}", file_name, METADATA_FILE_SUFFIX));
+    Some(metadata_path)
+}
+
 
 #[cfg(test)]
 mod tests {

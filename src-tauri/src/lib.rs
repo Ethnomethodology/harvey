@@ -170,6 +170,9 @@ pub fn run() {
             welcome::diarization::get_diarization_cache_path,
             welcome::status::check_config_status,
             
+            welcome::commands::get_selected_translation_family,
+            welcome::commands::set_selected_translation_family,
+            
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
 

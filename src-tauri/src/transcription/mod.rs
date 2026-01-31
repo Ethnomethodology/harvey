@@ -5,7 +5,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use crate::projectview::shared_types::TranscriptSegment;
 
 pub mod whisper_cpp;
-pub mod helsinki;
+pub mod python_engine;
 
 #[derive(Debug, Clone)]
 pub struct TranscriptionOptions {
@@ -39,5 +39,7 @@ pub trait TranslationEngine: Send + Sync {
         job_id: &str,
         cancel_flag: Arc<AtomicBool>,
         mode: &str,
+        src_lang: Option<&str>,
+        tgt_lang: Option<&str>,
     ) -> Result<Vec<String>, CommandError>;
 }

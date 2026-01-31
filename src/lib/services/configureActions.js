@@ -48,8 +48,8 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models (e.g., those containing 'opus-mt')
-	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.name.includes('opus-mt')) : [];
+	// Filter out translation models (those with a family set or containing '/')
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.family && !model.name.includes('/')) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
@@ -137,7 +137,7 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 }
 
 // --- Translation Model Actions ---
-export async function downloadTranslationModel(from, to, downloadLocation, modelName = null) {
+export async function downloadTranslationModel(from, to, downloadLocation, modelName = null, family = 'helsinki') {
   let to_lang = to;
   if (to === 'ja') {
     to_lang = 'jap';
@@ -145,6 +145,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
   const model_name = modelName || `Helsinki-NLP/opus-mt-${from}-${to_lang}`;
   const modelInfo = {
     name: model_name,
+    family: family,
     download_url: `https://huggingface.co/${model_name}`
   };
   if (!downloadLocation || downloadLocation.trim() === '') {
@@ -152,7 +153,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
-  console.log(`Attempting to download translation model: ${model_name} to ${downloadLocation}`);
+  console.log(`Attempting to download translation model: ${model_name} (family: ${family}) to ${downloadLocation}`);
   try {
     await invoke('download_translation_model_command', {
       modelInfo: modelInfo,
@@ -164,6 +165,25 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
     console.error(`Error invoking download_translation_model_command for ${model_name}:`, error);
     throw new Error(`Failed to start translation model download: ${error?.message || error}`);
   }
+}
+
+export async function getSelectedTranslationFamily() {
+	try {
+		return await invoke('get_selected_translation_family');
+	} catch (error) {
+		console.error("Error invoking get_selected_translation_family:", error);
+		return 'helsinki';
+	}
+}
+
+export async function setSelectedTranslationFamily(family) {
+	try {
+		await invoke('set_selected_translation_family', { family });
+		return true;
+	} catch (error) {
+		console.error("Error invoking set_selected_translation_family:", error);
+		return false;
+	}
 }
 
 export async function deleteTranslationModel(model) {

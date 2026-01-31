@@ -9,7 +9,9 @@
 		deleteTranslationModel,
         getLocalTranslationModels,
 		cancelTranslationModelDownload,
-		fetchAvailableModels
+		fetchAvailableModels,
+		getSelectedTranslationFamily,
+		setSelectedTranslationFamily
 	} from '$lib/services/configureActions';
 	import { setTranslationModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import notificationStore from '$lib/stores/notificationStore.js';
@@ -35,6 +37,7 @@
 	let isDownloading = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
+	let selectedFamily = 'helsinki';
 
 	// --- Marketplace / Search View State ---
 	let availableModelsList = [];
@@ -63,7 +66,8 @@
 					id: dm.name,
 					src: null, // We'll rely on formatModelDisplayName for these
 					tgt: null,
-					downloads: 0
+					downloads: 0,
+					family: dm.family || (dm.name.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki')
 				});
 			}
 		}
@@ -93,13 +97,14 @@
 				id: m.name,
 				src: null,
 				tgt: null,
-				downloads: 0
+				downloads: 0,
+				family: m.family || (m.name.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki')
 			}))];
 			
 			// Add any that are currently downloading but not yet in downloadedModels
 			for (const id in downloadStatus) {
 				if (downloadStatus[id] === 'downloading' && !baseList.some(m => m.id === id)) {
-					baseList.push({ id, src: null, tgt: null, downloads: 0 });
+					baseList.push({ id, src: null, tgt: null, downloads: 0, family: id.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki' });
 				}
 			}
 		} else {
@@ -107,10 +112,19 @@
 			// Ensure all downloaded models are in the list
 			for (const dm of downloadedModels) {
 				if (!baseList.some(am => am.id === dm.name)) {
-					baseList.push({ id: dm.name, src: null, tgt: null, downloads: 0 });
+					baseList.push({ 
+						id: dm.name, 
+						src: null, 
+						tgt: null, 
+						downloads: 0, 
+						family: dm.family || (dm.name.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki') 
+					});
 				}
 			}
 		}
+
+		// Filter by family
+		baseList = baseList.filter(m => m.family === selectedFamily);
 
 		// Filter by search query
 		if (searchQuery.trim() !== '') {
@@ -170,6 +184,10 @@
 		}
 	}
 
+	async function handleFamilyChange() {
+		await setSelectedTranslationFamily(selectedFamily);
+	}
+
 	async function handleRefreshModels() {
 		if (isFetchingModels) return;
 		isFetchingModels = true;
@@ -192,6 +210,7 @@
 		configError = '';
 		try {
 			downloadedModels = await getLocalTranslationModels();
+			selectedFamily = await getSelectedTranslationFamily() || 'helsinki';
 		} catch (e) {
 			configError = `Failed to load model configuration: ${e.message || e}`;
 		}
@@ -249,7 +268,7 @@
 		if (unlistenFinished) unlistenFinished();
 	});
 
-	async function handleDownload(targetModelName) {
+	async function handleDownload(targetModelId) {
 		if (isBusy) return;
 		if (!downloadLocation || downloadLocation.trim() === '') {
 			notificationStore.add('Please set a valid model download location first.', 'error');
@@ -257,16 +276,20 @@
 		}
 
 		configError = '';
-		const modelToDownload = targetModelName || modelName.trim();
+		const modelToDownload = targetModelId || modelName.trim();
 		
 		if (!modelToDownload) {
 			notificationStore.add('Please enter a model name.', 'error');
 			return;
 		}
 
+		// Find family from list if possible
+		const knownModel = availableModelsList.find(m => m.id === modelToDownload);
+		const family = knownModel ? knownModel.family : (modelToDownload.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki');
+
 		try {
 			modalLogs = [];
-			await downloadTranslationModel(null, null, downloadLocation, modelToDownload);
+			await downloadTranslationModel(null, null, downloadLocation, modelToDownload, family);
 		} catch (err) {
 			notificationStore.add(`Failed to start download for ${modelToDownload}: ${err.message || err}`, 'error');
 			isDownloading = false; 
@@ -302,6 +325,15 @@
 
     function formatModelDisplayName(modelName) {
         const parts = modelName.split('/');
+		const baseName = parts[parts.length - 1] || modelName;
+
+		if (baseName.toLowerCase().includes('nllb')) {
+			if (baseName.includes('600M')) return "NLLB-200 Distilled (Small & Fast)";
+			if (baseName.includes('1.3B')) return "NLLB-200 (Medium)";
+			if (baseName.includes('3.3B')) return "NLLB-200 (Large)";
+			return baseName;
+		}
+
         if (parts.length === 2) {
             const langParts = parts[1].split('-');
             if (langParts.length >= 3 && langParts[0] === 'opus' && langParts[1] === 'mt') {
@@ -358,9 +390,56 @@
 		</p>
 	{/if}
 
-	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4 flex-shrink-0 px-1">
-		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" on:click|preventDefault={() => openLink('https://huggingface.co/Helsinki-NLP')} class="text-blue-600 dark:text-blue-400 hover:underline">Helsinki-NLP models</a> for offline translation.
-	</p>
+	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
+		<div class="flex items-center justify-between mb-2">
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Model Family</span>
+			<div class="flex space-x-2">
+				<button 
+					class="px-3 py-1 text-xs rounded-full border transition-all"
+					class:bg-blue-600={selectedFamily === 'helsinki'}
+					class:text-white={selectedFamily === 'helsinki'}
+					class:border-transparent={selectedFamily === 'helsinki'}
+					class:bg-white={selectedFamily !== 'helsinki'}
+					class:dark:bg-gray-800={selectedFamily !== 'helsinki'}
+					class:text-gray-600={selectedFamily !== 'helsinki'}
+					class:dark:text-gray-400={selectedFamily !== 'helsinki'}
+					class:border-gray-200={selectedFamily !== 'helsinki'}
+					class:dark:border-gray-700={selectedFamily !== 'helsinki'}
+					on:click={() => { selectedFamily = 'helsinki'; handleFamilyChange(); }}
+				>
+					Helsinki-NLP
+				</button>
+				<button 
+					class="px-3 py-1 text-xs rounded-full border transition-all"
+					class:bg-blue-600={selectedFamily === 'nllb'}
+					class:text-white={selectedFamily === 'nllb'}
+					class:border-transparent={selectedFamily === 'nllb'}
+					class:bg-white={selectedFamily !== 'nllb'}
+					class:dark:bg-gray-800={selectedFamily !== 'nllb'}
+					class:text-gray-600={selectedFamily !== 'nllb'}
+					class:dark:text-gray-400={selectedFamily !== 'nllb'}
+					class:border-gray-200={selectedFamily !== 'nllb'}
+					class:dark:border-gray-700={selectedFamily !== 'nllb'}
+					on:click={() => { selectedFamily = 'nllb'; handleFamilyChange(); }}
+				>
+					NLLB (Meta)
+				</button>
+			</div>
+		</div>
+		
+		{#if selectedFamily === 'helsinki'}
+			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common pairs.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
+			</div>
+		{:else}
+			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Larger file size, slower on lower-end CPUs. Best with GPU.</p>
+			</div>
+		{/if}
+	</div>
+
 	{#if !$configStatus.python_libraries_installed}
 		<p class="text-orange-600 dark:text-orange-400 text-sm flex-shrink-0 px-1">
 			Please install the required Python libraries first to enable model downloads.
@@ -390,7 +469,7 @@
 								bind:value={searchQuery}
 								class="input w-full"
 								style="padding-left: 2.25rem;"
-								placeholder="Search languages (e.g. 'French', 'en-ja')..."
+								placeholder={selectedFamily === 'helsinki' ? "Search languages (e.g. 'French', 'en-ja')..." : "Search NLLB models..."}
 								autocomplete="off"
 								autocorrect="off"
 								autocapitalize="off"
@@ -413,7 +492,7 @@
 										<div class="flex flex-col min-w-0 pr-4">
 											<div class="flex items-center space-x-2">
 												<span class="font-semibold text-gray-800 dark:text-gray-200 truncate">
-													{#if model.src && model.tgt}
+													{#if model.family === 'helsinki' && model.src && model.tgt}
 														{getLangName(model.src)} <span class="text-gray-400">→</span> {getLangName(model.tgt)}
 													{:else}
 														{formatModelDisplayName(model.id)}
@@ -522,7 +601,7 @@
 							autocomplete="off"
 							autocorrect="off"
 							class="input w-full"
-							placeholder="e.g. Helsinki-NLP/opus-mt-en-jap"
+							placeholder={selectedFamily === 'helsinki' ? "e.g. Helsinki-NLP/opus-mt-en-jap" : "e.g. facebook/nllb-200-distilled-600M"}
 						/>
 					</div>
 					<button on:click={() => handleDownload(null)} class="btn-blue-small mb-0.5">

@@ -37,6 +37,8 @@ pub struct ProjectInfo {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModelInfo {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>, // e.g., "helsinki", "nllb"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,7 +76,8 @@ pub struct Config {
     #[serde(rename = "downloaded_models", default)]
     pub downloaded_models: Vec<ModelInfo>,
 
-    
+    #[serde(rename = "selected_translation_family", default)]
+    pub selected_translation_family: Option<String>, // "helsinki" or "nllb"
 
     // --- NEW: Theme Preference Field ---
     #[serde(rename = "themePreference", default, skip_serializing_if = "Option::is_none")]

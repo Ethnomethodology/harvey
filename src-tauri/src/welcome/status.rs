@@ -20,7 +20,6 @@ pub struct ConfigStatus {
 }
 
 use crate::welcome::config::{read_config, write_config};
-use crate::welcome::commands::get_download_location;
 use crate::welcome::python_env;
 
 #[tauri::command]
@@ -44,7 +43,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
 
     // Always re-verify model presence if config says they are there
     let models = get_downloaded_models().await?;
-    let has_transcription = models.iter().any(|m| !m.name.contains("opus-mt") && !m.name.contains("paraphrase"));
+    let has_transcription = models.iter().any(|m| m.family.is_none() && !m.name.contains('/') && !m.name.contains("paraphrase"));
     let has_translation = !get_local_translation_models().await?.is_empty();
 
     if !transcription_models_downloaded && has_transcription {
