@@ -43,7 +43,7 @@ def get_nllb_lang_code(lang_code):
         return lang_code
     return NLLB_LANG_MAP.get(lang_code.lower())
 
-def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, src_lang=None, tgt_lang=None):
+def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, src_lang=None, tgt_lang=None, ct2_tgt_prefix=None):
     """
     Translates segments using a sliding window approach: [Prev] + [Target] + [Next].
     This provides context to the model.
@@ -51,7 +51,7 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
     final_translations = [None] * len(segments)
     
     use_ct2 = hasattr(engine, "translate_batch")
-    is_nllb = not use_ct2 and hasattr(engine, "config") and "nllb" in engine.config._name_or_path.lower()
+    is_nllb = hasattr(engine, "config") and "nllb" in engine.config._name_or_path.lower() if not use_ct2 else (ct2_tgt_prefix is not None)
 
     # 1. Contextual Pass
     for i in range(0, len(segments), batch_size):
@@ -84,10 +84,15 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
         
         if valid_inputs:
             if use_ct2:
-                # CTranslate2: Use proper tokenization with special tokens
-                source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t, add_special_tokens=True)) for t in valid_inputs]
-                results = engine.translate_batch(source_tokens, asynchronous=False)
-                decoded = [tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results]
+                # CTranslate2: Use small batches for stability while keeping context
+                batch_size_ct2 = 4
+                decoded = []
+                for i in range(0, len(valid_inputs), batch_size_ct2):
+                    mini_batch = valid_inputs[i:i + batch_size_ct2]
+                    source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t, add_special_tokens=True)) for t in mini_batch]
+                    target_prefixes = [ct2_tgt_prefix] * len(source_tokens) if ct2_tgt_prefix else None
+                    results = engine.translate_batch(source_tokens, target_prefix=target_prefixes, asynchronous=False)
+                    decoded.extend([tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results])
             else:
                 # Transformers: Robust multi-line generation
                 inputs = tokenizer(valid_inputs, return_tensors="pt", padding=True, truncation=True).to(device)
@@ -135,7 +140,7 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
                 decoded = []
                 for t in batch_texts:
                     source_tokens = tokenizer.convert_ids_to_tokens(tokenizer.encode(t, add_special_tokens=True))
-                    results = engine.translate_batch([source_tokens], asynchronous=False)
+                    results = engine.translate_batch([source_tokens], target_prefix=[ct2_tgt_prefix] if ct2_tgt_prefix else None, asynchronous=False)
                     output_text = tokenizer.decode(tokenizer.convert_tokens_to_ids(results[0].hypotheses[0]), skip_special_tokens=True)
                     decoded.append(output_text)
             else:
@@ -153,27 +158,32 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
                 
     return final_translations
 
-def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None):
+def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None, ct2_tgt_prefix=None):
     """
     Standard batch translation.
     """
     use_ct2 = hasattr(engine, "translate_batch")
-    is_nllb = not use_ct2 and hasattr(engine, "config") and "nllb" in engine.config._name_or_path.lower()
+    is_nllb = hasattr(engine, "config") and "nllb" in engine.config._name_or_path.lower() if not use_ct2 else (ct2_tgt_prefix is not None)
     translated = []
-    for i in range(0, len(segments), batch_size):
-        batch = segments[i : i + batch_size]
-        
-        if use_ct2:
-            # CTranslate2: Process individually for highest quality mapping
-            for text in batch:
+    
+    if use_ct2:
+        # CTranslate2: Use small batches for performance and stability
+        batch_size_ct2 = 8
+        for i in range(0, len(segments), batch_size_ct2):
+            batch = segments[i : i + batch_size_ct2]
+            batch_clean = [s if s.strip() else " " for s in batch]
+            source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t, add_special_tokens=True)) for t in batch_clean]
+            target_prefixes = [ct2_tgt_prefix] * len(source_tokens) if ct2_tgt_prefix else None
+            results = engine.translate_batch(source_tokens, target_prefix=target_prefixes, asynchronous=False)
+            batch_decoded = [tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True).strip() for r in results]
+            
+            for j, text in enumerate(batch):
                 if not text.strip():
-                    translated.append("")
-                    continue
-                source_tokens = tokenizer.convert_ids_to_tokens(tokenizer.encode(text, add_special_tokens=True))
-                results = engine.translate_batch([source_tokens], asynchronous=False)
-                output_text = tokenizer.decode(tokenizer.convert_tokens_to_ids(results[0].hypotheses[0]), skip_special_tokens=True)
-                translated.append(output_text.strip())
-        else:
+                    batch_decoded[j] = ""
+            translated.extend(batch_decoded)
+    else:
+        for i in range(0, len(segments), batch_size):
+            batch = segments[i : i + batch_size]
             batch_clean = [s if s.strip() else " " for s in batch] 
             inputs = tokenizer(batch_clean, return_tensors="pt", padding=True, truncation=True).to(device)
             with torch.no_grad():
@@ -202,10 +212,19 @@ if __name__ == "__main__":
 
     try:
         os.environ["HF_HUB_OFFLINE"] = "1"
+        
+        # Limit CPU threads to avoid overloading and improve performance on laptops
+        torch.set_num_threads(4)
+        
         if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8')
             
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Determine device
+        device = "cpu"
+        if torch.backends.mps.is_available():
+            device = "mps"
+        elif torch.cuda.is_available():
+            device = "cuda"
         
         # Heuristic to check for NLLB
         is_nllb = "nllb" in args.model_path.lower()
@@ -214,20 +233,24 @@ if __name__ == "__main__":
         nllb_src = get_nllb_lang_code(args.src_lang) if is_nllb else None
         nllb_tgt = get_nllb_lang_code(args.tgt_lang) if is_nllb else None
 
-        sys.stderr.write(f"[Python Debug] Loading model from {args.model_path} (is_nllb={is_nllb})...\n")
+        sys.stderr.write(f"[Python Debug] Loading model from {args.model_path} (is_nllb={is_nllb}, device={device})...\n")
         
         # Check for CTranslate2 optimized model
         ct2_model_path = os.path.join(args.model_path, "ct2_optimized")
-        use_ct2 = not is_nllb and os.path.exists(ct2_model_path)
+        use_ct2 = os.path.exists(ct2_model_path)
         
         engine = None
         if use_ct2:
             try:
                 import ctranslate2
                 sys.stderr.write(f"[Python Debug] Using CTranslate2 optimized engine: {ct2_model_path}\n")
-                engine = ctranslate2.Translator(ct2_model_path, device="cpu")
-                # For Helsinki models, MarianTokenizer is still preferred even with CT2
-                tokenizer = MarianTokenizer.from_pretrained(args.model_path)
+                # CT2 can use multiple threads
+                engine = ctranslate2.Translator(ct2_model_path, device="cpu", intra_threads=4)
+                
+                if is_nllb:
+                    tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
+                else:
+                    tokenizer = MarianTokenizer.from_pretrained(args.model_path)
             except ImportError:
                 sys.stderr.write("[Python Debug] CTranslate2 not found, falling back to transformers.\n")
                 use_ct2 = False
@@ -236,20 +259,30 @@ if __name__ == "__main__":
             sys.stderr.write("[Python Debug] Loading with transformers engine.\n")
             if is_nllb:
                 tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
-                engine = AutoModelForSeq2SeqLM.from_pretrained(args.model_path).to(device)
+                engine = AutoModelForSeq2SeqLM.from_pretrained(args.model_path)
+                # Use float16 for NLLB on GPU/MPS to avoid CPU bottlenecks
+                if device != "cpu":
+                    engine = engine.half()
+                engine = engine.to(device)
             else:
                 tokenizer = MarianTokenizer.from_pretrained(args.model_path)
                 engine = MarianMTModel.from_pretrained(args.model_path).to(device)
 
         segments = json.loads(args.text)
         
+        # Use smaller batch size for NLLB to avoid hanging
+        batch_size = 1 if is_nllb else 8
+        
         results = []
+        # For NLLB in CT2, we need to pass the target language prefix
+        ct2_tgt_prefix = [nllb_tgt] if use_ct2 and is_nllb and nllb_tgt else None
+
         if args.mode == "document":
             sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Document mode (bulk)...")
-            results = translate_bulk(segments, engine, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
+            results = translate_bulk(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
         else:
             sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...")
-            results = translate_sliding_window(segments, engine, tokenizer, device, src_lang=nllb_src, tgt_lang=nllb_tgt)
+            results = translate_sliding_window(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
             
         print(json.dumps(results, ensure_ascii=False))
 

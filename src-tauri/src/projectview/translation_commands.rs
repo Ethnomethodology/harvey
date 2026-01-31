@@ -188,9 +188,10 @@ pub async fn translate_transcript_command<R: Runtime>(
     transcript_path: String,
     model_name: String,
     target_language: String,
+    source_language: Option<String>,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
 ) -> Result<TranslationInitiatedPayload, String> {
-    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, cancel_state, TranslationMode::Transcript).await
+    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, source_language, cancel_state, TranslationMode::Transcript).await
 }
 
 #[tauri::command]
@@ -200,9 +201,10 @@ pub async fn translate_document_command<R: Runtime>(
     document_path: String,
     model_name: String,
     target_language: String,
+    source_language: Option<String>,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
 ) -> Result<TranslationInitiatedPayload, String> {
-    translate_file_command(app_handle, project_xml_path, document_path, model_name, target_language, cancel_state, TranslationMode::Document).await
+    translate_file_command(app_handle, project_xml_path, document_path, model_name, target_language, source_language, cancel_state, TranslationMode::Document).await
 }
 
 #[tauri::command]
@@ -212,9 +214,10 @@ pub async fn translate_imported_transcript_command<R: Runtime>(
     transcript_path: String,
     model_name: String,
     target_language: String,
+    source_language: Option<String>,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
 ) -> Result<TranslationInitiatedPayload, String> {
-    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, cancel_state, TranslationMode::ImportedTranscript).await
+    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, source_language, cancel_state, TranslationMode::ImportedTranscript).await
 }
 
 async fn translate_file_command<R: Runtime>(
@@ -223,6 +226,7 @@ async fn translate_file_command<R: Runtime>(
     file_path: String,
     model_name: String,
     target_language: String,
+    source_language: Option<String>,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
     mode: TranslationMode,
 ) -> Result<TranslationInitiatedPayload, String> {
@@ -248,6 +252,7 @@ async fn translate_file_command<R: Runtime>(
             file_path,
             model_name,
             target_language,
+            source_language,
             cancel_flag,
             mode,
         ).await {
@@ -295,6 +300,7 @@ async fn run_translation_process<R: Runtime>(
     file_path: String,
     model_name: String,
     target_language: String,
+    source_language: Option<String>,
     cancel_flag: Arc<AtomicBool>,
     mode: TranslationMode,
 ) -> Result<String, CommandError> {
@@ -312,23 +318,25 @@ async fn run_translation_process<R: Runtime>(
         get_default_download_location()? 
     };
 
-    // Determine family and source language
+    // Determine family
     let is_nllb = model_name.to_lowercase().contains("nllb");
     let family = if is_nllb { "nllb" } else { "helsinki" };
     let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
 
     // Extract source language from file if possible
-    let mut source_lang = None;
+    let mut source_lang = source_language;
     let content = fs::read_to_string(&normalized_file_path)?;
     let mut lexical_json: Value = serde_json::from_str(&content)?;
 
-    // Try to find language code in the file metadata if it's a transcript
-    if let Some(metadata_path) = shared_utils::get_metadata_path(&PathBuf::from(&normalized_file_path)) {
-        if metadata_path.exists() {
-            if let Ok(metadata_content) = fs::read_to_string(metadata_path) {
-                if let Ok(metadata_json) = serde_json::from_str::<Value>(&metadata_content) {
-                    if let Some(lang) = metadata_json.get("metadata").and_then(|m| m.get("language_code")).and_then(|l| l.as_str()) {
-                        source_lang = Some(lang.to_string());
+    // Try to find language code in the file metadata if it's a transcript and source_lang is still None
+    if source_lang.is_none() {
+        if let Some(metadata_path) = shared_utils::get_metadata_path(&PathBuf::from(&normalized_file_path)) {
+            if metadata_path.exists() {
+                if let Ok(metadata_content) = fs::read_to_string(metadata_path) {
+                    if let Ok(metadata_json) = serde_json::from_str::<Value>(&metadata_content) {
+                        if let Some(lang) = metadata_json.get("metadata").and_then(|m| m.get("language_code")).and_then(|l| l.as_str()) {
+                            source_lang = Some(lang.to_string());
+                        }
                     }
                 }
             }

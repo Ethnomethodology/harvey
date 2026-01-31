@@ -21,6 +21,20 @@
 	let modelOptions = [];
 	let selectedModel = '';
 	let selectedFamily = 'helsinki';
+	let selectedSourceLanguage = 'auto';
+	let selectedTargetLanguage = 'en';
+
+	// Mapping for NLLB language options (based on supported list)
+	const nllbLanguageOptions = [
+		{ value: 'auto', label: 'Auto-detect' },
+		...Array.from(languageMap.entries())
+			.filter(([code, name]) => code.length === 2) // Keep standard 2-letter codes
+			.map(([code, name]) => ({ value: code, label: name }))
+			.sort((a, b) => a.label.localeCompare(b.label))
+	];
+
+	// Filtered list for target (remove auto-detect)
+	const nllbTargetLanguageOptions = nllbLanguageOptions.filter(opt => opt.value !== 'auto');
 
 	// Warning icon logic (same as ProjectView)
 	$: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
@@ -106,6 +120,14 @@
 				getSelectedTranslationFamily()
 			]);
 			selectedFamily = selectedFamily || 'helsinki';
+
+			// Smarter default for source language
+			const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
+			if (activeTranscript && activeTranscript.language_code) {
+				selectedSourceLanguage = activeTranscript.language_code;
+			} else {
+				selectedSourceLanguage = 'auto';
+			}
 		} catch (e) {
 			console.error("Failed to fetch local translation data:", e);
 		}
@@ -118,23 +140,24 @@
 	function handleConfirm() {
 		const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
 		
+		let sourceLang = 'auto';
 		let targetLang = 'auto';
+
 		if (selectedModel.toLowerCase().includes('nllb')) {
-			// For NLLB, target language isn't in the model name, 
-			// but we can default to 'en' or leave as 'auto' for backend to decide.
-			// Actually NLLB models translate TO many languages, but here we probably 
-			// want to know the intended target. For now 'auto' is fine for NLLB filename suffix
-			// if we don't have a selector for target lang yet.
-			targetLang = 'auto'; 
+			sourceLang = selectedSourceLanguage;
+			targetLang = selectedTargetLanguage;
 		} else if (selectedModel.includes('-')) {
 			const parts = selectedModel.split('-');
 			// For Helsinki models like "Helsinki-NLP/opus-mt-en-hi", parts are ["Helsinki-NLP/opus", "mt", "en", "hi"]
 			targetLang = parts[parts.length - 1];
+			// Source is second to last part
+			sourceLang = parts[parts.length - 2] || 'auto';
 		}
 
 		dispatch('confirm', {
 			transcript: selectedTranscriptObject,
 			model: selectedModel,
+			sourceLanguage: sourceLang,
 			targetLanguage: targetLang
 		});
 	}
@@ -258,6 +281,29 @@
 							/>
 						{/if}
                     </div>
+
+					{#if selectedModel.toLowerCase().includes('nllb')}
+						<div class="grid grid-cols-2 gap-4">
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">From:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbLanguageOptions}
+									bind:value={selectedSourceLanguage}
+									placeholder="Source"
+								/>
+							</div>
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">To:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbTargetLanguageOptions}
+									bind:value={selectedTargetLanguage}
+									placeholder="Target"
+								/>
+							</div>
+						</div>
+					{/if}
                 </div>
                 <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                     <button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>

@@ -224,6 +224,7 @@
   .ui-dropdown-menu {
     background-color: var(--ui-option-bg);
     border: 1px solid var(--ui-select-border);
+    @apply max-h-60 overflow-y-auto;
   }
   .ui-dropdown-menu .dropdown-option {
     color: var(--ui-option-text);

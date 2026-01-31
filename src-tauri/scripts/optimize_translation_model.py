@@ -7,7 +7,7 @@ import transformers
 def optimize_model(model_path, output_path):
     """
     Converts a Transformers model to CTranslate2 format.
-    Uses INT8 quantization for CPU efficiency.
+    Uses optimal quantization based on model family.
     """
     print(f"Optimizing model at {model_path} -> {output_path}", flush=True)
     
@@ -17,15 +17,17 @@ def optimize_model(model_path, output_path):
             print(f"Output directory {output_path} already exists. Removing...", flush=True)
             shutil.rmtree(output_path)
 
+        # Detect family
+        is_nllb = "nllb" in model_path.lower()
+        
         converter = ctranslate2.converters.TransformersConverter(model_path)
         
         # Determine quantization: 
-        # Helsinki models (Marian) are sensitive to int8. 
-        # Using float16 is much safer and still very fast on M1/M2 or modern CPUs.
-        # If float16 isn't supported, it will fallback to float32.
-        quant = "float16"
+        # NLLB models are large and benefit greatly from int8 on CPU.
+        # Helsinki models are small and sensitive, so we use float16.
+        quant = "int8" if is_nllb else "float16"
         
-        print(f"Converting with quantization: {quant}", flush=True)
+        print(f"Detected {'NLLB' if is_nllb else 'Helsinki'} model. Converting with quantization: {quant}", flush=True)
         converter.convert(
             output_path,
             quantization=quant,

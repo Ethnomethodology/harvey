@@ -22,6 +22,20 @@
     let selectedModel = '';
     let selectedFamily = 'helsinki';
     let documentName = '';
+	let selectedSourceLanguage = 'auto';
+	let selectedTargetLanguage = 'en';
+
+	// Mapping for NLLB language options (based on supported list)
+	const nllbLanguageOptions = [
+		{ value: 'auto', label: 'Auto-detect' },
+		...Array.from(languageMap.entries())
+			.filter(([code, name]) => code.length === 2) // Keep standard 2-letter codes
+			.map(([code, name]) => ({ value: code, label: name }))
+			.sort((a, b) => a.label.localeCompare(b.label))
+	];
+
+	// Filtered list for target (remove auto-detect)
+	const nllbTargetLanguageOptions = nllbLanguageOptions.filter(opt => opt.value !== 'auto');
 
     // Warning icon logic (same as ProjectView)
     $: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
@@ -95,6 +109,9 @@
 				getSelectedTranslationFamily()
 			]);
 			selectedFamily = selectedFamily || 'helsinki';
+
+			// We don't easily have doc language here yet, so default to auto
+			selectedSourceLanguage = 'auto';
         } catch (e) {
             console.error("Failed to fetch local translation data:", e);
         }
@@ -105,17 +122,22 @@
     });
 
     function handleConfirm() {
-        let targetLang = 'auto';
+        let sourceLang = 'auto';
+		let targetLang = 'auto';
+
 		if (selectedModel.toLowerCase().includes('nllb')) {
-			targetLang = 'auto'; 
+			sourceLang = selectedSourceLanguage;
+			targetLang = selectedTargetLanguage;
 		} else if (selectedModel.includes('-')) {
 			const parts = selectedModel.split('-');
 			targetLang = parts[parts.length - 1];
+			sourceLang = parts[parts.length - 2] || 'auto';
 		}
 
         dispatch('confirm', {
             documentPath: activeDocumentPath,
             model: selectedModel,
+            sourceLanguage: sourceLang,
             targetLanguage: targetLang
         });
     }
@@ -217,6 +239,29 @@
                             />
                         {/if}
                     </div>
+
+					{#if selectedModel.toLowerCase().includes('nllb')}
+						<div class="grid grid-cols-2 gap-4">
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">From:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbLanguageOptions}
+									bind:value={selectedSourceLanguage}
+									placeholder="Source"
+								/>
+							</div>
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">To:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbTargetLanguageOptions}
+									bind:value={selectedTargetLanguage}
+									placeholder="Target"
+								/>
+							</div>
+						</div>
+					{/if}
                 </div>
                 <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                     <button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>

@@ -160,28 +160,26 @@ pub async fn download_translation_model_command(
         return Err(CommandError::Message("Translation model download failed.".to_string()));
     }
 
-    // 3. Optimize model for CTranslate2 (for Helsinki)
-    if family == "helsinki" {
-        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimizing model for faster CPU inference..." })).unwrap();
-        
-        let optimize_script = app.path().resource_dir().unwrap().join("scripts/optimize_translation_model.py");
-        let folder_name = format!("models--{}", model_name.replace('/', "--"));
-        let model_path = target_dir.join(&folder_name);
-        let output_path = model_path.join("ct2_optimized");
+    // 3. Optimize model for CTranslate2
+    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimizing model for faster CPU inference..." })).unwrap();
+    
+    let optimize_script = app.path().resource_dir().unwrap().join("scripts/optimize_translation_model.py");
+    let folder_name = format!("models--{}", model_name.replace('/', "--"));
+    let model_path = target_dir.join(&folder_name);
+    let output_path = model_path.join("ct2_optimized");
 
-        let output = app.shell()
-            .command(python_path.to_str().unwrap())
-            .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
-            .output()
-            .await?;
+    let output = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
+        .output()
+        .await?;
 
-        if output.status.success() {
-            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            log::error!("Optimization failed: {}", stderr);
-            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
-        }
+    if output.status.success() {
+        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::error!("Optimization failed: {}", stderr);
+        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
     }
 
     window.emit("translation-download-complete", &model_name).unwrap();

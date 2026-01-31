@@ -2296,7 +2296,7 @@ export async function initializeTranslationProgressListener() {
     }
 }
 
-export async function requestTranslation(transcriptPath, modelName, targetLanguage) {
+export async function requestTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2318,6 +2318,7 @@ export async function requestTranslation(transcriptPath, modelName, targetLangua
             transcriptPath,
             modelName: modelName,
             targetLanguage: targetLanguage || ts.selectedLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
@@ -2332,7 +2333,7 @@ export async function requestTranslation(transcriptPath, modelName, targetLangua
     }
 }
 
-export async function requestDocumentTranslation(documentPath, modelName, targetLanguage) {
+export async function requestDocumentTranslation(documentPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2354,6 +2355,7 @@ export async function requestDocumentTranslation(documentPath, modelName, target
             documentPath: documentPath,
             modelName: modelName,
             targetLanguage: targetLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
@@ -2368,7 +2370,7 @@ export async function requestDocumentTranslation(documentPath, modelName, target
     }
 }
 
-export async function requestImportedTranscriptTranslation(transcriptPath, modelName, targetLanguage) {
+export async function requestImportedTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2390,6 +2392,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
             transcriptPath,
             modelName: modelName,
             targetLanguage: targetLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
