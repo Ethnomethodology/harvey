@@ -221,6 +221,7 @@ pub fn run() {
             projectview::transcription_commands::save_speaker_config,
             projectview::transcription_commands::list_subtitle_files_command,
             projectview::transcription_commands::convert_srt_to_vtt_command,
+            projectview::transcription_commands::convert_ass_to_vtt_command,
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,

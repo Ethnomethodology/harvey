@@ -2,6 +2,7 @@
 
 use super::shared_types::*;
 use super::shared_utils::*;
+use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
@@ -2163,6 +2164,90 @@ pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, 
             vtt_content.push_str(line);
         }
         vtt_content.push('\n');
+    }
+
+    Ok(vtt_content)
+}
+
+fn convert_ass_time_to_vtt(t: &str) -> String {
+    let parts: Vec<&str> = t.split('.').collect();
+    if parts.len() == 2 {
+        let hms = parts[0];
+        let cs = parts[1]; // centiseconds
+        let hms_parts: Vec<&str> = hms.split(':').collect();
+        let normalized_hms = if hms_parts.len() == 3 {
+            format!("{:0>2}:{:0>2}:{:0>2}", hms_parts[0], hms_parts[1], hms_parts[2])
+        } else {
+            hms.to_string()
+        };
+        format!("{}.{}0", normalized_hms, cs)
+    } else {
+        t.to_string()
+    }
+}
+
+#[tauri::command]
+pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, CommandError> {
+    info!("[convert_ass_to_vtt_command] Converting ASS: {}", ass_path_str);
+    let ass_path = PathBuf::from(&ass_path_str);
+    
+    let ass_content = fs::read_to_string(&ass_path)
+        .map_err(|e| CommandError::from(format!("Failed to read ASS file: {}", e)))?;
+
+    let mut vtt_content = String::from("WEBVTT\n\n");
+    let mut in_events_section = false;
+    let mut format_cols: Vec<String> = Vec::new();
+
+    for line in ass_content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[Events]") { in_events_section = true; continue; }
+        if !in_events_section { continue; }
+
+        if trimmed.starts_with("Format:") {
+            let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                format_cols = parts[1].split(',').map(|s| s.trim().to_lowercase()).collect();
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("Dialogue:") {
+            let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+            if parts.len() == 2 && !format_cols.is_empty() {
+                let data_part = parts[1];
+                let num_cols = format_cols.len();
+                let col_values: Vec<&str> = data_part.splitn(num_cols, ',').map(|s| s.trim()).collect();
+
+                if col_values.len() == num_cols {
+                    let start_idx = format_cols.iter().position(|c| c == "start").unwrap_or(1);
+                    let end_idx = format_cols.iter().position(|c| c == "end").unwrap_or(2);
+                    let text_idx = format_cols.iter().position(|c| c == "text").unwrap_or(9);
+
+                    if start_idx < col_values.len() && end_idx < col_values.len() && text_idx < col_values.len() {
+                        let start_ass = col_values[start_idx];
+                        let end_ass = col_values[end_idx];
+                        let text_raw = col_values[text_idx];
+
+                        let vtt_start = convert_ass_time_to_vtt(start_ass);
+                        let vtt_end = convert_ass_time_to_vtt(end_ass);
+
+                        // Strip all { ... } tags from text
+                        let mut text_clean = String::new();
+                        let mut in_tag = false;
+                        for c in text_raw.chars() {
+                            if c == '{' { in_tag = true; continue; }
+                            if c == '}' { in_tag = false; continue; }
+                            if !in_tag { text_clean.push(c); }
+                        }
+                        
+                        // Handle \N as newline
+                        text_clean = text_clean.replace("\\N", "\n").replace("\\n", "\n");
+
+                        vtt_content.push_str(&format!("{} --> {}\n{}\n\n", vtt_start, vtt_end, text_clean));
+                    }
+                }
+            }
+        }
     }
 
     Ok(vtt_content)

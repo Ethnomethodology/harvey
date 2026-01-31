@@ -316,7 +316,17 @@
 					} else {
 						throw new Error('SRT to VTT conversion did not return a string.');
 					}
-				} else { // Assume .vtt or other directly supported format
+				} else if (subtitleEntry.name.toLowerCase().endsWith('.ass')) {
+                    console.log('[MediaPlayer] ASS file selected, invoking conversion:', subtitleEntry.path);
+                    const vttContent = await invoke('convert_ass_to_vtt_command', { assPathStr: subtitleEntry.path });
+                    if (typeof vttContent === 'string') {
+                        const blob = new Blob([vttContent], { type: 'text/vtt' });
+                        subtitleDataUrl = URL.createObjectURL(blob);
+                        console.log('[MediaPlayer] ASS converted to VTT blob URL:', subtitleDataUrl);
+                    } else {
+                        throw new Error('ASS to VTT conversion did not return a string.');
+                    }
+                } else { // Assume .vtt or other directly supported format
                     console.log('[MediaPlayer] Reading subtitle file directly:', subtitleEntry.path);
                     const fileData = await readFile(subtitleEntry.path);
                     

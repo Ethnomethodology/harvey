@@ -251,7 +251,7 @@
 					 {:else if exportFormat === 'md'}
 						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
 					 {:else if exportFormat === 'ass'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export supports styling (bold, italic, underline, color). Highlights are converted to text color changes. Other styles stripped.</p>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export provides standard subtitles with basic styling support (bold, italic).</p>
 					 {/if}
 				</div>
 

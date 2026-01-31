@@ -1183,7 +1183,7 @@ fn lexical_color_to_ass_color(hex_color: &str) -> String {
     }
 }
 
-fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &std::collections::HashMap<String, String>) {
+fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
     if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
         match node_type {
             "text" | "extended-text" => {
@@ -1191,69 +1191,53 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &
                     let format_flags = node.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    let mut tags = String::new();
-                    if (format_flags & IS_BOLD) != 0 { tags.push_str("{\\b1}"); }
-                    if (format_flags & IS_ITALIC) != 0 { tags.push_str("{\\i1}"); }
-                    if (format_flags & IS_UNDERLINE) != 0 { tags.push_str("{\\u1}"); }
-                    if (format_flags & IS_STRIKETHROUGH) != 0 { tags.push_str("{\\s1}"); }
+                    let mut has_highlight = (format_flags & IS_HIGHLIGHT) != 0;
+                    let mut font_color: Option<&str> = None;
 
-                    let mut color_override: Option<String> = None;
-                    let mut style_override: Option<String> = None;
-
+                    // Determine if highlight is present and extract font color
                     for part in style_str.split(';') {
-                        let part_trimmed = part.trim();
-                        if part_trimmed.starts_with("color:") {
-                            let val = part_trimmed.trim_start_matches("color:").trim();
-                            if val != "transparent" { // Assuming transparent means default/no override
-                                color_override = Some(format!("{{\\1c{}}}", lexical_color_to_ass_color(val)));
-                            }
-                        } else if part_trimmed.starts_with("background-color:") {
-                            let val = part_trimmed.trim_start_matches("background-color:").trim().to_lowercase();
-                             // Check if this highlight color maps to a predefined style
-                            if let Some(style_name) = styles_map.get(&val) {
-                                style_override = Some(format!("{{\\r{}}}", style_name));
-                            } else if val != "transparent" {
-                                // Fallback: change text color if no specific highlight style defined
-                                // This is a simplification. True background needs BorderStyle=3 + \3c.
-                                // For now, we'll use a noticeable color like yellow for unmapped highlights.
-                                // Or, if we defined a generic "Highlight" style, use that.
-                                // As per plan, "Highlights are converted to text color changes".
-                                // Let's pick a visible default highlight-as-text-color if not mapped.
-                                // This is a placeholder for a better mapping or style definition.
-                                // For now, let's use a bright color like yellow if a highlight is present but not mapped to a style.
-                                // This part needs refinement based on how Lexical stores these and how they map to ASS styles.
-                                // A simple approach: if there's any background-color not 'transparent', set primary text to a highlight color
-                                // This example sets it to yellow text.
-                                 if color_override.is_none() { // Only if no explicit text color already set
-                                    color_override = Some(format!("{{\\1c{}}}", lexical_color_to_ass_color("#FFFF00"))); // Yellow text for highlight
-                                 }
+                        let p = part.trim();
+                        if p.starts_with("color:") {
+                            font_color = Some(p.trim_start_matches("color:").trim());
+                        } else if p.starts_with("background-color:") {
+                            let bg = p.trim_start_matches("background-color:").trim();
+                            if bg != "transparent" && !bg.is_empty() {
+                                has_highlight = true;
                             }
                         }
                     }
 
-                    if let Some(ref so) = style_override { // Changed to use ref
-                        ass_buffer.push_str(so); // Use so directly as it's a reference
+                    let mut open_tags = String::from("{");
+                    let mut has_tags = false;
+
+                    if (format_flags & IS_BOLD) != 0 { open_tags.push_str("\\b1"); has_tags = true; }
+                    if (format_flags & IS_ITALIC) != 0 { open_tags.push_str("\\i1"); has_tags = true; }
+                    if (format_flags & IS_UNDERLINE) != 0 { open_tags.push_str("\\u1"); has_tags = true; }
+                    if (format_flags & IS_STRIKETHROUGH) != 0 { open_tags.push_str("\\s1"); has_tags = true; }
+
+                    // Only apply font color if there is NO highlight.
+                    // This prevents contrast colors (like black) from being exported without their background.
+                    if !has_highlight {
+                        if let Some(color) = font_color {
+                            if color != "transparent" && !color.is_empty() {
+                                open_tags.push_str(&format!("\\1c{}", lexical_color_to_ass_color(color)));
+                                has_tags = true;
+                            }
+                        }
                     }
-                    if let Some(co) = color_override {
-                        ass_buffer.push_str(&co);
+                    open_tags.push('}');
+
+                    if has_tags {
+                        ass_buffer.push_str(&open_tags);
                     }
-                    ass_buffer.push_str(&tags);
 
                     // ASS text should not contain literal curly braces unless they are part of tags.
-                    // Also, \N is newline, \n is ignored or treated as space.
                     let ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\n", "\\N");
                     ass_buffer.push_str(&ass_safe_text);
 
-                    // Close tags in reverse order of opening for basic tags
-                    if (format_flags & IS_STRIKETHROUGH) != 0 { ass_buffer.push_str("{\\s0}"); }
-                    if (format_flags & IS_UNDERLINE) != 0 { ass_buffer.push_str("{\\u0}"); }
-                    if (format_flags & IS_ITALIC) != 0 { ass_buffer.push_str("{\\i0}"); }
-                    if (format_flags & IS_BOLD) != 0 { ass_buffer.push_str("{\\b0}"); }
-
-                    // If a style override was applied, switch back to Default.
-                    // Color overrides close themselves or are reset by \r.
-                    if style_override.is_some() {
-                        ass_buffer.push_str("{\\rDefault}");
+                    // Reset to default style to close all tags at once
+                    if has_tags {
+                        ass_buffer.push_str("{\\r}");
                     }
                 }
             }
@@ -1263,7 +1247,7 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &
             "paragraph" | "heading" | "listitem" | "quote" | "link" => { // Treat as block, recurse children
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        lexical_node_to_ass_tags(child, ass_buffer, styles_map);
+                        lexical_node_to_ass_tags(child, ass_buffer);
                     }
                 }
                 // Add \N after paragraphs if they are not the last element within a segment's text.
@@ -1274,7 +1258,7 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &
             _ => {
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        lexical_node_to_ass_tags(child, ass_buffer, styles_map);
+                        lexical_node_to_ass_tags(child, ass_buffer);
                     }
                 }
             }
@@ -1283,14 +1267,14 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &
 }
 
 
-fn get_ass_dialogue_line_from_lexical_string(text_content: &str, styles_map: &std::collections::HashMap<String, String>) -> String {
+fn get_ass_dialogue_line_from_lexical_string(text_content: &str) -> String {
     match serde_json::from_str::<Value>(text_content) {
         Ok(parsed_json) => {
             if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
                 let mut buffer = String::new();
                  if let Some(children) = parsed_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
                     for (i, child_node) in children.iter().enumerate() {
-                        lexical_node_to_ass_tags(child_node, &mut buffer, styles_map);
+                        lexical_node_to_ass_tags(child_node, &mut buffer);
                         if i < children.len() - 1 {
                             // If there are multiple top-level blocks (e.g. paragraphs) in Lexical, separate with \N
                             if !buffer.ends_with("\\N") {
@@ -1348,26 +1332,8 @@ pub async fn export_transcript_to_ass(
     // Opaque box for background: BorderStyle=3, Outline=border width, BackColour=highlight color
     ass_content.push_str("Style: Default,Arial,20,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1.5,0,2,10,10,10,1\n");
 
-    // Define styles for known highlight colors from LexicalEditor.svelte
-    // These styles will use BorderStyle 3 and set OutlineColour to the highlight. Text color remains primary.
-    // Note: ASS uses BGR format for colors, Alpha is first (00 for opaque).
-    let mut styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    // Lexical: #FFF275 (Yellow) -> ASS BGR: &H0075F2FF
-    ass_content.push_str("Style: HighlightYellow,Arial,20,&H00FFFFFF,&H0000FFFF,&H0075F2FF,&H00000000,0,0,0,0,100,100,0,0,3,0,0,2,10,10,10,1\n");
-    styles_map.insert("#fff275".to_string(), "HighlightYellow".to_string());
-    // Lexical: #A8FF9E (Green) -> ASS BGR: &H009EFFa8
-    ass_content.push_str("Style: HighlightGreen,Arial,20,&H00FFFFFF,&H0000FFFF,&H009EFFA8,&H00000000,0,0,0,0,100,100,0,0,3,0,0,2,10,10,10,1\n");
-    styles_map.insert("#a8ff9e".to_string(), "HighlightGreen".to_string());
-    // Lexical: #AEEFFF (Blue) -> ASS BGR: &H00FFefaE
-    ass_content.push_str("Style: HighlightBlue,Arial,20,&H00FFFFFF,&H0000FFFF,&H00FFEFaE,&H00000000,0,0,0,0,100,100,0,0,3,0,0,2,10,10,10,1\n");
-    styles_map.insert("#aeefff".to_string(), "HighlightBlue".to_string());
-    // Lexical: #FFB0CF (Pink) -> ASS BGR: &H00CFB0FF
-    ass_content.push_str("Style: HighlightPink,Arial,20,&H00FFFFFF,&H0000FFFF,&H00CFB0FF,&H00000000,0,0,0,0,100,100,0,0,3,0,0,2,10,10,10,1\n");
-    styles_map.insert("#ffb0cf".to_string(), "HighlightPink".to_string());
-    // Lexical: #D0A0FF (Purple) -> ASS BGR: &H00FFA0D0
-    ass_content.push_str("Style: HighlightPurple,Arial,20,&H00FFFFFF,&H0000FFFF,&H00FFA0D0,&H00000000,0,0,0,0,100,100,0,0,3,0,0,2,10,10,10,1\n");
-    styles_map.insert("#d0a0ff".to_string(), "HighlightPurple".to_string());
-    ass_content.push_str("\n");
+    // Highlight styles removed for simpler export.
+    let styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
 
     // [Events]
@@ -1379,7 +1345,7 @@ pub async fn export_transcript_to_ass(
         let end_ts = format_ass_timestamp(segment.end_time);
 
         let speaker_name = segment.speaker.as_deref().unwrap_or("").trim();
-        let dialogue_text_raw = get_ass_dialogue_line_from_lexical_string(&segment.text, &styles_map);
+        let dialogue_text_raw = get_ass_dialogue_line_from_lexical_string(&segment.text);
 
         // Prepend speaker to dialogue text if speaker name is not empty
         let final_text = if !speaker_name.is_empty() {
