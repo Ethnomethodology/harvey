@@ -51,8 +51,12 @@
 		return `${m}m ${s}s`;
 	}
 
+	let transcriptionStartTime = null;
+	let durationText = '';
+
 	// Event Handlers
 	function handleConfirm() {
+		transcriptionStartTime = Date.now();
 		if (modalTab === 'automatic') {
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
@@ -149,9 +153,9 @@
 			: isTranscribing && jobStatus === 'initiating'
 				? 'Initiating Transcription...'
 				: isTranscribing && jobStatus === 'running'
-					? `Transcription Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}`
+					? 'Transcription Status'
 					: jobStatus === 'cancelling'
-						? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}`
+						? 'Cancelling Job'
 						: !isTranscribing && jobStatus === 'done'
 							? 'Transcription Complete'
 							: !isTranscribing && jobStatus === 'error'
@@ -159,6 +163,21 @@
 								: !isTranscribing && jobStatus === 'cancelled'
 									? 'Transcription Cancelled'
 									: 'Transcription Status';
+
+	// Watch for completion to calculate duration
+	$: if (!isTranscribing && jobStatus === 'done') {
+		const endTime = Date.now();
+		const durationMs = transcriptionStartTime ? endTime - transcriptionStartTime : 0;
+		const seconds = Math.floor(durationMs / 1000);
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		
+		if (minutes > 0) {
+			durationText = `${minutes}m ${remainingSeconds}s`;
+		} else {
+			durationText = `${seconds}s`;
+		}
+	}
 
 	// Keyboard handling (optional, can be simplified or removed if not strictly needed by new design)
 	function handleKeydown(event) {
@@ -530,7 +549,10 @@
 				<!-- DONE VIEW -->
 				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
 					<CheckCircle class="w-16 h-16 text-green-500" />
-					<p class="text-sm font-medium">{progressMessage || 'Transcription Complete!'}</p>
+					<p class="text-sm font-medium">Transcription Complete!</p>
+					{#if durationText}
+						<p class="text-xs text-gray-500 dark:text-gray-400">Time taken: {durationText}</p>
+					{/if}
 				</div>
 				<div class="flex justify-center mt-auto">
 					<button class="btn-primary" on:click={handleCloseAndReset}>Close</button>

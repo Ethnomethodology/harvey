@@ -1,4 +1,3 @@
-<!-- src/lib/components/projectview/modals/TranslateDocumentModal.svelte -->
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
     import { get } from 'svelte/store';
@@ -10,6 +9,7 @@
     import { configStatus } from '$lib/stores/configStatusStore.js';
     import { basename } from '@tauri-apps/api/path';
     import { getSelectedTranslationFamily } from '$lib/services/configureActions';
+	import { message } from '@tauri-apps/plugin-dialog';
 
     export let activeDocumentPath = null;
     export let showModal = false;
@@ -24,6 +24,7 @@
     let documentName = '';
 	let selectedSourceLanguage = 'auto';
 	let selectedTargetLanguage = 'en';
+	let translationStartTime = null;
 
 	// Mapping for NLLB language options (based on supported list)
 	const nllbLanguageOptions = [
@@ -134,6 +135,8 @@
 			sourceLang = parts[parts.length - 2] || 'auto';
 		}
 
+		translationStartTime = Date.now();
+
         dispatch('confirm', {
             documentPath: activeDocumentPath,
             model: selectedModel,
@@ -158,19 +161,34 @@
 
     $: isTranslating = $transcriptStore.isTranslating;
     $: jobStatus = $transcriptStore.translationJobStatus;
-    $: progressPercent = $transcriptStore.translationProgress.percent;
     $: progressMessage = $transcriptStore.translationProgress.message;
     $: currentErrorMessage = $transcriptStore.translationErrorMessage;
-    $: currentJobId = $transcriptStore.translationJobId;
+
+	let durationText = '';
 
     $: modalTitle = (!isTranslating && jobStatus === null) ? 'Translate Document' :
                      (isTranslating && jobStatus === 'initiating') ? 'Initiating Translation...' :
-                     (isTranslating && jobStatus === 'running') ? `Translation Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
-                     (jobStatus === 'cancelling') ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` :
+                     (isTranslating && jobStatus === 'running') ? 'Translation Status' :
+                     (jobStatus === 'cancelling') ? `Cancelling Job` :
                      (!isTranslating && jobStatus === 'done') ? 'Translation Complete' :
                      (!isTranslating && jobStatus === 'error') ? 'Translation Error' :
                      (!isTranslating && jobStatus === 'cancelled') ? 'Translation Cancelled' :
                      'Translation Status';
+
+	// Watch for completion to calculate duration
+	$: if (!isTranslating && jobStatus === 'done') {
+		const endTime = Date.now();
+		const durationMs = translationStartTime ? endTime - translationStartTime : 0;
+		const seconds = Math.floor(durationMs / 1000);
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		
+		if (minutes > 0) {
+			durationText = `${minutes}m ${remainingSeconds}s`;
+		} else {
+			durationText = `${seconds}s`;
+		}
+	}
 
     function handleKeydown(event) {
         if (showModal && event.key === 'Escape') {
@@ -274,9 +292,6 @@
                     <div class="w-16 h-16">
                         <Loader class="w-full h-full text-blue-500 animate-spin" />
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: {progressPercent}%"></div>
-                    </div>
                     <p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
                         {progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : 'Processing...')}
                     </p>
@@ -308,7 +323,10 @@
                 <!-- DONE VIEW -->
                 <div class="flex flex-col items-center space-y-3 mb-6 text-center">
                     <CheckCircle class="w-16 h-16 text-green-500" />
-                    <p class="text-sm font-medium">{progressMessage || 'Translation Complete!'}</p>
+                    <p class="text-sm font-medium">Translation Complete!</p>
+					{#if durationText}
+						<p class="text-xs text-gray-500 dark:text-gray-400">Time taken: {durationText}</p>
+					{/if}
                 </div>
                 <div class="flex justify-center mt-auto">
                     <button class="btn-primary" on:click={handleCloseAndReset}>Close</button>
