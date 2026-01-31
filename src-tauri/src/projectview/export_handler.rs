@@ -16,6 +16,7 @@ use tauri_plugin_shell::process::CommandEvent;
 use crate::welcome::python_env::get_python_path;
 use uuid::Uuid;
 use html_escape::encode_text;
+use regex::Regex;
 
 // --- Lexical Format Constants ---
 const IS_BOLD: i64 = 1;
@@ -1303,11 +1304,59 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
 
 
 
-                    // ASS text should not contain literal curly braces unless they are part of tags.
+                                        // ASS text should not contain literal curly braces unless they are part of tags.
 
-                    let ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\r\n", "\\N").replace("\n", "\\N");
 
-                    ass_buffer.push_str(&ass_safe_text);
+
+                                        let mut ass_safe_text = text_content.replace("{", "\\{").replace("}", "\\}").replace("\r\n", "\\N").replace("\n", "\\N");
+
+
+
+                    
+
+
+
+                                        // Preserve multiple spaces by converting them to \h (hard space)
+
+
+
+                                        // We only do this if there are 2 or more consecutive spaces.
+
+
+
+                                        if ass_safe_text.contains("  ") {
+
+
+
+                                            if let Ok(re) = Regex::new(r" {2,}") {
+
+
+
+                                                ass_safe_text = re.replace_all(&ass_safe_text, |caps: &regex::Captures| {
+
+
+
+                                                    "\\h".repeat(caps[0].len())
+
+
+
+                                                }).to_string();
+
+
+
+                                            }
+
+
+
+                                        }
+
+
+
+                    
+
+
+
+                                        ass_buffer.push_str(&ass_safe_text);
 
 
 
