@@ -58,11 +58,11 @@
     }
 
     function handleDocumentTranslateConfirm(event) {
-        const { documentPath, model } = event.detail;
+        const { documentPath, model, targetLanguage } = event.detail;
         if (isImportedTranscript) {
-            requestImportedTranscriptTranslation(documentPath, model);
+            requestImportedTranscriptTranslation(documentPath, model, targetLanguage);
         } else {
-            requestDocumentTranslation(documentPath, model);
+            requestDocumentTranslation(documentPath, model, targetLanguage);
         }
     }
 

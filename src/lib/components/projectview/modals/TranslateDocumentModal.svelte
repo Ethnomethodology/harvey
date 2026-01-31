@@ -105,9 +105,18 @@
     });
 
     function handleConfirm() {
+        let targetLang = 'auto';
+		if (selectedModel.toLowerCase().includes('nllb')) {
+			targetLang = 'auto'; 
+		} else if (selectedModel.includes('-')) {
+			const parts = selectedModel.split('-');
+			targetLang = parts[parts.length - 1];
+		}
+
         dispatch('confirm', {
             documentPath: activeDocumentPath,
             model: selectedModel,
+            targetLanguage: targetLang
         });
     }
 

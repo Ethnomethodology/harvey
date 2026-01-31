@@ -436,6 +436,7 @@ async fn run_translation_process<R: Runtime>(
         // Transcript update logic (Col 4 only)
         if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
             if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
+                // Keep the header row (index 0) and only update data rows
                 for row in rows.iter_mut().skip(1) {
                     if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
                         if cells.len() > 3 {
@@ -456,6 +457,7 @@ async fn run_translation_process<R: Runtime>(
         // Imported Transcript update logic (Col 3 & 4)
         if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
             if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
+                // Keep header row
                 for row in rows.iter_mut().skip(1) {
                     if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
                         if cells.len() > 3 {
@@ -484,8 +486,21 @@ async fn run_translation_process<R: Runtime>(
         }
     }
 
-    let source_lang_code = source_lang.unwrap_or_else(|| "unk".to_string());
-    let target_lang_code = target_language;
+    let mut source_lang_code = source_lang.unwrap_or_else(|| "auto".to_string());
+    let mut target_lang_code = target_language;
+
+    // If target_lang_code is still 'auto' (unlikely now), try to derive from model name
+    if target_lang_code == "auto" {
+        let parts: Vec<&str> = model_name.split('/').collect();
+        let model_id = parts.last().unwrap_or(&"");
+        let lang_parts: Vec<&str> = model_id.split('-').collect();
+        if lang_parts.len() >= 4 {
+             target_lang_code = lang_parts.last().unwrap_or(&"auto").to_string();
+             if source_lang_code == "auto" {
+                 source_lang_code = lang_parts.get(lang_parts.len() - 2).unwrap_or(&"auto").to_string();
+             }
+        }
+    }
 
     let original_file_stem = std::path::Path::new(&normalized_file_path)
         .file_stem()

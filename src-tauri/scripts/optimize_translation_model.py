@@ -19,10 +19,16 @@ def optimize_model(model_path, output_path):
 
         converter = ctranslate2.converters.TransformersConverter(model_path)
         
-        # INT8 is generally safe and much faster on CPU
+        # Determine quantization: 
+        # Helsinki models (Marian) are sensitive to int8. 
+        # Using float16 is much safer and still very fast on M1/M2 or modern CPUs.
+        # If float16 isn't supported, it will fallback to float32.
+        quant = "float16"
+        
+        print(f"Converting with quantization: {quant}", flush=True)
         converter.convert(
             output_path,
-            quantization="int8",
+            quantization=quant,
             force=True
         )
         

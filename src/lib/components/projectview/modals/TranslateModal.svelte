@@ -117,9 +117,25 @@
 
 	function handleConfirm() {
 		const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
+		
+		let targetLang = 'auto';
+		if (selectedModel.toLowerCase().includes('nllb')) {
+			// For NLLB, target language isn't in the model name, 
+			// but we can default to 'en' or leave as 'auto' for backend to decide.
+			// Actually NLLB models translate TO many languages, but here we probably 
+			// want to know the intended target. For now 'auto' is fine for NLLB filename suffix
+			// if we don't have a selector for target lang yet.
+			targetLang = 'auto'; 
+		} else if (selectedModel.includes('-')) {
+			const parts = selectedModel.split('-');
+			// For Helsinki models like "Helsinki-NLP/opus-mt-en-hi", parts are ["Helsinki-NLP/opus", "mt", "en", "hi"]
+			targetLang = parts[parts.length - 1];
+		}
+
 		dispatch('confirm', {
 			transcript: selectedTranscriptObject,
 			model: selectedModel,
+			targetLanguage: targetLang
 		});
 	}
 
