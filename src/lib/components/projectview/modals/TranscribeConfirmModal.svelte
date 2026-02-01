@@ -48,15 +48,43 @@
 		if (!seconds && seconds !== 0) return '0s';
 		const m = Math.floor(seconds / 60);
 		const s = Math.floor(seconds % 60);
+		if (m === 0) return `${s}s`;
 		return `${m}m ${s}s`;
 	}
 
-	let transcriptionStartTime = null;
 	let durationText = '';
+	let elapsedText = '';
+	let timerInterval;
+
+	function updateElapsed() {
+		if ($transcriptStore.isTranscribing && $transcriptStore.transcriptionStartTime) {
+			const now = Date.now();
+			const diff = Math.floor((now - $transcriptStore.transcriptionStartTime) / 1000);
+			elapsedText = formatDuration(diff);
+		} else {
+			elapsedText = '';
+		}
+	}
+
+	$: if ($transcriptStore.isTranscribing && $transcriptStore.transcriptionStartTime) {
+		if (!timerInterval) {
+			updateElapsed();
+			timerInterval = setInterval(updateElapsed, 1000);
+		}
+	} else {
+		if (timerInterval) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+	}
+
+	onDestroy(() => {
+		if (timerInterval) clearInterval(timerInterval);
+	});
 
 	// Event Handlers
 	function handleConfirm() {
-		transcriptionStartTime = Date.now();
+		// Start time is now handled by store
 		if (modalTab === 'automatic') {
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
@@ -167,7 +195,8 @@
 	// Watch for completion to calculate duration
 	$: if (!isTranscribing && jobStatus === 'done') {
 		const endTime = Date.now();
-		const durationMs = transcriptionStartTime ? endTime - transcriptionStartTime : 0;
+		const startTime = $transcriptStore.transcriptionStartTime;
+		const durationMs = startTime ? endTime - startTime : 0;
 		const seconds = Math.floor(durationMs / 1000);
 		const minutes = Math.floor(seconds / 60);
 		const remainingSeconds = seconds % 60;
@@ -519,6 +548,11 @@
 									? 'Processing...'
 									: 'Please wait...')}
 					</p>
+					{#if elapsedText}
+						<p class="text-xs text-center text-gray-500 dark:text-gray-500 font-mono mt-1">
+							{elapsedText}
+						</p>
+					{/if}
 				</div>
 				<div class="flex justify-center space-x-2 mt-auto">
 					<button

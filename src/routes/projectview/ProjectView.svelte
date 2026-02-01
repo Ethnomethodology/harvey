@@ -995,7 +995,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         on:cancelRequest={handleCancelTranscriptionRequest}
         on:openConfig={() => { showConfigurationModal = true; toggleTranscribeModal(false); }}
         on:closeAndReset={() => {
-            transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false, transcriptionJobStatus: null, transcriptionErrorMessage: null, transcriptionJobId: null, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' } }));
+            transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false, transcriptionJobStatus: null, transcriptionErrorMessage: null, transcriptionJobId: null, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' }, transcriptionStartTime: null }));
             // Also clear any pending data related to a job that was just acknowledged as done/error/cancelled
             clearPendingTranscriptData();
              const ranInBackground = get(transcriptStore).ranInBackground;

@@ -45,6 +45,7 @@ export const initialTranscriptState = {
     transcriptionProgress: { percent: 0, message: '' },
     transcriptionJobId: null,
     showTranscribeModal: false,
+    transcriptionStartTime: null,
     mediaPathForLastJob: null,
     activeMediaDuringTranscriptionStart: null,
     transcriptUndoStack: [],
@@ -1043,11 +1044,15 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
             const newActiveMediaDuringStart = mediaPath || ts.selectedMediaFile?.path || ts.activeMediaDuringTranscriptionStart;
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             const messageToSet = initialProgressMessage || (jobStatusToSet === 'initiating' ? `Initiating...` : `Processing...`);
+            
+            // Set start time if starting fresh, otherwise keep existing
+            const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
 
             updatedState = {
                 ...ts,
                 isTranscribing: true,
                 transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId,
+                transcriptionStartTime: startTime,
                 mediaPathForLastJob: mediaPath || ts.mediaPathForLastJob,
                 activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
                 transcriptionProgress: {
@@ -1085,6 +1090,7 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
                 updatedState.mediaPathForLastJob = null;
                 updatedState.transcriptionProgress = { percent: 0, message: '' };
                 updatedState.ranInBackground = false;
+                updatedState.transcriptionStartTime = null;
             }
         }
         console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
@@ -1136,6 +1142,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
             ...ts,
             isTranscribing: false,
             activeMediaDuringTranscriptionStart: null,
+            transcriptionStartTime: null,
         };
     });
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
@@ -1151,7 +1158,8 @@ export function prepareForNewTranscription() {
             transcriptionProgress: { percent: 0, message: '' },
             transcriptionJobStatus: null,
             transcriptionErrorMessage: null,
-            showTranscribeModal: true
+            showTranscribeModal: true,
+            transcriptionStartTime: null
         };
     });
 }
