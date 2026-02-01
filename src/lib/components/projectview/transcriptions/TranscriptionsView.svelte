@@ -102,6 +102,18 @@
 
     let isMediaPlayerHidden = false; // New state variable
 
+    // Logic to show media player by default if the new media is a video
+    $: {
+        const selectedMedia = $transcriptStore.selectedMediaFile;
+        if (selectedMedia && selectedMedia.path) {
+            const extension = selectedMedia.path.split('.').pop()?.toLowerCase();
+            const videoExtensions = ['mp4', 'mov', 'webm', 'avi', 'mkv'];
+            if (videoExtensions.includes(extension)) {
+                isMediaPlayerHidden = false;
+            }
+        }
+    }
+
     let isSegmentEditingActive = false;
     let currentEditSegmentStart = 0;
     let currentEditSegmentEnd = 0;
