@@ -100,6 +100,7 @@
 				src: null,
 				tgt: null,
 				downloads: 0,
+				size: m.size,
 				family: m.family || (m.name.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki')
 			}))];
 			
@@ -111,16 +112,21 @@
 			}
 		} else {
 			baseList = [...availableModelsList];
-			// Ensure all downloaded models are in the list
+			// Ensure all downloaded models are in the list and enrich with local info (like size)
 			for (const dm of downloadedModels) {
-				if (!baseList.some(am => am.id === dm.name)) {
+				const existingIndex = baseList.findIndex(am => am.id === dm.name);
+				if (existingIndex === -1) {
 					baseList.push({ 
 						id: dm.name, 
 						src: null, 
 						tgt: null, 
 						downloads: 0, 
+						size: dm.size,
 						family: dm.family || (dm.name.toLowerCase().includes('nllb') ? 'nllb' : 'helsinki') 
 					});
+				} else if (dm.size) {
+					// Enrich existing entry with local size
+					baseList[existingIndex] = { ...baseList[existingIndex], size: dm.size };
 				}
 			}
 		}
@@ -530,6 +536,12 @@
 											</div>
 											<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center space-x-3">
 												<span class="truncate" title={model.id}>{model.id}</span>
+												{#if model.size}
+													<span class="flex items-center text-gray-400" title="Size on disk">
+														<span>&bull;</span>
+														<span class="ml-1">{model.size}</span>
+													</span>
+												{/if}
 												{#if model.downloads > 0}
 													<span class="flex items-center" title="Downloads">
 														<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>

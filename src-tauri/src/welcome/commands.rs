@@ -29,6 +29,7 @@ use reqwest;
 use futures_util::StreamExt;
 
 use crate::welcome::python_env;
+use walkdir::WalkDir;
 
 // --- Structs for Translation Model Download ---
 #[derive(Clone, serde::Serialize)]
@@ -245,11 +246,35 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
                             .unwrap_or(folder_name)
                             .replace("--", "/");
 
+                        // Calculate size
+                        let size_bytes: u64 = WalkDir::new(&path)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                            .filter_map(|e| e.metadata().ok())
+                            .filter(|m| m.is_file())
+                            .map(|m| m.len())
+                            .sum();
+
+                        let size_str = if size_bytes > 0 {
+                            const KB: u64 = 1024;
+                            const MB: u64 = KB * 1024;
+                            const GB: u64 = MB * 1024;
+                            if size_bytes >= GB {
+                                Some(format!("{:.1} GiB", size_bytes as f64 / GB as f64))
+                            } else if size_bytes >= MB {
+                                Some(format!("{:.1} MiB", size_bytes as f64 / MB as f64))
+                            } else {
+                                Some(format!("{:.1} KiB", size_bytes as f64 / KB as f64))
+                            }
+                        } else {
+                            None
+                        };
+
                         models.push(ModelInfo {
                             name: model_name,
                             family: Some(family_id.to_string()),
                             language: None,
-                            size: None,
+                            size: size_str,
                             description: None,
                             download_location: Some(path.to_string_lossy().into_owned()),
                             download_url: None,
