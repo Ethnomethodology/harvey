@@ -678,6 +678,146 @@ export function insertTranscriptSegment(index, newSegment) {
     }
 }
 
+export function splitTranscriptSegment(index) {
+    const store = get(transcriptStore);
+    if (index < 0 || index >= store.segments.length) {
+        console.warn('[TranscriptStore] splitTranscriptSegment called with invalid index:', index);
+        return;
+    }
+
+    const originalSegment = store.segments[index];
+    const duration = originalSegment.end_time - originalSegment.start_time;
+    if (duration <= 0.002) {
+         console.warn('[TranscriptStore] splitTranscriptSegment: Segment too short to split.');
+         return;
+    }
+
+    pushToUndoStack();
+
+    const splitTime = originalSegment.start_time + (duration / 2);
+
+    // Determine new speaker
+    let newSpeaker = originalSegment.speaker;
+    const speakerNames = store.speakers.names || [];
+    if (speakerNames.length > 0) {
+        const currentSpeakerIndex = speakerNames.indexOf(originalSegment.speaker);
+        if (currentSpeakerIndex !== -1) {
+            newSpeaker = speakerNames[(currentSpeakerIndex + 1) % speakerNames.length];
+        } else if (speakerNames.length > 1) {
+             // If current speaker not in list but we have speakers, maybe default to 2nd one or 1st?
+             // Prompt says "speaker_2 or whatever the next name is".
+             // If unknown, maybe just keep unknown or pick first. Let's keep unknown/current if not found.
+        }
+    }
+
+    const newSegment = {
+        ...originalSegment,
+        start_time: splitTime,
+        end_time: originalSegment.end_time,
+        speaker: newSpeaker,
+        text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
+    };
+
+    const updatedOriginalSegment = {
+        ...originalSegment,
+        end_time: splitTime
+    };
+
+    if (store.isDualModeActive) {
+        // Handle secondary transcript
+        const originalSecondary = store.secondaryTranscriptSegments[index];
+        // Assuming synchronized segments, we split at the same time ratio?
+        // Actually the prompt says "create the 2nd halves of interleaved segments".
+        // It implies splitting the secondary segment as well.
+        // We should check if secondary segment exists.
+        
+        let newSecondarySegments = [...store.secondaryTranscriptSegments];
+        
+        if (originalSecondary) {
+             const secDuration = originalSecondary.end_time - originalSecondary.start_time;
+             // We use the same split time relative to the segment? Or absolute? 
+             // "divide the duration of the corresponding segment in 2"
+             // Ideally we split both at their own midpoints if they aren't perfectly aligned, 
+             // OR we enforce alignment. 
+             // "interleaved together" suggests they correspond 1:1.
+             // Let's split secondary at ITS midpoint to be safe/consistent with logic.
+             const secSplitTime = originalSecondary.start_time + (secDuration / 2);
+             
+             // For speaker of secondary, we can follow same logic or keep same.
+             // Prompt says "if the original segment got speaker_1 the new empty segment should get speaker_2".
+             // It refers to the "segment" being split.
+             // We'll apply same speaker rotation logic for secondary if possible, or just copy from primary's decision?
+             // Usually secondary transcripts (translations) have same speakers.
+             
+             const newSecondarySegment = {
+                ...originalSecondary,
+                start_time: secSplitTime,
+                end_time: originalSecondary.end_time,
+                speaker: newSpeaker, // Match the primary's new speaker choice
+                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
+             };
+             
+             const updatedOriginalSecondary = {
+                 ...originalSecondary,
+                 end_time: secSplitTime
+             };
+             
+             newSecondarySegments = [
+                 ...newSecondarySegments.slice(0, index),
+                 updatedOriginalSecondary,
+                 newSecondarySegment,
+                 ...newSecondarySegments.slice(index + 1)
+             ];
+        } else {
+            // Should not happen if lengths are equal, but handle gracefully
+             newSecondarySegments = [
+                 ...newSecondarySegments.slice(0, index + 1), // Just insert nothing or empty placeholder?
+                 // If unmatched, we can't really split a non-existent segment.
+                 // We insert a placeholder to keep length aligned?
+                 // Let's assume they are aligned. If not, this might de-sync further.
+                 // Ideally we insert a dummy segment to maintain 1:1.
+                 { start_time: splitTime, end_time: splitTime + 1, speaker: newSpeaker, text: "{}" },
+                 ...newSecondarySegments.slice(index + 1)
+             ];
+        }
+
+        transcriptStore.update(ts => {
+            const newSegments = [
+                ...ts.segments.slice(0, index),
+                updatedOriginalSegment,
+                newSegment,
+                ...ts.segments.slice(index + 1)
+            ];
+            
+            return {
+                ...ts,
+                segments: newSegments,
+                secondaryTranscriptSegments: newSecondarySegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: index + 1 }
+            };
+        });
+
+    } else {
+        transcriptStore.update(ts => {
+            const newSegments = [
+                ...ts.segments.slice(0, index),
+                updatedOriginalSegment,
+                newSegment,
+                ...ts.segments.slice(index + 1)
+            ];
+            
+            updateProjectStoreState({ statusMessage: 'Segment split (undoable).' });
+            return {
+                ...ts,
+                segments: newSegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: index + 1 }
+            };
+        });
+    }
+}
+
 export function setSelectedModel(modelName) {
     transcriptStore.update((ts) => ({ ...ts, selectedModelName: modelName || null }));
 }

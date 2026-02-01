@@ -10,6 +10,7 @@
         undoTranscriptChange,
         redoTranscriptChange,
         insertTranscriptSegment,
+        splitTranscriptSegment,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         switchDualModeTranscripts,
@@ -324,6 +325,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     }
 
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
+    export function handleSplitSegmentRequest(event) { const indexToSplit = event.detail; if (typeof indexToSplit === 'number') splitTranscriptSegment(indexToSplit); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleInsertSegmentRequest(event) {
@@ -592,6 +594,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:toggleedit={handleToggleEditMode}
                 on:requestopentab={(e) => dispatch('requestopentab', e.detail)}
                 on:deletetranscriptsegment={handleDeleteSegmentRequest}
+                on:splittranscriptsegment={handleSplitSegmentRequest}
                 on:insertnewsegment={handleInsertSegmentRequest}
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
