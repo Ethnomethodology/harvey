@@ -75,6 +75,7 @@ export const initialTranscriptState = {
     isTranslating: false,
     translationProgress: { percent: 0, message: '' },
     translationJobId: null,
+    translationStartTime: null,
     showTranslateModal: false,
     ranTranslationInBackground: false,
     translationJobStatus: null, // e.g., 'initiating', 'running', 'done', 'error', 'cancelled'
@@ -1718,10 +1719,15 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
 
         if (isTranslating) {
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
+            
+            // Set start time if starting fresh, otherwise keep existing
+            const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
+
             updatedState = {
                 ...ts,
                 isTranslating: true,
                 translationJobId: jobIdToSet !== null ? jobIdToSet : ts.translationJobId,
+                translationStartTime: startTime,
                 translationProgress: {
                     percent: 0,
                     message: 'Initiating translation...'
@@ -1755,6 +1761,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
                 updatedState.translationJobId = null;
                 updatedState.translationProgress = { percent: 0, message: '' };
                 updatedState.ranTranslationInBackground = false;
+                updatedState.translationStartTime = null;
             }
         }
         return updatedState;
@@ -1795,6 +1802,7 @@ export function clearTranslationStatus(finalStatusMessage = 'Ready', error = nul
             translationErrorMessage: null,
             ranTranslationInBackground: false,
             showTranslateModal: false,
+            translationStartTime: null,
         };
     });
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
