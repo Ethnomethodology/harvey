@@ -136,6 +136,12 @@
         const index = event.detail;
         const segment = get(transcriptStore).segments?.[index];
         if (segment && typeof segment.start_time === 'number') {
+            // Commit any pending edits in the editable transcript before switching/saving
+            if (panelEditModeActive && editableTranscriptRef) {
+                editableTranscriptRef.commitCurrentSegmentEdits();
+                await tick();
+            }
+
             if (get(transcriptStore).transcriptDirty) {
                 try {
                     await handleSaveTranscript();
@@ -165,6 +171,13 @@
 
     async function handlePanelNavigate(event) {
         const detail = event.detail;
+
+        // Commit any pending edits in the editable transcript before navigating/saving
+        if (panelEditModeActive && editableTranscriptRef) {
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick();
+        }
+
         if (get(transcriptStore).transcriptDirty) {
             try {
                 await handleSaveTranscript();
@@ -455,6 +468,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     async function handleRequestLoadItem(event) {
         console.log('[TranscriptionsView] handleRequestLoadItem called for item:', event.detail.name, 'file_type:', event.detail.file_type);
+
+        // Commit any pending edits in the editable transcript before checking for dirty state
+        if (panelEditModeActive && editableTranscriptRef) {
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick();
+        }
 
         if (get(transcriptStore).transcriptDirty) {
             // Store the pending item and show the modal
