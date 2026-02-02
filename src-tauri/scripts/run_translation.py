@@ -126,18 +126,20 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
                     mini_batch = valid_inputs[i:i + batch_size_ct2]
                     source_tokens = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t, add_special_tokens=True)) for t in mini_batch]
                     target_prefixes = [ct2_tgt_prefix] * len(source_tokens) if ct2_tgt_prefix else None
-                    results = engine.translate_batch(source_tokens, target_prefix=target_prefixes, asynchronous=False)
+                    # Use greedy search (beam_size=1) for NLLB to improve speed significantly
+                    results = engine.translate_batch(source_tokens, target_prefix=target_prefixes, beam_size=1 if is_nllb else 2, asynchronous=False)
                     decoded.extend([tokenizer.decode(tokenizer.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=True) for r in results])
             else:
                 # Transformers: Robust multi-line generation
                 inputs = tokenizer(valid_inputs, return_tensors="pt", padding=True, truncation=True).to(device)
-                with torch.no_grad():
+                with torch.inference_mode():
                     if is_nllb and tgt_lang:
                         # NLLB needs forced_bos_token_id for target language
                         tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                        # Use greedy search (num_beams=1) for NLLB speed optimization
+                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id, num_beams=1, do_sample=False, use_cache=True)
                     else:
-                        generated = engine.generate(**inputs)
+                        generated = engine.generate(**inputs, use_cache=True)
                 decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
             
             for map_idx, output_text in zip(valid_indices_map, decoded):
@@ -180,12 +182,12 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
                     decoded.append(output_text)
             else:
                 inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
-                with torch.no_grad():
+                with torch.inference_mode():
                     if is_nllb and tgt_lang:
                         tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                        generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id, num_beams=1, do_sample=False, use_cache=True)
                     else:
-                        generated = engine.generate(**inputs)
+                        generated = engine.generate(**inputs, use_cache=True)
                 decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
             
             for ix, trans in zip(batch_ixs, decoded):
@@ -221,12 +223,12 @@ def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=
             batch = segments[i : i + batch_size]
             batch_clean = [s if s.strip() else " " for s in batch] 
             inputs = tokenizer(batch_clean, return_tensors="pt", padding=True, truncation=True).to(device)
-            with torch.no_grad():
+            with torch.inference_mode():
                 if is_nllb and tgt_lang:
                     tgt_lang_id = tokenizer.convert_tokens_to_ids(tgt_lang)
-                    generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id)
+                    generated = engine.generate(**inputs, forced_bos_token_id=tgt_lang_id, num_beams=1, do_sample=False, use_cache=True)
                 else:
-                    generated = engine.generate(**inputs)
+                    generated = engine.generate(**inputs, use_cache=True)
             decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
             
             for j, text in enumerate(batch):
@@ -329,7 +331,7 @@ if __name__ == "__main__":
         # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
         # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
         if is_nllb:
-            batch_size = 4 if device in ["cuda", "mps"] else 1
+            batch_size = 6 if device in ["cuda", "mps"] else 1
         else:
             batch_size = 8
         
