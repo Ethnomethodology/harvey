@@ -207,8 +207,6 @@
     {/if}
   </div>
 </div>
-  </div>
-</div>
 
 <!-- Pass the reactive variables for modal state and data -->
 <RenameModal
