@@ -96,56 +96,53 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             {
-            use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
-            let app_handle = app_mut_ref.handle();
-            
-            let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
-            let app_menu = Submenu::with_items(
-                app_handle,
-                "Harvey",
-                true,
-                &[
-                    &about_item,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::services(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::hide(app_handle, None)?,
-                    &PredefinedMenuItem::hide_others(app_handle, None)?,
-                    &PredefinedMenuItem::show_all(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::quit(app_handle, None)?,
-                ],
-            )?;
+                use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+                use tauri::WebviewWindowBuilder; // Explicit import
+                let app_handle = app_mut_ref.handle();
+                
+                // 1. App Menu (Harvey)
+                let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
+                let sep = PredefinedMenuItem::separator(app_handle)?;
+                let quit = PredefinedMenuItem::quit(app_handle, None)?;
+                
+                let app_menu = Submenu::with_items(
+                    app_handle,
+                    "Harvey",
+                    true,
+                    &[&about_item, &sep, &quit],
+                )?;
 
-            let edit_menu = Submenu::with_items(
-                app_handle,
-                "Edit",
-                true,
-                &[
-                    &PredefinedMenuItem::undo(app_handle, None)?,
-                    &PredefinedMenuItem::redo(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::cut(app_handle, None)?,
-                    &PredefinedMenuItem::copy(app_handle, None)?,
-                    &PredefinedMenuItem::paste(app_handle, None)?,
-                    &PredefinedMenuItem::select_all(app_handle, None)?,
-                ],
-            )?;
+                // 2. Edit Menu
+                let undo = PredefinedMenuItem::undo(app_handle, None)?;
+                let redo = PredefinedMenuItem::redo(app_handle, None)?;
+                let cut = PredefinedMenuItem::cut(app_handle, None)?;
+                let copy = PredefinedMenuItem::copy(app_handle, None)?;
+                let paste = PredefinedMenuItem::paste(app_handle, None)?;
+                let select_all = PredefinedMenuItem::select_all(app_handle, None)?;
+                let sep2 = PredefinedMenuItem::separator(app_handle)?;
+                
+                let edit_menu = Submenu::with_items(
+                    app_handle,
+                    "Edit",
+                    true,
+                    &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all],
+                )?;
 
-            let window_menu = Submenu::with_items(
-                app_handle,
-                "Window",
-                true,
-                &[
-                    &PredefinedMenuItem::minimize(app_handle, None)?,
-                    &PredefinedMenuItem::zoom(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::close_window(app_handle, None)?,
-                ],
-            )?;
+                // 3. Window Menu
+                let minimize = PredefinedMenuItem::minimize(app_handle, None)?;
+                let zoom = PredefinedMenuItem::zoom(app_handle, None)?;
+                let close = PredefinedMenuItem::close_window(app_handle, None)?;
+                let sep3 = PredefinedMenuItem::separator(app_handle)?;
 
-            let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu])?;
-            app_mut_ref.set_menu(menu)?;
+                let window_menu = Submenu::with_items(
+                    app_handle,
+                    "Window",
+                    true,
+                    &[&minimize, &zoom, &sep3, &close],
+                )?;
+
+                let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu])?;
+                app_mut_ref.set_menu(menu)?;
             
             use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
