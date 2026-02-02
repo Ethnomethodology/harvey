@@ -2,6 +2,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { fly } from 'svelte/transition';
+  import { invoke } from '@tauri-apps/api/core'; // Added
+  import { listen } from '@tauri-apps/api/event'; // Added
   import {
     loadProjects,
     handleCreateProject,
@@ -38,12 +40,26 @@
 
 
   // --- Lifecycle ---
+  let unlistenNewProject;
+  let unlistenOpenProject;
+
   onMount(async () => {
+    await invoke('set_menu_context', { context: 'welcome' }).catch(err => console.warn('Failed to set menu context:', err));
+    
+    unlistenNewProject = await listen('menu:file:new-project', () => {
+        onCreateProject();
+    });
+    unlistenOpenProject = await listen('menu:file:open-project', () => {
+        onOpenProject();
+    });
+
     await loadProjects({ setRecentProjects, setIsLoading });
     document.addEventListener('click', handleClickOutside);
   });
 
   onDestroy(() => {
+    if (unlistenNewProject) unlistenNewProject();
+    if (unlistenOpenProject) unlistenOpenProject();
     document.removeEventListener('click', handleClickOutside);
   });
 

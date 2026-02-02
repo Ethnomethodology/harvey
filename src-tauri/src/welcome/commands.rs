@@ -53,6 +53,69 @@ pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslat
 }
 
 #[command]
+pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) -> Result<(), CommandError> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+        
+        let app_handle = &app;
+        
+        // 1. App Menu (Harvey)
+        let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let quit = PredefinedMenuItem::quit(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let app_menu = Submenu::with_items(app_handle, "Harvey", true, &[&about_item, &configurations_item, &sep, &quit]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 2. Edit Menu
+        let undo = PredefinedMenuItem::undo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let redo = PredefinedMenuItem::redo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let cut = PredefinedMenuItem::cut(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let copy = PredefinedMenuItem::copy(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let paste = PredefinedMenuItem::paste(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let select_all = PredefinedMenuItem::select_all(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep2 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let edit_menu = Submenu::with_items(app_handle, "Edit", true, &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 3. Window Menu
+        let minimize = PredefinedMenuItem::minimize(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let close = PredefinedMenuItem::close_window(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep3 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let window_menu = Submenu::with_items(app_handle, "Window", true, &[&minimize, &sep3, &close]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 4. File Menu (Dynamic)
+        let file_menu;
+        if context == "welcome" {
+            let new_proj = MenuItem::with_id(app_handle, "file_new_project", "Create New Project", true, Some("CmdOrCtrl+N")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let open_proj = MenuItem::with_id(app_handle, "file_open_project", "Open Project...", true, Some("CmdOrCtrl+O")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            file_menu = Submenu::with_items(app_handle, "File", true, &[&new_proj, &open_proj]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        } else {
+            // Import Submenu
+            let imp_audio = MenuItem::with_id(app_handle, "file_import_audio", "Audio...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_video = MenuItem::with_id(app_handle, "file_import_video", "Video...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_doc = MenuItem::with_id(app_handle, "file_import_doc", "Document...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_image = MenuItem::with_id(app_handle, "file_import_image", "Image...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_table = MenuItem::with_id(app_handle, "file_import_table", "Table...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_trans = MenuItem::with_id(app_handle, "file_import_transcript", "Transcript...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            
+            let import_submenu = Submenu::with_items(app_handle, "Import", true, &[&imp_audio, &imp_video, &imp_doc, &imp_image, &imp_table, &imp_trans]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            // Create New Submenu
+            let new_doc = MenuItem::with_id(app_handle, "file_create_doc", "Document", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_table = MenuItem::with_id(app_handle, "file_create_table", "Table", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            
+            let create_submenu = Submenu::with_items(app_handle, "Create New", true, &[&new_doc, &new_table]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            file_menu = Submenu::with_items(app_handle, "File", true, &[&import_submenu, &create_submenu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        }
+
+        let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        app.set_menu(menu).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+    }
+    Ok(())
+}
+
+#[command]
 pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConfig) -> Result<(), CommandError> {
     log::info!("CMD: set_advanced_translation_config: {:?}", new_config);
     let mut config = read_config()?;

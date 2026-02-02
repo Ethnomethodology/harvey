@@ -83,6 +83,7 @@
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
     let unlistenCloseRequested = null;
+    let unlistenMenuEvents = [];
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
@@ -184,7 +185,35 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 	onMount(async () => {
 		const appWindow = getCurrentWindow();
 		await appWindow.maximize();
+        await invoke('set_menu_context', { context: 'project' }).catch(err => console.warn('Failed to set menu context:', err));
+
 		await loadTranscriptionConfigData(); // Load model/cloud config
+
+        // Menu Event Listeners
+        unlistenMenuEvents.push(await listen('menu:file:import:audio', () => triggerMediaImport('audio')));
+        unlistenMenuEvents.push(await listen('menu:file:import:video', () => triggerMediaImport('video')));
+        unlistenMenuEvents.push(await listen('menu:file:import:document', () => triggerMediaImport('document')));
+        unlistenMenuEvents.push(await listen('menu:file:import:image', () => triggerMediaImport('image')));
+        unlistenMenuEvents.push(await listen('menu:file:import:table', () => triggerMediaImport('table')));
+        unlistenMenuEvents.push(await listen('menu:file:import:transcript', () => triggerMediaImport('transcript')));
+        
+        unlistenMenuEvents.push(await listen('menu:file:create:document', () => {
+             const currentProject = get(project);
+             if (currentProject && currentProject.xmlPath) {
+                 createNewDocument(currentProject.xmlPath);
+             }
+        }));
+        unlistenMenuEvents.push(await listen('menu:file:create:table', () => {
+             // To open the modal, we need access to the state or dispatch an event.
+             // Since ProjectView doesn't own CreateTableModal (DataLeftPanel does), 
+             // we need a way to trigger it. 
+             // OR we can move CreateTableModal to ProjectView (which is cleaner for global menu access).
+             // Since I can't easily move it without refactoring DataLeftPanel, I will rely on a store or event bus?
+             // Actually, DataTopBar has some modals, but CreateTableModal is in DataLeftPanel.
+             // Let's assume we can trigger it via a store or event. 
+             // Or better: Let's emit a window-level event that DataLeftPanel listens to?
+             emit('request-create-table-modal'); // We'll add a listener in DataLeftPanel
+        }));
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
 		if (xmlPath && xmlPath.trim() !== '') {
@@ -241,6 +270,10 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onDestroy(() => {
 		cleanupProgressListener();
+        if (unlistenMenuEvents) {
+            unlistenMenuEvents.forEach(unlisten => unlisten());
+            unlistenMenuEvents = [];
+        }
         if (unlistenTranscriptionComplete) {
             unlistenTranscriptionComplete();
         }

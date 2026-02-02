@@ -17,6 +17,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { type as getOsType } from '@tauri-apps/plugin-os';
+    import { listen } from '@tauri-apps/api/event'; // Added listen
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
 
@@ -501,6 +502,10 @@
     }
 
     onMount(async () => {
+        const unlistenCreateTable = await listen('request-create-table-modal', () => {
+            showCreateTableModal = true;
+        });
+
         try {
             const savedHeight = localStorage.getItem(LS_KEY_DATA_PANEL_HEIGHT);
             if (savedHeight) {
@@ -559,7 +564,10 @@
       };
       document.addEventListener('click', listener, { capture: true });
 
-      return () => document.removeEventListener('click', listener, { capture: true });
+      return () => {
+          if (unlistenCreateTable) unlistenCreateTable();
+          document.removeEventListener('click', listener, { capture: true });
+      };
     });
 
     function handleShowAddToGroupSubMenu(event, item) {

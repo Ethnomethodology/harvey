@@ -63,7 +63,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init()) // Added this line
         .on_menu_event(|app, event| {
-            if event.id() == "about_harvey" {
+            let id = event.id().as_ref();
+            if id == "about_harvey" {
                 // Check if about window exists
                 if let Some(window) = app.get_webview_window("about") {
                     let _ = window.set_focus();
@@ -79,7 +80,7 @@ pub fn run() {
                     .resizable(false)
                     .build();
                 }
-            } else if event.id() == "configurations_harvey" {
+            } else if id == "configurations_harvey" {
                 // Check if configurations window exists
                 if let Some(window) = app.get_webview_window("configurations") {
                     let _ = window.set_focus();
@@ -95,6 +96,26 @@ pub fn run() {
                     .resizable(true)
                     .build();
                 }
+            } else if id == "file_new_project" {
+                let _ = app.emit("menu:file:new-project", ());
+            } else if id == "file_open_project" {
+                let _ = app.emit("menu:file:open-project", ());
+            } else if id == "file_import_audio" {
+                let _ = app.emit("menu:file:import:audio", ());
+            } else if id == "file_import_video" {
+                let _ = app.emit("menu:file:import:video", ());
+            } else if id == "file_import_doc" {
+                let _ = app.emit("menu:file:import:document", ());
+            } else if id == "file_import_image" {
+                let _ = app.emit("menu:file:import:image", ());
+            } else if id == "file_import_table" {
+                let _ = app.emit("menu:file:import:table", ());
+            } else if id == "file_import_transcript" {
+                let _ = app.emit("menu:file:import:transcript", ());
+            } else if id == "file_create_doc" {
+                let _ = app.emit("menu:file:create:document", ());
+            } else if id == "file_create_table" {
+                let _ = app.emit("menu:file:create:table", ());
             }
         })
         // Global shortcut plugin is now initialized in .setup
@@ -265,6 +286,7 @@ pub fn run() {
             welcome::commands::set_theme_preference,
             welcome::commands::get_advanced_translation_config,
             welcome::commands::set_advanced_translation_config,
+            welcome::commands::set_menu_context, // Added
 
             // --- Project view CORE commands ---
             projectview::core_commands::load_project_data,
