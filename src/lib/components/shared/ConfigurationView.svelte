@@ -111,21 +111,21 @@
 
 <div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0 overflow-x-auto tab-scroll-container">
-		<nav class="-mb-px flex space-x-8 pb-px" aria-label="Tabs">
+	<div class="mb-6 flex-shrink-0">
+		<nav class="flex flex-wrap gap-2" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
-				class:border-blue-500={activeTab === 'application'}
-				class:text-blue-600={activeTab === 'application'}
-				class:dark:text-blue-400={activeTab === 'application'}
-				class:border-transparent={activeTab !== 'application'}
+				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'application'}
+				class:text-blue-700={activeTab === 'application'}
+				class:dark:bg-blue-900={activeTab === 'application'}
+				class:dark:text-blue-300={activeTab === 'application'}
 				class:text-gray-500={activeTab !== 'application'}
 				class:dark:text-gray-400={activeTab !== 'application'}
 				class:hover:text-gray-700={activeTab !== 'application'}
 				class:dark:hover:text-gray-200={activeTab !== 'application'}
-				class:hover:border-gray-300={activeTab !== 'application'}
-				class:dark:hover:border-gray-500={activeTab !== 'application'}
+				class:hover:bg-gray-100={activeTab !== 'application'}
+				class:dark:hover:bg-gray-800={activeTab !== 'application'}
 				aria-current={activeTab === 'application' ? 'page' : undefined}
 			>
 				<span>Application</span>
@@ -138,17 +138,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
-				class:border-blue-500={activeTab === 'transcription'}
-				class:text-blue-600={activeTab === 'transcription'}
-				class:dark:text-blue-400={activeTab === 'transcription'}
-				class:border-transparent={activeTab !== 'transcription'}
+				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'transcription'}
+				class:text-blue-700={activeTab === 'transcription'}
+				class:dark:bg-blue-900={activeTab === 'transcription'}
+				class:dark:text-blue-300={activeTab === 'transcription'}
 				class:text-gray-500={activeTab !== 'transcription'}
 				class:dark:text-gray-400={activeTab !== 'transcription'}
 				class:hover:text-gray-700={activeTab !== 'transcription'}
 				class:dark:hover:text-gray-200={activeTab !== 'transcription'}
-				class:hover:border-gray-300={activeTab !== 'transcription'}
-				class:dark:hover:border-gray-500={activeTab !== 'transcription'}
+				class:hover:bg-gray-100={activeTab !== 'transcription'}
+				class:dark:hover:bg-gray-800={activeTab !== 'transcription'}
 				aria-current={activeTab === 'transcription' ? 'page' : undefined}
 			>
 				<span>Transcription</span>
@@ -161,17 +161,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'diarization'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
-				class:border-blue-500={activeTab === 'diarization'}
-				class:text-blue-600={activeTab === 'diarization'}
-				class:dark:text-blue-400={activeTab === 'diarization'}
-				class:border-transparent={activeTab !== 'diarization'}
+				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'diarization'}
+				class:text-blue-700={activeTab === 'diarization'}
+				class:dark:bg-blue-900={activeTab === 'diarization'}
+				class:dark:text-blue-300={activeTab === 'diarization'}
 				class:text-gray-500={activeTab !== 'diarization'}
 				class:dark:text-gray-400={activeTab !== 'diarization'}
 				class:hover:text-gray-700={activeTab !== 'diarization'}
 				class:dark:hover:text-gray-200={activeTab !== 'diarization'}
-				class:hover:border-gray-300={activeTab !== 'diarization'}
-				class:dark:hover:border-gray-500={activeTab !== 'diarization'}
+				class:hover:bg-gray-100={activeTab !== 'diarization'}
+				class:dark:hover:bg-gray-800={activeTab !== 'diarization'}
 				aria-current={activeTab === 'diarization' ? 'page' : undefined}
 			>
 				<span>Diarization</span>
@@ -184,17 +184,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
-				class:border-blue-500={activeTab === 'translation'}
-				class:text-blue-600={activeTab === 'translation'}
-				class:dark:text-blue-400={activeTab === 'translation'}
-				class:border-transparent={activeTab !== 'translation'}
+				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'translation'}
+				class:text-blue-700={activeTab === 'translation'}
+				class:dark:bg-blue-900={activeTab === 'translation'}
+				class:dark:text-blue-300={activeTab === 'translation'}
 				class:text-gray-500={activeTab !== 'translation'}
 				class:dark:text-gray-400={activeTab !== 'translation'}
 				class:hover:text-gray-700={activeTab !== 'translation'}
 				class:dark:hover:text-gray-200={activeTab !== 'translation'}
-				class:hover:border-gray-300={activeTab !== 'translation'}
-				class:dark:hover:border-gray-500={activeTab !== 'translation'}
+				class:hover:bg-gray-100={activeTab !== 'translation'}
+				class:dark:hover:bg-gray-800={activeTab !== 'translation'}
 				aria-current={activeTab === 'translation' ? 'page' : undefined}
 			>
 				<span>Translation</span>
@@ -207,21 +207,23 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'advanced'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
-				class:border-blue-500={activeTab === 'advanced'}
-				class:text-blue-600={activeTab === 'advanced'}
-				class:dark:text-blue-400={activeTab === 'advanced'}
-				class:border-transparent={activeTab !== 'advanced'}
+				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'advanced'}
+				class:text-blue-700={activeTab === 'advanced'}
+				class:dark:bg-blue-900={activeTab === 'advanced'}
+				class:dark:text-blue-300={activeTab === 'advanced'}
 				class:text-gray-500={activeTab !== 'advanced'}
 				class:dark:text-gray-400={activeTab !== 'advanced'}
 				class:hover:text-gray-700={activeTab !== 'advanced'}
 				class:dark:hover:text-gray-200={activeTab !== 'advanced'}
-				class:hover:border-gray-300={activeTab !== 'advanced'}
-				class:dark:hover:border-gray-500={activeTab !== 'advanced'}
+				class:hover:bg-gray-100={activeTab !== 'advanced'}
+				class:dark:hover:bg-gray-800={activeTab !== 'advanced'}
 				aria-current={activeTab === 'advanced' ? 'page' : undefined}
 			>
 				<span>Advanced</span>
 			</button>
+		</nav>
+	</div>
 		</nav>
 	</div>
 
@@ -319,10 +321,4 @@
 	.overflow-y-auto::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
 	.overflow-y-auto::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.6); }
 	.overflow-y-auto { scrollbar-width: thin; scrollbar-color: rgba(156, 163, 175, 0.5) transparent; }
-
-    .tab-scroll-container::-webkit-scrollbar { height: 6px; }
-	.tab-scroll-container::-webkit-scrollbar-track { background: transparent; }
-	.tab-scroll-container::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-	.tab-scroll-container::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.6); }
-	.tab-scroll-container { scrollbar-width: thin; scrollbar-color: rgba(156, 163, 175, 0.5) transparent; }
 </style>
