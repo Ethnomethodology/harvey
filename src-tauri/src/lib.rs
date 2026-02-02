@@ -61,6 +61,25 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init()) // Added this line
+        .on_menu_event(|app, event| {
+            if event.id() == "about_harvey" {
+                // Check if about window exists
+                if let Some(window) = app.get_webview_window("about") {
+                    let _ = window.set_focus();
+                } else {
+                    // Create new about window
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "about",
+                        tauri::WebviewUrl::App("about".into())
+                    )
+                    .title("About Harvey")
+                    .inner_size(600.0, 550.0)
+                    .resizable(false)
+                    .build();
+                }
+            }
+        })
         // Global shortcut plugin is now initialized in .setup
         .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
             // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed
@@ -77,6 +96,56 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             {
+            use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+            let app_handle = app_mut_ref.handle();
+            
+            let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
+            let app_menu = Submenu::with_items(
+                app_handle,
+                "Harvey",
+                true,
+                &[
+                    &about_item,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::services(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::hide(app_handle, None)?,
+                    &PredefinedMenuItem::hide_others(app_handle, None)?,
+                    &PredefinedMenuItem::show_all(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::quit(app_handle, None)?,
+                ],
+            )?;
+
+            let edit_menu = Submenu::with_items(
+                app_handle,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app_handle, None)?,
+                    &PredefinedMenuItem::redo(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::cut(app_handle, None)?,
+                    &PredefinedMenuItem::copy(app_handle, None)?,
+                    &PredefinedMenuItem::paste(app_handle, None)?,
+                    &PredefinedMenuItem::select_all(app_handle, None)?,
+                ],
+            )?;
+
+            let window_menu = Submenu::with_items(
+                app_handle,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(app_handle, None)?,
+                    &PredefinedMenuItem::zoom(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::close_window(app_handle, None)?,
+                ],
+            )?;
+
+            let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu])?;
+            app_mut_ref.set_menu(menu)?;
             
             use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
