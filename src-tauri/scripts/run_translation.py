@@ -325,8 +325,13 @@ if __name__ == "__main__":
 
         segments = json.loads(args.text)
         
-        # Use smaller batch size for NLLB to avoid hanging
-        batch_size = 1 if is_nllb else 8
+        # Determine optimal batch size
+        # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
+        # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
+        if is_nllb:
+            batch_size = 4 if device in ["cuda", "mps"] else 1
+        else:
+            batch_size = 8
         
         results = []
         # For NLLB in CT2, we need to pass the target language prefix
