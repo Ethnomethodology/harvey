@@ -111,8 +111,8 @@
 
 <div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0">
-		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
+	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0 overflow-x-auto">
+		<nav class="-mb-px flex space-x-8 pb-px" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
