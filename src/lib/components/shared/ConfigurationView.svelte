@@ -109,13 +109,13 @@
 	}
 </script>
 
-<div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
+<div class="p-4 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
 	<div class="mb-6 flex-shrink-0">
 		<nav class="flex flex-wrap gap-2" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
-				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:bg-blue-100={activeTab === 'application'}
 				class:text-blue-700={activeTab === 'application'}
 				class:dark:bg-blue-900={activeTab === 'application'}
@@ -138,7 +138,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
-				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:bg-blue-100={activeTab === 'transcription'}
 				class:text-blue-700={activeTab === 'transcription'}
 				class:dark:bg-blue-900={activeTab === 'transcription'}
@@ -161,7 +161,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'diarization'}
-				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:bg-blue-100={activeTab === 'diarization'}
 				class:text-blue-700={activeTab === 'diarization'}
 				class:dark:bg-blue-900={activeTab === 'diarization'}
@@ -184,7 +184,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:bg-blue-100={activeTab === 'translation'}
 				class:text-blue-700={activeTab === 'translation'}
 				class:dark:bg-blue-900={activeTab === 'translation'}
@@ -207,7 +207,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'advanced'}
-				class="px-3 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:bg-blue-100={activeTab === 'advanced'}
 				class:text-blue-700={activeTab === 'advanced'}
 				class:dark:bg-blue-900={activeTab === 'advanced'}
