@@ -1,4 +1,4 @@
-use crate::welcome::config::{CommandError};
+use crate::welcome::config::{CommandError, read_config};
 use crate::welcome::python_env::get_python_path;
 use super::TranslationEngine;
 use tauri::{AppHandle, Runtime, Manager};
@@ -65,6 +65,32 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
         if let Some(t) = tgt_lang {
             python_args.push("--tgt-lang".to_string());
             python_args.push(t.to_string());
+        }
+
+        // Read advanced config
+        if let Ok(config) = read_config() {
+            if let Some(adv) = config.advanced_translation {
+                if let Some(helsinki_bs) = adv.helsinki_batch_size {
+                    python_args.push("--batch-size-helsinki".to_string());
+                    python_args.push(helsinki_bs.to_string());
+                }
+                if let Some(nllb_bs) = adv.nllb_batch_size {
+                    python_args.push("--batch-size-nllb".to_string());
+                    python_args.push(nllb_bs.to_string());
+                }
+                if let Some(threads) = adv.num_threads {
+                    python_args.push("--threads".to_string());
+                    python_args.push(threads.to_string());
+                }
+                if let Some(device) = adv.device_preference {
+                    python_args.push("--device-preference".to_string());
+                    python_args.push(device);
+                }
+                if let Some(backend) = adv.backend_preference {
+                    python_args.push("--backend-preference".to_string());
+                    python_args.push(backend);
+                }
+            }
         }
 
         info!("[PythonEngine][{}] Executing python script: {:?}", job_id, python_args);

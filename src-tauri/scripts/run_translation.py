@@ -245,29 +245,51 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["transcript", "document"], default="transcript")
     parser.add_argument("--src-lang", help="Source language code (e.g. en, eng_Latn)")
     parser.add_argument("--tgt-lang", help="Target language code (e.g. ja, jpn_Jpan)")
+    
+    # Advanced Configuration Arguments
+    parser.add_argument("--batch-size-helsinki", type=int, help="Override batch size for Helsinki models")
+    parser.add_argument("--batch-size-nllb", type=int, help="Override batch size for NLLB models")
+    parser.add_argument("--threads", type=int, help="Override number of CPU threads")
+    parser.add_argument("--device-preference", choices=["auto", "cpu", "cuda", "mps"], default="auto", help="Device preference")
+    parser.add_argument("--backend-preference", choices=["auto", "ctranslate2", "transformers"], default="auto", help="Backend preference")
+    
     args = parser.parse_args()
 
     try:
         os.environ["HF_HUB_OFFLINE"] = "1"
         
         # Optimize CPU thread count for Intel/AMD
-        # Heuristic: Use ~physical cores (cpu_count / 2 for hyperthreading), capped at 8 to maintain system responsiveness.
-        # This provides a significant speedup on modern multi-core CPUs compared to the fixed limit of 4.
         cpu_count = os.cpu_count() or 4
         optimal_threads = max(1, int(cpu_count / 2))
         optimal_threads = min(optimal_threads, 8) 
+        
+        # Use override if provided
+        if args.threads:
+            optimal_threads = args.threads
+            sys.stderr.write(f"[Python Debug] Overriding CPU threads to {optimal_threads}\n")
         
         torch.set_num_threads(optimal_threads)
         
         if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8')
             
-        # Determine device
+        # Determine device based on preference and availability
         device = "cpu"
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
+        pref = args.device_preference
+        
+        if pref == "cuda":
+            if torch.cuda.is_available(): device = "cuda"
+            else: sys.stderr.write("[Python Debug] CUDA preferred but not available. Falling back to CPU.\n")
+        elif pref == "mps":
+            if torch.backends.mps.is_available(): device = "mps"
+            else: sys.stderr.write("[Python Debug] MPS preferred but not available. Falling back to CPU.\n")
+        elif pref == "cpu":
+            device = "cpu"
+        else: # auto
+            if torch.backends.mps.is_available():
+                device = "mps"
+            elif torch.cuda.is_available():
+                device = "cuda"
         
         # Heuristic to check for NLLB
         is_nllb = "nllb" in args.model_path.lower()
@@ -282,13 +304,22 @@ if __name__ == "__main__":
         ct2_model_path = os.path.join(args.model_path, "ct2_optimized")
         has_ct2_model = os.path.exists(ct2_model_path)
         
-        # Optimization for macOS (MPS):
-        # Prefer Transformers (MPS) over CT2 (CPU) for NLLB models to utilize Neural Engine/GPU.
-        # CTranslate2 currently does not support MPS, and NLLB is heavy on CPU.
-        # For Helsinki (small), CT2 CPU is efficient enough.
-        prefer_mps_for_nllb = torch.backends.mps.is_available() and is_nllb
+        # Determine Backend
+        use_ct2 = False
+        backend_pref = args.backend_preference
         
-        use_ct2 = has_ct2_model and not prefer_mps_for_nllb
+        if backend_pref == "ctranslate2":
+            if has_ct2_model: use_ct2 = True
+            else: sys.stderr.write("[Python Debug] CTranslate2 preferred but model not found. Falling back to Transformers.\n")
+        elif backend_pref == "transformers":
+            use_ct2 = False
+        else: # auto
+            # Optimization for macOS (MPS):
+            prefer_mps_for_nllb = torch.backends.mps.is_available() and is_nllb
+            use_ct2 = has_ct2_model and not prefer_mps_for_nllb
+            # If user explicitly chose 'cuda' device but CT2 works better with CUDA, CT2 is fine.
+            # But if user forced 'mps' device, CT2 won't work, so use_ct2 should be false if device is mps.
+            if device == "mps": use_ct2 = False
         
         engine = None
         if use_ct2:
@@ -334,12 +365,19 @@ if __name__ == "__main__":
         segments = json.loads(args.text)
         
         # Determine optimal batch size
-        # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
-        # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
+        batch_size = 8
         if is_nllb:
-            batch_size = 12 if device in ["cuda", "mps"] else 1
+            if args.batch_size_nllb:
+                batch_size = args.batch_size_nllb
+            else:
+                # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
+                # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
+                batch_size = 12 if device in ["cuda", "mps"] else 1
         else:
-            batch_size = 12
+            if args.batch_size_helsinki:
+                batch_size = args.batch_size_helsinki
+            else:
+                batch_size = 12 # Increased default for Helsinki too since it's light
         
         results = []
         # For NLLB in CT2, we need to pass the target language prefix

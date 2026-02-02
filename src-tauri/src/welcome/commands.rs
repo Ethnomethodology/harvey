@@ -2,7 +2,7 @@
 
 use crate::welcome::config::{
     ModelInfo, ProjectInfo, add_or_update_project_in_config, read_config, write_config, // Keep these config functions
-    PROJECT_FILE_EXTENSION, CommandError, get_default_download_location,
+    PROJECT_FILE_EXTENSION, CommandError, get_default_download_location, AdvancedTranslationConfig,
 };
 use crate::utils::canonicalize_path;
 use crate::DownloadCancellationState;
@@ -44,6 +44,21 @@ struct TranslationDownloadProgress {
 struct TranslationErrorPayload {
   model_name: String,
   error_message: String,
+}
+
+#[command]
+pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslationConfig>, CommandError> {
+    let config = read_config()?;
+    Ok(config.advanced_translation)
+}
+
+#[command]
+pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConfig) -> Result<(), CommandError> {
+    log::info!("CMD: set_advanced_translation_config: {:?}", new_config);
+    let mut config = read_config()?;
+    config.advanced_translation = Some(new_config);
+    write_config(&config)?;
+    Ok(())
 }
 
 #[command]

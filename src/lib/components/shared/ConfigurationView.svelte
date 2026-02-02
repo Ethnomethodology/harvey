@@ -17,11 +17,12 @@
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
 	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
+	import AdvancedConfiguration from './AdvancedConfiguration.svelte';
 	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
-	let activeTab = 'application'; // 'application', 'transcription', 'diarization', or 'translation'
+	let activeTab = 'application'; // 'application', 'transcription', 'diarization', 'translation', 'advanced'
 	let isWinArm64 = false;
 	let isFFmpegInstalled = false;
 	let downloadLocation = '';
@@ -32,8 +33,9 @@
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
+	let isAdvancedBusy = false;
 	let translationModelCount = 0;
-	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
+	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy || isAdvancedBusy;
 
 	onMount(async () => {
 		updateConfigStatus(true); // Force a refresh when the component mounts
@@ -203,6 +205,23 @@
 					</svg>
 				{/if}
 			</button>
+			<button
+				on:click={() => activeTab = 'advanced'}
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:border-blue-500={activeTab === 'advanced'}
+				class:text-blue-600={activeTab === 'advanced'}
+				class:dark:text-blue-400={activeTab === 'advanced'}
+				class:border-transparent={activeTab !== 'advanced'}
+				class:text-gray-500={activeTab !== 'advanced'}
+				class:dark:text-gray-400={activeTab !== 'advanced'}
+				class:hover:text-gray-700={activeTab !== 'advanced'}
+				class:dark:hover:text-gray-200={activeTab !== 'advanced'}
+				class:hover:border-gray-300={activeTab !== 'advanced'}
+				class:dark:hover:border-gray-500={activeTab !== 'advanced'}
+				aria-current={activeTab === 'advanced' ? 'page' : undefined}
+			>
+				<span>Advanced</span>
+			</button>
 		</nav>
 	</div>
 
@@ -277,6 +296,8 @@
 			</div>
 		{:else if activeTab === 'translation'}
 			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
+		{:else if activeTab === 'advanced'}
+			<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
 		{/if}
 	</div>
 </div>

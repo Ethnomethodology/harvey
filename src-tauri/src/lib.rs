@@ -179,6 +179,8 @@ pub fn run() {
             welcome::hf_auth::check_hf_auth_status,
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
+            welcome::commands::get_advanced_translation_config,
+            welcome::commands::set_advanced_translation_config,
 
             // --- Project view CORE commands ---
             projectview::core_commands::load_project_data,

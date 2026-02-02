@@ -88,9 +88,24 @@ pub struct Config {
 
     #[serde(rename = "verification_status", default)]
     pub verification_status: VerificationStatus,
+
+    #[serde(rename = "advanced_translation", default, skip_serializing_if = "Option::is_none")]
+    pub advanced_translation: Option<AdvancedTranslationConfig>,
 }
 
-
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AdvancedTranslationConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub helsinki_batch_size: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nllb_batch_size: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub num_threads: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_preference: Option<String>, // "auto", "cpu", "cuda", "mps"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_preference: Option<String>, // "auto", "ctranslate2", "transformers"
+}
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", content = "payload")] // This will serialize to { "type": "...", "payload": "..." }
