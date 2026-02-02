@@ -7,7 +7,7 @@
     "project",
     "project-*",
     "about",
-    "settings"
+    "configurations"
   ],
   "permissions": [
     "core:default",

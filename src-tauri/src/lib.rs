@@ -79,18 +79,18 @@ pub fn run() {
                     .resizable(false)
                     .build();
                 }
-            } else if event.id() == "settings_harvey" {
-                // Check if settings window exists
-                if let Some(window) = app.get_webview_window("settings") {
+            } else if event.id() == "configurations_harvey" {
+                // Check if configurations window exists
+                if let Some(window) = app.get_webview_window("configurations") {
                     let _ = window.set_focus();
                 } else {
-                    // Create new settings window
+                    // Create new configurations window
                     let _ = tauri::WebviewWindowBuilder::new(
                         app,
-                        "settings",
-                        tauri::WebviewUrl::App("settings".into())
+                        "configurations",
+                        tauri::WebviewUrl::App("configurations".into())
                     )
-                    .title("Settings")
+                    .title("Configurations")
                     .inner_size(800.0, 700.0)
                     .resizable(true)
                     .build();
@@ -119,7 +119,7 @@ pub fn run() {
                 
                 // 1. App Menu (Harvey)
                 let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
-                let settings_item = MenuItem::with_id(app_handle, "settings_harvey", "Settings...", true, Some("CmdOrCtrl+,"))?;
+                let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,"))?;
                 let sep = PredefinedMenuItem::separator(app_handle)?;
                 let quit = PredefinedMenuItem::quit(app_handle, None)?;
                 
@@ -127,7 +127,7 @@ pub fn run() {
                     app_handle,
                     "Harvey",
                     true,
-                    &[&about_item, &settings_item, &sep, &quit],
+                    &[&about_item, &configurations_item, &sep, &quit],
                 )?;
 
                 // 2. Edit Menu
