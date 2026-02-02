@@ -272,7 +272,15 @@ if __name__ == "__main__":
         
         # Check for CTranslate2 optimized model
         ct2_model_path = os.path.join(args.model_path, "ct2_optimized")
-        use_ct2 = os.path.exists(ct2_model_path)
+        has_ct2_model = os.path.exists(ct2_model_path)
+        
+        # Optimization for macOS (MPS):
+        # Prefer Transformers (MPS) over CT2 (CPU) for NLLB models to utilize Neural Engine/GPU.
+        # CTranslate2 currently does not support MPS, and NLLB is heavy on CPU.
+        # For Helsinki (small), CT2 CPU is efficient enough.
+        prefer_mps_for_nllb = torch.backends.mps.is_available() and is_nllb
+        
+        use_ct2 = has_ct2_model and not prefer_mps_for_nllb
         
         engine = None
         if use_ct2:
