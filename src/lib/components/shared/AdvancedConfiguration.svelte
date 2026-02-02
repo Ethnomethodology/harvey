@@ -79,16 +79,19 @@
         }
     }
 
-    async function handleReset() {
-        config = {
-            diarization_device: 'auto',
-            diarization_threads: 4,
-            helsinki_batch_size: 8,
-            nllb_batch_size: 1,
-            num_threads: 4,
-            device_preference: 'auto'
-        };
-        statusMessage = 'Settings reset to defaults (Click Save to apply).';
+    function resetDiarization() {
+        config.diarization_device = 'auto';
+        config.diarization_threads = 4;
+        statusMessage = 'Diarization settings reset (Click Save to apply).';
+        statusType = 'info';
+    }
+
+    function resetTranslation() {
+        config.helsinki_batch_size = 8;
+        config.nllb_batch_size = 1;
+        config.num_threads = 4;
+        config.device_preference = 'auto';
+        statusMessage = 'Translation settings reset (Click Save to apply).';
         statusType = 'info';
     }
 
@@ -120,6 +123,14 @@
         <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
     
+    <!-- Status Message Area (Moved up) -->
+    {#if statusMessage}
+        <div class="mb-4 flex items-center p-2 rounded-md" class:bg-green-100={statusType === 'success'} class:text-green-700={statusType === 'success'} class:bg-red-100={statusType === 'error'} class:text-red-700={statusType === 'error'} class:bg-gray-100={statusType === 'info'} class:text-gray-700={statusType === 'info'} class:dark:bg-green-900={statusType === 'success'} class:dark:text-green-300={statusType === 'success'} class:dark:bg-red-900={statusType === 'error'} class:dark:text-red-300={statusType === 'error'} class:dark:bg-gray-800={statusType === 'info'} class:dark:text-gray-300={statusType === 'info'}>
+            {#if statusType === 'success'} <CheckCircle class="w-4 h-4 mr-2"/> {:else if statusType === 'error'} <AlertTriangle class="w-4 h-4 mr-2"/> {/if}
+            <span class="text-sm">{statusMessage}</span>
+        </div>
+    {/if}
+
     <div class="space-y-6">
         <!-- Diarization Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
@@ -151,6 +162,11 @@
                             <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
+                    </div>
+                    <!-- Panel Actions -->
+                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
+                        <button class="btn-secondary" on:click={resetDiarization} disabled={isBusy}>Reset Defaults</button>
+                        <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
             {/if}
@@ -199,31 +215,13 @@
                             <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
                         </div>
                     </div>
+                    <!-- Panel Actions -->
+                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
+                        <button class="btn-secondary" on:click={resetTranslation} disabled={isBusy}>Reset Defaults</button>
+                        <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
+                    </div>
                 </div>
             {/if}
-        </div>
-    </div>
-
-    <!-- Footer Actions -->
-    <div class="mt-6 flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-            {#if statusMessage}
-                {#if statusType === 'success'}
-                    <CheckCircle class="w-4 h-4 text-green-500 mr-2" />
-                    <span class="text-sm text-green-600">{statusMessage}</span>
-                {:else if statusType === 'error'}
-                    <AlertTriangle class="w-4 h-4 text-red-500 mr-2" />
-                    <span class="text-sm text-red-600">{statusMessage}</span>
-                {:else}
-                    <span class="text-sm text-gray-600 dark:text-gray-400">{statusMessage}</span>
-                {/if}
-            {/if}
-        </div>
-        <div class="flex space-x-3">
-            <button class="btn-secondary" on:click={handleReset} disabled={isBusy}>Reset to Defaults</button>
-            <button class="btn-primary" on:click={handleSave} disabled={isBusy}>
-                {isBusy ? 'Saving...' : 'Save'}
-            </button>
         </div>
     </div>
 </div>
