@@ -5,7 +5,9 @@
   "windows": [
     "main",
     "project",
-    "project-*"
+    "project-*",
+    "about",
+    "settings"
   ],
   "permissions": [
     "core:default",
