@@ -505,6 +505,9 @@
         const unlistenCreateTable = await listen('request-create-table-modal', () => {
             showCreateTableModal = true;
         });
+        const unlistenCreateGroup = await listen('request-create-group-modal', () => {
+            showCreateGroupModal = true;
+        });
 
         try {
             const savedHeight = localStorage.getItem(LS_KEY_DATA_PANEL_HEIGHT);
@@ -566,6 +569,7 @@
 
       return () => {
           if (unlistenCreateTable) unlistenCreateTable();
+          if (unlistenCreateGroup) unlistenCreateGroup();
           document.removeEventListener('click', listener, { capture: true });
       };
     });

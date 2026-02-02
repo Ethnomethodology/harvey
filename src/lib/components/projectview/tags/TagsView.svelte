@@ -43,6 +43,15 @@
     // UI State for Context Menu / Dropdown
     let showAddMenu = false;
 
+    // Exported methods for parent control
+    export function openAddTagModal() {
+        isAddTagModalOpen = true;
+    }
+
+    export function openAddGroupModal() {
+        isAddGroupModalOpen = true;
+    }
+
     // Derived Data for Display
     let groups = [];
     let ungroupedTags = [];

@@ -204,15 +204,23 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
              }
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:table', () => {
-             // To open the modal, we need access to the state or dispatch an event.
-             // Since ProjectView doesn't own CreateTableModal (DataLeftPanel does), 
-             // we need a way to trigger it. 
-             // OR we can move CreateTableModal to ProjectView (which is cleaner for global menu access).
-             // Since I can't easily move it without refactoring DataLeftPanel, I will rely on a store or event bus?
-             // Actually, DataTopBar has some modals, but CreateTableModal is in DataLeftPanel.
-             // Let's assume we can trigger it via a store or event. 
-             // Or better: Let's emit a window-level event that DataLeftPanel listens to?
-             emit('request-create-table-modal'); // We'll add a listener in DataLeftPanel
+             // Emit loopback for DataLeftPanel
+             emit('request-create-table-modal');
+        }));
+        unlistenMenuEvents.push(await listen('menu:file:create:group', async () => {
+             await handleTabClick('data');
+             await tick();
+             emit('request-create-group-modal');
+        }));
+        unlistenMenuEvents.push(await listen('menu:file:create:tag', async () => {
+             await handleTabClick('tags');
+             await tick();
+             if (tagsViewRef) tagsViewRef.openAddTagModal();
+        }));
+        unlistenMenuEvents.push(await listen('menu:file:create:tag-group', async () => {
+             await handleTabClick('tags');
+             await tick();
+             if (tagsViewRef) tagsViewRef.openAddGroupModal();
         }));
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');

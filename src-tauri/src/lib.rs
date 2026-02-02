@@ -4,9 +4,9 @@ use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
 use tauri::Manager; // Added Manager import
+use tauri::Emitter; // For app.emit()
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
-// use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 
@@ -116,6 +116,12 @@ pub fn run() {
                 let _ = app.emit("menu:file:create:document", ());
             } else if id == "file_create_table" {
                 let _ = app.emit("menu:file:create:table", ());
+            } else if id == "file_create_group" {
+                let _ = app.emit("menu:file:create:group", ());
+            } else if id == "file_create_tag" {
+                let _ = app.emit("menu:file:create:tag", ());
+            } else if id == "file_create_tag_group" {
+                let _ = app.emit("menu:file:create:tag-group", ());
             }
         })
         // Global shortcut plugin is now initialized in .setup

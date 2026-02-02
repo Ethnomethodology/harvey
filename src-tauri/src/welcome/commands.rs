@@ -103,8 +103,11 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
             // Create New Submenu
             let new_doc = MenuItem::with_id(app_handle, "file_create_doc", "Document", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
             let new_table = MenuItem::with_id(app_handle, "file_create_table", "Table", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_group = MenuItem::with_id(app_handle, "file_create_group", "Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag = MenuItem::with_id(app_handle, "file_create_tag", "Tag", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag_group = MenuItem::with_id(app_handle, "file_create_tag_group", "Tag Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
             
-            let create_submenu = Submenu::with_items(app_handle, "Create New", true, &[&new_doc, &new_table]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let create_submenu = Submenu::with_items(app_handle, "Create New", true, &[&new_doc, &new_table, &new_group, &new_tag, &new_tag_group]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
             file_menu = Submenu::with_items(app_handle, "File", true, &[&import_submenu, &create_submenu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
         }
