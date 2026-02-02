@@ -316,14 +316,20 @@ if __name__ == "__main__":
             sys.stderr.write("[Python Debug] Loading with transformers engine.\n")
             if is_nllb:
                 tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
-                engine = AutoModelForSeq2SeqLM.from_pretrained(args.model_path)
-                # Use float16 for NLLB on GPU/MPS to avoid CPU bottlenecks
-                if device != "cpu":
-                    engine = engine.half()
-                engine = engine.to(device)
+                # Use optimal dtype and low memory usage for NLLB
+                engine = AutoModelForSeq2SeqLM.from_pretrained(
+                    args.model_path,
+                    torch_dtype=torch.float16 if device != "cpu" else torch.float32,
+                    low_cpu_mem_usage=True
+                )
+                engine = engine.to(device).eval()
             else:
-                tokenizer = MarianTokenizer.from_pretrained(args.model_path)
-                engine = MarianMTModel.from_pretrained(args.model_path).to(device)
+                tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+                engine = AutoModelForSeq2SeqLM.from_pretrained(
+                    args.model_path,
+                    torch_dtype=torch.float16 if device != "cpu" else torch.float32,
+                    low_cpu_mem_usage=True
+                ).to(device).eval()
 
         segments = json.loads(args.text)
         
@@ -331,9 +337,9 @@ if __name__ == "__main__":
         # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
         # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
         if is_nllb:
-            batch_size = 6 if device in ["cuda", "mps"] else 1
+            batch_size = 12 if device in ["cuda", "mps"] else 1
         else:
-            batch_size = 8
+            batch_size = 12
         
         results = []
         # For NLLB in CT2, we need to pass the target language prefix
