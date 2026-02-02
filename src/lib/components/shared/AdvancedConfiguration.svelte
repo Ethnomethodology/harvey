@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
-    import { CheckCircle, AlertTriangle } from 'lucide-svelte';
+    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-svelte';
 
     export let isBusy = false;
 
@@ -18,6 +18,10 @@
     let platformInfo = null; // Initialize as null to indicate loading
     let statusMessage = '';
     let statusType = 'info'; // info, success, error
+    
+    // Collapsible panel states
+    let isDiarizationOpen = false;
+    let isTranslationOpen = false;
 
     const deviceOptions = [
         { value: 'auto', label: 'Auto (Recommended)' },
@@ -48,8 +52,6 @@
             platformInfo = 'error';
         }
     });
-
-    // ... handleSave and handleReset remain the same ...
 
     async function handleSave() {
         isBusy = true;
@@ -118,66 +120,87 @@
         <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
     
-    <!-- Rest of the UI remains the same -->
     <div class="space-y-6">
         <!-- Diarization Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b dark:border-gray-700">
+            <button 
+                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                on:click={() => isDiarizationOpen = !isDiarizationOpen}
+            >
                 <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
-            </div>
-            <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Device -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                        <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
-                        <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
-                    </div>
-                    
-                    <!-- Threads -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                        <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
-                        <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
+                {#if isDiarizationOpen}
+                    <ChevronDown class="w-4 h-4 text-gray-500" />
+                {:else}
+                    <ChevronRight class="w-4 h-4 text-gray-500" />
+                {/if}
+            </button>
+            
+            {#if isDiarizationOpen}
+                <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Device -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                            <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
+                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
+                        </div>
+                        
+                        <!-- Threads -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            {/if}
         </div>
 
         <!-- Translation Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b dark:border-gray-700">
+            <button 
+                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                on:click={() => isTranslationOpen = !isTranslationOpen}
+            >
                 <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
-            </div>
-            <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Device -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                        <Dropdown options={deviceOptions} bind:value={config.device_preference} />
-                        <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
-                    </div>
-                    
-                    <!-- Threads -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                        <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
-                        <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
-                    </div>
+                {#if isTranslationOpen}
+                    <ChevronDown class="w-4 h-4 text-gray-500" />
+                {:else}
+                    <ChevronRight class="w-4 h-4 text-gray-500" />
+                {/if}
+            </button>
 
-                    <!-- Batch Sizes -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for NLLB</label>
-                        <input type="number" bind:value={config.nllb_batch_size} min="1" max="32" class="input w-full" />
-                        <p class="text-[10px] text-gray-500">Higher = Faster on GPU/MPS. Lower (1-4) safer for CPU.</p>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for Helsinki</label>
-                        <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
-                        <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
+            {#if isTranslationOpen}
+                <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Device & Backend -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                            <Dropdown options={deviceOptions} bind:value={config.device_preference} />
+                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
+                        </div>
+                        
+                        <!-- Threads -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                            <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
+                        </div>
+
+                        <!-- Batch Sizes -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for NLLB</label>
+                            <input type="number" bind:value={config.nllb_batch_size} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Higher = Faster on GPU/MPS. Lower (1-4) safer for CPU.</p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for Helsinki</label>
+                            <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            {/if}
         </div>
     </div>
 
