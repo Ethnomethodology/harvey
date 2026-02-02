@@ -278,9 +278,15 @@ if __name__ == "__main__":
         if use_ct2:
             try:
                 import ctranslate2
-                sys.stderr.write(f"[Python Debug] Using CTranslate2 optimized engine: {ct2_model_path}\n")
-                # CT2 can use multiple threads
-                engine = ctranslate2.Translator(ct2_model_path, device="cpu", intra_threads=4)
+                
+                # Determine CT2 device
+                ct2_device = "cpu"
+                if device == "cuda" and ctranslate2.get_cuda_device_count() > 0:
+                    ct2_device = "cuda"
+                
+                sys.stderr.write(f"[Python Debug] Using CTranslate2 optimized engine: {ct2_model_path} (Device: {ct2_device})\n")
+                # CT2 can use multiple threads. On CPU 4 is a safe default.
+                engine = ctranslate2.Translator(ct2_model_path, device=ct2_device, intra_threads=4 if ct2_device == "cpu" else 0)
                 
                 if is_nllb:
                     tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
