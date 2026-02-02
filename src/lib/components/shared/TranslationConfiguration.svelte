@@ -339,9 +339,17 @@
 		const baseName = parts[parts.length - 1] || modelName;
 
 		if (baseName.toLowerCase().includes('nllb')) {
-			if (baseName.includes('600M')) return "NLLB-200 Distilled (Small & Fast)";
-			if (baseName.includes('1.3B')) return "NLLB-200 (Medium)";
-			if (baseName.includes('3.3B')) return "NLLB-200 (Large)";
+            const isDistilled = baseName.includes('distilled');
+            let sizeLabel = "";
+            
+			if (baseName.includes('600M')) sizeLabel = "600M";
+			else if (baseName.includes('1.3B')) sizeLabel = "1.3B";
+			else if (baseName.includes('3.3B')) sizeLabel = "3.3B";
+            
+            if (sizeLabel === "600M") return "NLLB-200 Distilled (Small & Fast)";
+            if (sizeLabel === "1.3B") return isDistilled ? "NLLB-200 Distilled (Medium)" : "NLLB-200 (Medium)";
+            if (sizeLabel === "3.3B") return isDistilled ? "NLLB-200 Distilled (Large)" : "NLLB-200 (Large)";
+            
 			return baseName;
 		}
 
