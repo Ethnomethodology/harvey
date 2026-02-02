@@ -99,14 +99,14 @@
 
         if (isMac) {
             if (isARM) {
-                return "Detected: Apple Silicon (Native). Recommendation: Auto (uses MPS for NLLB, CPU for Helsinki).";
+                return "Detected: Apple Silicon (Native). Recommendation: Auto.";
             } else {
-                return "Detected: macOS (Intel/Rosetta). Recommendation: Auto. (If you have an M1/M2/M3 chip, 'Auto' will attempt to use MPS acceleration if your Python environment supports it).";
+                return "Detected: macOS (Intel/Rosetta). Recommendation: Auto.";
             }
         } else if (info.includes('windows')) {
-            return "Detected: Windows. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
+            return "Detected: Windows. Recommendation: Auto.";
         } else if (info.includes('linux')) {
-            return "Detected: Linux. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
+            return "Detected: Linux. Recommendation: Auto.";
         } else {
             return `Detected: ${info}. Recommendation: Auto.`;
         }
@@ -115,7 +115,6 @@
 
 <div class="p-1 h-full overflow-y-auto">
     <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-        <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">Hardware Detection</h4>
         <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
     
