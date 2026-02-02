@@ -251,7 +251,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size-nllb", type=int, help="Override batch size for NLLB models")
     parser.add_argument("--threads", type=int, help="Override number of CPU threads")
     parser.add_argument("--device-preference", choices=["auto", "cpu", "cuda", "mps"], default="auto", help="Device preference")
-    parser.add_argument("--backend-preference", choices=["auto", "ctranslate2", "transformers"], default="auto", help="Backend preference")
     
     args = parser.parse_args()
 
@@ -304,22 +303,12 @@ if __name__ == "__main__":
         ct2_model_path = os.path.join(args.model_path, "ct2_optimized")
         has_ct2_model = os.path.exists(ct2_model_path)
         
-        # Determine Backend
-        use_ct2 = False
-        backend_pref = args.backend_preference
-        
-        if backend_pref == "ctranslate2":
-            if has_ct2_model: use_ct2 = True
-            else: sys.stderr.write("[Python Debug] CTranslate2 preferred but model not found. Falling back to Transformers.\n")
-        elif backend_pref == "transformers":
-            use_ct2 = False
-        else: # auto
-            # Optimization for macOS (MPS):
-            prefer_mps_for_nllb = torch.backends.mps.is_available() and is_nllb
-            use_ct2 = has_ct2_model and not prefer_mps_for_nllb
-            # If user explicitly chose 'cuda' device but CT2 works better with CUDA, CT2 is fine.
-            # But if user forced 'mps' device, CT2 won't work, so use_ct2 should be false if device is mps.
-            if device == "mps": use_ct2 = False
+        # Determine Backend (Auto)
+        # Optimization for macOS (MPS):
+        prefer_mps_for_nllb = torch.backends.mps.is_available() and is_nllb
+        use_ct2 = has_ct2_model and not prefer_mps_for_nllb
+        # If user forced 'mps' device, CT2 won't work, so use_ct2 should be false if device is mps.
+        if device == "mps": use_ct2 = False
         
         engine = None
         if use_ct2:

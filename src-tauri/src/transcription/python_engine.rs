@@ -86,10 +86,6 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
                     python_args.push("--device-preference".to_string());
                     python_args.push(device);
                 }
-                if let Some(backend) = adv.backend_preference {
-                    python_args.push("--backend-preference".to_string());
-                    python_args.push(backend);
-                }
             }
         }
 

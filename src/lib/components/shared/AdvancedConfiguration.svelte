@@ -10,8 +10,7 @@
         helsinki_batch_size: 8,
         nllb_batch_size: 1,
         num_threads: 4,
-        device_preference: 'auto',
-        backend_preference: 'auto'
+        device_preference: 'auto'
     };
 
     let platformInfo = '';
@@ -25,17 +24,15 @@
         { value: 'mps', label: 'Apple Silicon (MPS/Metal)' }
     ];
 
-    const backendOptions = [
-        { value: 'auto', label: 'Auto (Recommended)' },
-        { value: 'ctranslate2', label: 'CTranslate2 (Faster on CPU/CUDA)' },
-        { value: 'transformers', label: 'Transformers (Compatible with MPS)' }
-    ];
-
     onMount(async () => {
         try {
             const savedConfig = await invoke('get_advanced_translation_config');
             if (savedConfig) {
-                config = { ...config, ...savedConfig };
+                // Only take relevant keys to avoid stale data issues if struct changed
+                if (savedConfig.helsinki_batch_size !== undefined) config.helsinki_batch_size = savedConfig.helsinki_batch_size;
+                if (savedConfig.nllb_batch_size !== undefined) config.nllb_batch_size = savedConfig.nllb_batch_size;
+                if (savedConfig.num_threads !== undefined) config.num_threads = savedConfig.num_threads;
+                if (savedConfig.device_preference !== undefined) config.device_preference = savedConfig.device_preference;
             }
             platformInfo = await invoke('get_platform_info');
         } catch (e) {
@@ -54,8 +51,7 @@
                 helsinki_batch_size: parseInt(config.helsinki_batch_size),
                 nllb_batch_size: parseInt(config.nllb_batch_size),
                 num_threads: parseInt(config.num_threads),
-                device_preference: config.device_preference,
-                backend_preference: config.backend_preference
+                device_preference: config.device_preference
             };
             await invoke('set_advanced_translation_config', { newConfig: payload });
             statusMessage = 'Settings saved successfully.';
@@ -75,8 +71,7 @@
             helsinki_batch_size: 8,
             nllb_batch_size: 1,
             num_threads: 4,
-            device_preference: 'auto',
-            backend_preference: 'auto'
+            device_preference: 'auto'
         };
         // Also save the reset immediately? Or let user click save?
         // Let's just reset the form.
@@ -109,16 +104,18 @@
             </div>
             <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Device & Backend -->
+                    <!-- Device -->
                     <div class="space-y-1">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
                         <Dropdown options={deviceOptions} bind:value={config.device_preference} />
                         <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                     </div>
+                    
+                    <!-- Threads -->
                     <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Backend Preference</label>
-                        <Dropdown options={backendOptions} bind:value={config.backend_preference} />
-                        <p class="text-[10px] text-gray-500">Force execution engine. 'Auto' selects optimal per model.</p>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                        <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
+                        <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                     </div>
 
                     <!-- Batch Sizes -->
@@ -131,13 +128,6 @@
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size (Helsinki)</label>
                         <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
                         <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
-                    </div>
-
-                    <!-- Threads -->
-                    <div class="space-y-1 md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                        <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
-                        <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                     </div>
                 </div>
             </div>
