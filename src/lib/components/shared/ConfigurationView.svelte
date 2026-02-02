@@ -111,7 +111,7 @@
 
 <div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0 overflow-x-auto">
+	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0 overflow-x-auto tab-scroll-container">
 		<nav class="-mb-px flex space-x-8 pb-px" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
@@ -319,4 +319,10 @@
 	.overflow-y-auto::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
 	.overflow-y-auto::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.6); }
 	.overflow-y-auto { scrollbar-width: thin; scrollbar-color: rgba(156, 163, 175, 0.5) transparent; }
+
+    .tab-scroll-container::-webkit-scrollbar { height: 6px; }
+	.tab-scroll-container::-webkit-scrollbar-track { background: transparent; }
+	.tab-scroll-container::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+	.tab-scroll-container::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.6); }
+	.tab-scroll-container { scrollbar-width: thin; scrollbar-color: rgba(156, 163, 175, 0.5) transparent; }
 </style>
