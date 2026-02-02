@@ -321,8 +321,9 @@ pub async fn get_selected_translation_family() -> Result<Option<String>, Command
 
 #[command]
 pub async fn get_platform_info() -> Result<String, CommandError> {
-    Ok(tauri::utils::platform::target_triple()
-        .unwrap_or_else(|_| "unknown".to_string()))
+    let os = std::env::consts::OS; // "macos", "windows", "linux"
+    let arch = std::env::consts::ARCH; // "x86_64", "aarch64"
+    Ok(format!("{}-{}", os, arch))
 }
 
 #[derive(Deserialize)]

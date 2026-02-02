@@ -80,16 +80,21 @@
     }
 
     function getHardwareRecommendation() {
-        if (platformInfo.includes('apple-darwin')) {
-            if (platformInfo.includes('aarch64')) {
+        const isMac = platformInfo.includes('macos') || platformInfo.includes('darwin') || platformInfo.includes('apple');
+        const isARM = platformInfo.includes('aarch64') || platformInfo.includes('arm64');
+
+        if (isMac) {
+            if (isARM) {
                 return "Detected: Apple Silicon (Native). Recommendation: Auto (uses MPS for NLLB, CPU for Helsinki).";
             } else {
                 return "Detected: macOS (Intel/Rosetta). Recommendation: Auto. (If you have an M1/M2/M3 chip, 'Auto' will attempt to use MPS acceleration if your Python environment supports it).";
             }
-        } else if (platformInfo.includes('windows') || platformInfo.includes('linux')) {
-            return "Detected: Windows/Linux. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
+        } else if (platformInfo.includes('windows')) {
+            return "Detected: Windows. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
+        } else if (platformInfo.includes('linux')) {
+            return "Detected: Linux. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
         } else {
-            return "Detected: Unknown. Recommendation: Auto.";
+            return `Detected: ${platformInfo || 'Unknown'}. Recommendation: Auto.`;
         }
     }
 </script>
