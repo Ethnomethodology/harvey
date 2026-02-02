@@ -13,7 +13,7 @@
         device_preference: 'auto'
     };
 
-    let platformInfo = '';
+    let platformInfo = null; // Initialize as null to indicate loading
     let statusMessage = '';
     let statusType = 'info'; // info, success, error
 
@@ -24,23 +24,28 @@
         { value: 'mps', label: 'Apple Silicon (MPS/Metal)' }
     ];
 
+    $: recommendation = getHardwareRecommendation(platformInfo);
+
     onMount(async () => {
         try {
             const savedConfig = await invoke('get_advanced_translation_config');
             if (savedConfig) {
-                // Only take relevant keys to avoid stale data issues if struct changed
                 if (savedConfig.helsinki_batch_size !== undefined) config.helsinki_batch_size = savedConfig.helsinki_batch_size;
                 if (savedConfig.nllb_batch_size !== undefined) config.nllb_batch_size = savedConfig.nllb_batch_size;
                 if (savedConfig.num_threads !== undefined) config.num_threads = savedConfig.num_threads;
                 if (savedConfig.device_preference !== undefined) config.device_preference = savedConfig.device_preference;
             }
             platformInfo = await invoke('get_platform_info');
+            console.log('[AdvancedConfig] Platform Info:', platformInfo);
         } catch (e) {
             console.error("Failed to load advanced config:", e);
             statusMessage = `Error loading config: ${e}`;
             statusType = 'error';
+            platformInfo = 'error';
         }
     });
+
+    // ... handleSave and handleReset remain the same ...
 
     async function handleSave() {
         isBusy = true;
@@ -73,15 +78,16 @@
             num_threads: 4,
             device_preference: 'auto'
         };
-        // Also save the reset immediately? Or let user click save?
-        // Let's just reset the form.
         statusMessage = 'Settings reset to defaults (Click Save to apply).';
         statusType = 'info';
     }
 
-    function getHardwareRecommendation() {
-        const isMac = platformInfo.includes('macos') || platformInfo.includes('darwin') || platformInfo.includes('apple');
-        const isARM = platformInfo.includes('aarch64') || platformInfo.includes('arm64');
+    function getHardwareRecommendation(info) {
+        if (!info) return "Checking hardware...";
+        if (info === 'error') return "Hardware detection failed.";
+
+        const isMac = info.includes('macos') || info.includes('darwin') || info.includes('apple');
+        const isARM = info.includes('aarch64') || info.includes('arm64');
 
         if (isMac) {
             if (isARM) {
@@ -89,12 +95,12 @@
             } else {
                 return "Detected: macOS (Intel/Rosetta). Recommendation: Auto. (If you have an M1/M2/M3 chip, 'Auto' will attempt to use MPS acceleration if your Python environment supports it).";
             }
-        } else if (platformInfo.includes('windows')) {
+        } else if (info.includes('windows')) {
             return "Detected: Windows. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
-        } else if (platformInfo.includes('linux')) {
+        } else if (info.includes('linux')) {
             return "Detected: Linux. Recommendation: Auto (uses CUDA if NVIDIA GPU present, else CPU).";
         } else {
-            return `Detected: ${platformInfo || 'Unknown'}. Recommendation: Auto.`;
+            return `Detected: ${info}. Recommendation: Auto.`;
         }
     }
 </script>
@@ -102,9 +108,10 @@
 <div class="p-1 h-full overflow-y-auto">
     <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
         <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">Hardware Detection</h4>
-        <p class="text-xs text-blue-700 dark:text-blue-400">{getHardwareRecommendation()}</p>
+        <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
-
+    
+    <!-- Rest of the UI remains the same -->
     <div class="space-y-6">
         <!-- Translation Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
