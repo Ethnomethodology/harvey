@@ -115,7 +115,7 @@
 		<nav class="-mb-px flex space-x-8 pb-px" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
 				class:border-blue-500={activeTab === 'application'}
 				class:text-blue-600={activeTab === 'application'}
 				class:dark:text-blue-400={activeTab === 'application'}
@@ -138,7 +138,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
 				class:border-blue-500={activeTab === 'transcription'}
 				class:text-blue-600={activeTab === 'transcription'}
 				class:dark:text-blue-400={activeTab === 'transcription'}
@@ -161,7 +161,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'diarization'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
 				class:border-blue-500={activeTab === 'diarization'}
 				class:text-blue-600={activeTab === 'diarization'}
 				class:dark:text-blue-400={activeTab === 'diarization'}
@@ -184,7 +184,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
 				class:border-blue-500={activeTab === 'translation'}
 				class:text-blue-600={activeTab === 'translation'}
 				class:dark:text-blue-400={activeTab === 'translation'}
@@ -207,7 +207,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'advanced'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2 flex-shrink-0"
 				class:border-blue-500={activeTab === 'advanced'}
 				class:text-blue-600={activeTab === 'advanced'}
 				class:dark:text-blue-400={activeTab === 'advanced'}
