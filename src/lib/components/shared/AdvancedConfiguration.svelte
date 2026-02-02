@@ -167,12 +167,12 @@
 
                     <!-- Batch Sizes -->
                     <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size (NLLB)</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for NLLB</label>
                         <input type="number" bind:value={config.nllb_batch_size} min="1" max="32" class="input w-full" />
                         <p class="text-[10px] text-gray-500">Higher = Faster on GPU/MPS. Lower (1-4) safer for CPU.</p>
                     </div>
                     <div class="space-y-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size (Helsinki)</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for Helsinki</label>
                         <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
                         <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
                     </div>
