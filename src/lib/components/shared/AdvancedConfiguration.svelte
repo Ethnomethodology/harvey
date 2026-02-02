@@ -7,6 +7,8 @@
     export let isBusy = false;
 
     let config = {
+        diarization_device: 'auto',
+        diarization_threads: 4,
         helsinki_batch_size: 8,
         nllb_batch_size: 1,
         num_threads: 4,
@@ -34,6 +36,8 @@
                 if (savedConfig.nllb_batch_size !== undefined) config.nllb_batch_size = savedConfig.nllb_batch_size;
                 if (savedConfig.num_threads !== undefined) config.num_threads = savedConfig.num_threads;
                 if (savedConfig.device_preference !== undefined) config.device_preference = savedConfig.device_preference;
+                if (savedConfig.diarization_device !== undefined) config.diarization_device = savedConfig.diarization_device;
+                if (savedConfig.diarization_threads !== undefined) config.diarization_threads = savedConfig.diarization_threads;
             }
             platformInfo = await invoke('get_platform_info');
             console.log('[AdvancedConfig] Platform Info:', platformInfo);
@@ -56,7 +60,9 @@
                 helsinki_batch_size: parseInt(config.helsinki_batch_size),
                 nllb_batch_size: parseInt(config.nllb_batch_size),
                 num_threads: parseInt(config.num_threads),
-                device_preference: config.device_preference
+                device_preference: config.device_preference,
+                diarization_device: config.diarization_device,
+                diarization_threads: parseInt(config.diarization_threads)
             };
             await invoke('set_advanced_translation_config', { newConfig: payload });
             statusMessage = 'Settings saved successfully.';
@@ -73,6 +79,8 @@
 
     async function handleReset() {
         config = {
+            diarization_device: 'auto',
+            diarization_threads: 4,
             helsinki_batch_size: 8,
             nllb_batch_size: 1,
             num_threads: 4,
@@ -113,6 +121,30 @@
     
     <!-- Rest of the UI remains the same -->
     <div class="space-y-6">
+        <!-- Diarization Panel -->
+        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+            <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b dark:border-gray-700">
+                <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
+            </div>
+            <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Device -->
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                        <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
+                        <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
+                    </div>
+                    
+                    <!-- Threads -->
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                        <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
+                        <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Translation Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
             <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b dark:border-gray-700">

@@ -1859,12 +1859,26 @@ async fn run_diarization_script<R: Runtime>(
 
     let token = get_hf_token(app_handle).map_err(|e| CommandError::from(e.to_string()))?;
 
-    let args = vec![
+    let mut args = vec![
         script_path.to_string_lossy().to_string(),
         media_path.to_string(),
         num_speakers.to_string(),
         token,
     ];
+
+    // Read advanced configuration for Diarization
+    if let Ok(config) = read_config() {
+        if let Some(adv) = config.advanced_translation {
+            if let Some(device) = adv.diarization_device {
+                args.push("--device".to_string());
+                args.push(device);
+            }
+            if let Some(threads) = adv.diarization_threads {
+                args.push("--threads".to_string());
+                args.push(threads.to_string());
+            }
+        }
+    }
 
     let shell_scope = app_handle.shell();
     let mut command = shell_scope.command(python_path.to_string_lossy().to_string()).args(args);

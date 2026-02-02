@@ -103,6 +103,10 @@ pub struct AdvancedTranslationConfig {
     pub num_threads: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_preference: Option<String>, // "auto", "cpu", "cuda", "mps"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diarization_device: Option<String>, // "auto", "cpu", "cuda", "mps"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diarization_threads: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
