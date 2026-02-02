@@ -248,8 +248,14 @@ if __name__ == "__main__":
     try:
         os.environ["HF_HUB_OFFLINE"] = "1"
         
-        # Limit CPU threads to avoid overloading and improve performance on laptops
-        torch.set_num_threads(4)
+        # Optimize CPU thread count for Intel/AMD
+        # Heuristic: Use ~physical cores (cpu_count / 2 for hyperthreading), capped at 8 to maintain system responsiveness.
+        # This provides a significant speedup on modern multi-core CPUs compared to the fixed limit of 4.
+        cpu_count = os.cpu_count() or 4
+        optimal_threads = max(1, int(cpu_count / 2))
+        optimal_threads = min(optimal_threads, 8) 
+        
+        torch.set_num_threads(optimal_threads)
         
         if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8')
@@ -293,8 +299,8 @@ if __name__ == "__main__":
                     ct2_device = "cuda"
                 
                 sys.stderr.write(f"[Python Debug] Using CTranslate2 optimized engine: {ct2_model_path} (Device: {ct2_device})\n")
-                # CT2 can use multiple threads. On CPU 4 is a safe default.
-                engine = ctranslate2.Translator(ct2_model_path, device=ct2_device, intra_threads=4 if ct2_device == "cpu" else 0)
+                # CT2 can use multiple threads. Use optimal_threads calculated above for CPU.
+                engine = ctranslate2.Translator(ct2_model_path, device=ct2_device, intra_threads=optimal_threads if ct2_device == "cpu" else 0)
                 
                 if is_nllb:
                     tokenizer = AutoTokenizer.from_pretrained(args.model_path, src_lang=nllb_src)
