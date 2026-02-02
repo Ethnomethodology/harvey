@@ -224,8 +224,6 @@
 			</button>
 		</nav>
 	</div>
-		</nav>
-	</div>
 
 	<!-- Tab Content Area -->
 	<div class="flex-grow min-h-0 overflow-y-auto pr-2 -mr-2">
