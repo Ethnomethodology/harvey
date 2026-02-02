@@ -3,6 +3,7 @@ use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
+use tauri::Manager; // Added Manager import
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
 // use tauri::Emitter; // For app.emit()
@@ -78,6 +79,22 @@ pub fn run() {
                     .resizable(false)
                     .build();
                 }
+            } else if event.id() == "settings_harvey" {
+                // Check if settings window exists
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.set_focus();
+                } else {
+                    // Create new settings window
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "settings",
+                        tauri::WebviewUrl::App("settings".into())
+                    )
+                    .title("Settings")
+                    .inner_size(800.0, 700.0)
+                    .resizable(true)
+                    .build();
+                }
             }
         })
         // Global shortcut plugin is now initialized in .setup
@@ -102,6 +119,7 @@ pub fn run() {
                 
                 // 1. App Menu (Harvey)
                 let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
+                let settings_item = MenuItem::with_id(app_handle, "settings_harvey", "Settings...", true, Some("CmdOrCtrl+,"))?;
                 let sep = PredefinedMenuItem::separator(app_handle)?;
                 let quit = PredefinedMenuItem::quit(app_handle, None)?;
                 
@@ -109,7 +127,7 @@ pub fn run() {
                     app_handle,
                     "Harvey",
                     true,
-                    &[&about_item, &sep, &quit],
+                    &[&about_item, &settings_item, &sep, &quit],
                 )?;
 
                 // 2. Edit Menu
@@ -130,7 +148,7 @@ pub fn run() {
 
                 // 3. Window Menu
                 let minimize = PredefinedMenuItem::minimize(app_handle, None)?;
-                let zoom = PredefinedMenuItem::zoom(app_handle, None)?;
+                // let zoom = PredefinedMenuItem::zoom(app_handle, None)?; // Removed due to error
                 let close = PredefinedMenuItem::close_window(app_handle, None)?;
                 let sep3 = PredefinedMenuItem::separator(app_handle)?;
 
@@ -138,7 +156,7 @@ pub fn run() {
                     app_handle,
                     "Window",
                     true,
-                    &[&minimize, &zoom, &sep3, &close],
+                    &[&minimize, &sep3, &close],
                 )?;
 
                 let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu])?;
