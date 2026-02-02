@@ -19,12 +19,26 @@ def run_diarization(audio_path, num_speakers, token):
             print(f"Error: Audio file not found at {audio_path}", file=sys.stderr)
             sys.exit(1)
 
-        # Force offline mode to prevent any internet connection attempts
+        # Force offline mode
         os.environ["HF_HUB_OFFLINE"] = "1"
 
-        # Check for GPU availability
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Using device: {device}", file=sys.stderr)
+        # 1. Optimize CPU threads (Intel/AMD optimization)
+        # Prevent PyTorch from using all cores which can cause contention.
+        # Heuristic: Use ~physical cores, capped at 8.
+        cpu_count = os.cpu_count() or 4
+        optimal_threads = max(1, int(cpu_count / 2))
+        optimal_threads = min(optimal_threads, 8)
+        torch.set_num_threads(optimal_threads)
+
+        # 2. Hardware Acceleration Detection (CUDA > MPS > CPU)
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+            
+        print(f"Using device: {device} (Threads: {optimal_threads})", file=sys.stderr)
 
         # Fix for PyTorch 2.6+ weights_only=True default causing unpickling errors with Pyannote/SpeechBrain
         try:
