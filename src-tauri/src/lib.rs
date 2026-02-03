@@ -122,6 +122,8 @@ pub fn run() {
                 let _ = app.emit("menu:file:create:tag", ());
             } else if id == "file_create_tag_group" {
                 let _ = app.emit("menu:file:create:tag-group", ());
+            } else if id == "help_center" {
+                let _ = app.emit("menu:help:center", ());
             }
         })
         // Global shortcut plugin is now initialized in .setup
@@ -186,7 +188,16 @@ pub fn run() {
                     &[&minimize, &sep3, &close],
                 )?;
 
-                let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu])?;
+                // 4. Help Menu
+                let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>)?;
+                let help_menu = Submenu::with_items(
+                    app_handle,
+                    "Help",
+                    true,
+                    &[&help_center],
+                )?;
+
+                let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu, &help_menu])?;
                 app_mut_ref.set_menu(menu)?;
             
             use tauri::{Emitter};

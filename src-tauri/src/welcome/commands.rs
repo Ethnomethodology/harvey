@@ -83,7 +83,11 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
         let sep3 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
         let window_menu = Submenu::with_items(app_handle, "Window", true, &[&minimize, &sep3, &close]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
-        // 4. File Menu (Dynamic)
+        // 4. Help Menu
+        let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let help_menu = Submenu::with_items(app_handle, "Help", true, &[&help_center]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 5. File Menu (Dynamic)
         let file_menu;
         if context == "welcome" {
             let new_proj = MenuItem::with_id(app_handle, "file_new_project", "Create New Project", true, Some("CmdOrCtrl+N")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
@@ -112,7 +116,7 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
             file_menu = Submenu::with_items(app_handle, "File", true, &[&import_submenu, &create_submenu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
         }
 
-        let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
         app.set_menu(menu).map_err(|e| CommandError::TauriApi(e.to_string()))?;
     }
     Ok(())

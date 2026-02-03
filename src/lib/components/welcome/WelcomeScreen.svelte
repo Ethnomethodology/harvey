@@ -16,6 +16,7 @@
   import { configStatus } from '$lib/stores/configStatusStore.js';
   import ProjectList from './ProjectList.svelte';
   import RenameModal from './RenameModal.svelte';
+  import HelpModal from '$lib/components/modals/HelpModal.svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
   import AboutContent from './AboutContent.svelte';
 
@@ -24,6 +25,7 @@
   let isLoading = true;
   let openMenuProjectPath = null;
   let isRenameModalOpen = false;
+  let showHelpModal = false;
   let projectToRename = null; // This will hold the *object* to rename
 
   // Track active tab: "projects", "configure" or "about"
@@ -39,9 +41,9 @@
   const updateIsRenameModalOpen = (bool) => { isRenameModalOpen = bool; };
 
 
-  // --- Lifecycle ---
   let unlistenNewProject;
   let unlistenOpenProject;
+  let unlistenHelpCenter;
 
   onMount(async () => {
     await invoke('set_menu_context', { context: 'welcome' }).catch(err => console.warn('Failed to set menu context:', err));
@@ -52,6 +54,9 @@
     unlistenOpenProject = await listen('menu:file:open-project', () => {
         onOpenProject();
     });
+    unlistenHelpCenter = await listen('menu:help:center', () => {
+        showHelpModal = true;
+    });
 
     await loadProjects({ setRecentProjects, setIsLoading });
     document.addEventListener('click', handleClickOutside);
@@ -60,6 +65,7 @@
   onDestroy(() => {
     if (unlistenNewProject) unlistenNewProject();
     if (unlistenOpenProject) unlistenOpenProject();
+    if (unlistenHelpCenter) unlistenHelpCenter();
     document.removeEventListener('click', handleClickOutside);
   });
 
@@ -231,6 +237,8 @@
   on:confirm={onConfirmRename}
   on:cancel={onCancelRename}
 />
+
+<HelpModal bind:showModal={showHelpModal} on:close={() => showHelpModal = false} />
 
 <style>
   /* Custom scrollbar for Webkit browsers */
