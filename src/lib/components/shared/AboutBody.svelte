@@ -17,7 +17,7 @@
         <li><strong>Manage</strong> all your project files in one place.</li>
     </ul>
 
-    <p class="text-gray-700 dark:text-gray-300 mb-6">Harvey is named in honor of Sociologist <a href="https://emcawiki.net/bibtex/browser.php?author=Harvey+Sacks&bib=emca.bib" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline"><strong>Harvey Sacks</strong></a> (1935-1975), whose foundational work revolutionized social research methods.</p>
+    <p class="text-gray-700 dark:text-gray-300 mb-6">Harvey is named in honor of Sociologist <a href="https://en.wikipedia.org/wiki/Harvey_Sacks" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline"><strong>Harvey Sacks</strong></a> (1935-1975), whose foundational work revolutionized social research methods.</p>
     
     <div class="pt-4">
         <h4 class="text-xl font-bold mb-2 text-gray-900 dark:text-white">Privacy First</h4>
