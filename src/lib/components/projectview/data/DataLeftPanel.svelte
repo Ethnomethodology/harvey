@@ -7,17 +7,14 @@
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
-	import FileRenameModal from '../modals/FileRenameModal.svelte';
-	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
-    import CreateGroupModal from '../modals/CreateGroupModal.svelte';
-    import CreateTableModal from '../modals/CreateTableModal.svelte';
-    import GroupRenameModal from '../modals/GroupRenameModal.svelte'; // Added GroupRenameModal
-	import { confirm, message } from '@tauri-apps/plugin-dialog';
-	import * as openerPlugin from '@tauri-apps/plugin-opener';
+	    import FileRenameModal from '../modals/FileRenameModal.svelte';
+		import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
+	    import GroupRenameModal from '../modals/GroupRenameModal.svelte'; // Added GroupRenameModal
+		import { confirm, message } from '@tauri-apps/plugin-dialog';	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { type as getOsType } from '@tauri-apps/plugin-os';
-    import { listen } from '@tauri-apps/api/event'; // Added listen
+    import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
 
@@ -301,8 +298,6 @@
     let groupSubMenuX = 0;
     let groupSubMenuY = 0;
     let groupSubMenuItem = null;
-    let showCreateGroupModal = false; // For Step III.4
-    let showCreateTableModal = false;
     let addToGroupHoverTimer = null; // For hover effect
     const FOLDER_PLUS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder-plus mr-2" viewBox="0 0 16 16"><path d="m.5 3 .04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2m5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98A1 1 0 0 1 2.5 2h3.672z"/><path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5"/></svg>`;
 
@@ -500,13 +495,6 @@
     }
 
     onMount(async () => {
-        const unlistenCreateTable = await listen('request-create-table-modal', () => {
-            showCreateTableModal = true;
-        });
-        const unlistenCreateGroup = await listen('request-create-group-modal', () => {
-            showCreateGroupModal = true;
-        });
-
         try {
             const savedHeight = localStorage.getItem(LS_KEY_DATA_PANEL_HEIGHT);
             if (savedHeight) {
@@ -566,8 +554,6 @@
       document.addEventListener('click', listener, { capture: true });
 
       return () => {
-          if (unlistenCreateTable) unlistenCreateTable();
-          if (unlistenCreateGroup) unlistenCreateGroup();
           document.removeEventListener('click', listener, { capture: true });
       };
     });
@@ -644,7 +630,7 @@
             return;
         }
         closeGroupSubMenu();
-        showCreateGroupModal = true;
+        emit('request-create-group-modal', { fileToAdd: groupSubMenuItem });
     }
 
     async function handleAddFileToExistingGroup(group) {
@@ -897,12 +883,6 @@
         event.stopPropagation();
         searchQuery.set('');
         showSearchBox.set(false);
-    }
-
-    async function handleTableCreated(event) {
-        const { path } = event.detail;
-        await refreshProjectFiles();
-        dispatch('requestviewchange', { viewType: 'tables', itemPath: path });
     }
 
     function handleToggleDataLeftPanel() {
@@ -1280,7 +1260,7 @@
                     }
                 }
                 if (categoryContextMenuType === 'table') {
-                    showCreateTableModal = true;
+                    emit('request-create-table-modal');
                 }
                 closeCategoryContextMenu();
             }}
@@ -1312,7 +1292,6 @@
 />
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
-<CreateTableModal bind:showModal={showCreateTableModal} on:tableCreated={handleTableCreated} />
 <HeaderConfirmationModal 
     bind:showModal={showHeaderConfirmationModal} 
     tablePath={headerConfirmationData.tablePath} 
@@ -1320,27 +1299,6 @@
     on:confirm={handleHeaderConfirmation}
 />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={(event) => handleImportTranscriptConfirm(event)} on:close={() => showImportTranscriptModal = false} />
-<CreateGroupModal
-    bind:showModal={showCreateGroupModal}
-    projectUuid={$project?.id}
-    fileToAdd={groupSubMenuItem}
-    on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
-    on:groupCreatedAndFileAdded={(event) => {
-        console.log('[NotesLeftPanel] Event: groupCreatedAndFileAdded', event.detail);
-        showCreateGroupModal = false;
-        groupSubMenuItem = null;
-        project.update(p => ({ ...p, statusMessage: `File ${event.detail.file.name} added to new group ${event.detail.group.name}.` }));
-        // Notify GroupDetailView if it's open for the new group
-        // const { groupContentNotification } = import('$lib/stores/projectStore.js'); // Line 1114: problematic import
-        // groupContentNotification.set({ groupId: event.detail.group.id, action: 'file_added', timestamp: Date.now() }); // Line 1115: removed .set call
-    }}
-    on:groupCreated={(event) => {
-        console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
-        showCreateGroupModal = false;
-        groupSubMenuItem = null;
-        project.update(p => ({ ...p, statusMessage: `Group ${event.detail.group.name} created.` }));
-    }}
-/>
 
 <GroupRenameModal
     bind:showModal={showGroupRenameModal}

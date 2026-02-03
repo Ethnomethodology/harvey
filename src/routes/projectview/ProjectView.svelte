@@ -65,6 +65,8 @@
     import TranscriptionsTopBar from '$lib/components/projectview/transcriptions/TopBar.svelte';
     import SimpleTopBar from '$lib/components/projectview/shared/SimpleTopBar.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
+    import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
+    import CreateTableModal from '$lib/components/projectview/modals/CreateTableModal.svelte';
 
 
 	let transcribeModalRef;
@@ -78,8 +80,11 @@
     let closeImportMenuListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
-	let showHeaderConfirmationModal = false;
+    let showHeaderConfirmationModal = false;
 	let showConfigurationModal = false;
+    let showCreateGroupModal = false;
+    let showCreateTableModal = false;
+    let fileToAddForGroup = null;
 	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
@@ -213,15 +218,14 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 await handleTabClick('data');
                 await tick();
              }
-             // Emit loopback for DataLeftPanel
-             emit('request-create-table-modal');
+             showCreateTableModal = true;
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:group', async () => {
              if (selectedTab !== 'data') {
                 await handleTabClick('data');
                 await tick();
              }
-             emit('request-create-group-modal');
+             showCreateGroupModal = true;
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:tag', async () => {
              if (selectedTab !== 'tags') {
@@ -236,6 +240,15 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 await tick();
              }
              if (tagsViewRef) tagsViewRef.openAddGroupModal();
+        }));
+
+        unlistenMenuEvents.push(await listen('request-create-table-modal', () => {
+            showCreateTableModal = true;
+        }));
+
+        unlistenMenuEvents.push(await listen('request-create-group-modal', (event) => {
+            fileToAddForGroup = event.payload?.fileToAdd || null;
+            showCreateGroupModal = true;
         }));
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
@@ -967,6 +980,16 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		}
 	}
 
+    async function handleTableCreated(event) {
+        const { path } = event.detail;
+        await refreshProjectFiles();
+        if (selectedTab !== 'data') {
+            await handleTabClick('data');
+            await tick();
+        }
+        prepareDocumentView(path, 'tables');
+    }
+
     $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
@@ -1074,6 +1097,28 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		previewData={headerConfirmationData.previewData}
 		on:confirm={handleHeaderConfirmation}
 	/>
+
+    <CreateTableModal 
+        bind:showModal={showCreateTableModal} 
+        on:tableCreated={handleTableCreated} 
+    />
+
+    <CreateGroupModal
+        bind:showModal={showCreateGroupModal}
+        projectUuid={$project?.id}
+        fileToAdd={fileToAddForGroup}
+        on:close={() => { showCreateGroupModal = false; fileToAddForGroup = null; }}
+        on:groupCreatedAndFileAdded={(event) => {
+            showCreateGroupModal = false;
+            fileToAddForGroup = null;
+            project.update(p => ({ ...p, statusMessage: `File ${event.detail.file.name} added to new group ${event.detail.group.name}.` }));
+        }}
+        on:groupCreated={(event) => {
+            showCreateGroupModal = false;
+            fileToAddForGroup = null;
+            project.update(p => ({ ...p, statusMessage: `Group ${event.detail.group.name} created.` }));
+        }}
+    />
 
 
     {#if importMenuVisible}
