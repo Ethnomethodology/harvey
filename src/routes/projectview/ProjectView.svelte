@@ -26,7 +26,8 @@
             loadTranscriptFile,
             normalizePath,
             clearProjectDataStore,
-            createManualTranscript
+            createManualTranscript,
+            createNewDocument
 	} from '$lib/services/projectService.js';
 	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
@@ -197,29 +198,43 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         unlistenMenuEvents.push(await listen('menu:file:import:table', () => triggerMediaImport('table')));
         unlistenMenuEvents.push(await listen('menu:file:import:transcript', () => triggerMediaImport('transcript')));
         
-        unlistenMenuEvents.push(await listen('menu:file:create:document', () => {
+        unlistenMenuEvents.push(await listen('menu:file:create:document', async () => {
              const currentProject = get(project);
              if (currentProject && currentProject.xmlPath) {
+                 if (selectedTab !== 'data') {
+                    await handleTabClick('data');
+                    await tick();
+                 }
                  createNewDocument(currentProject.xmlPath);
              }
         }));
-        unlistenMenuEvents.push(await listen('menu:file:create:table', () => {
+        unlistenMenuEvents.push(await listen('menu:file:create:table', async () => {
+             if (selectedTab !== 'data') {
+                await handleTabClick('data');
+                await tick();
+             }
              // Emit loopback for DataLeftPanel
              emit('request-create-table-modal');
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:group', async () => {
-             await handleTabClick('data');
-             await tick();
+             if (selectedTab !== 'data') {
+                await handleTabClick('data');
+                await tick();
+             }
              emit('request-create-group-modal');
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:tag', async () => {
-             await handleTabClick('tags');
-             await tick();
+             if (selectedTab !== 'tags') {
+                await handleTabClick('tags');
+                await tick();
+             }
              if (tagsViewRef) tagsViewRef.openAddTagModal();
         }));
         unlistenMenuEvents.push(await listen('menu:file:create:tag-group', async () => {
-             await handleTabClick('tags');
-             await tick();
+             if (selectedTab !== 'tags') {
+                await handleTabClick('tags');
+                await tick();
+             }
              if (tagsViewRef) tagsViewRef.openAddGroupModal();
         }));
 
@@ -895,9 +910,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 					};
 					showHeaderConfirmationModal = true;
                 } else {
-                    console.error("[ProjectView] Table import failed or returned no path.", importResult);
-                    await message("Table import failed. No valid table path was returned.", { title: "Import Error", type: "error" });
-                    project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Table import failed.`}));
+                    // Canceled or error already handled in importTableFile
+                    project.update(p => ({...p, isLoading: false, isImportingAsset: false}));
                 }
             }
             else if (actionType === 'image') {
