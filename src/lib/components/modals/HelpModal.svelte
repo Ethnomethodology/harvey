@@ -50,6 +50,15 @@
     { id: 'highlights', label: 'Highlights', sidebarId: 'tags' },
     { id: 'tag-groups', label: 'Tag Groups', sidebarId: 'tags' },
     
+    { id: 'annotate-page', label: 'Annotate', sidebarId: 'annotate-page' },
+    { id: 'media-annotations', label: 'Media Annotations', sidebarId: 'annotate-page' },
+    { id: 'document-annotations', label: 'Document Annotations', sidebarId: 'annotate-page' },
+    { id: 'pdf-annotations', label: 'PDF Annotations', sidebarId: 'annotate-page' },
+    { id: 'image-annotations', label: 'Image Annotations', sidebarId: 'annotate-page' },
+    { id: 'table-annotations', label: 'Table Annotations', sidebarId: 'annotate-page' },
+    { id: 'transcript-annotations', label: 'Transcript Annotations', sidebarId: 'annotate-page' },
+    { id: 'highlights-panel', label: 'Highlights Panel', sidebarId: 'annotate-page' },
+
     { id: 'translate-page', label: 'Translate', sidebarId: 'translate-page' },
     { id: 'translate-transcript', label: 'Translating Transcript', sidebarId: 'translate-page' },
     { id: 'translate-document', label: 'Translating Document', sidebarId: 'translate-page' },
@@ -65,6 +74,7 @@
     { id: 'manage-data', label: 'Data' },
     { id: 'transcribe', label: 'Transcription' },
     { id: 'tags', label: 'Tags' },
+    { id: 'annotate-page', label: 'Annotate' },
     { id: 'translate-page', label: 'Translate' },
     { id: 'report-issue', label: 'Report Issue' }
   ];
@@ -784,6 +794,119 @@
                     <li><strong>Hierarchy:</strong> Group related tags (e.g., "Emotions", "Interactional Patterns") to keep your coding schema organized.</li>
                     <li><strong>Filtering:</strong> Use groups to filter your view in the Tags tab or when exporting highlight reports.</li>
                     <li><strong>Flexibility:</strong> Move tags between groups easily by dragging or using the tag options menu.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'annotate-page'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Annotate</h3>
+                <p>Annotation is the core process of adding analytical value to your project data. Harvey supports a wide range of annotation types across different media and document formats.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <button on:click={() => navigateTo('media-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Media Annotations</span>
+                        <span class="text-xs text-gray-500">Annotating audio and video segments.</span>
+                    </button>
+                    <button on:click={() => navigateTo('document-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Document Annotations</span>
+                        <span class="text-xs text-gray-500">Working with text documents.</span>
+                    </button>
+                    <button on:click={() => navigateTo('pdf-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">PDF Annotations</span>
+                        <span class="text-xs text-gray-500">Visual highlights on PDFs.</span>
+                    </button>
+                    <button on:click={() => navigateTo('image-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Image Annotations</span>
+                        <span class="text-xs text-gray-500">Geometric bounding boxes.</span>
+                    </button>
+                    <button on:click={() => navigateTo('table-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Table Annotations</span>
+                        <span class="text-xs text-gray-500">Categorizing tabular data.</span>
+                    </button>
+                    <button on:click={() => navigateTo('transcript-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcript Annotations</span>
+                        <span class="text-xs text-gray-500">Interpreting dialogue.</span>
+                    </button>
+                    <button on:click={() => navigateTo('highlights-panel')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Highlights Panel</span>
+                        <span class="text-xs text-gray-500">Reviewing all annotations.</span>
+                    </button>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'media-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Media Annotations</h3>
+                <p>Annotate audio and video files by creating time-stamped segments and attaching notes or tags to them.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Segment Notes:</strong> Add rich text descriptions to any media segment.</li>
+                    <li><strong>Temporal Tagging:</strong> Link tags directly to specific moments in time.</li>
+                    <li><strong>Media Context:</strong> Annotations remain synchronized with the playback, allowing you to jump straight to the source material.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'document-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Document Annotations</h3>
+                <p>Annotate text-based documents using the integrated rich text editor.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>In-line Comments:</strong> Add notes to specific text selections.</li>
+                    <li><strong>Text Highlights:</strong> Use color-coded highlights to categorize different themes.</li>
+                    <li><strong>Cross-Referencing:</strong> Create links between different parts of a document or even between different files.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'pdf-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">PDF Annotations</h3>
+                <p>PDF documents can be visually annotated using standard tools.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Visual Highlighting:</strong> Select and highlight text directly on the PDF page.</li>
+                    <li><strong>Sticky Notes:</strong> Place comments anywhere on the document layout.</li>
+                    <li><strong>Integration:</strong> All PDF highlights are searchable and appear in the project-wide highlights panel.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'image-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Image Annotations</h3>
+                <p>Work with visual evidence by annotating image files.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Bounding Boxes:</strong> Draw rectangles around specific areas of interest in an image.</li>
+                    <li><strong>Geometric Shapes:</strong> Use circles, lines, or polygons for precise visual marking.</li>
+                    <li><strong>Annotorious:</strong> Harvey integrates with powerful image annotation libraries to provide professional-grade tools.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'table-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Table Annotations</h3>
+                <p>Annotate structured data in CSV or Excel tables.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Cell Tagging:</strong> Apply tags to individual cells or entire rows.</li>
+                    <li><strong>Data Interpretation:</strong> Add comments to explain specific data points or outliers.</li>
+                    <li><strong>Visual Cues:</strong> Color-code rows based on applied tags for quick visual analysis.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'transcript-annotations'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcript Annotations</h3>
+                <p>Interpretation of dialogue and social interaction.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Interactional Tagging:</strong> Apply specialized tags to capture conversational patterns.</li>
+                    <li><strong>Speaker Context:</strong> Annotate based on who is speaking and the social dynamics at play.</li>
+                    <li><strong>Synchronization:</strong> Transcript annotations are linked to the source media for immediate verification.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'highlights-panel'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Highlights Panel</h3>
+                <p>The centralized hub for reviewing and managing all your project annotations.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Global Review:</strong> See all highlights from across every document, transcript, and media file in one place.</li>
+                    <li><strong>Advanced Filtering:</strong> Filter by tag, file type, or creator to focus on specific themes.</li>
+                    <li><strong>Navigation:</strong> Click any highlight to jump directly to its location in the source file.</li>
                 </ul>
               </div>
 
