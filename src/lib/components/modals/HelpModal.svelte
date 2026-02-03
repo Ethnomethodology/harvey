@@ -16,7 +16,7 @@
     { id: 'supported-platforms', label: 'Supported Platforms', sidebarId: 'overview' },
     
     { id: 'configure', label: 'Configure', sidebarId: 'configure' },
-    { id: 'config-app', label: 'Application Settings', sidebarId: 'configure' },
+    { id: 'config-app', label: 'Application', sidebarId: 'configure' },
     { id: 'config-transcription', label: 'Transcription Engine', sidebarId: 'configure' },
     { id: 'config-diarization', label: 'Diarization Engine', sidebarId: 'configure' },
     { id: 'config-translation', label: 'Translation Engine', sidebarId: 'configure' },
@@ -31,9 +31,30 @@
     { id: 'tables', label: 'Tables', sidebarId: 'manage-data' },
     { id: 'transcripts', label: 'Transcripts', sidebarId: 'manage-data' },
     { id: 'groups', label: 'Groups', sidebarId: 'manage-data' },
+
     { id: 'transcribe', label: 'Transcription', sidebarId: 'transcribe' },
+    { id: 'transcription-tab', label: 'Transcription Tab', sidebarId: 'transcribe' },
+    { id: 'auto-transcription', label: 'Automatic Transcription', sidebarId: 'transcribe' },
+    { id: 'manual-transcription', label: 'Manual Transcription', sidebarId: 'transcribe' },
+    { id: 'diarization', label: 'Diarization', sidebarId: 'transcribe' },
+    { id: 'translation', label: 'Translation', sidebarId: 'transcribe' },
+    { id: 'media-player', label: 'Media Player', sidebarId: 'transcribe' },
+    { id: 'editing', label: 'Editing', sidebarId: 'transcribe' },
+    { id: 'waveform', label: 'Waveform', sidebarId: 'transcribe' },
+    { id: 'layout', label: 'Layout', sidebarId: 'transcribe' },
+    { id: 'shortcuts', label: 'Shortcuts', sidebarId: 'transcribe' },
+    { id: 'export', label: 'Export', sidebarId: 'transcribe' },
+
     { id: 'tags', label: 'Tags', sidebarId: 'tags' },
-    { id: 'translate', label: 'Translate', sidebarId: 'translate' },
+    { id: 'tags-tab', label: 'Tags Tab', sidebarId: 'tags' },
+    { id: 'highlights', label: 'Highlights', sidebarId: 'tags' },
+    { id: 'tag-groups', label: 'Tag Groups', sidebarId: 'tags' },
+    
+    { id: 'translate-page', label: 'Translate', sidebarId: 'translate-page' },
+    { id: 'translate-transcript', label: 'Translating Transcript', sidebarId: 'translate-page' },
+    { id: 'translate-document', label: 'Translating Document', sidebarId: 'translate-page' },
+    { id: 'translate-models', label: 'Translation Models', sidebarId: 'translate-page' },
+
     { id: 'report-issue', label: 'Report Issue', sidebarId: 'report-issue' }
   ];
 
@@ -44,7 +65,7 @@
     { id: 'manage-data', label: 'Data' },
     { id: 'transcribe', label: 'Transcription' },
     { id: 'tags', label: 'Tags' },
-    { id: 'translate', label: 'Translate' },
+    { id: 'translate-page', label: 'Translate' },
     { id: 'report-issue', label: 'Report Issue' }
   ];
 
@@ -114,9 +135,12 @@
       
       <!-- Main Modal Header -->
       <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-border flex justify-between items-center bg-gray-50 dark:bg-dark-bg-secondary">
-        <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
+        <div class="flex items-center space-x-3">
+            <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
+            <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
+        </div>
         
-        <div class="flex items-center space-x-4 flex-grow justify-end pr-4">
+        <div class="flex items-center space-x-4 flex-grow justify-end">
             <!-- Search Bar -->
             <div class="relative w-64 help-search-container">
                 <div class="relative">
@@ -347,7 +371,7 @@
             {:else if currentPageId === 'config-app'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Application Settings</h3>
-                <ul class="list-disc pl-5 space-y-3">
+                <ul class="list-disc pl-5 space-y-3 text-base">
                     <li><strong>Theme:</strong> Switch between Light, Dark, or System-defined visual modes.</li>
                     <li><strong>Model Download Location:</strong> Choose where Harvey stores the AI models (Whisper, Translation, etc.) on your disk. You can move existing models to a new location directly from this screen.</li>
                     <li><strong>Required Tools:</strong> Check the status of your Python environment and FFmpeg installation.</li>
@@ -356,7 +380,7 @@
               </div>
 
             {:else if currentPageId === 'config-transcription'}
-              <div class="space-y-6">
+              <div class="space-y-6 text-base">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription Engine</h3>
                 <p>Manage the <strong>Whisper.cpp</strong> models used for local transcription.</p>
                 <ul class="list-disc pl-5 space-y-3">
@@ -366,7 +390,7 @@
               </div>
 
             {:else if currentPageId === 'config-diarization'}
-              <div class="space-y-6">
+              <div class="space-y-6 text-base">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Diarization Engine</h3>
                 <p>Speaker identification is powered by <strong>Pyannote Audio</strong> models.</p>
                 <ul class="list-disc pl-5 space-y-3">
@@ -376,7 +400,7 @@
               </div>
 
             {:else if currentPageId === 'config-translation'}
-              <div class="space-y-6">
+              <div class="space-y-6 text-base">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translation Engine</h3>
                 <p>Local translation is handled by <strong>CTranslate2</strong> using <strong>Helsinki-NLP</strong> and <strong>NLLB</strong> models.</p>
                 <ul class="list-disc pl-5 space-y-3">
@@ -386,7 +410,7 @@
               </div>
 
             {:else if currentPageId === 'config-advanced'}
-              <div class="space-y-6">
+              <div class="space-y-6 text-base">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Advanced Settings</h3>
                 <p>Tools for troubleshooting and advanced system management.</p>
                 <ul class="list-disc pl-5 space-y-3">
@@ -515,7 +539,7 @@
               </div>
 
             {:else if currentPageId === 'groups'}
-              <div class="space-y-6">
+              <div class="space-y-6 text-base leading-relaxed">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Groups</h3>
                 <p>Groups are custom organizational units that allow you to cluster related assets regardless of their file type.</p>
                 <ul class="list-disc pl-5 space-y-3">
@@ -525,31 +549,105 @@
                 </ul>
               </div>
 
-            {:else if currentPageId === 'tags'}
-              <div class="space-y-6">
-                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Tags</h3>
-                <p>Tags allow you to categorize snippets of text across all your documents and transcripts.</p>
-                <ul class="list-disc pl-5 space-y-2">
-                    <li><strong>Creating Tags:</strong> In the Tags tab, click the options button to add new tags or groups.</li>
-                    <li><strong>Assigning Tags:</strong> Simply select text in any editor and choose a tag from the highlight menu.</li>
-                    <li><strong>Tag Groups:</strong> Organize related tags into groups for better analysis.</li>
-                </ul>
-              </div>
-
             {:else if currentPageId === 'transcribe'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription</h3>
-                <p>The Transcription tab is where the heavy lifting happens.</p>
-                <ul class="list-disc pl-5 space-y-2">
-                    <li><strong>Waveform:</strong> Visual seek bar for your audio.</li>
-                    <li><strong>Edit Mode:</strong> Click "Edit" or press <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">Ctrl + E</kbd> to fix text.</li>
-                    <li><strong>Speaker Labels:</strong> Double-click speaker names to rename them globally.</li>
+                <p>The Transcription tab is the heart of Harvey's media processing capabilities.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pb-8">
+                    <button on:click={() => navigateTo('transcription-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcription Tab</span>
+                        <span class="text-xs text-gray-500">Interface overview and navigation.</span>
+                    </button>
+                    <button on:click={() => navigateTo('auto-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Automatic Transcription</span>
+                        <span class="text-xs text-gray-500">AI-powered speech-to-text.</span>
+                    </button>
+                    <button on:click={() => navigateTo('manual-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Manual Transcription</span>
+                        <span class="text-xs text-gray-500">Direct text entry and segmentation.</span>
+                    </button>
+                    <button on:click={() => navigateTo('diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Diarization</span>
+                        <span class="text-xs text-gray-500">Speaker identification.</span>
+                    </button>
+                    <button on:click={() => navigateTo('translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation</span>
+                        <span class="text-xs text-gray-500">Local multilingual support.</span>
+                    </button>
+                    <button on:click={() => navigateTo('media-player')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Media Player</span>
+                        <span class="text-xs text-gray-500">Playback controls and features.</span>
+                    </button>
+                    <button on:click={() => navigateTo('editing')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Editing</span>
+                        <span class="text-xs text-gray-500">Fixing and refining transcripts.</span>
+                    </button>
+                    <button on:click={() => navigateTo('waveform')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Waveform</span>
+                        <span class="text-xs text-gray-500">Visual audio representation.</span>
+                    </button>
+                    <button on:click={() => navigateTo('layout')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Layout</span>
+                        <span class="text-xs text-gray-500">Customizing the workspace.</span>
+                    </button>
+                    <button on:click={() => navigateTo('shortcuts')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Shortcuts</span>
+                        <span class="text-xs text-gray-500">Keyboard productivity.</span>
+                    </button>
+                    <button on:click={() => navigateTo('export')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Export</span>
+                        <span class="text-xs text-gray-500">Outputting your results.</span>
+                    </button>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'transcription-tab'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription Tab</h3>
+                <p>This tab is dedicated to media playback and text generation. It features a synchronized environment where the audio/video player, waveform, and transcript editor work in harmony.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Left Panel:</strong> Browser for all media files in your project.</li>
+                    <li><strong>Center:</strong> The primary workspace containing the player, waveform, and segments.</li>
+                    <li><strong>Right Panel:</strong> Detailed information and configuration for the currently selected media.</li>
                 </ul>
               </div>
 
-            {:else if currentPageId === 'translate'}
+            {:else if currentPageId === 'auto-transcription'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Automatic Transcription</h3>
+                <p>Leverage state-of-the-art <strong>Whisper</strong> models to convert speech to text automatically.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Model Selection:</strong> Choose a model size that matches your hardware and accuracy needs.</li>
+                    <li><strong>Language Detection:</strong> Set a specific language or let the AI detect it automatically.</li>
+                    <li><strong>Process:</strong> Click the "Transcribe" button, configure your settings, and wait for the local processing to complete.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'manual-transcription'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Manual Transcription</h3>
+                <p>For high-precision work or difficult audio, you can transcribe manually.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Segmentation:</strong> Create custom time-stamped segments manually.</li>
+                    <li><strong>Entry:</strong> Type directly into the segments while controlling playback with keyboard shortcuts.</li>
+                    <li><strong>Flexibility:</strong> Combine manual entry with automatic results by editing existing segments.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'diarization'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Diarization</h3>
+                <p>Automatically identify and label different speakers in an audio recording.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Speaker Labels:</strong> AI assigns consistent labels (e.g., Speaker 1, Speaker 2) across the transcript.</li>
+                    <li><strong>Renaming:</strong> Double-click any speaker label to rename it throughout the entire document.</li>
+                    <li><strong>Configuration:</strong> Requires the Pyannote diarization model, which can be enabled in the Configure screen.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'translation'}
               <div class="space-y-6 text-base leading-relaxed">
-                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translate</h3>
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translation</h3>
                 <p>Harvey supports local machine translation using the <strong>Helsinki-NLP</strong> and <strong>NLLB</strong> (No Language Left Behind) models. Translation is optimized using <strong>CTranslate2</strong> for high performance on standard CPUs.</p>
                 
                 <h4 class="font-bold text-lg mt-6 mb-2 text-gray-800 dark:text-gray-100">Core Features</h4>
@@ -563,6 +661,183 @@
                 <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-100 dark:border-yellow-800 mt-6">
                     <strong class="text-yellow-900 dark:text-yellow-300">Requirement:</strong> You must download the specific translation models for your language pair in the <strong>Configure</strong> screen before using this feature.
                 </div>
+              </div>
+
+            {:else if currentPageId === 'media-player'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Media Player</h3>
+                <p>The integrated media player is optimized for transcription workflows.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Synchronization:</strong> Clicking any text segment jumps the player to that exact moment in the audio/video.</li>
+                    <li><strong>Playback Speed:</strong> Adjust speed from 0.5x to 2.0x to match your typing pace.</li>
+                    <li><strong>Trim Tool:</strong> Extract clips from your media assets directly within the Transcription tab.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'editing'}
+              <div class="space-y-6 text-base leading-relaxed">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Editing</h3>
+                <p>Refine your transcripts with powerful editing tools.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Edit Mode:</strong> Toggle edit mode using the toolbar button or <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">Ctrl + E</kbd>.</li>
+                    <li><strong>Segment Management:</strong> Add, delete, or merge segments to improve the flow of your transcript.</li>
+                    <li><strong>Formatting:</strong> Apply bold, italic, or underline styles to emphasize specific parts of the text.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'waveform'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Waveform</h3>
+                <p>The interactive waveform provides a visual representation of your audio.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Navigation:</strong> Click anywhere on the waveform to seek. The red playhead shows the current position.</li>
+                    <li><strong>Visual Cues:</strong> See pauses and loud sections at a glance, helping you identify segment boundaries.</li>
+                    <li><strong>Customization:</strong> Change the waveform layout (e.g., Bars vs. Wave) in the Settings menu.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'layout'}
+              <div class="space-y-6 text-base leading-relaxed">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Layout</h3>
+                <p>Customize the Transcription workspace to suit your preferences.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Panel Resizing:</strong> Drag the dividers between the file browser, editor, and info panel.</li>
+                    <li><strong>Collapsing:</strong> Click the collapse icons to hide sidebars and maximize your editing area.</li>
+                    <li><strong>Settings:</strong> Access layout preferences via the cog icon in the Transcription toolbar.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'shortcuts'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Shortcuts</h3>
+                <p>Master these keyboard shortcuts to significantly speed up your workflow.</p>
+                <div class="grid grid-cols-2 gap-4 max-w-md mt-4">
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">Ctrl + E</div>
+                    <div class="text-sm">Toggle Edit Mode</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">Ctrl + S</div>
+                    <div class="text-sm">Save Transcript</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F8</div>
+                    <div class="text-sm">Play / Pause Media</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F7 / F9</div>
+                    <div class="text-sm">Rewind / Forward</div>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'export'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Export</h3>
+                <p>Share your work by exporting transcripts in various formats.</p>
+                <ul class="list-disc pl-5 space-y-3 text-base">
+                    <li><strong>Standard Formats:</strong> Export to Microsoft Word (.docx), Markdown (.md), or Plain Text (.txt).</li>
+                    <li><strong>Subtitles:</strong> Generate timed subtitle files in SRT, VTT, or ASS formats.</li>
+                    <li><strong>Options:</strong> Choose which elements to include, such as speaker names and timestamps.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'tags'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Tags</h3>
+                <p>The Tags system is a powerful tool for qualitative analysis across your entire project.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <button on:click={() => navigateTo('tags-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Tags Tab</span>
+                        <span class="text-xs text-gray-500">Interface and tag management.</span>
+                    </button>
+                    <button on:click={() => navigateTo('highlights')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Highlights</span>
+                        <span class="text-xs text-gray-500">Creating and assigning tags.</span>
+                    </button>
+                    <button on:click={() => navigateTo('tag-groups')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Tag Groups</span>
+                        <span class="text-xs text-gray-500">Thematic organization.</span>
+                    </button>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'tags-tab'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Tags Tab</h3>
+                <p>The Tags tab provides a birds-eye view of your qualitative coding schema.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>All Tags:</strong> View a flat or grouped list of every tag defined in the project.</li>
+                    <li><strong>Frequency:</strong> See how many times each tag has been applied across all documents and transcripts.</li>
+                    <li><strong>Management:</strong> Add, rename, or delete tags. Renaming a tag updates it globally across the project.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'highlights'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Highlights</h3>
+                <p>Highlights are the primary way to apply your analytical framework to your data.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Creation:</strong> Select any text in a document or transcript. A floating menu will appear allowing you to select a tag.</li>
+                    <li><strong>Persistence:</strong> Highlights are saved as project metadata. Clicking a highlight in the Tags tab jumps you to its exact location.</li>
+                    <li><strong>Multi-tagging:</strong> You can apply multiple tags to the same snippet of text.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'tag-groups'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Tag Groups</h3>
+                <p>Organize your tags into thematic categories for more complex analysis.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Hierarchy:</strong> Group related tags (e.g., "Emotions", "Interactional Patterns") to keep your coding schema organized.</li>
+                    <li><strong>Filtering:</strong> Use groups to filter your view in the Tags tab or when exporting highlight reports.</li>
+                    <li><strong>Flexibility:</strong> Move tags between groups easily by dragging or using the tag options menu.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'translate-page'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translate</h3>
+                <p>The Translate section covers Harvey's offline machine translation capabilities.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <button on:click={() => navigateTo('translate-transcript')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translating Transcript</span>
+                        <span class="text-xs text-gray-500">Multilingual audio support.</span>
+                    </button>
+                    <button on:click={() => navigateTo('translate-document')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translating Document</span>
+                        <span class="text-xs text-gray-500">Converting research notes.</span>
+                    </button>
+                    <button on:click={() => navigateTo('translate-models')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation Models</span>
+                        <span class="text-xs text-gray-500">Managing Helsinki and NLLB.</span>
+                    </button>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'translate-transcript'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translating Transcript</h3>
+                <p>Translate your generated transcripts while preserving all metadata.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Structural Preservation:</strong> Translation maintains exact timestamps and speaker associations.</li>
+                    <li><strong>Workflow:</strong> Open a transcript in the Transcription tab, click the Translate button, and select your target language.</li>
+                    <li><strong>Review:</strong> Toggle between original and translated versions to verify accuracy.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'translate-document'}
+              <div class="space-y-6 text-base">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translating Document</h3>
+                <p>Convert your documents into other languages directly within the Data tab.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Supported Formats:</strong> Works with Lexical JSON, Markdown, and plain text files.</li>
+                    <li><strong>Batch Translation:</strong> Select multiple documents in the Data list to translate them in a single operation.</li>
+                    <li><strong>Output:</strong> Translated documents are saved as new assets in your project, linked to the originals.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'translate-models'}
+              <div class="space-y-6 text-base leading-relaxed">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translation Models</h3>
+                <p>Harvey uses specialized AI models for offline translation.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Helsinki-NLP:</strong> Highly efficient models for specific language pairs.</li>
+                    <li><strong>NLLB (No Language Left Behind):</strong> Facebook's universal model for translating between 200+ languages.</li>
+                    <li><strong>Management:</strong> Use the Translation Engine settings in the Configure screen to download and optimize these models for your CPU.</li>
+                </ul>
               </div>
 
             {:else if currentPageId === 'report-issue'}
