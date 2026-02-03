@@ -1,9 +1,12 @@
 <div class="h-screen w-screen bg-gray-100 dark:bg-surface-1 p-8 overflow-y-auto">
-    <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">License</h1>
+    <div class="flex items-center space-x-4 mb-6">
+        <img src="/logo.png" alt="Harvey Logo" class="w-12 h-12 [filter:drop-shadow(0_2px_4px_rgba(0,0,0,0.1))]" />
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">License</h1>
+    </div>
     <pre class="whitespace-pre-wrap font-mono text-sm text-gray-700 dark:text-gray-300">
 MIT License
 
-Copyright (c) 2025 Dipanjan Saha, Gemma Lough, and Tatsuya Akutsu
+Copyright (c) 2026 Dipanjan Saha, Gemma Lough, and Tatsuya Akutsu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
