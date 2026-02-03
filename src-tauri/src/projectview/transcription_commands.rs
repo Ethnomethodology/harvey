@@ -28,6 +28,7 @@ use dashmap::DashMap;
 use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
+use regex::Regex;
 use crate::welcome::python_env::get_python_path;
 use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
 use crate::transcription::whisper_cpp::WhisperCppEngine;
@@ -2185,83 +2186,366 @@ pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, 
 
 fn convert_ass_time_to_vtt(t: &str) -> String {
     let parts: Vec<&str> = t.split('.').collect();
-    if parts.len() == 2 {
+    if parts.len() >= 2 {
         let hms = parts[0];
         let cs = parts[1]; // centiseconds
         let hms_parts: Vec<&str> = hms.split(':').collect();
         let normalized_hms = if hms_parts.len() == 3 {
             format!("{:0>2}:{:0>2}:{:0>2}", hms_parts[0], hms_parts[1], hms_parts[2])
+        } else if hms_parts.len() == 2 {
+            format!("00:{:0>2}:{:0>2}", hms_parts[0], hms_parts[1])
         } else {
-            hms.to_string()
+             format!("00:00:{:0>2}", hms)
         };
-        format!("{}.{}0", normalized_hms, cs)
+        // VTT uses milliseconds (3 digits), ASS often has 2 (centiseconds).
+        // If cs is "55", that's 550ms.
+        let ms_str = if cs.len() == 1 {
+            format!("{}00", cs)
+        } else if cs.len() == 2 {
+             format!("{}0", cs)
+        } else {
+             cs.chars().take(3).collect::<String>()
+        };
+        format!("{}.{}", normalized_hms, ms_str)
     } else {
         t.to_string()
     }
 }
 
+// Helper to convert ASS color (&HBBGGRR or &HAABBGGRR) to CSS Hex (#RRGGBB)
+// Ignores Alpha for now or assumes opaque if simple hex.
+fn ass_color_to_css(ass_color: &str) -> Option<String> {
+    // Strip &H and optional trailing &
+    let clean = ass_color.trim().replace("&H", "").replace("&", "");
+    
+    // Parse hex string
+    if let Ok(val) = u32::from_str_radix(&clean, 16) {
+        // ASS format: AABBGGRR (or just BBGGRR)
+        // We need RGB.
+        let (r, g, b) = if clean.len() > 6 {
+            // Has Alpha: AA BB GG RR
+            let r = val & 0xFF;
+            let g = (val >> 8) & 0xFF;
+            let b = (val >> 16) & 0xFF;
+            // let a = (val >> 24) & 0xFF; // ASS Alpha: 00=Opaque, FF=Transparent. CSS is opposite.
+            (r, g, b)
+        } else {
+            // No Alpha: BB GG RR
+            let r = val & 0xFF;
+            let g = (val >> 8) & 0xFF;
+            let b = (val >> 16) & 0xFF;
+            (r, g, b)
+        };
+        Some(format!("#{:02X}{:02X}{:02X}", r, g, b))
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct AssStyle {
+    name: String,
+    primary_colour: Option<String>,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    strike_out: bool,
+}
+
 #[tauri::command]
 pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, CommandError> {
-    info!("[convert_ass_to_vtt_command] Converting ASS: {}", ass_path_str);
+    info!("[convert_ass_to_vtt_command] Converting ASS with robust state machine: {}", ass_path_str);
     let ass_path = PathBuf::from(&ass_path_str);
     
     let ass_content = fs::read_to_string(&ass_path)
         .map_err(|e| CommandError::from(format!("Failed to read ASS file: {}", e)))?;
 
-    let mut vtt_content = String::from("WEBVTT\n\n");
-    let mut in_events_section = false;
-    let mut format_cols: Vec<String> = Vec::new();
+    // --- Data Structures ---
+    #[derive(Clone)]
+    struct DialogueEvent {
+        start: String,
+        end: String,
+        style: String,
+        text: String,
+    }
 
+    let mut styles: std::collections::HashMap<String, AssStyle> = std::collections::HashMap::new();
+    let mut events: Vec<DialogueEvent> = Vec::new();
+    // Set of unique hex colors found in inline tags (CSS format #RRGGBB)
+    let mut inline_colors: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let mut section = "";
+    let mut format_cols_styles: Vec<String> = Vec::new();
+    let mut format_cols_events: Vec<String> = Vec::new();
+
+    // Regexes for parsing
+    // Matches { ... } blocks
+    let re_tag_block = Regex::new(r"\{.*?\}").unwrap();
+    // Matches specific commands within a block
+    let re_bold = Regex::new(r"\\b(\d+)").unwrap(); // \b1, \b0, \b100
+    let re_italic = Regex::new(r"\\i(\d)").unwrap(); // \i1, \i0
+    let re_underline = Regex::new(r"\\u(\d)").unwrap(); // \u1, \u0
+    let re_strike = Regex::new(r"\\s(\d)").unwrap(); // \s1, \s0
+    // Matches \c&HBBGGRR& or \1c&HBBGGRR& etc. 
+    // Capture group 1: the hex code part (e.g. &HFFFFFF&)
+    let re_color = Regex::new(r"\\[1-4]?c(&H[0-9a-fA-F]+&?)").unwrap(); 
+
+    // --- Pass 1: Parse File, Collect Styles & Events, Identify Inline Colors ---
     for line in ass_content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("[Events]") { in_events_section = true; continue; }
-        if !in_events_section { continue; }
-
-        if trimmed.starts_with("Format:") {
-            let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                format_cols = parts[1].split(',').map(|s| s.trim().to_lowercase()).collect();
-            }
+        if trimmed.is_empty() { continue; }
+        
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed;
             continue;
         }
 
-        if trimmed.starts_with("Dialogue:") {
-            let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
-            if parts.len() == 2 && !format_cols.is_empty() {
-                let data_part = parts[1];
-                let num_cols = format_cols.len();
-                let col_values: Vec<&str> = data_part.splitn(num_cols, ',').map(|s| s.trim()).collect();
+        if section == "[V4+ Styles]" || section == "[V4 Styles]" {
+            if trimmed.starts_with("Format:") {
+                let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    format_cols_styles = parts[1].split(',').map(|s| s.trim().to_lowercase()).collect();
+                }
+            } else if trimmed.starts_with("Style:") {
+                 let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+                 if parts.len() == 2 && !format_cols_styles.is_empty() {
+                     let data_part = parts[1];
+                     let col_values: Vec<&str> = data_part.split(',').map(|s| s.trim()).collect();
+                     
+                     if col_values.len() == format_cols_styles.len() {
+                         let mut style = AssStyle::default();
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "name") {
+                             style.name = col_values[idx].to_string();
+                         }
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "primarycolour") {
+                             style.primary_colour = ass_color_to_css(col_values[idx]);
+                         }
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "bold") {
+                             // ASS: -1 = true, 0 = false. Sometimes 1 = true.
+                             style.bold = col_values[idx] == "-1" || col_values[idx] == "1";
+                         }
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "italic") {
+                             style.italic = col_values[idx] == "-1" || col_values[idx] == "1";
+                         }
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "underline") {
+                             style.underline = col_values[idx] == "-1" || col_values[idx] == "1";
+                         }
+                         if let Some(idx) = format_cols_styles.iter().position(|c| c == "strikeout") {
+                             style.strike_out = col_values[idx] == "-1" || col_values[idx] == "1";
+                         }
+                         if !style.name.is_empty() {
+                             styles.insert(style.name.clone(), style);
+                         }
+                     }
+                 }
+            }
+        } else if section == "[Events]" {
+            if trimmed.starts_with("Format:") {
+                 let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    format_cols_events = parts[1].split(',').map(|s| s.trim().to_lowercase()).collect();
+                }
+            } else if trimmed.starts_with("Dialogue:") {
+                let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+                if parts.len() == 2 && !format_cols_events.is_empty() {
+                    let data_part = parts[1];
+                    let num_cols = format_cols_events.len();
+                    let col_values: Vec<&str> = data_part.splitn(num_cols, ',').map(|s| s.trim()).collect();
 
-                if col_values.len() == num_cols {
-                    let start_idx = format_cols.iter().position(|c| c == "start").unwrap_or(1);
-                    let end_idx = format_cols.iter().position(|c| c == "end").unwrap_or(2);
-                    let text_idx = format_cols.iter().position(|c| c == "text").unwrap_or(9);
+                    if col_values.len() == num_cols {
+                        let start_idx = format_cols_events.iter().position(|c| c == "start").unwrap_or(1);
+                        let end_idx = format_cols_events.iter().position(|c| c == "end").unwrap_or(2);
+                        let style_idx = format_cols_events.iter().position(|c| c == "style").unwrap_or(3);
+                        let text_idx = format_cols_events.iter().position(|c| c == "text").unwrap_or(9);
 
-                    if start_idx < col_values.len() && end_idx < col_values.len() && text_idx < col_values.len() {
-                        let start_ass = col_values[start_idx];
-                        let end_ass = col_values[end_idx];
-                        let text_raw = col_values[text_idx];
+                        if start_idx < col_values.len() && end_idx < col_values.len() && text_idx < col_values.len() {
+                            let raw_text = col_values[text_idx].to_string();
+                            
+                            // Scan for inline colors to register them
+                            for caps in re_color.captures_iter(&raw_text) {
+                                if let Some(hex_match) = caps.get(1) {
+                                    if let Some(css_hex) = ass_color_to_css(hex_match.as_str()) {
+                                        inline_colors.insert(css_hex);
+                                    }
+                                }
+                            }
 
-                        let vtt_start = convert_ass_time_to_vtt(start_ass);
-                        let vtt_end = convert_ass_time_to_vtt(end_ass);
-
-                        // Strip all { ... } tags from text
-                        let mut text_clean = String::new();
-                        let mut in_tag = false;
-                        for c in text_raw.chars() {
-                            if c == '{' { in_tag = true; continue; }
-                            if c == '}' { in_tag = false; continue; }
-                            if !in_tag { text_clean.push(c); }
+                            events.push(DialogueEvent {
+                                start: col_values[start_idx].to_string(),
+                                end: col_values[end_idx].to_string(),
+                                style: if style_idx < col_values.len() { col_values[style_idx].to_string() } else { "Default".to_string() },
+                                text: raw_text,
+                            });
                         }
-                        
-                        // Handle \N as newline
-                        text_clean = text_clean.replace("\\N", "\n").replace("\\n", "\n");
-
-                        vtt_content.push_str(&format!("{} --> {}\n{}\n\n", vtt_start, vtt_end, text_clean));
                     }
                 }
             }
         }
+    }
+
+    // --- Pass 2: Generate VTT Content ---
+    let mut vtt_content = String::from("WEBVTT\n\n");
+
+    // 1. STYLE Header
+    // We combine the base styles (from [V4 Styles]) and the inline color classes we discovered.
+    if !styles.is_empty() || !inline_colors.is_empty() {
+        vtt_content.push_str("STYLE\n");
+        
+        // Define generic strikethrough class for inline use
+        vtt_content.push_str("::cue(.s) {\n  text-decoration: line-through;\n}\n");
+
+        // Base Styles
+        for (name, style) in &styles {
+             let safe_name = name.replace(" ", "_").replace(".", "-");
+             vtt_content.push_str(&format!("::cue(.{}) {{\n", safe_name));
+             if let Some(color) = &style.primary_colour {
+                 vtt_content.push_str(&format!("  color: {};\n", color));
+             }
+             if style.bold { vtt_content.push_str("  font-weight: bold;\n"); }
+             if style.italic { vtt_content.push_str("  font-style: italic;\n"); }
+             
+             // Combined text-decoration
+             let mut decoration = Vec::new();
+             if style.underline { decoration.push("underline"); }
+             if style.strike_out { decoration.push("line-through"); }
+             if !decoration.is_empty() {
+                 vtt_content.push_str(&format!("  text-decoration: {};\n", decoration.join(" ")));
+             }
+             
+             vtt_content.push_str("}\n");
+        }
+
+        // Inline Color Classes (e.g. .c_FFFF00)
+        // Note: Sort for deterministic output
+        let mut sorted_colors: Vec<_> = inline_colors.into_iter().collect();
+        sorted_colors.sort();
+        
+        for css_hex in sorted_colors {
+            // Hex is #RRGGBB. Class name: c_RRGGBB
+            let class_name = format!("c_{}", css_hex.trim_start_matches('#'));
+            vtt_content.push_str(&format!("::cue(.{}) {{\n  color: {};\n}}\n", class_name, css_hex));
+        }
+        vtt_content.push('\n');
+    }
+
+    // 2. Events Processing
+    for event in events {
+        let vtt_start = convert_ass_time_to_vtt(&event.start);
+        let vtt_end = convert_ass_time_to_vtt(&event.end);
+        
+        // Initial State based on the line's Style
+        let base_style = styles.get(&event.style);
+        let mut state_bold = base_style.map(|s| s.bold).unwrap_or(false);
+        let mut state_italic = base_style.map(|s| s.italic).unwrap_or(false);
+        let mut state_underline = base_style.map(|s| s.underline).unwrap_or(false);
+        let mut state_strike = base_style.map(|s| s.strike_out).unwrap_or(false);
+        let mut state_color: Option<String> = None; // None means use base style color
+
+        // Split text by tags: { ... }
+        // We use finding matches to iterate content
+        let mut last_idx = 0;
+        let mut processed_line = String::new();
+
+        // Safe style name for the outer cue
+        let safe_style_name = event.style.replace(" ", "_").replace(".", "-");
+        
+        // We will build segments. Each segment of text needs to be wrapped according to CURRENT state.
+        // Helper to append text with current wrappers
+        let append_text = |out: &mut String, text: &str, bold: bool, italic: bool, underline: bool, strike: bool, color: &Option<String>| {
+            if text.is_empty() { return; }
+            
+            // Clean text escapes
+            let clean = text.replace("\\h", "\u{00A0}")
+                            .replace("\\N", "\n")
+                            .replace("\\n", "\n");
+            
+            // Wrap
+            let mut prefix = String::new();
+            let mut suffix = String::new();
+
+            if let Some(c) = color {
+                let class_name = format!("c_{}", c.trim_start_matches('#'));
+                prefix.push_str(&format!("<c.{}>", class_name));
+                suffix.insert_str(0, "</c>");
+            }
+            if bold { prefix.push_str("<b>"); suffix.insert_str(0, "</b>"); }
+            if italic { prefix.push_str("<i>"); suffix.insert_str(0, "</i>"); }
+            if underline { prefix.push_str("<u>"); suffix.insert_str(0, "</u>"); }
+            if strike { prefix.push_str("<c.s>"); suffix.insert_str(0, "</c>"); } // Use <c.s> for strikethrough
+
+            out.push_str(&prefix);
+            out.push_str(&clean);
+            out.push_str(&suffix);
+        };
+
+        for cap in re_tag_block.find_iter(&event.text) {
+            // Text before the tag
+            if cap.start() > last_idx {
+                let text_segment = &event.text[last_idx..cap.start()];
+                append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color);
+            }
+
+            // Process the tag content
+            let tag_content = cap.as_str();
+            
+            // Update State
+            // Bold
+            if let Some(b_match) = re_bold.captures(tag_content) {
+                if let Some(val_str) = b_match.get(1) {
+                    if let Ok(val) = val_str.as_str().parse::<u32>() {
+                        // \b0 = false, \b1 = true, \b100+ = true
+                        state_bold = val >= 1; // Simplification: any weight >= 1 is bold
+                    }
+                }
+            }
+            // Italic
+            if let Some(i_match) = re_italic.captures(tag_content) {
+                if let Some(val_str) = i_match.get(1) {
+                     state_italic = val_str.as_str() == "1";
+                }
+            }
+            // Underline
+            if let Some(u_match) = re_underline.captures(tag_content) {
+                if let Some(val_str) = u_match.get(1) {
+                     state_underline = val_str.as_str() == "1";
+                }
+            }
+            // Strikethrough
+            if let Some(s_match) = re_strike.captures(tag_content) {
+                if let Some(val_str) = s_match.get(1) {
+                     state_strike = val_str.as_str() == "1";
+                }
+            }
+            // Color
+            if let Some(c_match) = re_color.captures(tag_content) {
+                if let Some(hex_match) = c_match.get(1) {
+                    if let Some(css) = ass_color_to_css(hex_match.as_str()) {
+                        state_color = Some(css);
+                    }
+                }
+            }
+            // Reset Color (\r or \rDefault usually resets everything, but let's just assume \c w/o arg might reset? ASS is tricky. 
+            // Often \r resets style. Let's handle \r roughly.)
+            if tag_content.contains("\\r") {
+                // Reset to base style state
+                state_bold = base_style.map(|s| s.bold).unwrap_or(false);
+                state_italic = base_style.map(|s| s.italic).unwrap_or(false);
+                state_underline = base_style.map(|s| s.underline).unwrap_or(false);
+                state_strike = base_style.map(|s| s.strike_out).unwrap_or(false);
+                state_color = None;
+            }
+
+            last_idx = cap.end();
+        }
+
+        // Remaining text after last tag
+        if last_idx < event.text.len() {
+            let text_segment = &event.text[last_idx..];
+            append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color);
+        }
+
+        // Output VTT Cue
+        vtt_content.push_str(&format!("{} --> {}\n<c.{}>{}</c>\n\n", vtt_start, vtt_end, safe_style_name, processed_line));
     }
 
     Ok(vtt_content)
