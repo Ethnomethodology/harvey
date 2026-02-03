@@ -89,7 +89,7 @@
 			<div class="mb-6">
 				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Display</h3>
 				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-					Choose how the audio waveform is displayed in the Transcriptions tab.
+					Choose how the audio waveform is displayed in the Transcription tab.
 				</p>
 				<Dropdown
 					containerClasses="w-full"

@@ -1264,7 +1264,7 @@
 			<button
 				on:click={handleDataTranscribeClick}
 				class="btn-action text-xs"
-				title="Transcribe this media in main Transcriptions tab"
+				title="Transcribe this media in main Transcription tab"
 				disabled={!localMediaUrl || isLoadingMedia}
 			>
 				Transcribe
