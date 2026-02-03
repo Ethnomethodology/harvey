@@ -30,6 +30,10 @@ export default defineConfig(async () => ({
   //
   // 1. prevent vite from obscuring rust errors
   clearScreen: false,
+
+  define: {
+    '__BUILD_DATE__': JSON.stringify(new Date().toISOString()),
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

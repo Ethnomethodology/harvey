@@ -85,7 +85,11 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
 
         // 4. Help Menu
         let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let help_menu = Submenu::with_items(app_handle, "Help", true, &[&help_center]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let license_item = MenuItem::with_id(app_handle, "view_license", "License", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let credits_item = MenuItem::with_id(app_handle, "view_credits", "Credits", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let version_item = MenuItem::with_id(app_handle, "view_version", "Version", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        
+        let help_menu = Submenu::with_items(app_handle, "Help", true, &[&help_center, &license_item, &credits_item, &version_item]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         // 5. File Menu (Dynamic)
         let file_menu;
@@ -118,6 +122,53 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
 
         let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
         app.set_menu(menu).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        app.on_menu_event(move |app, event| {
+            let id = event.id().as_ref();
+            if id == "view_license" {
+                if let Some(window) = app.get_webview_window("license") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "license",
+                        tauri::WebviewUrl::App("license".into())
+                    )
+                    .title("License")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_credits" {
+                if let Some(window) = app.get_webview_window("credits") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "credits",
+                        tauri::WebviewUrl::App("credits".into())
+                    )
+                    .title("Credits")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_version" {
+                if let Some(window) = app.get_webview_window("version") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "version",
+                        tauri::WebviewUrl::App("version".into())
+                    )
+                    .title("Version")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            }
+        });
     }
     Ok(())
 }

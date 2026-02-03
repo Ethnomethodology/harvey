@@ -84,7 +84,7 @@
   <ToastNotifications />
 <HeaderConfirmationModal />
 
-{#if $project.isLoading && $page.url.pathname !== '/about' && $page.url.pathname !== '/configurations'}
+{#if $project.isLoading && $page.url.pathname !== '/about' && $page.url.pathname !== '/configurations' && $page.url.pathname !== '/license' && $page.url.pathname !== '/credits' && $page.url.pathname !== '/version'}
     <div class="absolute inset-0 z-[120] flex items-center justify-center bg-black/30 backdrop-blur-sm">
         <div class="flex flex-col items-center p-6 bg-white dark:bg-surface-2 rounded-lg shadow-xl">
              <Loader class="w-12 h-12 text-blue-500 animate-spin mb-3" />
