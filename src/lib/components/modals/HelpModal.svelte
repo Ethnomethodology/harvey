@@ -14,6 +14,14 @@
     { id: 'getting-started', label: 'Getting Started', sidebarId: 'overview' },
     { id: 'projects', label: 'Projects', sidebarId: 'overview' },
     { id: 'supported-platforms', label: 'Supported Platforms', sidebarId: 'overview' },
+    
+    { id: 'configure', label: 'Configure', sidebarId: 'configure' },
+    { id: 'config-app', label: 'Application Settings', sidebarId: 'configure' },
+    { id: 'config-transcription', label: 'Transcription Engine', sidebarId: 'configure' },
+    { id: 'config-diarization', label: 'Diarization Engine', sidebarId: 'configure' },
+    { id: 'config-translation', label: 'Translation Engine', sidebarId: 'configure' },
+    { id: 'config-advanced', label: 'Advanced Settings', sidebarId: 'configure' },
+
     { id: 'manage-data', label: 'Data', sidebarId: 'manage-data' },
     { id: 'data-tab', label: 'Data Tab', sidebarId: 'manage-data' },
     { id: 'audio', label: 'Audios', sidebarId: 'manage-data' },
@@ -24,18 +32,19 @@
     { id: 'transcripts', label: 'Transcripts', sidebarId: 'manage-data' },
     { id: 'groups', label: 'Groups', sidebarId: 'manage-data' },
     { id: 'transcribe', label: 'Transcription', sidebarId: 'transcribe' },
-    { id: 'configure', label: 'Configure', sidebarId: 'configure' },
     { id: 'tags', label: 'Tags', sidebarId: 'tags' },
+    { id: 'translate', label: 'Translate', sidebarId: 'translate' },
     { id: 'report-issue', label: 'Report Issue', sidebarId: 'report-issue' }
   ];
 
   // Sidebar tabs (only top-level sections)
   const sidebarTabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'configure', label: 'Configure' },
     { id: 'manage-data', label: 'Data' },
     { id: 'transcribe', label: 'Transcription' },
-    { id: 'configure', label: 'Configure' },
     { id: 'tags', label: 'Tags' },
+    { id: 'translate', label: 'Translate' },
     { id: 'report-issue', label: 'Report Issue' }
   ];
 
@@ -181,7 +190,7 @@
         <div class="flex-grow flex flex-col overflow-hidden bg-white dark:bg-surface-2 font-sans">
           
           <!-- Inner Page Header (Navigation) -->
-          <div class="flex-shrink-0 px-8 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-surface-2 h-12">
+          <div class="flex-shrink-0 px-8 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-dark-bg-secondary h-12">
             <button 
                 class="flex items-center space-x-1 text-sm font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors disabled:opacity-0"
                 on:click={goToPrev}
@@ -295,17 +304,14 @@
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Supported Platforms</h3>
                 <div class="space-y-4">
-                    <div class="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                        <span class="font-semibold text-gray-800 dark:text-gray-100">macOS (Silicon)</span>
-                        <span class="text-green-500 text-sm font-medium">Optimal Performance</span>
+                    <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">macOS (Apple Silicon)</span>
                     </div>
-                    <div class="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                         <span class="font-semibold text-gray-800 dark:text-gray-100">macOS (Intel)</span>
-                        <span class="text-yellow-500 text-sm font-medium">Supported</span>
                     </div>
-                    <div class="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                         <span class="font-semibold text-gray-800 dark:text-gray-100">Windows 10/11</span>
-                        <span class="text-green-500 text-sm font-medium">Fully Supported</span>
                     </div>
                 </div>
               </div>
@@ -313,22 +319,80 @@
             {:else if currentPageId === 'configure'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Configure</h3>
-                <p>Access the <strong>Configure</strong> screen via the cog icon in the sidebar or from the Welcome screen.</p>
-                <ul class="list-disc pl-5 space-y-2">
-                    <li><strong>Models:</strong> Download Whisper models (Tiny, Base, Small, Medium, Large).</li>
-                    <li><strong>Python:</strong> Ensure the virtual environment is correctly initialized.</li>
-                    <li><strong>Theme:</strong> Toggle between Light, Dark, and System modes.</li>
+                <p>The Configure screen allows you to manage system-level settings, hardware acceleration, and AI models.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <button on:click={() => navigateTo('config-app')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Application</span>
+                        <span class="text-xs text-gray-500">Theme and download locations.</span>
+                    </button>
+                    <button on:click={() => navigateTo('config-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcription Engine</span>
+                        <span class="text-xs text-gray-500">Whisper model management.</span>
+                    </button>
+                    <button on:click={() => navigateTo('config-diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Diarization Engine</span>
+                        <span class="text-xs text-gray-500">Speaker identification setup.</span>
+                    </button>
+                    <button on:click={() => navigateTo('config-translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation Engine</span>
+                        <span class="text-xs text-gray-500">Local translation models.</span>
+                    </button>
+                    <button on:click={() => navigateTo('config-advanced')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                        <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Advanced Settings</span>
+                        <span class="text-xs text-gray-500">Developer tools and logs.</span>
+                    </button>
+                </div>
+              </div>
+
+            {:else if currentPageId === 'config-app'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Application Settings</h3>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Theme:</strong> Switch between Light, Dark, or System-defined visual modes.</li>
+                    <li><strong>Model Download Location:</strong> Choose where Harvey stores the AI models (Whisper, Translation, etc.) on your disk. You can move existing models to a new location directly from this screen.</li>
+                    <li><strong>Required Tools:</strong> Check the status of your Python environment and FFmpeg installation.</li>
+                    <li><strong>Hugging Face Integration:</strong> Manage your access token for downloading diarization models.</li>
                 </ul>
               </div>
 
-            {:else if currentPageId === 'transcribe'}
+            {:else if currentPageId === 'config-transcription'}
               <div class="space-y-6">
-                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription</h3>
-                <p>The Transcription tab is where the heavy lifting happens.</p>
-                <ul class="list-disc pl-5 space-y-2">
-                    <li><strong>Waveform:</strong> Visual seek bar for your audio.</li>
-                    <li><strong>Edit Mode:</strong> Click "Edit" or press <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">Ctrl + E</kbd> to fix text.</li>
-                    <li><strong>Speaker Labels:</strong> Double-click speaker names to rename them globally.</li>
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription Engine</h3>
+                <p>Manage the <strong>Whisper.cpp</strong> models used for local transcription.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Available Models:</strong> Download various model sizes (Tiny, Base, Small, Medium, Large). Larger models are more accurate but require more RAM and processing power.</li>
+                    <li><strong>Hardware Acceleration:</strong> On macOS (Silicon), Harvey uses Core ML for optimal performance. Windows users can leverage specialized builds for acceleration.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'config-diarization'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Diarization Engine</h3>
+                <p>Speaker identification is powered by <strong>Pyannote Audio</strong> models.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Model Access:</strong> Due to licensing, you must accept the terms on Hugging Face and provide a token in the Application settings to download these models.</li>
+                    <li><strong>Functionality:</strong> Once enabled, Harvey can automatically detect when different people are speaking and label them accordingly in the transcript.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'config-translation'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translation Engine</h3>
+                <p>Local translation is handled by <strong>CTranslate2</strong> using <strong>Helsinki-NLP</strong> and <strong>NLLB</strong> models.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Language Pairs:</strong> Download specific models for the languages you need to translate (e.g., French to English, Spanish to English).</li>
+                    <li><strong>Optimization:</strong> Models are automatically optimized for high-speed CPU inference during the download process.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'config-advanced'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Advanced Settings</h3>
+                <p>Tools for troubleshooting and advanced system management.</p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Developer Logs:</strong> View internal application logs to diagnose issues.</li>
+                    <li><strong>Python Management:</strong> Reset or re-initialize the internal Python virtual environment if libraries become corrupted.</li>
+                    <li><strong>Cache Management:</strong> Clear temporary files and downloaded model caches.</li>
                 </ul>
               </div>
 
@@ -472,6 +536,35 @@
                 </ul>
               </div>
 
+            {:else if currentPageId === 'transcribe'}
+              <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription</h3>
+                <p>The Transcription tab is where the heavy lifting happens.</p>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li><strong>Waveform:</strong> Visual seek bar for your audio.</li>
+                    <li><strong>Edit Mode:</strong> Click "Edit" or press <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">Ctrl + E</kbd> to fix text.</li>
+                    <li><strong>Speaker Labels:</strong> Double-click speaker names to rename them globally.</li>
+                </ul>
+              </div>
+
+            {:else if currentPageId === 'translate'}
+              <div class="space-y-6 text-base leading-relaxed">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translate</h3>
+                <p>Harvey supports local machine translation using the <strong>Helsinki-NLP</strong> and <strong>NLLB</strong> (No Language Left Behind) models. Translation is optimized using <strong>CTranslate2</strong> for high performance on standard CPUs.</p>
+                
+                <h4 class="font-bold text-lg mt-6 mb-2 text-gray-800 dark:text-gray-100">Core Features</h4>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Privacy:</strong> All translations happen locally. Your sensitive data is never sent to external servers.</li>
+                    <li><strong>Transcript Translation:</strong> Translate an entire transcript while maintaining the original timestamps and speaker labels.</li>
+                    <li><strong>Side-by-Side View:</strong> View the original and translated versions together in the editor for easy comparison.</li>
+                    <li><strong>Document Translation:</strong> Quickly translate your research notes and other documents in the Data tab.</li>
+                </ul>
+
+                <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-100 dark:border-yellow-800 mt-6">
+                    <strong class="text-yellow-900 dark:text-yellow-300">Requirement:</strong> You must download the specific translation models for your language pair in the <strong>Configure</strong> screen before using this feature.
+                </div>
+              </div>
+
             {:else if currentPageId === 'report-issue'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Report Issue</h3>
@@ -480,7 +573,7 @@
                     <p>Encountered a bug or have a feature request? We use <strong>GitHub Issues</strong> to track and manage all feedback. Reporting an issue helps us make Harvey better for everyone.</p>
                     
                     <div class="bg-gray-50 dark:bg-surface-3 border border-gray-200 dark:border-gray-700 p-6 rounded-xl">
-                        <h4 class="font-bold text-gray-900 dark:text-white mb-3">How to report on GitHub:</h4>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-3 text-sm">How to report on GitHub:</h4>
                         <ol class="list-decimal pl-5 space-y-3 text-sm">
                             <li>Visit the <strong>Harvey Issues</strong> page: <a href="https://github.com/Ethnomethodology/harvey/issues" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">github.com/Ethnomethodology/harvey/issues</a></li>
                             <li>Sign in to your GitHub account (or create one for free).</li>
