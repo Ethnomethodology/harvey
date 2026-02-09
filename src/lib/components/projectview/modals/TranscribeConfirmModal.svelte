@@ -33,6 +33,20 @@
 	let manualSegmentDuration = 60;
 	let manualSpeakerMode = 'unassigned';
 
+    function handleManualSegCountInput(e) {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val > 0 && mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / val));
+        }
+    }
+
+    function handleManualSegDurationInput(e) {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val > 0 && mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / val)));
+        }
+    }
+
 	// Derived state for manual validation
 	$: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
 	// For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
@@ -430,6 +444,7 @@
 								min="1"
 								max="100"
 								bind:value={manualSegmentCount}
+                                on:input={handleManualSegCountInput}
 								class="ui-input w-full"
 							/>
 						</div>
@@ -444,6 +459,7 @@
 									type="number"
 									min="1"
 									bind:value={manualSegmentDuration}
+                                    on:input={handleManualSegDurationInput}
 									class="ui-input w-full"
 								/>
 								<span class="text-xs text-gray-500 whitespace-nowrap min-w-[4rem]">
