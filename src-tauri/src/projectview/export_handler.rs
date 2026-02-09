@@ -759,8 +759,80 @@ fn format_vtt_timestamp(seconds: f64) -> String {
     format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
 }
 
-// Helper function to convert Lexical JSON to VTT cue text with basic styling
-fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String) {
+// Helper to sanitize color strings for CSS class names
+fn sanitize_color_class(color: &str) -> String {
+    if color.starts_with('#') {
+        format!("c_{}", color.trim_start_matches('#'))
+    } else {
+        // Replace spaces, commas, parens with underscores
+        let safe = color.replace(|c: char| !c.is_alphanumeric(), "_");
+        format!("c_{}", safe)
+    }
+}
+
+// Helper function to ensure a color is in a format VTT/ASS players like (HEX)
+// and handles "transparent" by returning an empty string.
+fn ensure_vtt_color(color: &str) -> String {
+    if color == "transparent" {
+        return "".to_string();
+    }
+    let trimmed = color.trim();
+    if trimmed.starts_with('#') {
+        let hex = trimmed.trim_start_matches('#');
+        if hex.len() == 3 {
+            // Convert #RGB to #RRGGBB
+            let r = &hex[0..1];
+            let g = &hex[1..2];
+            let b = &hex[2..3];
+            return format!("#{}{}{}{}{}{}", r, r, g, g, b, b);
+        }
+        if hex.len() == 6 {
+            return trimmed.to_string();
+        }
+    }
+    // Handle rgb(r, g, b) format
+    if let Ok(re) = Regex::new(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)") {
+        if let Some(caps) = re.captures(trimmed) {
+            if let (Ok(r), Ok(g), Ok(b)) = (
+                caps[1].parse::<u8>(),
+                caps[2].parse::<u8>(),
+                caps[3].parse::<u8>(),
+            ) {
+                return format!("#{:02x}{:02x}{:02x}", r, g, b);
+            }
+        }
+    }
+    // Fallback for named colors or invalid formats
+    match trimmed.to_lowercase().as_str() {
+        "black" => "#000000".to_string(),
+        "white" => "#ffffff".to_string(),
+        "red" => "#ff0000".to_string(),
+        "green" => "#00ff00".to_string(),
+        "blue" => "#0000ff".to_string(),
+        "yellow" => "#ffff00".to_string(),
+        "magenta" | "fuchsia" => "#ff00ff".to_string(),
+        "cyan" | "aqua" => "#00ffff".to_string(),
+        _ => trimmed.to_string(),
+    }
+}
+
+// Helper to convert Lexical color (hex like #RRGGBB or named) to ASS &HBBGGRR& (opaque)
+fn lexical_color_to_ass_color(hex_color: &str) -> String {
+    let sanitized = ensure_vtt_color(hex_color);
+    let color = sanitized.trim_start_matches('#');
+    if color.len() == 6 {
+        let r = &color[0..2];
+        let g = &color[2..4];
+        let b = &color[4..6];
+        format!("&H00{}{}{}&", b, g, r).to_uppercase() // ASS is BGR, opaque
+    } else {
+        // Fallback to white opaque
+        "&H00FFFFFF&".to_string()
+    }
+}
+
+// Helper function to convert Lexical JSON to VTT cue text with styling
+fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String, used_classes: &mut std::collections::HashSet<String>) {
     if let Some(node_type) = value.get("type").and_then(|t| t.as_str()) {
         match node_type {
             "text" | "extended-text" => {
@@ -771,93 +843,113 @@ fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String) {
                     let mut prefix_tags = String::new();
                     let mut suffix_tags = String::new();
 
-                    if format_flags & IS_BOLD != 0 { prefix_tags.push_str("<b>"); suffix_tags.insert_str(0, "</b>"); }
-                    if format_flags & IS_ITALIC != 0 { prefix_tags.push_str("<i>"); suffix_tags.insert_str(0, "</i>"); }
-                    if format_flags & IS_UNDERLINE != 0 { prefix_tags.push_str("<u>"); suffix_tags.insert_str(0, "</u>"); }
+                    let mut has_strikethrough = (format_flags & IS_STRIKETHROUGH) != 0;
+                    let mut has_highlight = (format_flags & IS_HIGHLIGHT) != 0;
+                    let mut color_found: Option<String> = None;
 
-                    // Basic color parsing (e.g., "color: #RRGGBB" or "color: red")
-                    // VTT supports <c.colorname> and <c.#RRGGBB>
+                    // Parse styles
                     if !style_str.is_empty() {
                         for part in style_str.split(';') {
                             let part_trimmed = part.trim();
                             if part_trimmed.starts_with("color:") {
-                                let color_value = part_trimmed.trim_start_matches("color:").trim();
-                                if !color_value.is_empty() {
-                                    // VTT class names cannot start with a digit if not hex, and hex needs #
-                                    // Simple heuristic: if it starts with #, assume hex. Otherwise, treat as named color.
-                                    // More robust parsing might be needed for complex CSS color values.
-                                    let vtt_color_tag = format!("<c.{}>", color_value);
-                                    prefix_tags.push_str(&vtt_color_tag);
-                                    suffix_tags.insert_str(0, "</c>"); // VTT uses simple </c> to close color tags
+                                let val = part_trimmed.trim_start_matches("color:").trim();
+                                if !val.is_empty() { 
+                                    let sanitized = ensure_vtt_color(val);
+                                    if !sanitized.is_empty() {
+                                        color_found = Some(sanitized);
+                                    }
                                 }
-                                break; // Assuming only one color declaration for simplicity
+                            } else if part_trimmed.starts_with("background-color:") {
+                                let bg = part_trimmed.trim_start_matches("background-color:").trim();
+                                if bg != "transparent" && !bg.is_empty() {
+                                    has_highlight = true;
+                                }
+                            } else if part_trimmed.starts_with("text-decoration:") {
+                                if part_trimmed.contains("line-through") {
+                                    has_strikethrough = true;
+                                }
                             }
-                            // Background color (highlight) is generally not directly supported in VTT text spans.
-                            // Could map to a class like <c.highlightYellow> if player CSS is available.
-                            // For now, we'll ignore background-color.
                         }
                     }
 
+                    // Standard WebVTT only supports <b>, <i>, <u>, <c>, <v>, <lang>.
+                    // We use <c.class> for colors and strikethrough for widest compatibility (especially browsers).
+                    if let Some(color) = color_found {
+                        let is_black = color == "#000000" || color == "#000" || color == "black";
+                        // If there is a highlight, we avoid applying black color 
+                        // because we don't export the highlight background, 
+                        // and black text on a dark video background is unreadable.
+                        if !has_highlight || !is_black {
+                            let class_name = format!("c_{}", color.trim_start_matches('#'));
+                            prefix_tags.push_str(&format!("<c.{}>", class_name));
+                            suffix_tags.insert_str(0, "</c>");
+                            used_classes.insert(class_name);
+                        }
+                    }
+
+                    if format_flags & IS_BOLD != 0 { prefix_tags.push_str("<b>"); suffix_tags.insert_str(0, "</b>"); }
+                    if format_flags & IS_ITALIC != 0 { prefix_tags.push_str("<i>"); suffix_tags.insert_str(0, "</i>"); }
+                    if format_flags & IS_UNDERLINE != 0 { prefix_tags.push_str("<u>"); suffix_tags.insert_str(0, "</u>"); }
+                    if has_strikethrough { 
+                        prefix_tags.push_str("<c.s>"); 
+                        suffix_tags.insert_str(0, "</c>"); 
+                        used_classes.insert("s".to_string());
+                    }
+
                     vtt_text_buffer.push_str(&prefix_tags);
-                    vtt_text_buffer.push_str(&encode_text(text_content)); // Encode to prevent VTT syntax issues from text
+                    vtt_text_buffer.push_str(&encode_text(text_content));
                     vtt_text_buffer.push_str(&suffix_tags);
                 }
             }
+
             "linebreak" => {
                 vtt_text_buffer.push_str("\n");
             }
             "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table" | "tablecell" | "tablerow" => {
                 if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer, used_classes);
                     }
-                }
-                // Add a newline after block elements like paragraphs if they are not the last in a sequence of blocks
-                // or if they represent a distinct thought unit. For VTT, this often translates to just letting linebreaks handle it.
-                if node_type == "paragraph" && !vtt_text_buffer.ends_with("\n") && !vtt_text_buffer.is_empty() {
-                     // vtt_text_buffer.push_str("\n"); // Could add a newline if paragraphs must be distinct lines in VTT
                 }
             }
             _ => {
                 if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer, used_classes);
                     }
                 }
             }
         }
     } else if let Some(children) = value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
         for (i, child) in children.iter().enumerate() {
-            lexical_to_vtt_cue_text(child, vtt_text_buffer);
+            lexical_to_vtt_cue_text(child, vtt_text_buffer, used_classes);
             if i < children.len() - 1 {
                 if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
                     if child_node_type == "paragraph" && !vtt_text_buffer.ends_with('\n') {
-                        vtt_text_buffer.push_str("\n"); // Newline between top-level paragraphs
+                        vtt_text_buffer.push_str("\n");
                     }
                 }
             }
         }
-    } else if value.is_string() { // If it's already a plain string
+    } else if value.is_string() {
          vtt_text_buffer.push_str(value.as_str().unwrap_or(""));
     }
 }
 
-fn get_vtt_cue_text_from_lexical_string(text_content: &str) -> String {
+fn get_vtt_cue_text_from_lexical_string(text_content: &str, used_classes: &mut std::collections::HashSet<String>) -> String {
     match serde_json::from_str::<Value>(text_content) {
         Ok(parsed_json) => {
             if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
                 let mut buffer = String::new();
-                lexical_to_vtt_cue_text(&parsed_json, &mut buffer);
-                return buffer; // No trim, preserve internal newlines
+                lexical_to_vtt_cue_text(&parsed_json, &mut buffer, used_classes);
+                return buffer;
             }
-            if parsed_json.is_string() { // JSON string value
+            if parsed_json.is_string() {
                 return parsed_json.as_str().unwrap_or("").to_string();
             }
-            // Fallback for other JSON that is not Lexical root (e.g. simple array/object not expected here)
             text_content.to_string()
         }
         Err(_) => {
-            // Not valid JSON, assume it's already plain text
             text_content.to_string()
         }
     }
@@ -870,7 +962,7 @@ pub async fn export_transcript_to_vtt(
     output_path_str: String,
     segments_json_str: String,
 ) -> Result<String, CommandError> {
-    info!("[export_transcript_to_vtt] Exporting to VTT: {}", output_path_str);
+    info!("[export_transcript_to_vtt] Exporting to VTT with styling: {}", output_path_str);
 
     let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
         .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for VTT: {}", e)))?;
@@ -879,31 +971,49 @@ pub async fn export_transcript_to_vtt(
         return Err(CommandError::from("No segments provided for VTT export."));
     }
 
-    let mut vtt_content = String::new();
-    vtt_content.push_str("WEBVTT\n\n");
+    // Two-pass approach for VTT:
+    // 1. Generate cue texts and collect all used classes (strikethrough and colors)
+    // 2. Build the final VTT with a STYLE block containing only the needed classes.
 
-    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
-        // VTT sequence numbers are optional but can be helpful.
-        // If not using them, just remove this line.
-        // vtt_content.push_str(&(_index + 1).to_string()); // Use _index here if enabling
-        // vtt_content.push_str("\n");
+    let mut used_classes = std::collections::HashSet::new();
+    let mut cue_texts = Vec::new();
 
+    for segment in segments.iter() {
+        let cue_text = get_vtt_cue_text_from_lexical_string(&segment.text, &mut used_classes);
+        cue_texts.push(cue_text);
+    }
+
+    let mut vtt_content = String::from("WEBVTT\n\n");
+
+    if !used_classes.is_empty() {
+        vtt_content.push_str("STYLE\n");
+        if used_classes.contains("s") {
+            vtt_content.push_str("::cue(.s) { text-decoration: line-through; }\n");
+        }
+        for class in used_classes.iter() {
+            if class.starts_with("c_") {
+                let hex = &class[2..];
+                vtt_content.push_str(&format!("::cue(.{}) {{ color: #{}; }}\n", class, hex));
+            }
+        }
+        vtt_content.push('\n');
+    }
+
+    for (index, segment) in segments.iter().enumerate() {
         let start_ts = format_vtt_timestamp(segment.start_time);
         let end_ts = format_vtt_timestamp(segment.end_time);
         vtt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
 
-        let cue_text = get_vtt_cue_text_from_lexical_string(&segment.text);
+        let cue_text = &cue_texts[index];
 
         let text_line = if let Some(speaker_name) = &segment.speaker {
             if !speaker_name.trim().is_empty() {
-                // VTT standard way to denote speaker is often <v Speaker Name>Text content
-                // or just Speaker Name: Text content. For simplicity, using the latter.
                 format!("{}: {}", speaker_name.trim(), cue_text)
             } else {
-                cue_text
+                cue_text.clone()
             }
         } else {
-            cue_text
+            cue_text.clone()
         };
         vtt_content.push_str(&text_line);
         vtt_content.push_str("\n\n");
@@ -1167,23 +1277,6 @@ fn format_ass_timestamp(seconds: f64) -> String {
     format!("{}:{:02}:{:02}.{:02}", h, m, s, cs)
 }
 
-// Helper to convert Lexical color (hex like #RRGGBB or named) to ASS &HBBGGRR& (opaque)
-// For simplicity, this currently expects hex and converts. Named colors would need a map.
-// Alpha is set to 00 (opaque).
-fn lexical_color_to_ass_color(hex_color: &str) -> String {
-    let color = hex_color.trim_start_matches('#');
-    if color.len() == 6 {
-        let r = &color[0..2];
-        let g = &color[2..4];
-        let b = &color[4..6];
-        format!("&H00{}{}{}&", b, g, r).to_uppercase() // ASS is BGR, opaque
-    } else {
-        // Fallback for named colors or invalid hex - return default (white opaque)
-        // A more robust solution would map common named colors.
-        "&H00FFFFFF&".to_string()
-    }
-}
-
 fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
 
     if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
@@ -1274,24 +1367,22 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
 
 
 
-                    // Only apply font color if there is NO highlight.
-
-                    if !has_highlight {
-
-                        if let Some(color) = font_color {
-
-                            if color != "transparent" && !color.is_empty() {
-
-                                open_tags.push_str(&format!("\\1c{}", lexical_color_to_ass_color(color)));
-
+                    // Apply font color if present.
+                    if let Some(color) = font_color {
+                        if color != "transparent" && !color.is_empty() {
+                            let ass_color = lexical_color_to_ass_color(color);
+                            // We avoid applying black color if a highlight is present
+                            // because we don't export the highlight background, 
+                            // and black text on a dark video is unreadable.
+                            let is_black = ass_color == "&H00000000&" || ass_color == "&H000000&" || 
+                                           color == "#000000" || color == "#000" || color == "black";
+                            
+                            if !has_highlight || !is_black {
+                                open_tags.push_str(&format!("\\1c{}", ass_color));
                                 has_tags = true;
-
                             }
-
                         }
-
                     }
-
                     open_tags.push('}');
 
 

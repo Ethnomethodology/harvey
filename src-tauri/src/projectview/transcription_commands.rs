@@ -2167,6 +2167,11 @@ pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, 
         .map_err(|e| CommandError::from(format!("Failed to read SRT file: {}", e)))?;
 
     let mut vtt_content = String::from("WEBVTT\n\n");
+    // Add STYLE block for strikethrough support in modern players/browsers
+    vtt_content.push_str("STYLE\n");
+    vtt_content.push_str("::cue(s) { text-decoration: line-through; }\n");
+    vtt_content.push_str("::cue(strike) { text-decoration: line-through; }\n\n");
+
     // Simple SRT to VTT conversion: 
     // 1. Prepend WEBVTT
     // 2. Change time separator from ',' to '.'
@@ -2384,49 +2389,8 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
     }
 
     // --- Pass 2: Generate VTT Content ---
-    let mut vtt_content = String::from("WEBVTT\n\n");
-
-    // 1. STYLE Header
-    // We combine the base styles (from [V4 Styles]) and the inline color classes we discovered.
-    if !styles.is_empty() || !inline_colors.is_empty() {
-        vtt_content.push_str("STYLE\n");
-        
-        // Define generic strikethrough class for inline use
-        vtt_content.push_str("::cue(.s) {\n  text-decoration: line-through;\n}\n");
-
-        // Base Styles
-        for (name, style) in &styles {
-             let safe_name = name.replace(" ", "_").replace(".", "-");
-             vtt_content.push_str(&format!("::cue(.{}) {{\n", safe_name));
-             if let Some(color) = &style.primary_colour {
-                 vtt_content.push_str(&format!("  color: {};\n", color));
-             }
-             if style.bold { vtt_content.push_str("  font-weight: bold;\n"); }
-             if style.italic { vtt_content.push_str("  font-style: italic;\n"); }
-             
-             // Combined text-decoration
-             let mut decoration = Vec::new();
-             if style.underline { decoration.push("underline"); }
-             if style.strike_out { decoration.push("line-through"); }
-             if !decoration.is_empty() {
-                 vtt_content.push_str(&format!("  text-decoration: {};\n", decoration.join(" ")));
-             }
-             
-             vtt_content.push_str("}\n");
-        }
-
-        // Inline Color Classes (e.g. .c_FFFF00)
-        // Note: Sort for deterministic output
-        let mut sorted_colors: Vec<_> = inline_colors.into_iter().collect();
-        sorted_colors.sort();
-        
-        for css_hex in sorted_colors {
-            // Hex is #RRGGBB. Class name: c_RRGGBB
-            let class_name = format!("c_{}", css_hex.trim_start_matches('#'));
-            vtt_content.push_str(&format!("::cue(.{}) {{\n  color: {};\n}}\n", class_name, css_hex));
-        }
-        vtt_content.push('\n');
-    }
+    let mut cue_lines = Vec::new();
+    let mut used_classes = std::collections::HashSet::new();
 
     // 2. Events Processing
     for event in events {
@@ -2447,11 +2411,11 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
         let mut processed_line = String::new();
 
         // Safe style name for the outer cue
-        let safe_style_name = event.style.replace(" ", "_").replace(".", "-");
+        let _safe_style_name = event.style.replace(" ", "_").replace(".", "-");
         
         // We will build segments. Each segment of text needs to be wrapped according to CURRENT state.
         // Helper to append text with current wrappers
-        let append_text = |out: &mut String, text: &str, bold: bool, italic: bool, underline: bool, strike: bool, color: &Option<String>| {
+        let append_text = |out: &mut String, text: &str, bold: bool, italic: bool, underline: bool, strike: bool, color: &Option<String>, used_classes: &mut std::collections::HashSet<String>| {
             if text.is_empty() { return; }
             
             // Clean text escapes
@@ -2463,15 +2427,29 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
             let mut prefix = String::new();
             let mut suffix = String::new();
 
+            // VTT classes for color and strike
             if let Some(c) = color {
                 let class_name = format!("c_{}", c.trim_start_matches('#'));
                 prefix.push_str(&format!("<c.{}>", class_name));
                 suffix.insert_str(0, "</c>");
+                used_classes.insert(class_name);
+            } else if let Some(bs) = base_style {
+                if let Some(c) = &bs.primary_colour {
+                    let class_name = format!("c_{}", c.trim_start_matches('#'));
+                    prefix.push_str(&format!("<c.{}>", class_name));
+                    suffix.insert_str(0, "</c>");
+                    used_classes.insert(class_name);
+                }
             }
+
             if bold { prefix.push_str("<b>"); suffix.insert_str(0, "</b>"); }
             if italic { prefix.push_str("<i>"); suffix.insert_str(0, "</i>"); }
             if underline { prefix.push_str("<u>"); suffix.insert_str(0, "</u>"); }
-            if strike { prefix.push_str("<c.s>"); suffix.insert_str(0, "</c>"); } // Use <c.s> for strikethrough
+            if strike { 
+                prefix.push_str("<c.s>"); 
+                suffix.insert_str(0, "</c>"); 
+                used_classes.insert("s".to_string());
+            }
 
             out.push_str(&prefix);
             out.push_str(&clean);
@@ -2482,7 +2460,7 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
             // Text before the tag
             if cap.start() > last_idx {
                 let text_segment = &event.text[last_idx..cap.start()];
-                append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color);
+                append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color, &mut used_classes);
             }
 
             // Process the tag content
@@ -2541,11 +2519,30 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
         // Remaining text after last tag
         if last_idx < event.text.len() {
             let text_segment = &event.text[last_idx..];
-            append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color);
+            append_text(&mut processed_line, text_segment, state_bold, state_italic, state_underline, state_strike, &state_color, &mut used_classes);
         }
 
-        // Output VTT Cue
-        vtt_content.push_str(&format!("{} --> {}\n<c.{}>{}</c>\n\n", vtt_start, vtt_end, safe_style_name, processed_line));
+        cue_lines.push(format!("{} --> {}\n{}\n\n", vtt_start, vtt_end, processed_line));
+    }
+
+    let mut vtt_content = String::from("WEBVTT\n\n");
+
+    if !used_classes.is_empty() {
+        vtt_content.push_str("STYLE\n");
+        if used_classes.contains("s") {
+            vtt_content.push_str("::cue(.s) { text-decoration: line-through; }\n");
+        }
+        for class in used_classes.iter() {
+            if class.starts_with("c_") {
+                let hex = &class[2..];
+                vtt_content.push_str(&format!("::cue(.{}) {{ color: #{}; }}\n", class, hex));
+            }
+        }
+        vtt_content.push('\n');
+    }
+
+    for cue in cue_lines {
+        vtt_content.push_str(&cue);
     }
 
     Ok(vtt_content)
