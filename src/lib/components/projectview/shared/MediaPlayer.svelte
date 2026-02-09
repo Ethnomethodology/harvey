@@ -1065,6 +1065,9 @@
                 const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
                 const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
 
+                // Store decodedAudioBuffer locally for use in onmessage handler when worker responds
+                waveformLoadData.set(loadId, decodedAudioBuffer);
+
                 waveformWorker.postMessage({
                     type: 'GENERATE_PEAKS',
                     payload: {
