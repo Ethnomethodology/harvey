@@ -1629,9 +1629,9 @@ pub async fn export_transcript_to_ass(
     // [V4+ Styles]
     ass_content.push_str("[V4+ Styles]\n");
     ass_content.push_str("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n");
-    // Default style: Courier New (monospace), 20pt, White text, Yellow secondary (for karaoke), Black outline, Transparent shadow box
+    // Default style: Arial (standard proportional font), 20pt, White text, Yellow secondary (for karaoke), Black outline, Transparent shadow box
     // Opaque box for background: BorderStyle=3, Outline=border width, BackColour=highlight color
-    ass_content.push_str("Style: Default,Courier New,20,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1.5,0,2,10,10,10,1\n");
+    ass_content.push_str("Style: Default,Arial,20,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1.5,0,2,10,10,10,1\n");
 
     // Highlight styles removed for simpler export.
     let styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
