@@ -209,29 +209,51 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return;
 
         let changes = {};
+        let prevSegChanges = null;
+        let nextSegChanges = null;
         const currentSeg = segments[currentIndex];
 
-        if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) {
+        const startTimeChanged = Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001;
+        const endTimeChanged = Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001;
+
+        if (startTimeChanged) {
             localStart = formatTimestamp(newStartTime);
             changes.start_time = newStartTime;
+            if (currentIndex > 0) {
+                prevSegChanges = { end_time: newStartTime };
+            }
         } else {
             localStart = formatTimestamp(currentSeg.start_time);
         }
 
-        if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) {
+        if (endTimeChanged) {
             localEnd = formatTimestamp(newEndTime);
             changes.end_time = newEndTime;
+            if (currentIndex < segments.length - 1) {
+                nextSegChanges = { start_time: newEndTime };
+            }
         } else {
             localEnd = formatTimestamp(currentSeg.end_time);
         }
 
         if (Object.keys(changes).length > 0) {
-            if (get(transcriptStore).isDualModeActive) {
-                updateSegment(currentIndex, changes, true);
-                updateSecondarySegment(currentIndex, changes);
-            } else {
-                updateSegment(currentIndex, changes, true);
+            const isDual = get(transcriptStore).isDualModeActive;
+
+            // Update adjacent segments first to keep continuity logic clean in history?
+            // Order doesn't strictly matter for correctness but might for undo history perception.
+            if (prevSegChanges) {
+                updateSegment(currentIndex - 1, prevSegChanges, true);
+                if (isDual) updateSecondarySegment(currentIndex - 1, prevSegChanges);
             }
+
+            updateSegment(currentIndex, changes, true);
+            if (isDual) updateSecondarySegment(currentIndex, changes);
+
+            if (nextSegChanges) {
+                updateSegment(currentIndex + 1, nextSegChanges, true);
+                if (isDual) updateSecondarySegment(currentIndex + 1, nextSegChanges);
+            }
+
             tick().then(dispatchEditState);
             const currentTime = get(transcriptStore).player.currentTime;
             if (currentTime < newStartTime || currentTime >= newEndTime) {

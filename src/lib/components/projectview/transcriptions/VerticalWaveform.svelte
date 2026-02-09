@@ -6,6 +6,9 @@
 	export let externalPeaks = null;
 	export let currentTime = 0;
 	export let duration = 0;
+    export let isEditingSegment = false;
+    export let editSegmentStartTime = 0;
+    export let editSegmentEndTime = 0;
 
 	const TIMESCALE_WIDTH = 35;
 	const BAR_THICKNESS_PX = 2;
@@ -42,6 +45,46 @@
 	let segmentHighlightStyle = 'display: none;';
 
 	const dispatch = createEventDispatcher();
+
+    let draggingHandle = null;
+
+    function startEditDrag(handle, event) {
+        if (!isEditingSegment || !duration || !waveformCanvas) return;
+        event.preventDefault();
+        event.stopPropagation();
+        draggingHandle = handle;
+        window.addEventListener('mousemove', handleEditMouseMove);
+        window.addEventListener('mouseup', handleEditMouseUp, { once: true });
+    }
+
+    function handleEditMouseMove(event) {
+        if (!draggingHandle || !waveformAreaContainerRef) return;
+        event.preventDefault();
+        
+        const rect = waveformAreaContainerRef.getBoundingClientRect();
+        const clickY_in_viewport = event.clientY - rect.top;
+        
+        let newTime = pyToTime(clickY_in_viewport, duration, visibleCanvasHeight, scrollOffsetPy);
+        
+        const minDuration = 0.05; 
+        let newStartTime = editSegmentStartTime; 
+        let newEndTime = editSegmentEndTime;
+        
+        if (draggingHandle === 'edit-top') {
+            newStartTime = Math.max(0, Math.min(newTime, editSegmentEndTime - minDuration));
+        } else {
+            newEndTime = Math.min(duration, Math.max(newTime, editSegmentStartTime + minDuration));
+        }
+        
+        if (newStartTime !== editSegmentStartTime || newEndTime !== editSegmentEndTime) {
+            dispatch('segmentupdate', { startTime: newStartTime, endTime: newEndTime });
+        }
+    }
+
+    function handleEditMouseUp() {
+        draggingHandle = null;
+        window.removeEventListener('mousemove', handleEditMouseMove);
+    }
 
 	let segments = [];
 	let currentSegmentIndex = -1;
@@ -644,6 +687,30 @@
 				{#if (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0}
 					<div class="vertical-seek-bar" style={seekBarStyle}></div>
 					<div class="segment-highlight-window" style={segmentHighlightStyle}></div>
+                    
+                    {#if isEditingSegment}
+                        <!-- Handles -->
+                        {@const editStartPy = timeToLogicalPy(editSegmentStartTime, duration, visibleCanvasHeight)}
+                        {@const editEndPy = timeToLogicalPy(editSegmentEndTime, duration, visibleCanvasHeight)}
+                        
+                        <!-- Top Handle (Start) -->
+                        <div 
+                            class="absolute left-0 w-full h-2.5 -translate-y-1/2 flex flex-col items-center justify-center cursor-row-resize group z-30" 
+                            style="top: {editStartPy}px;"
+                            on:mousedown|preventDefault={(e) => startEditDrag('edit-top', e)}
+                        >
+                            <div class="w-full h-0.5 bg-blue-600 group-hover:h-1 transition-all"></div>
+                        </div>
+
+                        <!-- Bottom Handle (End) -->
+                        <div 
+                            class="absolute left-0 w-full h-2.5 -translate-y-1/2 flex flex-col items-center justify-center cursor-row-resize group z-30" 
+                            style="top: {editEndPy}px;"
+                            on:mousedown|preventDefault={(e) => startEditDrag('edit-bottom', e)}
+                        >
+                            <div class="w-full h-0.5 bg-blue-600 group-hover:h-1 transition-all"></div>
+                        </div>
+                    {/if}
 				{/if}
 			</div>
 		</div>

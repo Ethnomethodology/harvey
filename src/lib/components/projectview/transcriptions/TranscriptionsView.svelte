@@ -602,7 +602,11 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                         externalPeaks={$transcriptStore.audioBufferPeaks}
                         currentTime={$transcriptStore.player.currentTime}
                         duration={$transcriptStore.player.duration}
+                        isEditingSegment={isSegmentEditingActive}
+                        editSegmentStartTime={currentEditSegmentStart}
+                        editSegmentEndTime={currentEditSegmentEnd}
                         on:navigate={handlePanelNavigate}
+                        on:segmentupdate={handleWaveformSegmentUpdate}
                     />
                 {:else if $transcriptStore.selectedMediaFile}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-d-gray-500 bg-white dark:bg-surface-1 p-1">
@@ -650,7 +654,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     isEditingSegment={isSegmentEditingActive}
                     editSegmentStartTime={currentEditSegmentStart}
                     editSegmentEndTime={currentEditSegmentEnd}
-                    showTrimUI={false}
+                    showTrimUI={panelEditModeActive}
                     fixedHeightPx={horizontalWaveformContainerHeightPx}
                     compactMode={false}
                     on:navigate={handlePanelNavigate}
