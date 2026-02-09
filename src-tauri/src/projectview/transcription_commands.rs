@@ -2220,8 +2220,8 @@ fn convert_ass_time_to_vtt(t: &str) -> String {
 // Helper to convert ASS color (&HBBGGRR or &HAABBGGRR) to CSS Hex (#RRGGBB)
 // Ignores Alpha for now or assumes opaque if simple hex.
 fn ass_color_to_css(ass_color: &str) -> Option<String> {
-    // Strip &H and optional trailing &
-    let clean = ass_color.trim().replace("&H", "").replace("&", "");
+    // Strip &H (case insensitive) and optional trailing &
+    let clean = ass_color.trim().replace("&H", "").replace("&h", "").replace("&", "");
     
     // Parse hex string
     if let Ok(val) = u32::from_str_radix(&clean, 16) {
@@ -2292,8 +2292,9 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
     let re_underline = Regex::new(r"\\u(\d)").unwrap(); // \u1, \u0
     let re_strike = Regex::new(r"\\s(\d)").unwrap(); // \s1, \s0
     // Matches \c&HBBGGRR& or \1c&HBBGGRR& etc. 
-    // Capture group 1: the hex code part (e.g. &HFFFFFF&)
-    let re_color = Regex::new(r"\\[1-4]?c(&H[0-9a-fA-F]+&?)").unwrap(); 
+    // Capture group 1: Optional number (1-4)
+    // Capture group 2: the hex code part (e.g. &HFFFFFF&)
+    let re_color = Regex::new(r"\\([1-4])?c\s*(&[hH][0-9a-fA-F]+&?)").unwrap(); 
 
     // --- Pass 1: Parse File, Collect Styles & Events, Identify Inline Colors ---
     for line in ass_content.lines() {
@@ -2368,9 +2369,15 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
                             
                             // Scan for inline colors to register them
                             for caps in re_color.captures_iter(&raw_text) {
-                                if let Some(hex_match) = caps.get(1) {
-                                    if let Some(css_hex) = ass_color_to_css(hex_match.as_str()) {
-                                        inline_colors.insert(css_hex);
+                                // Group 1 is optional prefix, Group 2 is hex
+                                let type_prefix = caps.get(1).map(|m| m.as_str());
+                                let hex_match = caps.get(2);
+
+                                if type_prefix.is_none() || type_prefix == Some("1") {
+                                    if let Some(m) = hex_match {
+                                        if let Some(css_hex) = ass_color_to_css(m.as_str()) {
+                                            inline_colors.insert(css_hex);
+                                        }
                                     }
                                 }
                             }
@@ -2495,10 +2502,18 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
                 }
             }
             // Color
-            if let Some(c_match) = re_color.captures(tag_content) {
-                if let Some(hex_match) = c_match.get(1) {
-                    if let Some(css) = ass_color_to_css(hex_match.as_str()) {
-                        state_color = Some(css);
+            for c_match in re_color.captures_iter(tag_content) {
+                // Group 1: Optional number (1, 2, 3, 4)
+                // Group 2: The hex string
+                let type_prefix = c_match.get(1).map(|m| m.as_str());
+                let hex_str_match = c_match.get(2);
+
+                // Only apply primary color (\c or \1c). Ignore \2c, \3c, \4c for text color state.
+                if type_prefix.is_none() || type_prefix == Some("1") {
+                    if let Some(hex_match) = hex_str_match {
+                        if let Some(css) = ass_color_to_css(hex_match.as_str()) {
+                            state_color = Some(css);
+                        }
                     }
                 }
             }
@@ -2535,7 +2550,7 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
         for class in used_classes.iter() {
             if class.starts_with("c_") {
                 let hex = &class[2..];
-                vtt_content.push_str(&format!("::cue(.{}) {{ color: #{}; }}\n", class, hex));
+                vtt_content.push_str(&format!("::cue(.{}) {{ color: #{} !important; }}\n", class, hex));
             }
         }
         vtt_content.push('\n');
