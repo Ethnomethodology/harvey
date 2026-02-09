@@ -618,33 +618,34 @@
             {:else if currentPageId === 'transcription-tab'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription Tab</h3>
-                <p>This tab is dedicated to media playback and text generation. It features a synchronized environment where the audio/video player, waveform, and transcript editor work in harmony.</p>
+                <p>This tab is dedicated to media playback and text generation. It features a synchronized environment where the audio/video player, interactive waveform, and transcript editor work in harmony.</p>
                 <ul class="list-disc pl-5 space-y-3">
-                    <li><strong>Left Panel:</strong> Browser for all media files in your project.</li>
-                    <li><strong>Center:</strong> The primary workspace containing the player, waveform, and segments.</li>
-                    <li><strong>Right Panel:</strong> Detailed information and configuration for the currently selected media.</li>
+                    <li><strong>Integrated Workflow:</strong> The transcript segments are linked to the media. Selecting a segment jumps the player to that time, and moving the playhead highlights the active segment.</li>
+                    <li><strong>Standardized View:</strong> Segments use a fixed two-row layout (Metadata then Text) to maximize horizontal space for both short and long utterances.</li>
+                    <li><strong>Interactive Panels:</strong> All panels are resizable and collapsible to optimize your workspace for different tasks like review or deep editing.</li>
                 </ul>
               </div>
 
             {:else if currentPageId === 'auto-transcription'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Automatic Transcription</h3>
-                <p>Leverage state-of-the-art <strong>Whisper</strong> models to convert speech to text automatically.</p>
+                <p>Leverage state-of-the-art <strong>Whisper</strong> models to convert speech to text automatically and locally.</p>
                 <ul class="list-disc pl-5 space-y-3">
-                    <li><strong>Model Selection:</strong> Choose a model size that matches your hardware and accuracy needs.</li>
-                    <li><strong>Language Detection:</strong> Set a specific language or let the AI detect it automatically.</li>
-                    <li><strong>Process:</strong> Click the "Transcribe" button, configure your settings, and wait for the local processing to complete.</li>
+                    <li><strong>System Checks:</strong> Harvey automatically verifies your Python environment and hardware acceleration (like Core ML) before starting to ensure peak performance.</li>
+                    <li><strong>Model Selection:</strong> Choose a model size that matches your accuracy needs. Larger models (e.g., Medium, Large) provide better results for complex audio but require more RAM.</li>
+                    <li><strong>Language Detection:</strong> Set a specific language for best results, or use "Auto Detect" for multilingual files.</li>
                 </ul>
               </div>
 
             {:else if currentPageId === 'manual-transcription'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Manual Transcription</h3>
-                <p>For high-precision work or difficult audio, you can transcribe manually.</p>
+                <p>For high-precision work or difficult audio, you can transcribe manually using Harvey's specialized tools.</p>
                 <ul class="list-disc pl-5 space-y-3">
-                    <li><strong>Segmentation:</strong> Create custom time-stamped segments manually.</li>
-                    <li><strong>Entry:</strong> Type directly into the segments while controlling playback with keyboard shortcuts.</li>
-                    <li><strong>Flexibility:</strong> Combine manual entry with automatic results by editing existing segments.</li>
+                    <li><strong>Smart Initialization:</strong> When setting up a manual transcript, the <strong>Number of Segments</strong> and <strong>Duration</strong> are bidirectionally linked. Adjusting one automatically calculates the other based on the total media length.</li>
+                    <li><strong>Segmentation:</strong> Create custom time-stamped segments manually. The system ensures segments are perfectly contiguous.</li>
+                    <li><strong>Direct Entry:</strong> Type directly into the segments while controlling playback with global keyboard shortcuts.</li>
+                    <li><strong>Flexibility:</strong> Combine manual entry with automatic results by editing existing segments at any time.</li>
                 </ul>
               </div>
 
@@ -684,17 +685,18 @@
                 <ul class="list-disc pl-5 space-y-3">
                     <li><strong>Synchronization:</strong> Clicking any text segment jumps the player to that exact moment in the audio/video.</li>
                     <li><strong>Playback Speed:</strong> Adjust speed from 0.5x to 2.0x to match your typing pace.</li>
-                    <li><strong>Trim Tool:</strong> Extract clips from your media assets directly within the Transcription tab.</li>
+                    <li><strong>Reliable Trimming:</strong> Use the trim tool to extract clips from your media assets. The process is optimized to handle large files reliably.</li>
                 </ul>
               </div>
 
             {:else if currentPageId === 'editing'}
               <div class="space-y-6 text-base leading-relaxed">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Editing</h3>
-                <p>Refine your transcripts with powerful editing tools.</p>
+                <p>Refine your transcripts with powerful, time-aware editing tools.</p>
                 <ul class="list-disc pl-5 space-y-3">
                     <li><strong>Edit Mode:</strong> Toggle edit mode using the toolbar button or <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">{modKeyName} + E</kbd>.</li>
-                    <li><strong>Segment Management:</strong> Add, delete, or merge segments to improve the flow of your transcript.</li>
+                    <li><strong>Gapless Continuity:</strong> When you adjust the start or end time of a segment, the adjacent segments are automatically updated to prevent gaps or overlaps, ensuring a perfect timeline.</li>
+                    <li><strong>Standardized Layout:</strong> Each segment uses a clear two-row layout: Metadata (Speaker & Time) at the top, and formatted text below for maximum clarity.</li>
                     <li><strong>Formatting:</strong> Apply bold, italic, or underline styles to emphasize specific parts of the text.</li>
                 </ul>
               </div>
@@ -702,11 +704,12 @@
             {:else if currentPageId === 'waveform'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Waveform</h3>
-                <p>The interactive waveform provides a visual representation of your audio.</p>
+                <p>The interactive waveform provides a visual representation of your audio and segment timing.</p>
                 <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Interactive Handles:</strong> In the vertical waveform view, you can drag the top and bottom handles of any segment block to precisely adjust its timing.</li>
+                    <li><strong>Visual Cues:</strong> See pauses and loud sections at a glance, helping you identify speaker turns and natural segment boundaries.</li>
                     <li><strong>Navigation:</strong> Click anywhere on the waveform to seek. The red playhead shows the current position.</li>
-                    <li><strong>Visual Cues:</strong> See pauses and loud sections at a glance, helping you identify segment boundaries.</li>
-                    <li><strong>Customization:</strong> Change the waveform layout (e.g., Bars vs. Wave) in the Settings menu.</li>
+                    <li><strong>Zooming:</strong> Use the zoom controls or <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">{modKeyName} + Scroll</kbd> to inspect fine audio details.</li>
                 </ul>
               </div>
 
@@ -715,17 +718,17 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Layout</h3>
                 <p>Customize the Transcription workspace to suit your preferences.</p>
                 <ul class="list-disc pl-5 space-y-3">
+                    <li><strong>Two-Row Segments:</strong> The transcript uses a standardized two-row structure (Metadata followed by Text) to provide more horizontal space for long utterances.</li>
                     <li><strong>Panel Resizing:</strong> Drag the dividers between the file browser, editor, and info panel.</li>
-                    <li><strong>Collapsing:</strong> Click the collapse icons to hide sidebars and maximize your editing area.</li>
-                    <li><strong>Settings:</strong> Access layout preferences via the cog icon in the Transcription toolbar.</li>
+                    <li><strong>Responsive Headers:</strong> The waveform headers are optimized to remain functional even when panels are narrow.</li>
                 </ul>
               </div>
 
             {:else if currentPageId === 'shortcuts'}
               <div class="space-y-6">
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Shortcuts</h3>
-                <p>Master these keyboard shortcuts to significantly speed up your workflow.</p>
-                <div class="grid grid-cols-2 gap-4 max-w-md mt-4">
+                <p>Master these platform-aware shortcuts to significantly speed up your workflow.</p>
+                <div class="grid grid-cols-2 gap-4 max-w-lg mt-4">
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + E</div>
                     <div class="text-sm">Toggle Edit Mode</div>
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + S</div>
@@ -733,9 +736,9 @@
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F8</div>
                     <div class="text-sm">Play / Pause Media</div>
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F7 / F9</div>
-                    <div class="text-sm">Rewind / Forward</div>
+                    <div class="text-sm">Rewind / Forward 5s</div>
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + ↑ / ↓</div>
-                    <div class="text-sm">Prev / Next Segment</div>
+                    <div class="text-sm">Previous / Next Segment</div>
                 </div>
               </div>
 
