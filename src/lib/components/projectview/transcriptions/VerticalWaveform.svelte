@@ -46,6 +46,10 @@
 
 	const dispatch = createEventDispatcher();
 
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
     let draggingHandle = null;
 
     function startEditDrag(handle, event) {
@@ -652,13 +656,13 @@
 </script>
 
 <div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-d-gray-800 border border-gray-200 dark:border-border rounded overflow-hidden">
-	<div class="flex-shrink-0 px-2 py-1.5 flex items-center justify-end space-x-1.5 border-b border-gray-300 dark:border-d-gray-600 w-full">
-		<button class="ui-button-icon-panelheader" title="Zoom In Waveform" aria-label="Zoom In Waveform" on:click={zoomIn} disabled={!canZoomIn}>
+	<div class="flex-shrink-0 p-0.5 flex items-center justify-end space-x-0.5 border-b border-gray-300 dark:border-d-gray-600 w-full">
+		<button class="ui-button-icon-panelheader" title="Zoom In Waveform ({modKeyName}+Scroll)" aria-label="Zoom In Waveform" on:click={zoomIn} disabled={!canZoomIn}>
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
 			</svg>
 		</button>
-		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform" aria-label="Zoom Out Waveform" on:click={zoomOut} disabled={!canZoomOut}>
+		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform ({modKeyName}+Scroll)" aria-label="Zoom Out Waveform" on:click={zoomOut} disabled={!canZoomOut}>
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
 			</svg>
