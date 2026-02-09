@@ -810,7 +810,7 @@
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
             {#if allSegmentsData.length || previewEditMode}
-                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200" title={previewEditMode ? `Save Transcript (${modKeyName}+S)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
+                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
                   <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-d-gray-500={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-d-gray-400={canUndo} class:dark:hover:text-d-gray-200={canUndo} on:click={handleUndo} title="Undo (Ctrl+Z)" aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
                   <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-d-gray-500={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-d-gray-400={canRedo} class:dark:hover:text-d-gray-200={canRedo} on:click={handleRedo} title="Redo (Ctrl+Y)" aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>

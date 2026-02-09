@@ -85,6 +85,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let isMounted = false;
     let isEditorVisible = false;
     $: isEditorVisible = segments.length > 0 && currentIndex >= 0 && currentIndex < segments.length;
+
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
     const allNodesForUtilities = [
         RootNode,
         ParagraphNode,
@@ -553,12 +558,12 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             <div class="relative py-1 flex-shrink-0 mb-4">
                 <button on:click="{handleEditSaveClick}"
                         class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white'
-                        title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
+                        title="{editEnabled ? `Save & Exit Edit mode (${modKeyName}+E)` : `Enable Editing (${modKeyName}+E)`}"
                         aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
                         style="padding-left:0px;">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
-                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment (Cmd+Up)">
+                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /> </svg>
                 </button>
             </div>
@@ -624,7 +629,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 </div>
             </div>
-            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" title="Next Segment (Cmd+Down)"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
+            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" title="Next Segment ({modKeyName}+Down)"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
         </div>
     {/if}
 </div>
