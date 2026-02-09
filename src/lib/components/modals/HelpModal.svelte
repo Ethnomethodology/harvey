@@ -7,6 +7,10 @@
 
   const dispatch = createEventDispatcher();
 
+  // Determine platform-specific modifier key name
+  const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
   // Define the flat sequence of all pages using exact UI strings
   const allPages = [
     { id: 'overview', label: 'Help Center', sidebarId: 'overview' },
@@ -689,7 +693,7 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Editing</h3>
                 <p>Refine your transcripts with powerful editing tools.</p>
                 <ul class="list-disc pl-5 space-y-3">
-                    <li><strong>Edit Mode:</strong> Toggle edit mode using the toolbar button or <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">Ctrl + E</kbd>.</li>
+                    <li><strong>Edit Mode:</strong> Toggle edit mode using the toolbar button or <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs">{modKeyName} + E</kbd>.</li>
                     <li><strong>Segment Management:</strong> Add, delete, or merge segments to improve the flow of your transcript.</li>
                     <li><strong>Formatting:</strong> Apply bold, italic, or underline styles to emphasize specific parts of the text.</li>
                 </ul>
@@ -722,14 +726,16 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Shortcuts</h3>
                 <p>Master these keyboard shortcuts to significantly speed up your workflow.</p>
                 <div class="grid grid-cols-2 gap-4 max-w-md mt-4">
-                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">Ctrl + E</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + E</div>
                     <div class="text-sm">Toggle Edit Mode</div>
-                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">Ctrl + S</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + S</div>
                     <div class="text-sm">Save Transcript</div>
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F8</div>
                     <div class="text-sm">Play / Pause Media</div>
                     <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">F7 / F9</div>
                     <div class="text-sm">Rewind / Forward</div>
+                    <div class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">{modKeyName} + ↑ / ↓</div>
+                    <div class="text-sm">Prev / Next Segment</div>
                 </div>
               </div>
 

@@ -92,6 +92,10 @@
     let unlistenCloseRequested = null;
     let unlistenMenuEvents = [];
 
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
 	// Transcription configuration data
 	let downloadedModelsList = [];
 	
@@ -354,11 +358,11 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
                 if (!proj.autosaveEnabled) {
                     if ((proj.isDocumentDirty || proj.isDocumentMetadataDirty) && activeDocEditor && typeof activeDocEditor.save === 'function') {
-                        activeDocEditor.save().catch(e => console.error("Ctrl+S document save failed", e));
+                        activeDocEditor.save().catch(e => console.error(`${modKeyName}+S document save failed`, e));
                     } else if (proj.isImportedTranscriptDirty && activeImpTsEditor && typeof activeImpTsEditor.save === 'function') {
-                        activeImpTsEditor.save().catch(e => console.error("Ctrl+S imported transcript save failed", e));
+                        activeImpTsEditor.save().catch(e => console.error(`${modKeyName}+S imported transcript save failed`, e));
                     } else if (proj.isMediaNoteTranscriptDirty && activeMediaNoteEditor && typeof activeMediaNoteEditor.save === 'function') {
-                        activeMediaNoteEditor.save().catch(e => console.error("Ctrl+S media note save failed", e));
+                        activeMediaNoteEditor.save().catch(e => console.error(`${modKeyName}+S media note save failed`, e));
                     }
                 }
             } return;

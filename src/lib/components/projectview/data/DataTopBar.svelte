@@ -25,6 +25,10 @@
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
 
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
     let isLiveTranscriptionActive = false;
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
@@ -646,7 +650,7 @@
         {/if}
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs hover-scale-effect"
-            title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
+            title={canSave ? `Save Changes (${modKeyName}+S)` : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
             disabled={!canSave}
             on:click={handleManualSave}
         >
