@@ -138,6 +138,22 @@ async function onConfirmTranscriptionStart(event) {
         // Manual Logic
         toggleTranscribeModal(false); // Close modal
 
+        // Ensure Dual Mode is OFF before creating manual segments
+        const currentStore = get(transcriptStore);
+        if (currentStore.isDualModeActive) {
+            console.log('[ProjectView] Dual Mode is active during manual transcription start. Turning it OFF.');
+            transcriptStore.update(ts => ({
+                ...ts,
+                isDualModeActive: false,
+                secondaryTranscriptPath: null,
+                secondaryTranscriptSegments: []
+            }));
+            // Update localStorage as well to persist the change
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('harvey-dual-mode', JSON.stringify(false));
+            }
+        }
+
         const { segmentCount, segmentDuration, speakerMode, startTime } = manualSettings;
         const store = get(transcriptStore);
         const speakerNames = store.speakers.names;
