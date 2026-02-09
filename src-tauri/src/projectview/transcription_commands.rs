@@ -2170,7 +2170,8 @@ pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, 
     // Add STYLE block for strikethrough support in modern players/browsers
     vtt_content.push_str("STYLE\n");
     vtt_content.push_str("::cue(s) { text-decoration: line-through; }\n");
-    vtt_content.push_str("::cue(strike) { text-decoration: line-through; }\n\n");
+    vtt_content.push_str("::cue(strike) { text-decoration: line-through; }\n");
+    vtt_content.push_str("::cue { color: #FFFFFF; }\n\n");
 
     // Simple SRT to VTT conversion: 
     // 1. Prepend WEBVTT
@@ -2397,7 +2398,7 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
 
     // --- Pass 2: Generate VTT Content ---
     let mut cue_lines = Vec::new();
-    let mut used_classes = std::collections::HashSet::new();
+    let mut used_classes = std::collections::HashMap::new();
 
     // 2. Events Processing
     for event in events {
@@ -2422,7 +2423,7 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
         
         // We will build segments. Each segment of text needs to be wrapped according to CURRENT state.
         // Helper to append text with current wrappers
-        let append_text = |out: &mut String, text: &str, bold: bool, italic: bool, underline: bool, strike: bool, color: &Option<String>, used_classes: &mut std::collections::HashSet<String>| {
+        let append_text = |out: &mut String, text: &str, bold: bool, italic: bool, underline: bool, strike: bool, color: &Option<String>, used_classes: &mut std::collections::HashMap<String, String>| {
             if text.is_empty() { return; }
             
             // Clean text escapes
@@ -2434,18 +2435,18 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
             let mut prefix = String::new();
             let mut suffix = String::new();
 
-            // VTT classes for color and strike
+            // VTT classes for color and strike.
             if let Some(c) = color {
-                let class_name = format!("c_{}", c.trim_start_matches('#'));
-                prefix.push_str(&format!("<c.{}>", class_name));
-                suffix.insert_str(0, "</c>");
-                used_classes.insert(class_name);
-            } else if let Some(bs) = base_style {
-                if let Some(c) = &bs.primary_colour {
-                    let class_name = format!("c_{}", c.trim_start_matches('#'));
+                let is_white = c.eq_ignore_ascii_case("#FFFFFF") || c.eq_ignore_ascii_case("#FFF") || c.eq_ignore_ascii_case("white");
+                if !is_white {
+                    let safe_suffix = c.trim_start_matches('#').chars()
+                        .map(|ch| if ch.is_alphanumeric() { ch } else { '_' })
+                        .collect::<String>();
+                    let class_name = format!("c_{}", safe_suffix);
+                    
                     prefix.push_str(&format!("<c.{}>", class_name));
                     suffix.insert_str(0, "</c>");
-                    used_classes.insert(class_name);
+                    used_classes.insert(class_name, c.clone());
                 }
             }
 
@@ -2455,7 +2456,7 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
             if strike { 
                 prefix.push_str("<c.s>"); 
                 suffix.insert_str(0, "</c>"); 
-                used_classes.insert("s".to_string());
+                used_classes.insert("s".to_string(), "line-through".to_string());
             }
 
             out.push_str(&prefix);
@@ -2544,15 +2545,19 @@ pub async fn convert_ass_to_vtt_command(ass_path_str: String) -> Result<String, 
 
     if !used_classes.is_empty() {
         vtt_content.push_str("STYLE\n");
-        if used_classes.contains("s") {
-            vtt_content.push_str("::cue(.s) { text-decoration: line-through; }\n");
-        }
-        for class in used_classes.iter() {
-            if class.starts_with("c_") {
-                let hex = &class[2..];
-                vtt_content.push_str(&format!("::cue(.{}) {{ color: #{} !important; }}\n", class, hex));
+        let mut sorted_keys: Vec<_> = used_classes.keys().collect();
+        sorted_keys.sort();
+
+        for class in sorted_keys {
+            if class == "s" {
+                vtt_content.push_str("::cue(.s) { text-decoration: line-through; }\n");
+            } else if class.starts_with("c_") {
+                if let Some(css_color) = used_classes.get(class) {
+                    vtt_content.push_str(&format!("::cue(.{}) {{ color: {}; }}\n", class, css_color));
+                }
             }
         }
+        vtt_content.push_str("::cue { color: #FFFFFF; }\n");
         vtt_content.push('\n');
     }
 
