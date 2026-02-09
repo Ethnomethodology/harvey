@@ -5,7 +5,12 @@
   "windows": [
     "main",
     "project",
-    "project-*"
+    "project-*",
+    "about",
+    "configurations",
+    "license",
+    "credits",
+    "version"
   ],
   "permissions": [
     "core:default",

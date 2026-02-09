@@ -48,8 +48,8 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models (e.g., those containing 'opus-mt')
-	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.name.includes('opus-mt')) : [];
+	// Filter out translation models (those with a family set or containing '/')
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.family && !model.name.includes('/')) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
@@ -137,7 +137,7 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 }
 
 // --- Translation Model Actions ---
-export async function downloadTranslationModel(from, to, downloadLocation, modelName = null) {
+export async function downloadTranslationModel(from, to, downloadLocation, modelName = null, family = 'helsinki') {
   let to_lang = to;
   if (to === 'ja') {
     to_lang = 'jap';
@@ -145,6 +145,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
   const model_name = modelName || `Helsinki-NLP/opus-mt-${from}-${to_lang}`;
   const modelInfo = {
     name: model_name,
+    family: family,
     download_url: `https://huggingface.co/${model_name}`
   };
   if (!downloadLocation || downloadLocation.trim() === '') {
@@ -152,7 +153,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
-  console.log(`Attempting to download translation model: ${model_name} to ${downloadLocation}`);
+  console.log(`Attempting to download translation model: ${model_name} (family: ${family}) to ${downloadLocation}`);
   try {
     await invoke('download_translation_model_command', {
       modelInfo: modelInfo,
@@ -166,20 +167,46 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
   }
 }
 
+export async function getSelectedTranslationFamily() {
+	return await invoke('get_selected_translation_family');
+}
+
+export async function isCTranslate2Installed() {
+	return await invoke('is_ctranslate2_installed');
+}
+
+
+export async function setSelectedTranslationFamily(family) {
+	try {
+		await invoke('set_selected_translation_family', { family });
+		return true;
+	} catch (error) {
+		console.error("Error invoking set_selected_translation_family:", error);
+		return false;
+	}
+}
+
 export async function deleteTranslationModel(model) {
-  console.log(`Attempting to delete translation model: ${model.name}`);
+  console.log(`Attempting to delete translation model: ${model.name || model.id} (family: ${model.family})`);
   try {
-    if (!model?.name) {
+    if (!model?.name && !model?.id) {
       const errorMsg = `Cannot delete translation model without a name.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
+    
+    // Ensure name is set correctly for the backend
+    const modelToDelete = {
+      ...model,
+      name: model.name || model.id
+    };
+
     // This uses the same backend `delete_model` command, which is fine as it just deletes the folder.
-    await invoke('delete_model', { modelToDelete: model });
-    console.log("Translation model deletion command invoked:", model.name);
+    await invoke('delete_model', { modelToDelete: modelToDelete });
+    console.log("Translation model deletion command invoked:", modelToDelete.name);
     return true;
   } catch (error) {
-    console.error(`Error invoking delete_model for translation model ${model.name}:`, error);
+    console.error(`Error invoking delete_model for translation model ${model.name || model.id}:`, error);
     throw new Error(`Failed to delete translation model: ${error?.message || error}`);
   }
 }

@@ -20,7 +20,6 @@
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
     import DocumentExportModal from '../modals/DocumentExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
-    import ThinMediaPlayer from './shared_panels/ThinMediaPlayer.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
@@ -58,11 +57,11 @@
     }
 
     function handleDocumentTranslateConfirm(event) {
-        const { documentPath, model } = event.detail;
+        const { documentPath, model, targetLanguage, sourceLanguage } = event.detail;
         if (isImportedTranscript) {
-            requestImportedTranscriptTranslation(documentPath, model);
+            requestImportedTranscriptTranslation(documentPath, model, targetLanguage, sourceLanguage);
         } else {
-            requestDocumentTranslation(documentPath, model);
+            requestDocumentTranslation(documentPath, model, targetLanguage, sourceLanguage);
         }
     }
 
@@ -580,11 +579,6 @@
     </div>
 
     <div class="flex justify-center min-w-0 z-10"> <!-- Middle Column -->
-        {#if isLexicalDocument}
-            <div class="ui-button-icon flex w-full max-w-2xl rounded-md h-8 px-1">
-                <!-- <ThinMediaPlayer /> -->
-            </div>
-        {/if}
     </div>
   
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->

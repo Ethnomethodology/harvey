@@ -9,63 +9,80 @@ logger = logging.getLogger(__name__)
 
 def fetch_models():
     """
-    Fetches Helsinki-NLP models from Hugging Face and outputs a list of model objects.
+    Fetches Helsinki-NLP and NLLB models from Hugging Face and outputs a list of model objects.
     """
     try:
         api = HfApi()
-        # Fetch models - removed full=True to avoid timeouts
-        models = api.list_models(author="Helsinki-NLP", limit=3000) 
-
+        
         model_list = []
 
+        # 1. Fetch Helsinki-NLP models
+        models = api.list_models(author="Helsinki-NLP", limit=3000) 
         for model in models:
             model_id = model.modelId
-            
-            # Filter for opus-mt models
             if "opus-mt-" not in model_id:
                 continue
-            
-            # Skip TC models for now if desired, or include them. 
-            # The user asked for "more info", so let's include them but parse them correctly if we can.
-            # Standard: Helsinki-NLP/opus-mt-{src}-{tgt}
             
             parts = model_id.split("/")
             if len(parts) != 2:
                 continue
             
             name_parts = parts[1].split("-")
-            
-            # Try to extract src/tgt
-            # Case 1: opus-mt-en-fr (4 parts)
-            # Case 2: opus-mt-tc-big-en-fr (6 parts)
-            
             src = None
             tgt = None
             
             if len(name_parts) >= 4 and name_parts[0] == "opus" and name_parts[1] == "mt":
                 if name_parts[2] == "tc" and name_parts[3] == "big" and len(name_parts) >= 6:
-                     # opus-mt-tc-big-en-fr
                      src = name_parts[4]
                      tgt = name_parts[5]
                 elif len(name_parts) == 4:
-                     # opus-mt-en-fr
                      src = name_parts[2]
                      tgt = name_parts[3]
-                else:
-                    # fallback for complex codes like 'opus-mt-es-en_el_es' or similar if they exist
-                    # just take the last two? No, unsafe.
-                    pass
 
-            # Prepare the object
-            model_data = {
+            model_list.append({
                 "id": model_id,
                 "downloads": getattr(model, "downloads", 0),
                 "likes": getattr(model, "likes", 0),
                 "last_modified": str(getattr(model, "lastModified", "")),
                 "src": src,
-                "tgt": tgt
-            }
-            model_list.append(model_data)
+                "tgt": tgt,
+                "family": "helsinki"
+            })
+
+        # 2. Fetch NLLB models
+        # We manually specify some popular NLLB models as listing them might be messy
+        nllb_models = [
+            "facebook/nllb-200-distilled-600M",
+            "facebook/nllb-200-distilled-1.3B",
+            "facebook/nllb-200-1.3B",
+            "facebook/nllb-200-3.3B"
+        ]
+        
+        # We fetch their metadata to get download/like stats if possible
+        for m_id in nllb_models:
+            try:
+                m_info = api.model_info(m_id)
+                model_list.append({
+                    "id": m_info.modelId,
+                    "downloads": getattr(m_info, "downloads", 0),
+                    "likes": getattr(m_info, "likes", 0),
+                    "last_modified": str(getattr(m_info, "lastModified", "")),
+                    "src": "multi",
+                    "tgt": "multi",
+                    "family": "nllb"
+                })
+            except Exception as e:
+                logger.warn(f"Could not fetch info for {m_id}: {e}")
+                # Fallback without stats
+                model_list.append({
+                    "id": m_id,
+                    "downloads": 0,
+                    "likes": 0,
+                    "last_modified": "",
+                    "src": "multi",
+                    "tgt": "multi",
+                    "family": "nllb"
+                })
 
         # Output JSON list to stdout
         print(json.dumps(model_list))

@@ -2296,7 +2296,7 @@ export async function initializeTranslationProgressListener() {
     }
 }
 
-export async function requestTranslation(transcriptPath, modelName) {
+export async function requestTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2317,7 +2317,8 @@ export async function requestTranslation(transcriptPath, modelName) {
             projectXmlPath: currentProject.xmlPath,
             transcriptPath,
             modelName: modelName,
-            targetLanguage: ts.selectedLanguage,
+            targetLanguage: targetLanguage || ts.selectedLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
@@ -2332,7 +2333,7 @@ export async function requestTranslation(transcriptPath, modelName) {
     }
 }
 
-export async function requestDocumentTranslation(documentPath, modelName) {
+export async function requestDocumentTranslation(documentPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2353,7 +2354,8 @@ export async function requestDocumentTranslation(documentPath, modelName) {
             projectXmlPath: currentProject.xmlPath,
             documentPath: documentPath,
             modelName: modelName,
-            targetLanguage: 'en',
+            targetLanguage: targetLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
@@ -2368,7 +2370,7 @@ export async function requestDocumentTranslation(documentPath, modelName) {
     }
 }
 
-export async function requestImportedTranscriptTranslation(transcriptPath, modelName) {
+export async function requestImportedTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2387,9 +2389,10 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
     try {
         const initiatedPayload = await invoke('translate_imported_transcript_command', {
             projectXmlPath: currentProject.xmlPath,
-            transcriptPath: transcriptPath,
+            transcriptPath,
             modelName: modelName,
-            targetLanguage: ts.selectedLanguage || 'en', // Default to 'en' or current selection
+            targetLanguage: targetLanguage || 'en',
+            sourceLanguage: sourceLanguage || null,
         });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {

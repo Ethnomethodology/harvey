@@ -43,6 +43,15 @@
     // UI State for Context Menu / Dropdown
     let showAddMenu = false;
 
+    // Exported methods for parent control
+    export function openAddTagModal() {
+        isAddTagModalOpen = true;
+    }
+
+    export function openAddGroupModal() {
+        isAddGroupModalOpen = true;
+    }
+
     // Derived Data for Display
     let groups = [];
     let ungroupedTags = [];
@@ -576,20 +585,23 @@
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
         <div class="w-64 flex-shrink-0 h-full bg-white dark:bg-surface-2 flex flex-col" transition:slide={{ axis: 'x' }}>
             <!-- Header -->
-            <div class="p-4 border-b border-gray-200 dark:border-border flex justify-between items-center relative">
-                <h2 class="text-sm font-semibold dark:text-text-primary">All Tags</h2>
+            <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary mb-3">
+                <div class="flex items-center space-x-2 transition-opacity duration-200">
+                    <span class="pl-2">All Tags</span>
+                </div>
                 <button
                     id="add-tag-btn"
-                    class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full cursor-pointer z-10"
+                    class="p-1 flex items-center justify-center text-gray-400 dark:text-d-gray-500 hover:text-gray-600 dark:hover:text-d-gray-300 transition-opacity duration-200"
                     on:click|stopPropagation={() => showAddMenu = !showAddMenu}
+                    title="Options"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical pointer-events-none" viewBox="0 0 16 16">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
                         <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
                     </svg>
                 </button>
 
                 {#if showAddMenu}
-                    <div id="add-tag-menu" class="absolute top-10 right-2 w-40 bg-white dark:bg-surface-3 border border-gray-200 dark:border-border rounded shadow-lg z-50 py-1">
+                    <div id="add-tag-menu" class="absolute top-full right-0 w-40 bg-white dark:bg-surface-3 border border-gray-200 dark:border-border rounded shadow-lg z-50 py-1 font-normal">
                         <button
                             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
                             on:click={() => { showAddMenu = false; isAddTagModalOpen = true; }}
@@ -604,7 +616,7 @@
                         </button>
                     </div>
                 {/if}
-            </div>
+            </h2>
 
             <!-- List Content -->
             <div class="flex-1 overflow-y-auto p-2">

@@ -2,7 +2,7 @@
 
 use crate::welcome::config::{
     ModelInfo, ProjectInfo, add_or_update_project_in_config, read_config, write_config, // Keep these config functions
-    PROJECT_FILE_EXTENSION, CommandError, get_default_download_location,
+    PROJECT_FILE_EXTENSION, CommandError, get_default_download_location, AdvancedTranslationConfig,
 };
 use crate::utils::canonicalize_path;
 use crate::DownloadCancellationState;
@@ -29,6 +29,7 @@ use reqwest;
 use futures_util::StreamExt;
 
 use crate::welcome::python_env;
+use walkdir::WalkDir;
 
 // --- Structs for Translation Model Download ---
 #[derive(Clone, serde::Serialize)]
@@ -45,6 +46,164 @@ struct TranslationErrorPayload {
   error_message: String,
 }
 
+#[command]
+pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslationConfig>, CommandError> {
+    let config = read_config()?;
+    Ok(config.advanced_translation)
+}
+
+#[command]
+pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) -> Result<(), CommandError> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+        
+        let app_handle = &app;
+        
+        // 1. App Menu (Harvey)
+        let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let quit = PredefinedMenuItem::quit(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let app_menu = Submenu::with_items(app_handle, "Harvey", true, &[&about_item, &configurations_item, &sep, &quit]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 2. Edit Menu
+        let undo = PredefinedMenuItem::undo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let redo = PredefinedMenuItem::redo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let cut = PredefinedMenuItem::cut(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let copy = PredefinedMenuItem::copy(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let paste = PredefinedMenuItem::paste(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let select_all = PredefinedMenuItem::select_all(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep2 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let edit_menu = Submenu::with_items(app_handle, "Edit", true, &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 3. Window Menu
+        let minimize = PredefinedMenuItem::minimize(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let close = PredefinedMenuItem::close_window(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep3 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let window_menu = Submenu::with_items(app_handle, "Window", true, &[&minimize, &sep3, &close]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 4. Help Menu
+        let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let license_item = MenuItem::with_id(app_handle, "view_license", "License", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let credits_item = MenuItem::with_id(app_handle, "view_credits", "Credits", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let version_item = MenuItem::with_id(app_handle, "view_version", "Version", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        
+        let help_menu = Submenu::with_items(app_handle, "Help", true, &[&help_center, &license_item, &credits_item, &version_item]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        // 5. File Menu (Dynamic)
+        let file_menu;
+        if context == "welcome" {
+            let new_proj = MenuItem::with_id(app_handle, "file_new_project", "Create New Project", true, Some("CmdOrCtrl+N")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let open_proj = MenuItem::with_id(app_handle, "file_open_project", "Open Project...", true, Some("CmdOrCtrl+O")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            file_menu = Submenu::with_items(app_handle, "File", true, &[&new_proj, &open_proj]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        } else {
+            // Import Submenu
+            let imp_audio = MenuItem::with_id(app_handle, "file_import_audio", "Audio...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_video = MenuItem::with_id(app_handle, "file_import_video", "Video...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_doc = MenuItem::with_id(app_handle, "file_import_doc", "Document...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_image = MenuItem::with_id(app_handle, "file_import_image", "Image...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_table = MenuItem::with_id(app_handle, "file_import_table", "Table...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_trans = MenuItem::with_id(app_handle, "file_import_transcript", "Transcript...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            
+            let import_submenu = Submenu::with_items(app_handle, "Import", true, &[&imp_audio, &imp_video, &imp_doc, &imp_image, &imp_table, &imp_trans]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            // Create New Submenu
+            let new_doc = MenuItem::with_id(app_handle, "file_create_doc", "Document", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_table = MenuItem::with_id(app_handle, "file_create_table", "Table", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_group = MenuItem::with_id(app_handle, "file_create_group", "Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag = MenuItem::with_id(app_handle, "file_create_tag", "Tag", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag_group = MenuItem::with_id(app_handle, "file_create_tag_group", "Tag Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            
+            let create_submenu = Submenu::with_items(app_handle, "Create New", true, &[&new_doc, &new_table, &new_group, &new_tag, &new_tag_group]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            file_menu = Submenu::with_items(app_handle, "File", true, &[&import_submenu, &create_submenu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        }
+
+        let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        app.set_menu(menu).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        app.on_menu_event(move |app, event| {
+            let id = event.id().as_ref();
+            if id == "view_license" {
+                if let Some(window) = app.get_webview_window("license") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "license",
+                        tauri::WebviewUrl::App("license".into())
+                    )
+                    .title("License")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_credits" {
+                if let Some(window) = app.get_webview_window("credits") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "credits",
+                        tauri::WebviewUrl::App("credits".into())
+                    )
+                    .title("Credits")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_version" {
+                if let Some(window) = app.get_webview_window("version") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "version",
+                        tauri::WebviewUrl::App("version".into())
+                    )
+                    .title("Version")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            }
+        });
+    }
+    Ok(())
+}
+
+#[command]
+pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConfig) -> Result<(), CommandError> {
+    log::info!("CMD: set_advanced_translation_config: {:?}", new_config);
+    let mut config = read_config()?;
+    config.advanced_translation = Some(new_config);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
+pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
+}
+
 // --- Translation Model Download Command ---
 #[command]
 pub async fn download_translation_model_command(
@@ -52,10 +211,14 @@ pub async fn download_translation_model_command(
     model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
     download_location: String,
 ) -> Result<(), CommandError> {
-    log::info!("CMD: download_translation_model: {} -> {}", model_info.name, download_location);
+    log::info!("CMD: download_translation_model: {} (family: {:?}) -> {}", model_info.name, model_info.family, download_location);
     let model_name = model_info.name.clone();
-    // Update target directory to include organization structure
-    let target_dir = PathBuf::from(&download_location).join("translation").join("helsinki-nlp");
+    
+    // Determine target directory based on family
+    let family = model_info.family.as_deref().unwrap_or("helsinki");
+    let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+    
+    let target_dir = PathBuf::from(&download_location).join("translation").join(org_dir);
     let target_dir_str = target_dir.to_string_lossy().to_string();
 
     if download_location.trim().is_empty() {
@@ -68,6 +231,23 @@ pub async fn download_translation_model_command(
         return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
     }
 
+    let python_path = python_env::get_python_path()?;
+    let window = app.get_webview_window("main").unwrap();
+
+    // 1. Check/Install CTranslate2 if it's a Helsinki model (optimization candidate)
+    // Actually we want to optimize ALL models eventually, but user specifically asked for Helsinki first.
+    // For now let's do it for Helsinki as requested.
+    if family == "helsinki" {
+        let ct2_installed = is_ctranslate2_installed(app.clone()).await.unwrap_or(false);
+        if !ct2_installed {
+            log::info!("CTranslate2 not found. Installing...");
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
+            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log").await?;
+            window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 installed successfully." })).unwrap();
+        }
+    }
+
+    // 2. Download model weights
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
 
     let token_path = app.path().app_config_dir().unwrap().join("hf_token");
@@ -77,17 +257,12 @@ pub async fn download_translation_model_command(
         String::new()
     };
 
-    let python_path = python_env::get_python_path()?;
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        // Pass the new target_dir_str instead of raw download_location
         .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
-
-    let window = app.get_webview_window("main").unwrap();
 
     window.emit("translation-download-start", &model_name).unwrap();
 
@@ -105,8 +280,8 @@ pub async fn download_translation_model_command(
                 window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);
                 if payload.code == Some(0) {
-                    window.emit("translation-download-complete", &model_name).unwrap();
                     success = true;
                 } else {
                     window.emit("translation-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
@@ -117,6 +292,34 @@ pub async fn download_translation_model_command(
         }
     }
 
+    if !success {
+        window.emit("translation-download-finished", ()).unwrap();
+        return Err(CommandError::Message("Translation model download failed.".to_string()));
+    }
+
+    // 3. Optimize model for CTranslate2
+    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimizing model for faster CPU inference..." })).unwrap();
+    
+    let optimize_script = app.path().resource_dir().unwrap().join("scripts/optimize_translation_model.py");
+    let folder_name = format!("models--{}", model_name.replace('/', "--"));
+    let model_path = target_dir.join(&folder_name);
+    let output_path = model_path.join("ct2_optimized");
+
+    let output = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
+        .output()
+        .await?;
+
+    if output.status.success() {
+        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::error!("Optimization failed: {}", stderr);
+        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
+    }
+
+    window.emit("translation-download-complete", &model_name).unwrap();
     window.emit("translation-download-finished", ()).unwrap();
 
     if success {
@@ -152,36 +355,67 @@ pub async fn download_translation_model_command(
 #[command]
 pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandError> {
     log::info!("CMD: get_local_translation_models");
-    // Look in the specific subdirectory
-    let download_dir = PathBuf::from(get_download_location().await?).join("translation").join("helsinki-nlp");
+    let base_download_dir = PathBuf::from(get_download_location().await?);
     let mut models = Vec::new();
 
-    if !download_dir.exists() {
-        log::warn!("Download directory {:?} does not exist. Returning empty list.", download_dir);
-        return Ok(models);
-    }
+    let families = [
+        ("helsinki", "helsinki-nlp"),
+        ("nllb", "facebook"),
+    ];
 
-    for entry in fs::read_dir(download_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) {
-                if folder_name.contains("opus-mt") {
-                    // The folder name is like `models--Helsinki-NLP--opus-mt-ja-en`
-                    // We need to convert it back to `Helsinki-NLP/opus-mt-ja-en`
-                    let model_name = folder_name
-                        .strip_prefix("models--")
-                        .unwrap_or(folder_name)
-                        .replace("--", "/");
+    for (family_id, sub_dir) in families {
+        let download_dir = base_download_dir.join("translation").join(sub_dir);
+        if !download_dir.exists() {
+            continue;
+        }
 
-                    models.push(ModelInfo {
-                        name: model_name,
-                        language: None,
-                        size: None,
-                        description: None,
-                        download_location: Some(path.to_string_lossy().into_owned()),
-                        download_url: None,
-                    });
+        for entry in fs::read_dir(download_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if folder_name.starts_with("models--") {
+                        // The folder name is like `models--Helsinki-NLP--opus-mt-ja-en`
+                        // We need to convert it back to `Helsinki-NLP/opus-mt-ja-en`
+                        let model_name = folder_name
+                            .strip_prefix("models--")
+                            .unwrap_or(folder_name)
+                            .replace("--", "/");
+
+                        // Calculate size
+                        let size_bytes: u64 = WalkDir::new(&path)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                            .filter_map(|e| e.metadata().ok())
+                            .filter(|m| m.is_file())
+                            .map(|m| m.len())
+                            .sum();
+
+                        let size_str = if size_bytes > 0 {
+                            const KB: u64 = 1024;
+                            const MB: u64 = KB * 1024;
+                            const GB: u64 = MB * 1024;
+                            if size_bytes >= GB {
+                                Some(format!("{:.1} GiB", size_bytes as f64 / GB as f64))
+                            } else if size_bytes >= MB {
+                                Some(format!("{:.1} MiB", size_bytes as f64 / MB as f64))
+                            } else {
+                                Some(format!("{:.1} KiB", size_bytes as f64 / KB as f64))
+                            }
+                        } else {
+                            None
+                        };
+
+                        models.push(ModelInfo {
+                            name: model_name,
+                            family: Some(family_id.to_string()),
+                            language: None,
+                            size: size_str,
+                            description: None,
+                            download_location: Some(path.to_string_lossy().into_owned()),
+                            download_url: None,
+                        });
+                    }
                 }
             }
         }
@@ -192,9 +426,25 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
 }
 
 #[command]
+pub async fn set_selected_translation_family(family: String) -> Result<(), CommandError> {
+    log::info!("CMD: set_selected_translation_family: {}", family);
+    let mut config = read_config()?;
+    config.selected_translation_family = Some(family);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
+pub async fn get_selected_translation_family() -> Result<Option<String>, CommandError> {
+    let config = read_config()?;
+    Ok(config.selected_translation_family)
+}
+
+#[command]
 pub async fn get_platform_info() -> Result<String, CommandError> {
-    Ok(tauri::utils::platform::target_triple()
-        .unwrap_or_else(|_| "unknown".to_string()))
+    let os = std::env::consts::OS; // "macos", "windows", "linux"
+    let arch = std::env::consts::ARCH; // "x86_64", "aarch64"
+    Ok(format!("{}-{}", os, arch))
 }
 
 #[derive(Deserialize)]
@@ -649,7 +899,7 @@ pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
 
 #[command]
 pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError> {
-    log::info!("CMD: delete_model: Attempting to delete '{}'", model_to_delete.name);
+    log::info!("CMD: delete_model: Attempting to delete '{}' (family: {:?})", model_to_delete.name, model_to_delete.family);
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
 
@@ -665,7 +915,9 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
     // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-    let folder_name = if model_to_delete.name.contains("opus-mt") && model_to_delete.name.contains('/') {
+    let is_translation = model_to_delete.name.contains('/') || model_to_delete.family.is_some();
+    
+    let folder_name = if is_translation && model_to_delete.name.contains('/') {
         let transformed = format!("models--{}", model_to_delete.name.replace('/', "--"));
         log::info!("Transforming translation model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
         transformed
@@ -673,8 +925,10 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
         model_to_delete.name.clone()
     };
 
-    let sub_dir = if model_to_delete.name.contains("opus-mt") {
-         PathBuf::from("translation").join("helsinki-nlp")
+    let sub_dir = if is_translation {
+         let family = model_to_delete.family.as_deref().unwrap_or("helsinki");
+         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+         PathBuf::from("translation").join(org_dir)
     } else {
          PathBuf::from("transcription").join("whisper-cpp")
     };
@@ -701,8 +955,8 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     if config.downloaded_models.len() < initial_len {
         let remaining_models = &config.downloaded_models;
-        let has_transcription_models = remaining_models.iter().any(|m| !m.name.contains("opus-mt"));
-        let has_translation_models = remaining_models.iter().any(|m| m.name.contains("opus-mt"));
+        let has_transcription_models = remaining_models.iter().any(|m| m.family.is_none() && !m.name.contains('/'));
+        let has_translation_models = remaining_models.iter().any(|m| m.family.is_some() || m.name.contains('/'));
 
         if !has_transcription_models {
             config.verification_status.transcription_models_verified = false;
@@ -719,6 +973,7 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     Ok(())
 }
+
 #[command]
 pub async fn change_download_location_and_move_models(new_location: String) -> Result<(), CommandError> {
     log::info!("CMD: change_dl_loc_move: {}", new_location);
@@ -760,15 +1015,26 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     let mut move_errors : Vec<String> = Vec::new();
 
     for model in &models_in_config {
-        // Determine subdirectory based on model type
-        let sub_dir = if model.name.contains("opus-mt") {
-             PathBuf::from("translation").join("helsinki-nlp")
+        // Determine subdirectory based on model type and family
+        let is_translation = model.name.contains('/') || model.family.is_some();
+        let sub_dir = if is_translation {
+             let family = model.family.as_deref().unwrap_or("helsinki");
+             let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+             PathBuf::from("translation").join(org_dir)
         } else {
              PathBuf::from("transcription").join("whisper-cpp")
         };
 
-        let old_model_dir = old_path.join(&sub_dir).join(&model.name);
-        let new_model_dir = new_path.join(&sub_dir).join(&model.name);
+        // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
+        // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
+        let folder_name = if is_translation && model.name.contains('/') {
+            format!("models--{}", model.name.replace('/', "--"))
+        } else {
+            model.name.clone()
+        };
+
+        let old_model_dir = old_path.join(&sub_dir).join(&folder_name);
+        let new_model_dir = new_path.join(&sub_dir).join(&folder_name);
 
         log::info!("Check model '{}': Old {:?}, New {:?}", model.name, old_model_dir, new_model_dir);
 
@@ -804,7 +1070,7 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
             }
         } else {
              // Fallback check for legacy structure (Root/ModelName)
-             let legacy_old_model_dir = old_path.join(&model.name);
+             let legacy_old_model_dir = old_path.join(&folder_name);
              if legacy_old_model_dir.exists() && legacy_old_model_dir.is_dir() {
                  log::info!("Found model at legacy path {:?}. Moving to new structure {:?}.", legacy_old_model_dir, new_model_dir);
                   // Ensure parent dir exists

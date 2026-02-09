@@ -9,7 +9,7 @@ Harvey is a desktop application for qualitative researchers and anyone working w
 * **Edit** and **annotate** transcripts, documents, PDFs, and images.
 * **Manage** all your project files in one place.
 
-Harvey is named in honor of Sociologist [**Harvey Sacks**](https://emcawiki.net/bibtex/browser.php?author=Harvey+Sacks&bib=emca.bib) (1935-1975), whose foundational work revolutionized social research methods.
+Harvey is named in honor of Sociologist [**Harvey Sacks**](https://en.wikipedia.org/wiki/Harvey_Sacks) (1935-1975), whose foundational work revolutionized social research methods.
 
 ### Privacy First
 

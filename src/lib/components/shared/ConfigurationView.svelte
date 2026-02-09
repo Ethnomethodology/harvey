@@ -17,11 +17,12 @@
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
 	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
+	import AdvancedConfiguration from './AdvancedConfiguration.svelte';
 	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
-	let activeTab = 'application'; // 'application', 'transcription', 'diarization', or 'translation'
+	let activeTab = 'application'; // 'application', 'transcription', 'diarization', 'translation', 'advanced'
 	let isWinArm64 = false;
 	let isFFmpegInstalled = false;
 	let downloadLocation = '';
@@ -32,8 +33,9 @@
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
+	let isAdvancedBusy = false;
 	let translationModelCount = 0;
-	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
+	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy || isAdvancedBusy;
 
 	onMount(async () => {
 		updateConfigStatus(true); // Force a refresh when the component mounts
@@ -107,23 +109,23 @@
 	}
 </script>
 
-<div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
+<div class="p-4 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0">
-		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
+	<div class="mb-6 flex-shrink-0">
+		<nav class="flex flex-wrap gap-2" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:border-blue-500={activeTab === 'application'}
-				class:text-blue-600={activeTab === 'application'}
-				class:dark:text-blue-400={activeTab === 'application'}
-				class:border-transparent={activeTab !== 'application'}
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'application'}
+				class:text-blue-700={activeTab === 'application'}
+				class:dark:bg-blue-900={activeTab === 'application'}
+				class:dark:text-blue-300={activeTab === 'application'}
 				class:text-gray-500={activeTab !== 'application'}
 				class:dark:text-gray-400={activeTab !== 'application'}
 				class:hover:text-gray-700={activeTab !== 'application'}
 				class:dark:hover:text-gray-200={activeTab !== 'application'}
-				class:hover:border-gray-300={activeTab !== 'application'}
-				class:dark:hover:border-gray-500={activeTab !== 'application'}
+				class:hover:bg-gray-100={activeTab !== 'application'}
+				class:dark:hover:bg-gray-800={activeTab !== 'application'}
 				aria-current={activeTab === 'application' ? 'page' : undefined}
 			>
 				<span>Application</span>
@@ -136,17 +138,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:border-blue-500={activeTab === 'transcription'}
-				class:text-blue-600={activeTab === 'transcription'}
-				class:dark:text-blue-400={activeTab === 'transcription'}
-				class:border-transparent={activeTab !== 'transcription'}
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'transcription'}
+				class:text-blue-700={activeTab === 'transcription'}
+				class:dark:bg-blue-900={activeTab === 'transcription'}
+				class:dark:text-blue-300={activeTab === 'transcription'}
 				class:text-gray-500={activeTab !== 'transcription'}
 				class:dark:text-gray-400={activeTab !== 'transcription'}
 				class:hover:text-gray-700={activeTab !== 'transcription'}
 				class:dark:hover:text-gray-200={activeTab !== 'transcription'}
-				class:hover:border-gray-300={activeTab !== 'transcription'}
-				class:dark:hover:border-gray-500={activeTab !== 'transcription'}
+				class:hover:bg-gray-100={activeTab !== 'transcription'}
+				class:dark:hover:bg-gray-800={activeTab !== 'transcription'}
 				aria-current={activeTab === 'transcription' ? 'page' : undefined}
 			>
 				<span>Transcription</span>
@@ -159,17 +161,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'diarization'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:border-blue-500={activeTab === 'diarization'}
-				class:text-blue-600={activeTab === 'diarization'}
-				class:dark:text-blue-400={activeTab === 'diarization'}
-				class:border-transparent={activeTab !== 'diarization'}
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'diarization'}
+				class:text-blue-700={activeTab === 'diarization'}
+				class:dark:bg-blue-900={activeTab === 'diarization'}
+				class:dark:text-blue-300={activeTab === 'diarization'}
 				class:text-gray-500={activeTab !== 'diarization'}
 				class:dark:text-gray-400={activeTab !== 'diarization'}
 				class:hover:text-gray-700={activeTab !== 'diarization'}
 				class:dark:hover:text-gray-200={activeTab !== 'diarization'}
-				class:hover:border-gray-300={activeTab !== 'diarization'}
-				class:dark:hover:border-gray-500={activeTab !== 'diarization'}
+				class:hover:bg-gray-100={activeTab !== 'diarization'}
+				class:dark:hover:bg-gray-800={activeTab !== 'diarization'}
 				aria-current={activeTab === 'diarization' ? 'page' : undefined}
 			>
 				<span>Diarization</span>
@@ -182,17 +184,17 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:border-blue-500={activeTab === 'translation'}
-				class:text-blue-600={activeTab === 'translation'}
-				class:dark:text-blue-400={activeTab === 'translation'}
-				class:border-transparent={activeTab !== 'translation'}
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'translation'}
+				class:text-blue-700={activeTab === 'translation'}
+				class:dark:bg-blue-900={activeTab === 'translation'}
+				class:dark:text-blue-300={activeTab === 'translation'}
 				class:text-gray-500={activeTab !== 'translation'}
 				class:dark:text-gray-400={activeTab !== 'translation'}
 				class:hover:text-gray-700={activeTab !== 'translation'}
 				class:dark:hover:text-gray-200={activeTab !== 'translation'}
-				class:hover:border-gray-300={activeTab !== 'translation'}
-				class:dark:hover:border-gray-500={activeTab !== 'translation'}
+				class:hover:bg-gray-100={activeTab !== 'translation'}
+				class:dark:hover:bg-gray-800={activeTab !== 'translation'}
 				aria-current={activeTab === 'translation' ? 'page' : undefined}
 			>
 				<span>Translation</span>
@@ -202,6 +204,23 @@
 						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
 					</svg>
 				{/if}
+			</button>
+			<button
+				on:click={() => activeTab = 'advanced'}
+				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:bg-blue-100={activeTab === 'advanced'}
+				class:text-blue-700={activeTab === 'advanced'}
+				class:dark:bg-blue-900={activeTab === 'advanced'}
+				class:dark:text-blue-300={activeTab === 'advanced'}
+				class:text-gray-500={activeTab !== 'advanced'}
+				class:dark:text-gray-400={activeTab !== 'advanced'}
+				class:hover:text-gray-700={activeTab !== 'advanced'}
+				class:dark:hover:text-gray-200={activeTab !== 'advanced'}
+				class:hover:bg-gray-100={activeTab !== 'advanced'}
+				class:dark:hover:bg-gray-800={activeTab !== 'advanced'}
+				aria-current={activeTab === 'advanced' ? 'page' : undefined}
+			>
+				<span>Advanced</span>
 			</button>
 		</nav>
 	</div>
@@ -277,6 +296,8 @@
 			</div>
 		{:else if activeTab === 'translation'}
 			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
+		{:else if activeTab === 'advanced'}
+			<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
 		{/if}
 	</div>
 </div>

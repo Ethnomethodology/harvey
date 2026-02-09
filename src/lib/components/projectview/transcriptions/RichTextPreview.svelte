@@ -606,6 +606,14 @@
         } else {
         }
     }
+
+    async function handleSplitSegment(idx) {
+        if (!previewEditMode) return;
+        const store = get(transcriptStore);
+        // Dispatch to parent, which calls store method
+        dispatch('splittranscriptsegment', idx);
+    }
+
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) {
@@ -734,6 +742,7 @@
     const REDO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"> <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/> <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/> </svg>`;
     const INSERT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>`;
 	const DELETE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /> </svg>`;
+    const SPLIT_ICON = `<svg class="w-6 h-6 text-gray-800 dark:text-white rotate-90" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"> <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18v2h6V4H4v2m16 12v2h-6V4h6v2M6.49545 14.4954 4.00003 12m0 0 2.49542-2.49543M4.00003 12h5.94809m7.49798 2.5539L20 12m0 0-2.5539-2.55392M20 12h-5.8319"/> </svg>`;
 	const MENU_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="size-6" viewBox="0 0 16 16"> <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/> </svg>`;
 	let showExportMenu = false;
 
@@ -894,7 +903,7 @@
                     aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}
                 >
                     <!-- Item 1: Delete Button (conditionally rendered) -->
-                    <div class="flex-shrink-0"> <!-- Container for button to manage visibility and spacing -->
+                    <div class="flex-shrink-0 flex flex-col"> <!-- Container for button to manage visibility and spacing -->
                         <button
                             class="btn-icon p-0.5"
                             class:invisible={!previewEditMode}
@@ -905,6 +914,17 @@
                             aria-label="Delete this segment"
                         >
                             {@html DELETE_ICON}
+                        </button>
+                        <button
+                            class="btn-icon p-0.5 mt-1"
+                            class:invisible={!previewEditMode}
+                            class:text-gray-500={previewEditMode} class:hover:text-gray-700={previewEditMode}
+                            class:dark:text-gray-400={previewEditMode} class:dark:hover:text-gray-300={previewEditMode}
+                            on:click|stopPropagation={(e) => handleSplitSegment(seg.segmentIndex)}
+                            title="Split this segment"
+                            aria-label="Split this segment"
+                        >
+                            {@html SPLIT_ICON}
                         </button>
                     </div>
 

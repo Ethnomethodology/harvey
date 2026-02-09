@@ -219,25 +219,24 @@
 </script>
 
 <!-- Main Container -->
-<div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200 text-xs">
+<div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200">
 
 	<!-- Media Files Accordion Header -->
-	<div class="border-b border-gray-300 dark:border-border flex-shrink-0">
-		<div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
-			on:click="{() => toggleSection('files')}"
-			aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
-			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
-		>
-			<span class="mr-1.5 text-gray-600 dark:text-gray-400"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.5a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg> </span>
-			<h3 class="font-semibold text-sm flex-grow">Media Files</h3>
-			<span class="ml-2 text-gray-500 dark:text-gray-400"> {@html openSection === 'files' ? CHEVRON_DOWN : CHEVRON_RIGHT} </span>
+	<h2
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary flex-shrink-0"
+		on:click="{() => toggleSection('files')}"
+		aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
+		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
+	>
+		<div class="flex items-center space-x-2 transition-opacity duration-200">
+			<span class="pl-2">Media Files</span>
 		</div>
-	</div>
+		<span class="pr-1 text-gray-500 dark:text-gray-400"> {@html openSection === 'files' ? CHEVRON_DOWN : CHEVRON_RIGHT} </span>
+	</h2>
 
 	<!-- Media Files Content (Tree) -->
 	{#if openSection === 'files'}
-		<div id="files-content" class="flex-grow overflow-y-auto min-h-0 pb-1 pt-1 px-1" role="region" aria-live="polite">
+		<div id="files-content" class="flex-grow overflow-y-auto min-h-0 pb-1 pt-1 px-1 mb-3 text-xs" role="region" aria-live="polite">
 			{#if $project.isLoading && !$project.files?.length}
 				<p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-2">Loading project...</p>
 			{:else if !$project.files || projectFileTree.length === 0}
@@ -260,18 +259,17 @@
 	{/if}
 
 	<!-- Shortcuts Accordion Header -->
-	<div class="flex-shrink-0 border-gray-300 dark:border-border {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
-         <div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
-			on:click="{() => toggleSection('shortcuts')}"
-			aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
-			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"
-		>
-			<span class="mr-1.5 text-gray-600 dark:text-gray-400"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg> </span>
-			<h3 class="font-semibold text-sm flex-grow">Shortcuts</h3>
-			<span class="ml-2 text-gray-500 dark:text-gray-400"> {@html openSection === 'shortcuts' ? CHEVRON_DOWN : CHEVRON_RIGHT} </span>
+	<h2
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary flex-shrink-0 {openSection !== 'files' ? '' : 'border-t'}"
+		on:click="{() => toggleSection('shortcuts')}"
+		aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
+		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"
+	>
+		<div class="flex items-center space-x-2 transition-opacity duration-200">
+			<span class="pl-2">Shortcuts</span>
 		</div>
-	</div>
+		<span class="pr-1 text-gray-500 dark:text-gray-400"> {@html openSection === 'shortcuts' ? CHEVRON_DOWN : CHEVRON_RIGHT} </span>
+	</h2>
 
 	<!-- Shortcuts Content -->
 	{#if openSection === 'shortcuts'}

@@ -10,6 +10,7 @@
         undoTranscriptChange,
         redoTranscriptChange,
         insertTranscriptSegment,
+        splitTranscriptSegment,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         switchDualModeTranscripts,
@@ -101,6 +102,18 @@
 
     let isMediaPlayerHidden = false; // New state variable
 
+    // Logic to show media player by default if the new media is a video
+    $: {
+        const selectedMedia = $transcriptStore.selectedMediaFile;
+        if (selectedMedia && selectedMedia.path) {
+            const extension = selectedMedia.path.split('.').pop()?.toLowerCase();
+            const videoExtensions = ['mp4', 'mov', 'webm', 'avi', 'mkv'];
+            if (videoExtensions.includes(extension)) {
+                isMediaPlayerHidden = false;
+            }
+        }
+    }
+
     let isSegmentEditingActive = false;
     let currentEditSegmentStart = 0;
     let currentEditSegmentEnd = 0;
@@ -135,6 +148,12 @@
         const index = event.detail;
         const segment = get(transcriptStore).segments?.[index];
         if (segment && typeof segment.start_time === 'number') {
+            // Commit any pending edits in the editable transcript before switching/saving
+            if (panelEditModeActive && editableTranscriptRef) {
+                editableTranscriptRef.commitCurrentSegmentEdits();
+                await tick();
+            }
+
             if (get(transcriptStore).transcriptDirty) {
                 try {
                     await handleSaveTranscript();
@@ -164,6 +183,13 @@
 
     async function handlePanelNavigate(event) {
         const detail = event.detail;
+
+        // Commit any pending edits in the editable transcript before navigating/saving
+        if (panelEditModeActive && editableTranscriptRef) {
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick();
+        }
+
         if (get(transcriptStore).transcriptDirty) {
             try {
                 await handleSaveTranscript();
@@ -324,6 +350,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     }
 
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
+    export function handleSplitSegmentRequest(event) { const indexToSplit = event.detail; if (typeof indexToSplit === 'number') splitTranscriptSegment(indexToSplit); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleInsertSegmentRequest(event) {
@@ -453,6 +480,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     async function handleRequestLoadItem(event) {
         console.log('[TranscriptionsView] handleRequestLoadItem called for item:', event.detail.name, 'file_type:', event.detail.file_type);
+
+        // Commit any pending edits in the editable transcript before checking for dirty state
+        if (panelEditModeActive && editableTranscriptRef) {
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick();
+        }
 
         if (get(transcriptStore).transcriptDirty) {
             // Store the pending item and show the modal
@@ -592,6 +625,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:toggleedit={handleToggleEditMode}
                 on:requestopentab={(e) => dispatch('requestopentab', e.detail)}
                 on:deletetranscriptsegment={handleDeleteSegmentRequest}
+                on:splittranscriptsegment={handleSplitSegmentRequest}
                 on:insertnewsegment={handleInsertSegmentRequest}
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}

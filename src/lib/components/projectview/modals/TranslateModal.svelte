@@ -1,4 +1,3 @@
-<!-- src/lib/components/projectview/modals/TranslateModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
@@ -8,6 +7,8 @@
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { getSelectedTranslationFamily } from '$lib/services/configureActions';
+	import { message } from '@tauri-apps/plugin-dialog';
 
 	export let availableTranscripts = [];
 	export let activeTranscriptPath = null;
@@ -16,8 +17,61 @@
 
 	let selectedTranscript = '';
 	let localModels = [];
+	let filteredModels = [];
 	let modelOptions = [];
 	let selectedModel = '';
+	let selectedFamily = 'helsinki';
+	let selectedSourceLanguage = 'auto';
+	let selectedTargetLanguage = 'en';
+	
+	function formatDuration(seconds) {
+		if (!seconds && seconds !== 0) return '0s';
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		if (m === 0) return `${s}s`;
+		return `${m}m ${s}s`;
+	}
+
+	let elapsedText = '';
+	let timerInterval;
+
+	function updateElapsed() {
+		if ($transcriptStore.isTranslating && $transcriptStore.translationStartTime) {
+			const now = Date.now();
+			const diff = Math.floor((now - $transcriptStore.translationStartTime) / 1000);
+			elapsedText = formatDuration(diff);
+		} else {
+			elapsedText = '';
+		}
+	}
+
+	$: if ($transcriptStore.isTranslating && $transcriptStore.translationStartTime) {
+		if (!timerInterval) {
+			updateElapsed();
+			timerInterval = setInterval(updateElapsed, 1000);
+		}
+	} else {
+		if (timerInterval) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+	}
+
+	onDestroy(() => {
+		if (timerInterval) clearInterval(timerInterval);
+	});
+
+	// Mapping for NLLB language options (based on supported list)
+	const nllbLanguageOptions = [
+		{ value: 'auto', label: 'Auto-detect' },
+		...Array.from(languageMap.entries())
+			.filter(([code, name]) => code.length === 2) // Keep standard 2-letter codes
+			.map(([code, name]) => ({ value: code, label: name }))
+			.sort((a, b) => a.label.localeCompare(b.label))
+	];
+
+	// Filtered list for target (remove auto-detect)
+	const nllbTargetLanguageOptions = nllbLanguageOptions.filter(opt => opt.value !== 'auto');
 
 	// Warning icon logic (same as ProjectView)
 	$: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
@@ -34,6 +88,15 @@
 
 	function formatModelDisplayName(modelName) {
 		const parts = modelName.split('/');
+		const baseName = parts[parts.length - 1] || modelName;
+
+		if (baseName.toLowerCase().includes('nllb')) {
+			if (baseName.includes('600M')) return "NLLB-200 Distilled (Small & Fast)";
+			if (baseName.includes('1.3B')) return "NLLB-200 (Medium)";
+			if (baseName.includes('3.3B')) return "NLLB-200 (Large)";
+			return baseName;
+		}
+
 		if (parts.length === 2) {
 			const langParts = parts[1].split('-');
 			if (langParts.length >= 3 && langParts[0] === 'opus' && langParts[1] === 'mt') {
@@ -67,40 +130,72 @@
 		selectedTranscript = '';
 	}
 
-	$: if (localModels.length > 0) {
-		modelOptions = localModels.map(model => ({
-			value: model.name,
-			label: formatModelDisplayName(model.name)
-		}));
-		if (!selectedModel || !localModels.some(m => m.name === selectedModel)) {
-			selectedModel = localModels[0]?.name || '';
+	$: {
+		filteredModels = localModels.filter(m => m.family === selectedFamily);
+		if (filteredModels.length > 0) {
+			modelOptions = filteredModels.map(model => ({
+				value: model.name,
+				label: formatModelDisplayName(model.name)
+			}));
+			if (!selectedModel || !filteredModels.some(m => m.name === selectedModel)) {
+				selectedModel = filteredModels[0]?.name || '';
+			}
+		} else {
+			modelOptions = [];
+			selectedModel = '';
 		}
-	} else {
-		modelOptions = [];
-		selectedModel = '';
 	}
 
 	$: if (showModal) {
-		loadLocalModels();
+		loadData();
 	}
 
-	async function loadLocalModels() {
+	async function loadData() {
 		try {
-			localModels = await invoke('get_local_translation_models');
+			[localModels, selectedFamily] = await Promise.all([
+				invoke('get_local_translation_models'),
+				getSelectedTranslationFamily()
+			]);
+			selectedFamily = selectedFamily || 'helsinki';
+
+			// Smarter default for source language
+			const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
+			if (activeTranscript && activeTranscript.language_code) {
+				selectedSourceLanguage = activeTranscript.language_code;
+			} else {
+				selectedSourceLanguage = 'auto';
+			}
 		} catch (e) {
-			console.error("Failed to fetch local translation models:", e);
+			console.error("Failed to fetch local translation data:", e);
 		}
 	}
 
 	onMount(async () => {
-		await loadLocalModels();
+		await loadData();
 	});
 
 	function handleConfirm() {
 		const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
+		
+		let sourceLang = 'auto';
+		let targetLang = 'auto';
+
+		if (selectedModel.toLowerCase().includes('nllb')) {
+			sourceLang = selectedSourceLanguage;
+			targetLang = selectedTargetLanguage;
+		} else if (selectedModel.includes('-')) {
+			const parts = selectedModel.split('-');
+			// For Helsinki models like "Helsinki-NLP/opus-mt-en-hi", parts are ["Helsinki-NLP/opus", "mt", "en", "hi"]
+			targetLang = parts[parts.length - 1];
+			// Source is second to last part
+			sourceLang = parts[parts.length - 2] || 'auto';
+		}
+
 		dispatch('confirm', {
 			transcript: selectedTranscriptObject,
 			model: selectedModel,
+			sourceLanguage: sourceLang,
+			targetLanguage: targetLang
 		});
 	}
 
@@ -121,19 +216,35 @@
 	$: showModal = $transcriptStore.showTranslateModal;
 	$: isTranslating = $transcriptStore.isTranslating;
 	$: jobStatus = $transcriptStore.translationJobStatus;
-	$: progressPercent = $transcriptStore.translationProgress.percent;
 	$: progressMessage = $transcriptStore.translationProgress.message;
 	$: currentErrorMessage = $transcriptStore.translationErrorMessage;
-	$: currentJobId = $transcriptStore.translationJobId;
 
 	$: modalTitle = (!isTranslating && jobStatus === null) ? 'Translate Transcript' :
 					 (isTranslating && jobStatus === 'initiating') ? 'Initiating Translation...' :
-					 (isTranslating && jobStatus === 'running') ? `Translation Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
-					 (jobStatus === 'cancelling') ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` :
+					 (isTranslating && jobStatus === 'running') ? 'Translation Status' :
+					 (jobStatus === 'cancelling') ? 'Cancelling Job' :
 					 (!isTranslating && jobStatus === 'done') ? 'Translation Complete' :
 					 (!isTranslating && jobStatus === 'error') ? 'Translation Error' :
 					 (!isTranslating && jobStatus === 'cancelled') ? 'Translation Cancelled' :
 					 'Translation Status';
+
+	let durationText = '';
+
+	// Watch for completion to calculate duration
+	$: if (!isTranslating && jobStatus === 'done') {
+		const endTime = Date.now();
+		const startTime = $transcriptStore.translationStartTime;
+		const durationMs = startTime ? endTime - startTime : 0;
+		const seconds = Math.floor(durationMs / 1000);
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		
+		if (minutes > 0) {
+			durationText = `${minutes}m ${remainingSeconds}s`;
+		} else {
+			durationText = `${seconds}s`;
+		}
+	}
 
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
@@ -223,6 +334,29 @@
 							/>
 						{/if}
                     </div>
+
+					{#if selectedModel.toLowerCase().includes('nllb')}
+						<div class="grid grid-cols-2 gap-4">
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">From:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbLanguageOptions}
+									bind:value={selectedSourceLanguage}
+									placeholder="Source"
+								/>
+							</div>
+							<div class="space-y-1">
+								<label class="block font-medium text-gray-900 dark:text-gray-100">To:</label>
+								<Dropdown
+									containerClasses="w-full"
+									options={nllbTargetLanguageOptions}
+									bind:value={selectedTargetLanguage}
+									placeholder="Target"
+								/>
+							</div>
+						</div>
+					{/if}
                 </div>
                 <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                     <button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
@@ -235,12 +369,14 @@
                     <div class="w-16 h-16">
                         <Loader class="w-full h-full text-blue-500 animate-spin" />
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: {progressPercent}%"></div>
-                    </div>
 					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
                         {progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : 'Processing...')}
 					</p>
+					{#if elapsedText}
+						<p class="text-xs text-center text-gray-500 dark:text-gray-500 font-mono mt-1">
+							{elapsedText}
+						</p>
+					{/if}
 				</div>
 				<div class="flex justify-center space-x-2 mt-auto">
 					<button class="btn-secondary" on:click={handleRunInBackgroundAndClose} disabled={jobStatus === 'initiating'}>
@@ -269,7 +405,10 @@
 				<!-- DONE VIEW -->
 				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
 					<CheckCircle class="w-16 h-16 text-green-500" />
-					<p class="text-sm font-medium">{progressMessage || 'Translation Complete!'}</p>
+					<p class="text-sm font-medium">Translation Complete!</p>
+					{#if durationText}
+						<p class="text-xs text-gray-500 dark:text-gray-400">Time taken: {durationText}</p>
+					{/if}
 				</div>
 				<div class="flex justify-center mt-auto">
 					<button class="btn-primary" on:click={handleCloseAndReset}>Close</button>

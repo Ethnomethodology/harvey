@@ -1,28 +1,32 @@
 import sys
 import os
 import logging
-from transformers import MarianMTModel, MarianTokenizer
-from huggingface_hub import login
+from huggingface_hub import snapshot_download, login
 
-# Configure logging for huggingface_hub
+# Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-logging.getLogger('huggingface_hub').setLevel(logging.INFO)
+logger = logging.getLogger('huggingface_hub')
+logger.setLevel(logging.INFO)
 
 def download_model(model_name, cache_dir, token):
     """
-    Downloads a MarianMT model and tokenizer to a specified cache directory.
+    Downloads a translation model from Hugging Face without loading it into RAM.
+    Supports Helsinki-NLP and NLLB models.
     """
     print(f"Downloading model {model_name} to {cache_dir}", flush=True)
     try:
-        # Ensure the cache directory exists
-        os.makedirs(cache_dir, exist_ok=True)
-
         if token:
             login(token=token)
 
-        # Download tokenizer and model
-        tokenizer = MarianTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-        model = MarianMTModel.from_pretrained(model_name, cache_dir=cache_dir)
+        # Download the full repository snapshot
+        # local_dir_use_symlinks=False ensures the files are actually moved into the dir
+        # rather than just being symlinked from the HF cache.
+        snapshot_download(
+            repo_id=model_name,
+            cache_dir=cache_dir,
+            local_dir_use_symlinks=False,
+            resume_download=True
+        )
 
         print("Download complete.", flush=True)
     except Exception as e:

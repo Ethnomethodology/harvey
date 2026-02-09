@@ -3,9 +3,10 @@ use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
+use tauri::Manager; // Added Manager import
+use tauri::Emitter; // For app.emit()
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
-// use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 
@@ -61,6 +62,112 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init()) // Added this line
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            if id == "about_harvey" {
+                // Check if about window exists
+                if let Some(window) = app.get_webview_window("about") {
+                    let _ = window.set_focus();
+                } else {
+                    // Create new about window
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "about",
+                        tauri::WebviewUrl::App("about".into())
+                    )
+                    .title("About Harvey")
+                    .inner_size(600.0, 550.0)
+                    .resizable(false)
+                    .build();
+                }
+            } else if id == "configurations_harvey" {
+                // Check if configurations window exists
+                if let Some(window) = app.get_webview_window("configurations") {
+                    let _ = window.set_focus();
+                } else {
+                    // Create new configurations window
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "configurations",
+                        tauri::WebviewUrl::App("configurations".into())
+                    )
+                    .title("Configurations")
+                    .inner_size(800.0, 700.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "file_new_project" {
+                let _ = app.emit("menu:file:new-project", ());
+            } else if id == "file_open_project" {
+                let _ = app.emit("menu:file:open-project", ());
+            } else if id == "file_import_audio" {
+                let _ = app.emit("menu:file:import:audio", ());
+            } else if id == "file_import_video" {
+                let _ = app.emit("menu:file:import:video", ());
+            } else if id == "file_import_doc" {
+                let _ = app.emit("menu:file:import:document", ());
+            } else if id == "file_import_image" {
+                let _ = app.emit("menu:file:import:image", ());
+            } else if id == "file_import_table" {
+                let _ = app.emit("menu:file:import:table", ());
+            } else if id == "file_import_transcript" {
+                let _ = app.emit("menu:file:import:transcript", ());
+            } else if id == "file_create_doc" {
+                let _ = app.emit("menu:file:create:document", ());
+            } else if id == "file_create_table" {
+                let _ = app.emit("menu:file:create:table", ());
+            } else if id == "file_create_group" {
+                let _ = app.emit("menu:file:create:group", ());
+            } else if id == "file_create_tag" {
+                let _ = app.emit("menu:file:create:tag", ());
+            } else if id == "file_create_tag_group" {
+                let _ = app.emit("menu:file:create:tag-group", ());
+            } else if id == "help_center" {
+                let _ = app.emit("menu:help:center", ());
+            } else if id == "view_license" {
+                if let Some(window) = app.get_webview_window("license") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "license",
+                        tauri::WebviewUrl::App("license".into())
+                    )
+                    .title("License")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_credits" {
+                if let Some(window) = app.get_webview_window("credits") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "credits",
+                        tauri::WebviewUrl::App("credits".into())
+                    )
+                    .title("Credits")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if id == "view_version" {
+                if let Some(window) = app.get_webview_window("version") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "version",
+                        tauri::WebviewUrl::App("version".into())
+                    )
+                    .title("Version")
+                    .inner_size(600.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            }
+        })
         // Global shortcut plugin is now initialized in .setup
         .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
             // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed
@@ -77,6 +184,67 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             {
+                use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+                use tauri::WebviewWindowBuilder; // Explicit import
+                let app_handle = app_mut_ref.handle();
+                
+                // 1. App Menu (Harvey)
+                let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
+                let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,"))?;
+                let sep = PredefinedMenuItem::separator(app_handle)?;
+                let quit = PredefinedMenuItem::quit(app_handle, None)?;
+                
+                let app_menu = Submenu::with_items(
+                    app_handle,
+                    "Harvey",
+                    true,
+                    &[&about_item, &configurations_item, &sep, &quit],
+                )?;
+
+                // 2. Edit Menu
+                let undo = PredefinedMenuItem::undo(app_handle, None)?;
+                let redo = PredefinedMenuItem::redo(app_handle, None)?;
+                let cut = PredefinedMenuItem::cut(app_handle, None)?;
+                let copy = PredefinedMenuItem::copy(app_handle, None)?;
+                let paste = PredefinedMenuItem::paste(app_handle, None)?;
+                let select_all = PredefinedMenuItem::select_all(app_handle, None)?;
+                let sep2 = PredefinedMenuItem::separator(app_handle)?;
+                
+                let edit_menu = Submenu::with_items(
+                    app_handle,
+                    "Edit",
+                    true,
+                    &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all],
+                )?;
+
+                // 3. Window Menu
+                let minimize = PredefinedMenuItem::minimize(app_handle, None)?;
+                // let zoom = PredefinedMenuItem::zoom(app_handle, None)?; // Removed due to error
+                let close = PredefinedMenuItem::close_window(app_handle, None)?;
+                let sep3 = PredefinedMenuItem::separator(app_handle)?;
+
+                let window_menu = Submenu::with_items(
+                    app_handle,
+                    "Window",
+                    true,
+                    &[&minimize, &sep3, &close],
+                )?;
+
+                // 4. Help Menu
+                let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>)?;
+                let license_item = MenuItem::with_id(app_handle, "view_license", "License", true, None::<&str>)?;
+                let credits_item = MenuItem::with_id(app_handle, "view_credits", "Credits", true, None::<&str>)?;
+                let version_item = MenuItem::with_id(app_handle, "view_version", "Version", true, None::<&str>)?;
+
+                let help_menu = Submenu::with_items(
+                    app_handle,
+                    "Help",
+                    true,
+                    &[&help_center, &license_item, &credits_item, &version_item],
+                )?;
+
+                let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu, &help_menu])?;
+                app_mut_ref.set_menu(menu)?;
             
             use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
@@ -170,8 +338,18 @@ pub fn run() {
             welcome::diarization::get_diarization_cache_path,
             welcome::status::check_config_status,
             
+            welcome::commands::set_selected_translation_family,
+            welcome::commands::get_selected_translation_family,
+            welcome::commands::is_ctranslate2_installed,
+            welcome::status::check_config_status,
+            welcome::python_env::list_venv_lib_contents,
+            welcome::python_env::delete_virtual_env,
+            welcome::hf_auth::check_hf_auth_status,
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
+            welcome::commands::get_advanced_translation_config,
+            welcome::commands::set_advanced_translation_config,
+            welcome::commands::set_menu_context, // Added
 
             // --- Project view CORE commands ---
             projectview::core_commands::load_project_data,

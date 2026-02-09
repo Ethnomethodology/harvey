@@ -1,4 +1,4 @@
-use crate::welcome::config::{CommandError};
+use crate::welcome::config::{CommandError, read_config};
 use crate::welcome::python_env::get_python_path;
 use super::TranslationEngine;
 use tauri::{AppHandle, Runtime, Manager};
@@ -12,18 +12,18 @@ use tokio::sync::Mutex;
 use std::time::Duration;
 use tokio::time::sleep;
 
-pub struct HelsinkiTranslationEngine<R: Runtime> {
+pub struct PythonTranslationEngine<R: Runtime> {
     app_handle: AppHandle<R>,
 }
 
-impl<R: Runtime> HelsinkiTranslationEngine<R> {
+impl<R: Runtime> PythonTranslationEngine<R> {
     pub fn new(app_handle: AppHandle<R>) -> Self {
         Self { app_handle }
     }
 }
 
 #[async_trait]
-impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
+impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
     async fn translate(
         &self,
         texts: Vec<String>,
@@ -31,6 +31,8 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
         job_id: &str,
         cancel_flag: Arc<AtomicBool>,
         mode: &str,
+        src_lang: Option<&str>,
+        tgt_lang: Option<&str>,
     ) -> Result<Vec<String>, CommandError> {
         if texts.is_empty() {
             return Ok(Vec::new());
@@ -46,7 +48,7 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
         let input_json = serde_json::to_string(&texts)
             .map_err(|e| CommandError::from(format!("Failed to serialize texts: {}", e)))?;
 
-        let python_args: Vec<String> = vec![
+        let mut python_args: Vec<String> = vec![
             script_path.to_string_lossy().to_string(),
             "--model-path".to_string(),
             model_path.to_string_lossy().to_string(),
@@ -56,7 +58,38 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
             mode.to_string(),
         ];
 
-        info!("[HelsinkiEngine][{}] Executing python script: {:?}", job_id, python_args);
+        if let Some(s) = src_lang {
+            python_args.push("--src-lang".to_string());
+            python_args.push(s.to_string());
+        }
+        if let Some(t) = tgt_lang {
+            python_args.push("--tgt-lang".to_string());
+            python_args.push(t.to_string());
+        }
+
+        // Read advanced config
+        if let Ok(config) = read_config() {
+            if let Some(adv) = config.advanced_translation {
+                if let Some(helsinki_bs) = adv.helsinki_batch_size {
+                    python_args.push("--batch-size-helsinki".to_string());
+                    python_args.push(helsinki_bs.to_string());
+                }
+                if let Some(nllb_bs) = adv.nllb_batch_size {
+                    python_args.push("--batch-size-nllb".to_string());
+                    python_args.push(nllb_bs.to_string());
+                }
+                if let Some(threads) = adv.num_threads {
+                    python_args.push("--threads".to_string());
+                    python_args.push(threads.to_string());
+                }
+                if let Some(device) = adv.device_preference {
+                    python_args.push("--device-preference".to_string());
+                    python_args.push(device);
+                }
+            }
+        }
+
+        info!("[PythonEngine][{}] Executing python script: {:?}", job_id, python_args);
 
         let shell_scope = self.app_handle.shell();
         let (mut rx, child) = shell_scope.command(python_path.to_string_lossy().to_string())
@@ -73,7 +106,7 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
         tokio::spawn(async move {
             loop {
                 if cancel_flag_clone.load(Ordering::Relaxed) {
-                    warn!("[HelsinkiEngine][{}] Cancellation requested. Killing process...", job_id_clone);
+                    warn!("[PythonEngine][{}] Cancellation requested. Killing process...", job_id_clone);
                     if let Some(child) = shared_child_clone.lock().await.take() {
                         let _ = child.kill();
                     }
@@ -91,15 +124,15 @@ impl<R: Runtime> TranslationEngine for HelsinkiTranslationEngine<R> {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    debug!("[HelsinkiEngine][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
+                    debug!("[PythonEngine][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
                     python_stdout.extend_from_slice(&line);
                 },
                 CommandEvent::Stderr(line) => {
-                    debug!("[HelsinkiEngine][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
+                    debug!("[PythonEngine][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
                     python_stderr.extend_from_slice(&line);
                 },
                 CommandEvent::Error(msg) => {
-                    error!("[HelsinkiEngine][error][{}] {}", job_id, msg);
+                    error!("[PythonEngine][error][{}] {}", job_id, msg);
                     python_error = Some(msg);
                     break;
                 },

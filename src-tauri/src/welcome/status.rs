@@ -3,7 +3,7 @@
 use serde::{Serialize, Deserialize};
 use tauri::{AppHandle, Runtime};
 use super::{
-    commands::{check_python_libraries_installed, get_downloaded_models, get_local_translation_models},
+    commands::{check_python_libraries_installed, get_downloaded_models, get_local_translation_models, is_ctranslate2_installed},
     diarization::check_diarization_model_access,
     hf_auth::check_hf_auth_status,
 };
@@ -17,10 +17,10 @@ pub struct ConfigStatus {
     pub transcription_models_downloaded: bool,
     pub diarization_model_downloaded: bool,
     pub translation_models_downloaded: bool,
+    pub ctranslate2_installed: bool,
 }
 
 use crate::welcome::config::{read_config, write_config};
-use crate::welcome::commands::get_download_location;
 use crate::welcome::python_env;
 
 #[tauri::command]
@@ -34,6 +34,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     let mut diarization_model_downloaded = config.verification_status.diarization_model_verified;
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
     let mut hf_token_present = config.verification_status.hf_token_verified;
+    let mut ct2_installed = false;
 
     // --- Lightweight Checks ---
     if python_libs_installed && !python_env::get_env_path()?.exists() {
@@ -44,7 +45,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
 
     // Always re-verify model presence if config says they are there
     let models = get_downloaded_models().await?;
-    let has_transcription = models.iter().any(|m| !m.name.contains("opus-mt") && !m.name.contains("paraphrase"));
+    let has_transcription = models.iter().any(|m| m.family.is_none() && !m.name.contains('/') && !m.name.contains("paraphrase"));
     let has_translation = !get_local_translation_models().await?.is_empty();
 
     if !transcription_models_downloaded && has_transcription {
@@ -82,6 +83,12 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config.verification_status.python_libraries_verified = true;
         config_changed = true;
     }
+
+    // CTranslate2 check
+    if python_libs_installed {
+        ct2_installed = is_ctranslate2_installed(app_handle.clone()).await.unwrap_or(false);
+    }
+
     let current_hf_token_status = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
     if hf_token_present != current_hf_token_status {
         hf_token_present = current_hf_token_status;
@@ -106,5 +113,6 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         transcription_models_downloaded,
         diarization_model_downloaded,
         translation_models_downloaded,
+        ctranslate2_installed: ct2_installed,
     })
 }
