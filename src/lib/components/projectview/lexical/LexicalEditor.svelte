@@ -2587,7 +2587,7 @@ $: if (editor && activeLayout) {
 
 <FindReplaceModal
   bind:showModal={showFindReplaceModal}
-  initialSearchTerm={searchTerm}
+  bind:initialSearchTerm={searchTerm}
   currentMatchIndex={currentSearchResultIndex}
   totalMatches={searchResults.length}
   on:replace={handleReplace}
