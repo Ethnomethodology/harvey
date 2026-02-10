@@ -155,6 +155,7 @@
 
   let searchUiContainerElement;
   let searchToggleButtonElement;
+  let searchInputRef;
 
   let latestScrollTargetKey = null; // New component-level variable
   let areHighlightsReady = false; // Track if highlights have been loaded from backend
@@ -207,15 +208,13 @@
     }
 
     function handleClickOutsideSearch(event) {
-      if (showSearchBox && searchTerm === '') {
+      if (showSearchBox) {
         const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
         const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
 
         if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
           showSearchBox = false;
-        } else {
         }
-      } else {
       }
     }
 
@@ -1748,37 +1747,11 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
 function handleSearchInputKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault(); // Prevent default Enter key action
-    console.log('[handleSearchInputKeydown] Enter key pressed.');
-
-    if (searchTerm.trim() !== '') {
-      executeSearch(searchTerm);
+    if (event.shiftKey) {
+        navigateToPreviousResult();
     } else {
-      // If term is empty, Enter probably shouldn't clear results again,
-      // but rather do nothing or allow default (which is now prevented).
-      // For now, let's assume Enter on empty term does nothing further here
-      // beyond preventing default.
-      // Or, if executeSearch handles empty term by clearing, that's fine.
-      // executeSearch already handles empty searchTerm by clearing results.
-      searchResults = [];
-      currentSearchResultIndex = -1;
-      // Dispatch updates if needed, though executeSearch('') would do this.
-      // dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
-      // dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
-      console.log('[handleSearchInputKeydown] Search term is empty, results cleared (if any).');
+        navigateToNextResult();
     }
-
-    // Explicitly refocus the search input field
-    // Use tick to ensure any DOM updates from executeSearch are processed first,
-    // though likely not strictly necessary here if input field itself isn't re-rendered.
-    tick().then(() => {
-      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-      if (inputField) {
-        inputField.focus();
-        console.log('[handleSearchInputKeydown] Refocused search input field.');
-      } else {
-        console.warn('[handleSearchInputKeydown] Could not find search input field to refocus.');
-      }
-    });
   }
 }
 
@@ -1834,7 +1807,7 @@ function executeSearch(termToSearch) {
     if (searchResults.length > 0) {
       currentSearchResultIndex = 0;
       console.log('[executeSearch] currentSearchResultIndex set to 0. First result:', searchResults[0]);
-      navigateToResult(currentSearchResultIndex); // This will also log
+      // navigateToResult(currentSearchResultIndex, false); // REMOVED: Do NOT focus editor or select automatically on type to prevent focus theft
     } else {
       console.log('[executeSearch] No results found for:', term);
       dispatch('searchindexchanged', { currentIndex: -1, currentResult: null }); // Ensure this is dispatched if no results
@@ -1859,13 +1832,12 @@ function clearSearchTermInput() {
   console.log('[clearSearchTermInput] Dispatching searchindexchanged with:', indexChangeData);
   dispatch('searchindexchanged', indexChangeData);
 
-  if (showSearchBox && editorContainer) {
-    const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-    inputField?.focus();
+  if (showSearchBox) {
+    searchInputRef?.focus();
   }
 }
 
-function navigateToResult(index) {
+function navigateToResult(index, shouldFocus = true) {
   if (!editor) return;
   console.log('[navigateToResult] Called with index:', index, 'Total results:', searchResults.length);
 
@@ -1887,7 +1859,9 @@ function navigateToResult(index) {
   currentSearchResultIndex = index;
   console.log('[navigateToResult] Navigating to result:', result);
 
-  editor.focus(); // <--- Add this line
+  if (shouldFocus) {
+      editor.focus(); 
+  }
   latestScrollTargetKey = null; // Reset at the beginning of navigation
 
   editor.update(() => {
@@ -1942,22 +1916,22 @@ function navigateToResult(index) {
 
 function navigateToPreviousResult() {
   console.log('[navigateToPreviousResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
-  if (searchResults.length === 0 || currentSearchResultIndex <= 0) {
-    console.log('[navigateToPreviousResult] No previous results or already at the first result.');
-    return;
-  }
-  currentSearchResultIndex--;
-  navigateToResult(currentSearchResultIndex);
+  if (searchResults.length === 0) return;
+  
+  let newIndex = currentSearchResultIndex - 1;
+  if (newIndex < 0) newIndex = searchResults.length - 1;
+  
+  navigateToResult(newIndex, false);
 }
 
 function navigateToNextResult() {
   console.log('[navigateToNextResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
-  if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) {
-    console.log('[navigateToNextResult] No next results or already at the last result.');
-    return;
-  }
-  currentSearchResultIndex++;
-  navigateToResult(currentSearchResultIndex);
+  if (searchResults.length === 0) return;
+  
+  let newIndex = currentSearchResultIndex + 1;
+  if (newIndex >= searchResults.length) newIndex = 0;
+
+  navigateToResult(newIndex, false);
 }
 
 let previousLayout = null;
@@ -2274,6 +2248,83 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.clearFormatting && toolbarConfig.search}
         <div class="separator"></div>
+      {/if}
+
+      {#if toolbarConfig.search}
+        <div class="ml-auto relative flex items-center" bind:this={searchToggleButtonElement}>
+          <button
+            class="mini-toolbar-button"
+            class:active={showSearchBox}
+            on:click={() => {
+                showSearchBox = !showSearchBox;
+                if (showSearchBox) {
+                    tick().then(() => {
+                        const input = searchUiContainerElement?.querySelector('input');
+                        if (input) input.focus();
+                    });
+                }
+            }}
+            title="Search"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+            </svg>
+          </button>
+
+          {#if showSearchBox}
+            <div
+              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+              bind:this={searchUiContainerElement}
+            >
+              <div class="relative flex-grow">
+                <input
+                  type="search"
+                  placeholder="Search..."
+                  class="w-full text-xs border border-gray-300 dark:border-border px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                  bind:value={searchTerm}
+                  bind:this={searchInputRef}
+                  on:input={() => executeSearch(searchTerm)}
+                  on:keydown={handleSearchInputKeydown}
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+              </div>
+              
+              <div class="flex items-center gap-0.5">
+                <button
+                  class="mini-toolbar-button !p-1"
+                  on:click={navigateToPreviousResult}
+                  disabled={searchResults.length === 0}
+                  title="Previous Match"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+                  </svg>
+                </button>
+                <button
+                  class="mini-toolbar-button !p-1"
+                  on:click={navigateToNextResult}
+                  disabled={searchResults.length === 0}
+                  title="Next Match"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+                  </svg>
+                </button>
+              </div>
+
+              <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[40px] text-center">
+                {#if searchResults.length > 0}
+                  {currentSearchResultIndex + 1} of {searchResults.length}
+                {:else if searchTerm}
+                  0 of 0
+                {/if}
+              </span>
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}
