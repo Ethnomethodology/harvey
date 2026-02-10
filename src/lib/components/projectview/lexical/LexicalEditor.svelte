@@ -1776,47 +1776,37 @@ function updateSearchHighlights() {
   const activeRanges = [];
 
   searchResults.forEach((result, index) => {
-    const domNode = editor.getElementByKey(result.nodeKey);
-    if (!domNode) return;
+    // result.nodes is an array of { nodeKey, startOffset, endOffset }
+    result.nodes.forEach(nodeMatch => {
+        const domNode = editor.getElementByKey(nodeMatch.nodeKey);
+        if (!domNode) return;
 
-    let textNode = null;
-    if (domNode.nodeType === Node.TEXT_NODE) {
-      textNode = domNode;
-    } else {
-      const walker = document.createTreeWalker(domNode, NodeFilter.SHOW_TEXT, null);
-      textNode = walker.nextNode();
-    }
-
-    if (textNode) {
-      try {
-        const range = new Range();
-        range.setStart(textNode, result.offset);
-        range.setEnd(textNode, result.offset + result.length);
-        
-        if (index === currentSearchResultIndex) {
-          activeRanges.push(range);
+        let textNode = null;
+        if (domNode.nodeType === Node.TEXT_NODE) {
+          textNode = domNode;
         } else {
-          matchRanges.push(range);
+          const walker = document.createTreeWalker(domNode, NodeFilter.SHOW_TEXT, null);
+          textNode = walker.nextNode();
         }
-      } catch (e) {
-        // Range might become invalid during document changes
-      }
-    }
+
+        if (textNode) {
+          try {
+            const range = new Range();
+            range.setStart(textNode, nodeMatch.startOffset);
+            range.setEnd(textNode, nodeMatch.endOffset);
+            
+            if (index === currentSearchResultIndex) {
+              activeRanges.push(range);
+            } else {
+              matchRanges.push(range);
+            }
+          } catch (e) {}
+        }
+    });
   });
 
-  if (matchRanges.length > 0) {
-    CSS.highlights.set('search-match', new Highlight(...matchRanges));
-  } else {
-    const h = CSS.highlights.get('search-match');
-    if (h) { h.clear(); CSS.highlights.delete('search-match'); }
-  }
-
-  if (activeRanges.length > 0) {
-    CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
-  } else {
-    const h = CSS.highlights.get('search-match-active');
-    if (h) { h.clear(); CSS.highlights.delete('search-match-active'); }
-  }
+  CSS.highlights.set('search-match', new Highlight(...matchRanges));
+  CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
 }
 
 function handleSearchInputKeydown(event) {
@@ -1852,59 +1842,68 @@ function executeSearch(termToSearch, options = {}) {
     if (term !== latestSearchTerm) return;
 
     const root = _getRoot();
-    const nodesToSearch = [root];
-    const newResults = [];
+    
+    // 1. Flatten document text and track node offsets
+    let fullText = '';
+    const textNodeOffsets = []; // { nodeKey, start, end }
 
+    const visit = (node) => {
+        if (_isTextNode(node)) {
+            const nodeText = node.getTextContent();
+            textNodeOffsets.push({
+                nodeKey: node.getKey(),
+                start: fullText.length,
+                end: fullText.length + nodeText.length
+            });
+            fullText += nodeText;
+        } else if (_isElementNode(node)) {
+            node.getChildren().forEach(visit);
+            // Add newline for block elements to separate text flow? 
+            // Lexical plain text search usually ignores blocks unless they are paragraphs.
+            // For now, let's keep it simple as continuous flow for finding "partially highlighted words".
+        }
+    };
+    visit(root);
+
+    const newResults = [];
     let regex;
     try {
-      if (isRegex || isWholeWord) {
-        let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (isWholeWord) {
-          pattern = `\\b${pattern}\\b`;
-        }
-        regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
-      }
+      let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (isWholeWord) pattern = `\\b${pattern}\\b`;
+      regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
     } catch (e) {
       console.warn("Invalid search pattern:", term);
       return;
     }
 
-    while (nodesToSearch.length > 0) {
-      const node = nodesToSearch.pop();
-
-      if (_isTextNode(node)) {
-        const text = node.getTextContent();
+    // 2. Search in flattened text
+    let match;
+    while ((match = regex.exec(fullText)) !== null) {
+        const matchStart = match.index;
+        const matchEnd = match.index + match[0].length;
         
-        if (regex) {
-          let match;
-          while ((match = regex.exec(text)) !== null) {
-            newResults.push({
-              nodeKey: node.getKey(),
-              offset: match.index,
-              length: match[0].length,
-              text: match[0]
-            });
-            if (match.index === regex.lastIndex) regex.lastIndex++;
-          }
-        } else {
-          const termToUse = isCaseSensitive ? term : term.toLowerCase();
-          const textToUse = isCaseSensitive ? text : text.toLowerCase();
-          let offset = -1;
-          while ((offset = textToUse.indexOf(termToUse, offset + 1)) !== -1) {
-            newResults.push({
-              nodeKey: node.getKey(),
-              offset: offset,
-              length: term.length,
-              text: text.substring(offset, offset + term.length)
-            });
-          }
+        // 3. Map match range back to nodes
+        const nodesInMatch = [];
+        for (const tno of textNodeOffsets) {
+            if (tno.end > matchStart && tno.start < matchEnd) {
+                // This node overlaps with match
+                nodesInMatch.push({
+                    nodeKey: tno.nodeKey,
+                    startOffset: Math.max(0, matchStart - tno.start),
+                    endOffset: Math.min(tno.end - tno.start, matchEnd - tno.start)
+                });
+            }
+            if (tno.start >= matchEnd) break;
         }
-      } else if (node.getChildren) {
-        const children = node.getChildren();
-        for (let i = children.length - 1; i >= 0; i--) {
-            nodesToSearch.push(children[i]);
+
+        if (nodesInMatch.length > 0) {
+            newResults.push({
+                nodes: nodesInMatch,
+                text: match[0]
+            });
         }
-      }
+        
+        if (match.index === regex.lastIndex) regex.lastIndex++;
     }
     
     if (term !== latestSearchTerm) return;
@@ -1938,16 +1937,24 @@ function handleReplace(event) {
       const result = searchResults[currentSearchResultIndex];
       
       editor.update(() => {
-          const node = _getNodeByKey(result.nodeKey);
-          if (_isTextNode(node)) {
-              try {
-                  node.select(result.offset, result.offset + result.length);
-                  const selection = _getSelection();
-                  if (_isRangeSelection(selection)) {
-                      selection.insertText(replace);
+          if (result.nodes.length > 0) {
+              const first = result.nodes[0];
+              const last = result.nodes[result.nodes.length - 1];
+              
+              const firstNode = _getNodeByKey(first.nodeKey);
+              const lastNode = _getNodeByKey(last.nodeKey);
+              
+              if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+                  try {
+                      const selection = _getSelection();
+                      if (_isRangeSelection(selection)) {
+                          selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                          selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                          selection.insertText(replace);
+                      }
+                  } catch (e) {
+                      console.error("Replace failed:", e);
                   }
-              } catch (e) {
-                  console.error("Replace failed:", e);
               }
           }
       }, { tag: 'replace-one' });
@@ -1961,33 +1968,23 @@ function handleReplaceAll(event) {
   if (searchResults.length === 0) return;
 
   editor.update(() => {
-      const resultsByNode = new Map();
-      for (const res of searchResults) {
-          if (!resultsByNode.has(res.nodeKey)) {
-              resultsByNode.set(res.nodeKey, []);
-          }
-          resultsByNode.get(res.nodeKey).push(res);
-      }
-      
-      for (const [nodeKey, results] of resultsByNode) {
-          const node = _getNodeByKey(nodeKey);
-          if (_isTextNode(node)) {
-              results.sort((a, b) => b.offset - a.offset);
+      // Replacement must be done in reverse order to keep offsets valid for preceding matches
+      for (let i = searchResults.length - 1; i >= 0; i--) {
+          const result = searchResults[i];
+          if (result.nodes.length > 0) {
+              const first = result.nodes[0];
+              const last = result.nodes[result.nodes.length - 1];
+              const firstNode = _getNodeByKey(first.nodeKey);
+              const lastNode = _getNodeByKey(last.nodeKey);
               
-              const textContent = node.getTextContent();
-              let lastIndex = textContent.length;
-              let parts = [];
-              
-              for (const res of results) {
-                  const tail = textContent.slice(res.offset + res.length, lastIndex);
-                  parts.unshift(tail);
-                  parts.unshift(replace);
-                  lastIndex = res.offset;
+              if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+                  const selection = _getSelection();
+                  if (_isRangeSelection(selection)) {
+                      selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                      selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                      selection.insertText(replace);
+                  }
               }
-              const head = textContent.slice(0, lastIndex);
-              parts.unshift(head);
-              
-              node.setTextContent(parts.join(''));
           }
       }
   }, { tag: 'replace-all' });
@@ -2019,80 +2016,55 @@ function navigateToResult(index, shouldFocus = true) {
   if (!editor) return;
   console.log('[navigateToResult] Called with index:', index, 'Total results:', searchResults.length);
 
-  // Removed redundant highlight clearing, selection handles this
-
   if (index < 0 || index >= searchResults.length) {
     currentSearchResultIndex = -1;
-    console.log('[navigateToResult] Index out of bounds. currentSearchResultIndex set to -1.');
     updateSearchHighlights();
-    // Ensure previous highlight is cleared if any
-    // if (currentSearchHighlight) {
-    //   currentSearchHighlight.remove();
-    //   currentSearchHighlight = null;
-    // }
     dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
   const result = searchResults[index];
   currentSearchResultIndex = index;
-  console.log('[navigateToResult] Navigating to result:', result);
 
   if (shouldFocus) {
       editor.focus(); 
   }
-  latestScrollTargetKey = null; // Reset at the beginning of navigation
+  latestScrollTargetKey = null;
 
   editor.update(() => {
-    const node = _getNodeByKey(result.nodeKey);
-    if (_isTextNode(node)) {
-      const currentNodeTextLength = node.getTextContentSize();
-      const startOffset = result.offset;
-      const endOffset = result.offset + result.length;
+    if (result.nodes.length > 0) {
+        const first = result.nodes[0];
+        const last = result.nodes[result.nodes.length - 1];
+        const firstNode = _getNodeByKey(first.nodeKey);
+        const lastNode = _getNodeByKey(last.nodeKey);
 
-      console.log(`[navigateToResult] Attempting selection for node ${result.nodeKey}. Stored Offset: ${startOffset}, Stored Length: ${result.length}, End Offset: ${endOffset}, Current Node Text Length: ${currentNodeTextLength}`);
-
-      if (startOffset < 0 || startOffset > currentNodeTextLength || endOffset > currentNodeTextLength) {
-        console.warn(`[navigateToResult] Stale or invalid offset for node ${result.nodeKey}. Offset: ${startOffset}, Length: ${result.length}, Node Text Length: ${currentNodeTextLength}. Skipping selection.`);
-        latestScrollTargetKey = null; // Ensure no scroll attempt
-      } else {
-        console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
-        node.select(startOffset, endOffset);
-        latestScrollTargetKey = result.nodeKey; // Set target for scrolling
-      }
-    } else {
-      console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
-      latestScrollTargetKey = null; // Ensure no scroll attempt
+        if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+            const selection = _getSelection();
+            if (_isRangeSelection(selection)) {
+                selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                latestScrollTargetKey = first.nodeKey;
+            }
+        }
     }
   }, { tag: 'search-navigate' });
 
-  // Update highlights to reflect new active index
   tick().then(updateSearchHighlights);
 
-  // Scroll logic using the component-level variable, wrapped in tick()
   if (latestScrollTargetKey) {
-    const keyToScroll = latestScrollTargetKey; // Capture value for closure
+    const keyToScroll = latestScrollTargetKey;
     tick().then(() => {
-      console.log('[navigateToResult] Tick complete. Attempting to scroll for node key:', keyToScroll);
       try {
         const domElement = editor.getElementByKey(keyToScroll);
         if (domElement) {
-          console.log('[navigateToResult] DOM element found. Attempting to scroll DOM element into view for node key:', keyToScroll);
           domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-          console.warn('[navigateToResult] Tick: Could not find DOM element for node key:', keyToScroll, 'to scroll into view.');
         }
-      } catch (e) {
-        console.error('[navigateToResult] Tick: Error scrolling element into view:', e);
-      }
+      } catch (e) {}
     });
-  } else {
-      console.log('[navigateToResult] Skipping scroll attempt as no valid scrollTargetKey was set for node key:', result.nodeKey);
   }
-  latestScrollTargetKey = null; // Clean up after attempt or skip
+  latestScrollTargetKey = null;
 
   const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
-  console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
   dispatch('searchindexchanged', dispatchData);
 }
 

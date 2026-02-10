@@ -1158,26 +1158,57 @@ async function performReplaceInLexicalJson(json, find, replace, offset, length) 
         };
         visit(root);
 
+        // 1. Map global offset to nodes
         let currentOffset = 0;
+        let startNode = null;
+        let startOffsetInNode = 0;
+        let nodesToRemove = [];
+
+        const matchEnd = offset + length;
+
         for (const node of textNodes) {
             const nodeLength = node.getTextContentSize();
-            if (currentOffset + nodeLength > offset) {
-                // This node contains the start of the match
-                const startInNode = offset - currentOffset;
-                // We assume for single replace that match is within one segment's text flow
-                // but it might span multiple text nodes.
-                // Simple version: if it fits in this node, replace it.
-                if (startInNode + length <= nodeLength) {
-                    const text = node.getTextContent();
-                    const newText = text.slice(0, startInNode) + replace + text.slice(startInNode + length);
-                    node.setTextContent(newText);
-                } else {
-                    // Spanning nodes is complex, for now we handle single node matches which is 99% of cases
-                    console.warn("[ProjectService] Single replace match spans nodes - not yet implemented.");
+            const nodeEnd = currentOffset + nodeLength;
+
+            if (nodeEnd > offset && currentOffset < matchEnd) {
+                // This node is part of match
+                if (!startNode) {
+                    startNode = node;
+                    startOffsetInNode = offset - currentOffset;
                 }
-                break;
+                nodesToRemove.push(node);
             }
             currentOffset += nodeLength;
+            if (currentOffset >= matchEnd) break;
+        }
+
+        // 2. Perform cross-node replacement
+        if (startNode && nodesToRemove.length > 0) {
+            // We'll keep the first node, update its text, and remove the others
+            const firstNode = nodesToRemove[0];
+            const lastNode = nodesToRemove[nodesToRemove.length - 1];
+            
+            const firstNodeText = firstNode.getTextContent();
+            const lastNodeText = lastNode.getTextContent();
+            
+            const endOffsetInLastNode = matchEnd - (currentOffset - lastNode.getTextContentSize());
+
+            if (nodesToRemove.length === 1) {
+                // Single node replacement
+                const newText = firstNodeText.slice(0, startOffsetInNode) + replace + firstNodeText.slice(startOffsetInNode + length);
+                firstNode.setTextContent(newText);
+            } else {
+                // Multi-node replacement
+                // Keep prefix of first node, add replacement, add suffix of last node
+                const prefix = firstNodeText.slice(0, startOffsetInNode);
+                const suffix = lastNodeText.slice(endOffsetInLastNode);
+                firstNode.setTextContent(prefix + replace + suffix);
+                
+                // Remove intermediate nodes
+                for (let i = 1; i < nodesToRemove.length; i++) {
+                    nodesToRemove[i].remove();
+                }
+            }
         }
     });
 
@@ -1197,6 +1228,10 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
 
     await editor.update(() => {
         const root = _getRoot();
+        
+        // We must re-visit and re-flatten after each match replacement 
+        // OR work backwards. Reverse order is safer for offsets.
+        
         const textNodes = [];
         const visit = (node) => {
             if (_isTextNode(node)) textNodes.push(node);
@@ -1204,23 +1239,52 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
         };
         visit(root);
 
+        let fullText = '';
+        const nodeRanges = [];
         for (const node of textNodes) {
+            const start = fullText.length;
             const text = node.getTextContent();
-            const matches = [];
-            let m;
-            while ((m = regex.exec(text)) !== null) {
-                matches.push(m);
-                if (m.index === regex.lastIndex) regex.lastIndex++;
+            fullText += text;
+            nodeRanges.push({ node, start, end: fullText.length });
+        }
+
+        const matches = [];
+        let m;
+        while ((m = regex.exec(fullText)) !== null) {
+            matches.push(m);
+            if (m.index === regex.lastIndex) regex.lastIndex++;
+        }
+
+        // Process matches in reverse order
+        for (let i = matches.length - 1; i >= 0; i--) {
+            const match = matches[i];
+            const matchStart = match.index;
+            const matchEnd = match.index + match[0].length;
+
+            const nodesInMatch = [];
+            for (const range of nodeRanges) {
+                if (range.end > matchStart && range.start < matchEnd) {
+                    nodesInMatch.push({
+                        node: range.node,
+                        startInNode: Math.max(0, matchStart - range.start),
+                        endInNode: Math.min(range.node.getTextContentSize(), matchEnd - range.start)
+                    });
+                }
             }
 
-            if (matches.length > 0) {
-                // Replace in reverse order to keep offsets valid
-                let newText = text;
-                for (let i = matches.length - 1; i >= 0; i--) {
-                    const match = matches[i];
-                    newText = newText.slice(0, match.index) + replace + newText.slice(match.index + match[0].length);
+            if (nodesInMatch.length > 0) {
+                const first = nodesInMatch[0];
+                const last = nodesInMatch[nodesInMatch.length - 1];
+                
+                const prefix = first.node.getTextContent().slice(0, first.startInNode);
+                const suffix = last.node.getTextContent().slice(last.endInNode);
+                
+                first.node.setTextContent(prefix + replace + suffix);
+                
+                // Remove intermediate and last nodes if multiple nodes involved
+                for (let j = 1; j < nodesInMatch.length; j++) {
+                    nodesInMatch[j].node.remove();
                 }
-                node.setTextContent(newText);
             }
         }
     });
