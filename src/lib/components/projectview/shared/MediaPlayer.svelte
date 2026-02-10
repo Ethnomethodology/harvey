@@ -231,7 +231,7 @@
 
 	function toggleFullscreen() {
 		if (!videoElement) return;
-		const container = document.getElementById('video-container-wrapper');
+		const container = document.getElementById('media-player-root');
 		if (!document.fullscreenElement) {
 			container.requestFullscreen().catch(err => {
 				console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
@@ -265,9 +265,11 @@
     let progressTooltipTop = '0px';
 
 	// --- Overlay Icon State & Icons ---
-	let isHoveringVideo = false;
+	let isHoveringPlayer = false;
 	const ICON_PLAY_OVERLAY = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-play-circle-fill" viewBox="0 0 16 16" style="filter: drop-shadow(0 0 5px rgba(0,0,0,0.7));"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/></svg>`;
 	const ICON_PAUSE_OVERLAY = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-pause-circle-fill" viewBox="0 0 16 16" style="filter: drop-shadow(0 0 5px rgba(0,0,0,0.7));"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM6.25 5C5.56 5 5 5.56 5 6.25v3.5a1.25 1.25 0 1 0 2.5 0v-3.5C7.5 5.56 6.94 5 6.25 5zm3.5 0c-.69 0-1.25.56-1.25 1.25v3.5a1.25 1.25 0 1 0 2.5 0v-3.5C11 5.56 10.44 5 9.75 5z"/></svg>`;
+
+    $: controlsVisible = userActive || !displayIsPlaying;
 
 	// --- Rewind/Forward Icons & Functions ---
 	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/></svg>`;
@@ -1159,20 +1161,23 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-surface-2 h-full">
+<div id="media-player-root" 
+	class="p-1 flex flex-col bg-gray-50 dark:bg-surface-2 h-full relative" 
+	class:fullscreen-mode={isFullscreen}
+	on:mouseenter={() => { isHoveringPlayer = true; handleUserActivity(); }}
+	on:mouseleave={() => { isHoveringPlayer = false; }}
+	on:mousemove={handleUserActivity}
+>
 	<div
 		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
-		class:cursor-none={isFullscreen && !userActive}
+		class:cursor-auto={userActive}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
-		on:mousemove={handleUserActivity}
 		role="button"
 		aria-label="Play or pause video"
 		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTogglePlay(); }}
 		tabindex="0"
-		on:mouseenter={() => { isHoveringVideo = true; handleUserActivity(); }}
-	on:mouseleave={() => { isHoveringVideo = false; }}
 	>
 		{#if isLoadingMedia}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"><span>Loading media...</span></div>
@@ -1202,7 +1207,7 @@
 			<!-- Overlay Icon Div -->
 			<div
 				class="absolute inset-0 flex items-center justify-center pointer-events-none"
-				style="color: white; opacity: { ((isHoveringVideo && userActive) || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
+				style="color: white; opacity: { ((isHoveringPlayer && userActive) || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
 			>
 				{#if displayIsPlaying}
 					{@html ICON_PAUSE_OVERLAY}
@@ -1233,8 +1238,9 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
-		style="position: relative; z-index: 30;"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md transition-opacity duration-300"
+		class:floating-controls={isFullscreen}
+		style="position: relative; z-index: 30; opacity: {isFullscreen ? (userActive ? 1 : 0) : 1}; pointer-events: {isFullscreen && !userActive ? 'none' : 'auto'};"
 	>
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full" style="z-index: 20;"> <!-- Stacking for timeline within control bar -->
@@ -1477,6 +1483,39 @@
 		object-fit: contain;
 	}
 
+	#media-player-root.fullscreen-mode {
+		padding: 0 !important;
+		background: black !important;
+	}
+
+	#media-player-root.fullscreen-mode #video-container-wrapper {
+		cursor: none;
+	}
+
+	#media-player-root.fullscreen-mode #video-container-wrapper.cursor-auto {
+		cursor: auto;
+	}
+
+	.floating-controls {
+		position: absolute !important;
+		bottom: 2rem;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 90% !important;
+		max-width: 800px;
+		background-color: rgba(255, 255, 255, 0.8) !important;
+		border: 1px solid rgba(209, 213, 219, 0.3) !important;
+		backdrop-filter: blur(8px);
+		border-radius: 0.75rem !important;
+		padding: 0.75rem !important;
+		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.25) !important;
+	}
+
+	:global(.dark) .floating-controls {
+		background-color: rgba(36, 36, 36, 0.8) !important;
+		border-color: rgba(255, 255, 255, 0.1) !important;
+	}
+
 	.animate-pulse {
 		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 	}
@@ -1512,6 +1551,9 @@
 		outline: none;
 		opacity: 0.9;
 		transition: opacity .15s ease-in-out;
+	}
+	.floating-controls .video-progress {
+		background: #9ca3af; /* Darker gray for better visibility on transparent widget */
 	}
 	.dark .video-progress {
 		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
@@ -1557,6 +1599,9 @@
 		opacity: 0.9;
 		transition: opacity .15s ease-in-out;
 	}
+	.floating-controls .volume-slider {
+		background: #9ca3af;
+	}
 	.dark .volume-slider {
 		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
 	}
@@ -1582,5 +1627,9 @@
 	.dark .volume-slider::-moz-range-thumb {
 		background: var(--color-accent-primary);
 		border-color: transparent;
+	}
+
+	.floating-controls :global(.ui-button-icon) {
+		@apply border border-gray-400 dark:border-white/10;
 	}
 </style>
