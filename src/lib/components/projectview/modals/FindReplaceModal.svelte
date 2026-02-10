@@ -175,7 +175,7 @@
           <button
             type="button"
             class="toggle-btn {isCaseSensitive ? 'active' : ''}"
-            title={isCaseSensitive ? 'Match Case' : 'Ignore Case'}
+            title="Match Case"
             on:click={toggleCaseSensitive}
           >
             Aa
@@ -288,8 +288,8 @@
   }
 
   .toggle-btn {
-    @apply flex items-center justify-center w-7 h-7 rounded border border-gray-300 dark:border-gray-600 
-      bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer transition-colors text-xs font-bold;
+    @apply flex items-center justify-center w-6 h-6 rounded border border-gray-300 dark:border-gray-600 
+      bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer transition-colors text-[10px] font-bold;
   }
   .toggle-btn:hover {
     @apply bg-gray-100 dark:bg-gray-600;

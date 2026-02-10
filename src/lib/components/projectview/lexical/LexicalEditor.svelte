@@ -2531,7 +2531,7 @@ $: if (editor && activeLayout) {
                   {#if showSearchOptionsDropdown}
                     <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg rounded overflow-hidden min-w-[120px]">
                       <button
-                        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+                        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 whitespace-nowrap"
                         on:click={openFindReplaceModal}
                       >
                         Find & Replace
