@@ -136,7 +136,6 @@
   let searchResults = [];
   let currentSearchResultIndex = -1;
 
-  let currentSearchHighlight = null;
   const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)';
   const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';
 
@@ -1750,11 +1749,19 @@ function updateSearchHighlights() {
     return;
   }
 
-  // Clear existing highlights
-  CSS.highlights.delete('search-match');
-  CSS.highlights.delete('search-match-active');
-
-  if (!searchTerm.trim() || searchResults.length === 0) {
+  // Fast path: if no results or search inactive, clear everything immediately
+  if (!showSearchBox || !searchTerm.trim() || searchResults.length === 0) {
+    const prevMatch = CSS.highlights.get('search-match');
+    if (prevMatch) {
+      prevMatch.clear();
+      CSS.highlights.delete('search-match');
+    }
+    
+    const prevActive = CSS.highlights.get('search-match-active');
+    if (prevActive) {
+      prevActive.clear();
+      CSS.highlights.delete('search-match-active');
+    }
     return;
   }
 
@@ -1785,16 +1792,23 @@ function updateSearchHighlights() {
           matchRanges.push(range);
         }
       } catch (e) {
-        // Silently fail for invalid ranges which can happen during rapid typing
+        // Range might become invalid during document changes
       }
     }
   });
 
   if (matchRanges.length > 0) {
     CSS.highlights.set('search-match', new Highlight(...matchRanges));
+  } else {
+    const h = CSS.highlights.get('search-match');
+    if (h) { h.clear(); CSS.highlights.delete('search-match'); }
   }
+
   if (activeRanges.length > 0) {
     CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
+  } else {
+    const h = CSS.highlights.get('search-match-active');
+    if (h) { h.clear(); CSS.highlights.delete('search-match-active'); }
   }
 }
 
@@ -1809,22 +1823,30 @@ function handleSearchInputKeydown(event) {
   }
 }
 
+let latestSearchTerm = '';
 function executeSearch(termToSearch) {
   if (!editor) return;
+  searchTerm = termToSearch; // Ensure reactive state is synced immediately
   const term = termToSearch.trim();
+  latestSearchTerm = term;
 
-  // Reset internal results state
+  // Clear internal results state immediately
   searchResults = [];
   currentSearchResultIndex = -1;
   
+  // Clear highlights immediately to prevent stale visual state
+  updateSearchHighlights();
+
   if (term === '') {
-    updateSearchHighlights();
     dispatch('searchresultsupdated', { results: [], term: '' });
     dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
   editor.getEditorState().read(() => {
+    // If a newer search has already started, ignore these results
+    if (term !== latestSearchTerm) return;
+
     const root = _getRoot();
     const nodesToSearch = [root];
     const newResults = [];
@@ -1853,6 +1875,9 @@ function executeSearch(termToSearch) {
       }
     }
     
+    // Final check for race condition before committing results to state
+    if (term !== latestSearchTerm) return;
+
     searchResults = newResults;
     if (searchResults.length > 0) {
       currentSearchResultIndex = 0;
@@ -2339,7 +2364,7 @@ $: if (editor && activeLayout) {
                   class="w-full text-xs border border-gray-300 dark:border-border px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
                   bind:value={searchTerm}
                   bind:this={searchInputRef}
-                  on:input={() => executeSearch(searchTerm)}
+                  on:input={(e) => executeSearch(e.currentTarget.value)}
                   on:keydown={handleSearchInputKeydown}
                   autocomplete="off"
                   autocorrect="off"
