@@ -30,6 +30,9 @@
     x = 0;
     y = 0;
     
+    // Sync with parent immediately on open
+    handleFindChange();
+
     setTimeout(() => {
       tick().then(() => {
         if (findTerm && replaceInput) {

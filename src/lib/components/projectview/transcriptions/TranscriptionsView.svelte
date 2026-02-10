@@ -20,8 +20,11 @@
         saveTranscriptData,
         requestTranscription as requestTranscriptionService, // Renamed to avoid conflict
         convertAndSaveTranscriptAsDoc,
-        loadTranscriptFile
+        loadTranscriptFile,
+        replaceTranscriptText,
+        replaceAllTranscriptText
     } from '$lib/services/projectService.js';
+
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
     import TopBar from './TopBar.svelte';
@@ -413,6 +416,16 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         updateManualSegmentSettings({ duration, speakerMode });
     }
 
+    function handleReplaceTranscriptText(event) {
+        const { segmentIndex, isPrimary, find, replace, offset, length } = event.detail;
+        replaceTranscriptText(segmentIndex, isPrimary, find, replace, offset, length);
+    }
+
+    function handleReplaceAllTranscriptText(event) {
+        const { find, replace, isCaseSensitive, isRegex, isWholeWord } = event.detail;
+        replaceAllTranscriptText(find, replace, { isCaseSensitive, isRegex, isWholeWord });
+    }
+
     
 
     // Handlers for UnsavedChangesModal
@@ -635,6 +648,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
                 on:requestmanualsettings={handleRequestManualSettings}
+                on:replacetranscripttext={handleReplaceTranscriptText}
+                on:replacealltranscripttext={handleReplaceAllTranscriptText}
              />
         </div>
     </div>

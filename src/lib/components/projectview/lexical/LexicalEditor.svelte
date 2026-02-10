@@ -2752,7 +2752,6 @@ $: if (editor && activeLayout) {
   :global(::highlight(search-match-active)) {
     background-color: rgba(255, 165, 0, 0.7);
     color: black;
-    text-decoration: underline;
   }
 
   :global(html.dark ::highlight(search-match)) {
@@ -2763,7 +2762,6 @@ $: if (editor && activeLayout) {
   :global(html.dark ::highlight(search-match-active)) {
     background-color: rgba(255, 165, 0, 0.6);
     color: white;
-    text-decoration: underline;
   }
 
 </style>

@@ -1100,6 +1100,134 @@ export async function saveTranscriptData() {
     }
 }
 
+export async function replaceTranscriptText(segmentIndex, isPrimary, find, replace, offset, length) {
+    const tsStore = get(transcriptStore);
+    const segments = isPrimary ? tsStore.segments : tsStore.secondaryTranscriptSegments;
+    if (!segments[segmentIndex]) return;
+
+    const segment = segments[segmentIndex];
+    const updatedJson = await performReplaceInLexicalJson(segment.text, find, replace, offset, length);
+    
+    const { updateSegment, updateSecondarySegment } = await import('$lib/stores/transcriptStore.js');
+    if (isPrimary) {
+        updateSegment(segmentIndex, { text: updatedJson });
+    } else {
+        updateSecondarySegment(segmentIndex, { text: updatedJson });
+    }
+}
+
+export async function replaceAllTranscriptText(find, replace, options = {}) {
+    const tsStore = get(transcriptStore);
+    const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+    
+    project.update(p => ({ ...p, isLoading: true, statusMessage: 'Replacing all occurrences...' }));
+
+    const processSegments = async (segs, updateFn) => {
+        const newSegs = [];
+        for (let i = 0; i < segs.length; i++) {
+            const updatedJson = await performReplaceAllInLexicalJson(segs[i].text, find, replace, options);
+            if (updatedJson !== segs[i].text) {
+                updateFn(i, { text: updatedJson }, true); // silent update
+            }
+        }
+    };
+
+    const { updateSegment, updateSecondarySegment, pushToUndoStack } = await import('$lib/stores/transcriptStore.js');
+    
+    pushToUndoStack();
+    await processSegments(tsStore.segments, updateSegment);
+    if (tsStore.isDualModeActive) {
+        await processSegments(tsStore.secondaryTranscriptSegments, updateSecondarySegment);
+    }
+
+    project.update(p => ({ ...p, isLoading: false, statusMessage: 'Replace all complete.' }));
+}
+
+async function performReplaceInLexicalJson(json, find, replace, offset, length) {
+    const editor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES });
+    try {
+        editor.setEditorState(editor.parseEditorState(json));
+    } catch (e) { return json; }
+
+    await editor.update(() => {
+        const root = _getRoot();
+        const textNodes = [];
+        const visit = (node) => {
+            if (_isTextNode(node)) textNodes.push(node);
+            else if (_isElementNode(node)) node.getChildren().forEach(visit);
+        };
+        visit(root);
+
+        let currentOffset = 0;
+        for (const node of textNodes) {
+            const nodeLength = node.getTextContentSize();
+            if (currentOffset + nodeLength > offset) {
+                // This node contains the start of the match
+                const startInNode = offset - currentOffset;
+                // We assume for single replace that match is within one segment's text flow
+                // but it might span multiple text nodes.
+                // Simple version: if it fits in this node, replace it.
+                if (startInNode + length <= nodeLength) {
+                    const text = node.getTextContent();
+                    const newText = text.slice(0, startInNode) + replace + text.slice(startInNode + length);
+                    node.setTextContent(newText);
+                } else {
+                    // Spanning nodes is complex, for now we handle single node matches which is 99% of cases
+                    console.warn("[ProjectService] Single replace match spans nodes - not yet implemented.");
+                }
+                break;
+            }
+            currentOffset += nodeLength;
+        }
+    });
+
+    return JSON.stringify(editor.getEditorState().toJSON());
+}
+
+async function performReplaceAllInLexicalJson(json, find, replace, options) {
+    const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+    const editor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES });
+    try {
+        editor.setEditorState(editor.parseEditorState(json));
+    } catch (e) { return json; }
+
+    let pattern = isRegex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (isWholeWord) pattern = `\\b${pattern}\\b`;
+    const regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
+
+    await editor.update(() => {
+        const root = _getRoot();
+        const textNodes = [];
+        const visit = (node) => {
+            if (_isTextNode(node)) textNodes.push(node);
+            else if (_isElementNode(node)) node.getChildren().forEach(visit);
+        };
+        visit(root);
+
+        for (const node of textNodes) {
+            const text = node.getTextContent();
+            const matches = [];
+            let m;
+            while ((m = regex.exec(text)) !== null) {
+                matches.push(m);
+                if (m.index === regex.lastIndex) regex.lastIndex++;
+            }
+
+            if (matches.length > 0) {
+                // Replace in reverse order to keep offsets valid
+                let newText = text;
+                for (let i = matches.length - 1; i >= 0; i--) {
+                    const match = matches[i];
+                    newText = newText.slice(0, match.index) + replace + newText.slice(match.index + match[0].length);
+                }
+                node.setTextContent(newText);
+            }
+        }
+    });
+
+    return JSON.stringify(editor.getEditorState().toJSON());
+}
+
 export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
     const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });

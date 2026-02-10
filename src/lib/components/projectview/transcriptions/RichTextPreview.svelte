@@ -10,15 +10,18 @@
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
     import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
-    import { activeLayout } from '$lib/stores/layoutStore.js';
-	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
-
+    	import { activeLayout } from '$lib/stores/layoutStore.js';
+    	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
+    	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    	import FindReplaceModal from '../modals/FindReplaceModal.svelte';
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;
     const ESTIMATED_SEGMENT_HEIGHT = 70; // Adjust as needed, or measure dynamically
     const OVERSCAN_COUNT = 5; // Number of items to render above/below viewport
+
+    let searchUiContainerElement;
+    let searchToggleButtonElement;
 
     let showTranscriptDropdown = false;
     let transcriptDropdownButtonRef;
@@ -40,8 +43,21 @@
         }
     }
 
+    function handleClickOutsideSearch(event) {
+        if (showSearchBox) {
+            const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
+            const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
+
+            if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
+                showSearchBox = false;
+                clearSearchHighlights();
+            }
+        }
+    }
+
     onMount(async () => {
         document.addEventListener('click', handleClickOutsideTranscriptDropdown, true);
+        document.addEventListener('click', handleClickOutsideSearch, true);
 
         unlistenJobComplete = await listen('custom_transcription_job_completed', (event) => {
             if (event.payload && event.payload.status === 'done') {
@@ -61,6 +77,7 @@
 
     onDestroy(() => {
         document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
+        document.removeEventListener('click', handleClickOutsideSearch, true);
         if (unlistenJobComplete) {
             unlistenJobComplete();
         }
@@ -483,6 +500,233 @@
 
     let isMounted = false;
 
+    // Search state
+    let showSearchBox = false;
+    let searchTerm = '';
+    let searchResults = [];
+    let currentSearchResultIndex = -1;
+    let showFindReplaceModal = false;
+    let searchInputRef;
+
+    const SEARCH_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"> <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/> </svg>`;
+
+    function toggleSearchBox() {
+        showSearchBox = !showSearchBox;
+        if (showSearchBox) {
+            tick().then(() => {
+                if (searchInputRef) searchInputRef.focus();
+            });
+        } else {
+            // Clear highlights when closing search
+            clearSearchHighlights();
+        }
+    }
+
+    function clearSearchHighlights() {
+        if (typeof CSS !== 'undefined' && CSS.highlights) {
+            const prevMatch = CSS.highlights.get('search-match');
+            if (prevMatch) { prevMatch.clear(); CSS.highlights.delete('search-match'); }
+            const prevActive = CSS.highlights.get('search-match-active');
+            if (prevActive) { prevActive.clear(); CSS.highlights.delete('search-match-active'); }
+        }
+    }
+
+    function executeSearch(termToSearch, options = {}) {
+        searchTerm = termToSearch;
+        const term = termToSearch;
+        const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+
+        searchResults = [];
+        currentSearchResultIndex = -1;
+        clearSearchHighlights();
+
+        if (!term) return;
+
+        const newResults = [];
+        let regex;
+        try {
+            if (isRegex || isWholeWord) {
+                let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (isWholeWord) pattern = `\\b${pattern}\\b`;
+                regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
+            }
+        } catch (e) {
+            console.warn("Invalid search pattern:", term);
+            return;
+        }
+
+        allSegmentsData.forEach((item, segIdx) => {
+            const seg = item.originalSegment;
+            const text = extractPlainTextForSearch(seg.text);
+            
+            if (regex) {
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    newResults.push({
+                        segmentIndex: segIdx,
+                        isPrimary: item.isPrimary,
+                        offset: match.index,
+                        length: match[0].length,
+                        text: match[0]
+                    });
+                    if (match.index === regex.lastIndex) regex.lastIndex++;
+                }
+            } else {
+                const termToUse = isCaseSensitive ? term : term.toLowerCase();
+                const textToUse = isCaseSensitive ? text : text.toLowerCase();
+                let offset = -1;
+                while ((offset = textToUse.indexOf(termToUse, offset + 1)) !== -1) {
+                    newResults.push({
+                        segmentIndex: segIdx,
+                        isPrimary: item.isPrimary,
+                        offset: offset,
+                        length: term.length,
+                        text: text.substring(offset, offset + term.length)
+                    });
+                }
+            }
+        });
+
+        searchResults = newResults;
+        if (searchResults.length > 0) {
+            currentSearchResultIndex = 0;
+            updateSearchHighlights();
+        }
+    }
+
+    function extractPlainTextForSearch(input) {
+        if (!input) return '';
+        if (isLexicalJson(input)) {
+            try {
+                const data = typeof input === 'string' ? JSON.parse(input) : input;
+                return extractTextFromLexicalNodes(data.root.children);
+            } catch (e) {
+                return '';
+            }
+        }
+        return extractPlainTextForPreview(input);
+    }
+
+    function extractTextFromLexicalNodes(nodes) {
+        let text = '';
+        for (const node of nodes) {
+            if (node.text) text += node.text;
+            if (node.children) text += extractTextFromLexicalNodes(node.children);
+        }
+        return text;
+    }
+
+    function updateSearchHighlights() {
+        if (typeof CSS === 'undefined' || !CSS.highlights || !searchTerm || searchResults.length === 0) {
+            clearSearchHighlights();
+            return;
+        }
+
+        tick().then(() => {
+            const matchRanges = [];
+            const activeRanges = [];
+
+            // We can only highlight what's currently in the DOM
+            const renderedSegments = previewScrollContainerRef.querySelectorAll('.segment-block');
+            renderedSegments.forEach(el => {
+                const idAttr = el.id; // segment-{idx}-{p|s}
+                const parts = idAttr.split('-');
+                const segIdx = parseInt(parts[1], 10);
+                const isPrimary = parts[2] === 'p';
+
+                const resultsInThisSeg = searchResults.map((r, i) => ({...r, globalIndex: i}))
+                    .filter(r => r.segmentIndex === segIdx && r.isPrimary === isPrimary);
+
+                if (resultsInThisSeg.length > 0) {
+                    const contentArea = el.querySelector('.preview-content-area');
+                    if (contentArea) {
+                        const textNodes = [];
+                        const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+                        let node;
+                        while (node = walker.nextNode()) textNodes.push(node);
+
+                        resultsInThisSeg.forEach(res => {
+                            let currentOffset = 0;
+                            for (const textNode of textNodes) {
+                                const nodeLength = textNode.textContent.length;
+                                if (currentOffset + nodeLength > res.offset) {
+                                    const startInNode = Math.max(0, res.offset - currentOffset);
+                                    const endInNode = Math.min(nodeLength, res.offset + res.length - currentOffset);
+                                    
+                                    if (startInNode < nodeLength) {
+                                        try {
+                                            const range = new Range();
+                                            range.setStart(textNode, startInNode);
+                                            range.setEnd(textNode, endInNode);
+                                            if (res.globalIndex === currentSearchResultIndex) {
+                                                activeRanges.push(range);
+                                            } else {
+                                                matchRanges.push(range);
+                                            }
+                                        } catch (e) {}
+                                    }
+                                }
+                                currentOffset += nodeLength;
+                                if (currentOffset > res.offset + res.length) break;
+                            }
+                        });
+                    }
+                }
+            });
+
+            CSS.highlights.set('search-match', new Highlight(...matchRanges));
+            CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
+        });
+    }
+
+    function navigateToResult(index) {
+        if (index < 0 || index >= searchResults.length) return;
+        currentSearchResultIndex = index;
+        const res = searchResults[index];
+        
+        // Scroll to segment
+        const itemTop = ($transcriptStore.isDualModeActive ? res.segmentIndex * 2 + (res.isPrimary ? 0 : 1) : res.segmentIndex) * ESTIMATED_SEGMENT_HEIGHT;
+        const targetScrollTop = Math.max(0, itemTop - (containerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2));
+        manualSmoothScroll(targetScrollTop);
+
+        updateSearchHighlights();
+    }
+
+    function navigateToNextResult() {
+        if (searchResults.length === 0) return;
+        navigateToResult((currentSearchResultIndex + 1) % searchResults.length);
+    }
+
+    function navigateToPreviousResult() {
+        if (searchResults.length === 0) return;
+        navigateToResult((currentSearchResultIndex - 1 + searchResults.length) % searchResults.length);
+    }
+
+    function handleReplace(event) {
+        const { find, replace, isCaseSensitive, isRegex, isWholeWord } = event.detail;
+        if (currentSearchResultIndex >= 0 && searchResults.length > 0) {
+            const res = searchResults[currentSearchResultIndex];
+            dispatch('replacetranscripttext', { 
+                segmentIndex: res.segmentIndex, 
+                isPrimary: res.isPrimary,
+                find, 
+                replace,
+                offset: res.offset,
+                length: res.length
+            });
+            // Re-run search after a short delay to allow store update
+            setTimeout(() => executeSearch(find, { isCaseSensitive, isRegex, isWholeWord }), 50);
+        }
+    }
+
+    function handleReplaceAll(event) {
+        const { find, replace, isCaseSensitive, isRegex, isWholeWord } = event.detail;
+        if (searchResults.length === 0) return;
+        
+        dispatch('replacealltranscripttext', { find, replace, isCaseSensitive, isRegex, isWholeWord });
+        setTimeout(() => executeSearch(find, { isCaseSensitive, isRegex, isWholeWord }), 50);
+    }
+
     function cancelAnimation() {
         if (scrollAnimationId) {
             cancelAnimationFrame(scrollAnimationId);
@@ -523,6 +767,9 @@
             if ($transcriptStore.player.isPlaying) {
                 karaokeScrollIndex = -1;
             }
+        }
+        if (showSearchBox) {
+            updateSearchHighlights();
         }
     }
 
@@ -819,7 +1066,18 @@
             <!-- Edit/Save/Undo/Redo buttons HTML block ends here -->
         </div>
 
-        <div class="flex items-center"> <!-- This div now only effectively holds the "More options" menu -->
+        <div class="flex items-center relative"> <!-- This div now only effectively holds the "More options" menu -->
+            {#if allSegmentsData.length || previewEditMode}
+                <button
+                    bind:this={searchToggleButtonElement}
+                    class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200"
+                    class:active={showSearchBox}
+                    on:click={toggleSearchBox}
+                    title="Search"
+                >
+                    {@html SEARCH_ICON}
+                </button>
+            {/if}
             {#if allSegmentsData.length > 0}
               <div class="relative inline-block ml-2">
                 <button
@@ -833,6 +1091,12 @@
                 {#if showExportMenu}
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
                   <div class="absolute right-0 mt-2 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
+                    <button
+                      on:click={() => { showExportMenu = false; showFindReplaceModal = true; }}
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                    >
+                      Find & Replace
+                    </button>
                     <button
                       on:click={() => { showExportMenu = false; dispatch('requestmanualsettings'); }}
                       class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
@@ -854,6 +1118,77 @@
                   </div>
                 {/if}
               </div>
+            {/if}
+
+            {#if showSearchBox}
+                <div 
+                    bind:this={searchUiContainerElement}
+                    class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+                >
+                    <div class="relative flex-grow flex items-center">
+                        <input
+                            type="text"
+                            placeholder="Search transcript..."
+                            class="w-full text-xs border border-gray-300 dark:border-d-gray-600 pl-2 pr-16 py-1 bg-white dark:bg-d-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                            bind:value={searchTerm}
+                            bind:this={searchInputRef}
+                            on:input={(e) => executeSearch(e.currentTarget.value)}
+                            on:keydown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (e.shiftKey) navigateToPreviousResult();
+                                    else navigateToNextResult();
+                                }
+                            }}
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                        />
+                        <div class="absolute right-1 flex items-center gap-1 pointer-events-none">
+                            {#if searchTerm}
+                                <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                    {#if searchResults.length > 0}
+                                        {currentSearchResultIndex + 1}/{searchResults.length}
+                                    {:else}
+                                        0/0
+                                    {/if}
+                                </span>
+                                <button
+                                    class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full pointer-events-auto transition-colors"
+                                    on:click|stopPropagation={() => { searchTerm = ''; executeSearch(''); }}
+                                    title="Clear Search"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                                    </svg>
+                                </button>
+                            {/if}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-0.5">
+                        <button
+                            class="btn-icon !p-1"
+                            on:click={navigateToPreviousResult}
+                            disabled={searchResults.length === 0}
+                            title="Previous Match"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+                            </svg>
+                        </button>
+                        <button
+                            class="btn-icon !p-1"
+                            on:click={navigateToNextResult}
+                            disabled={searchResults.length === 0}
+                            title="Next Match"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             {/if}
         </div>
     </h3>
@@ -1028,6 +1363,18 @@
     {/if}
 </div>
 
+<FindReplaceModal
+  bind:showModal={showFindReplaceModal}
+  initialSearchTerm={searchTerm}
+  currentMatchIndex={currentSearchResultIndex}
+  totalMatches={searchResults.length}
+  on:replace={handleReplace}
+  on:replaceall={handleReplaceAll}
+  on:findnext={navigateToNextResult}
+  on:findchange={(e) => executeSearch(e.detail.term, { isCaseSensitive: e.detail.isCaseSensitive, isRegex: e.detail.isRegex, isWholeWord: e.detail.isWholeWord })}
+  on:close={() => showFindReplaceModal = false}
+/>
+
 <style lang="postcss">
 	.btn-icon { @apply p-1 rounded focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-d-gray-800 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
 	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
@@ -1107,4 +1454,25 @@
     			:global(html.dark .segment-block.hovering .flex-1 *) {
     				color: black !important;
     			}
+
+                /* Search match highlights using CSS Custom Highlight API */
+                :global(::highlight(search-match)) {
+                    background-color: rgba(255, 215, 0, 0.4);
+                    color: black;
+                }
+
+                :global(::highlight(search-match-active)) {
+                    background-color: rgba(255, 165, 0, 0.7);
+                    color: black;
+                }
+
+                :global(html.dark ::highlight(search-match)) {
+                    background-color: rgba(255, 215, 0, 0.3);
+                    color: white;
+                }
+
+                :global(html.dark ::highlight(search-match-active)) {
+                    background-color: rgba(255, 165, 0, 0.6);
+                    color: white;
+                }
     		</style>
