@@ -218,9 +218,42 @@
 	export let isVideoMinimized = false;
 	const ICON_MINIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-collapse" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m-.5 11.707-1.146 1.147a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 11.707V15.5a.5.5 0 0 1-1 0z"/></svg>`;
 	const ICON_MAXIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-expand" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10"/></svg>`;
+	const ICON_FULLSCREEN = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-fullscreen" viewBox="0 0 16 16">
+  <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/>
+</svg>`;
+	const ICON_EXIT_FULLSCREEN = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-fullscreen-exit" viewBox="0 0 16 16">
+  <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"/>
+</svg>`;
 
 	function toggleMinimizeVideo() {
 		isVideoMinimized = !isVideoMinimized;
+	}
+
+	function toggleFullscreen() {
+		if (!videoElement) return;
+		const container = document.getElementById('video-container-wrapper');
+		if (!document.fullscreenElement) {
+			container.requestFullscreen().catch(err => {
+				console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+			});
+		} else {
+			document.exitFullscreen();
+		}
+	}
+
+	let isFullscreen = false;
+	function handleFullscreenChange() {
+		isFullscreen = !!document.fullscreenElement;
+	}
+
+	let userActive = false;
+	let userActiveTimeout;
+	function handleUserActivity() {
+		userActive = true;
+		clearTimeout(userActiveTimeout);
+		userActiveTimeout = setTimeout(() => {
+			userActive = false;
+		}, 3000);
 	}
 
 	// --- Progress Bar Tooltip State ---
@@ -486,6 +519,7 @@
 		initializeWaveformWorker();
 
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+		document.addEventListener('fullscreenchange', handleFullscreenChange);
 
 		const setupShortcutListener = async () => {
 			try {
@@ -1174,6 +1208,20 @@
 					{@html ICON_PLAY_OVERLAY}
 				{/if}
 			</div>
+
+			<!-- Fullscreen Button -->
+			<button
+				class="absolute bottom-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-md transition-opacity duration-200 z-10"
+				style="opacity: {isHoveringVideo ? 1 : 0}; pointer-events: {isHoveringVideo ? 'auto' : 'none'};"
+				on:click|stopPropagation={toggleFullscreen}
+				title={isFullscreen ? "Exit Fullscreen" : "Toggle Fullscreen"}
+			>
+				{#if isFullscreen}
+					{@html ICON_EXIT_FULLSCREEN}
+				{:else}
+					{@html ICON_FULLSCREEN}
+				{/if}
+			</button>
 		{:else}
 		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
 				<span>No media selected or media failed to load</span>
@@ -1413,12 +1461,19 @@
 	</div>
 {/if}
 <style>
-	/*
-	REMOVED: #video-container-wrapper:fullscreen and #video-container-wrapper:fullscreen video styles
-	as fullscreen functionality is removed.
-	*/
-
-	
+	#video-container-wrapper:fullscreen {
+		width: 100vw;
+		height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: black;
+	}
+	#video-container-wrapper:fullscreen video {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
 
 	.animate-pulse {
 		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
