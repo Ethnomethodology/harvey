@@ -1831,17 +1831,15 @@ function handleSearchInputKeydown(event) {
 }
 
 let latestSearchTerm = '';
-function executeSearch(termToSearch) {
+function executeSearch(termToSearch, options = {}) {
   if (!editor) return;
-  searchTerm = termToSearch; // Ensure reactive state is synced immediately
-  const term = termToSearch.trim();
+  const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+  searchTerm = termToSearch; 
+  const term = termToSearch; 
   latestSearchTerm = term;
 
-  // Clear internal results state immediately
   searchResults = [];
   currentSearchResultIndex = -1;
-  
-  // Clear highlights immediately to prevent stale visual state
   updateSearchHighlights();
 
   if (term === '') {
@@ -1851,28 +1849,55 @@ function executeSearch(termToSearch) {
   }
 
   editor.getEditorState().read(() => {
-    // If a newer search has already started, ignore these results
     if (term !== latestSearchTerm) return;
 
     const root = _getRoot();
     const nodesToSearch = [root];
     const newResults = [];
 
+    let regex;
+    try {
+      if (isRegex || isWholeWord) {
+        let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (isWholeWord) {
+          pattern = `\\b${pattern}\\b`;
+        }
+        regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
+      }
+    } catch (e) {
+      console.warn("Invalid search pattern:", term);
+      return;
+    }
+
     while (nodesToSearch.length > 0) {
       const node = nodesToSearch.pop();
 
       if (_isTextNode(node)) {
         const text = node.getTextContent();
-        const termLower = term.toLowerCase();
-        const textLower = text.toLowerCase();
-        let offset = -1;
-        while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
-          newResults.push({
-            nodeKey: node.getKey(),
-            offset: offset,
-            length: term.length,
-            text: text.substring(offset, offset + term.length)
-          });
+        
+        if (regex) {
+          let match;
+          while ((match = regex.exec(text)) !== null) {
+            newResults.push({
+              nodeKey: node.getKey(),
+              offset: match.index,
+              length: match[0].length,
+              text: match[0]
+            });
+            if (match.index === regex.lastIndex) regex.lastIndex++;
+          }
+        } else {
+          const termToUse = isCaseSensitive ? term : term.toLowerCase();
+          const textToUse = isCaseSensitive ? text : text.toLowerCase();
+          let offset = -1;
+          while ((offset = textToUse.indexOf(termToUse, offset + 1)) !== -1) {
+            newResults.push({
+              nodeKey: node.getKey(),
+              offset: offset,
+              length: term.length,
+              text: text.substring(offset, offset + term.length)
+            });
+          }
         }
       } else if (node.getChildren) {
         const children = node.getChildren();
@@ -1882,7 +1907,6 @@ function executeSearch(termToSearch) {
       }
     }
     
-    // Final check for race condition before committing results to state
     if (term !== latestSearchTerm) return;
 
     searchResults = newResults;
@@ -2505,12 +2529,12 @@ $: if (editor && activeLayout) {
                     </svg>
                   </button>
                   {#if showSearchOptionsDropdown}
-                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg rounded overflow-hidden min-w-[100px]">
+                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg rounded overflow-hidden min-w-[120px]">
                       <button
                         class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                         on:click={openFindReplaceModal}
                       >
-                        Replace
+                        Find & Replace
                       </button>
                     </div>
                   {/if}
@@ -2568,7 +2592,8 @@ $: if (editor && activeLayout) {
   totalMatches={searchResults.length}
   on:replace={handleReplace}
   on:replaceall={handleReplaceAll}
-  on:findchange={(e) => executeSearch(e.detail.term)}
+  on:findnext={navigateToNextResult}
+  on:findchange={(e) => executeSearch(e.detail.term, { isCaseSensitive: e.detail.isCaseSensitive, isRegex: e.detail.isRegex, isWholeWord: e.detail.isWholeWord })}
   on:close={() => showFindReplaceModal = false}
 />
 
