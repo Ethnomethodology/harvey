@@ -514,12 +514,22 @@
         showSearchBox = !showSearchBox;
         if (showSearchBox) {
             tick().then(() => {
-                if (searchInputRef) searchInputRef.focus();
+                if (searchInputRef) {
+                    searchInputRef.focus();
+                    // Optional: re-trigger search if there's an existing term
+                    if (searchTerm) executeSearch(searchTerm);
+                }
             });
         } else {
-            // Clear highlights when closing search
+            // Clear highlights when closing search box
             clearSearchHighlights();
         }
+    }
+
+    function openFindReplaceModal() {
+        showExportMenu = false;
+        showFindReplaceModal = true;
+        // Search term is already in 'searchTerm' due to binding and executeSearch updates
     }
 
     function clearSearchHighlights() {
@@ -1092,7 +1102,7 @@
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
                   <div class="absolute right-0 mt-2 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
                     <button
-                      on:click={() => { showExportMenu = false; showFindReplaceModal = true; }}
+                      on:click={openFindReplaceModal}
                       class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
                     >
                       Find & Replace
@@ -1365,7 +1375,7 @@
 
 <FindReplaceModal
   bind:showModal={showFindReplaceModal}
-  initialSearchTerm={searchTerm}
+  bind:initialSearchTerm={searchTerm}
   currentMatchIndex={currentSearchResultIndex}
   totalMatches={searchResults.length}
   on:replace={handleReplace}

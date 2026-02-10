@@ -24,13 +24,13 @@
 
   let lastShowModal = false;
   $: if (showModal && !lastShowModal) {
-    findTerm = initialSearchTerm;
+    findTerm = initialSearchTerm || '';
     replaceTerm = ''; 
     // Reset position when opening? Or preserve? Let's reset to center-ish.
     x = 0;
     y = 0;
     
-    // Sync with parent immediately on open
+    // Sync parent state with what's in modal now
     handleFindChange();
 
     setTimeout(() => {
@@ -44,6 +44,11 @@
     }, 0);
   }
   $: lastShowModal = showModal;
+
+  // Keep findTerm in sync with initialSearchTerm if initialSearchTerm changes from parent
+  $: if (showModal && initialSearchTerm !== undefined && initialSearchTerm !== findTerm) {
+      findTerm = initialSearchTerm;
+  }
 
   const dispatch = createEventDispatcher();
 
