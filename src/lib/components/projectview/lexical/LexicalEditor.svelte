@@ -214,6 +214,7 @@
 
         if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
           showSearchBox = false;
+          updateSearchHighlights();
         }
       }
     }
@@ -1744,9 +1745,62 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       if (editorContainer) editorContainer.style.cursor = 'auto';
   }
 
+function updateSearchHighlights() {
+  if (typeof CSS === 'undefined' || !CSS.highlights) {
+    return;
+  }
+
+  // Clear existing highlights
+  CSS.highlights.delete('search-match');
+  CSS.highlights.delete('search-match-active');
+
+  if (!searchTerm.trim() || searchResults.length === 0) {
+    return;
+  }
+
+  const matchRanges = [];
+  const activeRanges = [];
+
+  searchResults.forEach((result, index) => {
+    const domNode = editor.getElementByKey(result.nodeKey);
+    if (!domNode) return;
+
+    let textNode = null;
+    if (domNode.nodeType === Node.TEXT_NODE) {
+      textNode = domNode;
+    } else {
+      const walker = document.createTreeWalker(domNode, NodeFilter.SHOW_TEXT, null);
+      textNode = walker.nextNode();
+    }
+
+    if (textNode) {
+      try {
+        const range = new Range();
+        range.setStart(textNode, result.offset);
+        range.setEnd(textNode, result.offset + result.length);
+        
+        if (index === currentSearchResultIndex) {
+          activeRanges.push(range);
+        } else {
+          matchRanges.push(range);
+        }
+      } catch (e) {
+        // Silently fail for invalid ranges which can happen during rapid typing
+      }
+    }
+  });
+
+  if (matchRanges.length > 0) {
+    CSS.highlights.set('search-match', new Highlight(...matchRanges));
+  }
+  if (activeRanges.length > 0) {
+    CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
+  }
+}
+
 function handleSearchInputKeydown(event) {
   if (event.key === 'Enter') {
-    event.preventDefault(); // Prevent default Enter key action
+    event.preventDefault();
     if (event.shiftKey) {
         navigateToPreviousResult();
     } else {
@@ -1758,19 +1812,18 @@ function handleSearchInputKeydown(event) {
 function executeSearch(termToSearch) {
   if (!editor) return;
   const term = termToSearch.trim();
-  console.log('[executeSearch] Called with termToSearch:', termToSearch, '(trimmed term:', term + ')');
 
+  // Reset internal results state
   searchResults = [];
   currentSearchResultIndex = -1;
-
+  
   if (term === '') {
-    console.log('[executeSearch] Term is empty, clearing results and dispatching.');
-    dispatch('searchresultsupdated', { results: searchResults, term: term });
+    updateSearchHighlights();
+    dispatch('searchresultsupdated', { results: [], term: '' });
     dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
-  console.log('[executeSearch] Commencing search for term:', term);
   editor.getEditorState().read(() => {
     const root = _getRoot();
     const nodesToSearch = [root];
@@ -1780,20 +1833,17 @@ function executeSearch(termToSearch) {
       const node = nodesToSearch.pop();
 
       if (_isTextNode(node)) {
-        console.log('[executeSearch] Processing TextNode. Key:', node.getKey(), 'Text (first 50 chars):', node.getTextContent().substring(0, 50));
         const text = node.getTextContent();
         const termLower = term.toLowerCase();
         const textLower = text.toLowerCase();
         let offset = -1;
         while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
-          const matchDetail = {
+          newResults.push({
             nodeKey: node.getKey(),
             offset: offset,
             length: term.length,
-            text: node.getTextContent().substring(offset, offset + term.length)
-          };
-          console.log('[executeSearch] Match found:', matchDetail);
-          newResults.push(matchDetail);
+            text: text.substring(offset, offset + term.length)
+          });
         }
       } else if (node.getChildren) {
         const children = node.getChildren();
@@ -1802,20 +1852,19 @@ function executeSearch(termToSearch) {
         }
       }
     }
+    
     searchResults = newResults;
-    console.log('[executeSearch] Search complete. Found', searchResults.length, 'results.');
     if (searchResults.length > 0) {
       currentSearchResultIndex = 0;
-      console.log('[executeSearch] currentSearchResultIndex set to 0. First result:', searchResults[0]);
-      // navigateToResult(currentSearchResultIndex, false); // REMOVED: Do NOT focus editor or select automatically on type to prevent focus theft
     } else {
-      console.log('[executeSearch] No results found for:', term);
-      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null }); // Ensure this is dispatched if no results
+      currentSearchResultIndex = -1;
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     }
+    
+    updateSearchHighlights();
   });
-  const dispatchData = { results: searchResults, term: term };
-  console.log('[executeSearch] Dispatching searchresultsupdated with:', dispatchData);
-  dispatch('searchresultsupdated', dispatchData);
+
+  dispatch('searchresultsupdated', { results: searchResults, term: term });
 }
 
 function clearSearchTermInput() {
@@ -1823,6 +1872,7 @@ function clearSearchTermInput() {
   searchTerm = '';
   searchResults = [];
   currentSearchResultIndex = -1;
+  updateSearchHighlights();
 
   const updateData = { results: searchResults, term: searchTerm };
   const indexChangeData = { currentIndex: currentSearchResultIndex, currentResult: null };
@@ -1846,6 +1896,7 @@ function navigateToResult(index, shouldFocus = true) {
   if (index < 0 || index >= searchResults.length) {
     currentSearchResultIndex = -1;
     console.log('[navigateToResult] Index out of bounds. currentSearchResultIndex set to -1.');
+    updateSearchHighlights();
     // Ensure previous highlight is cleared if any
     // if (currentSearchHighlight) {
     //   currentSearchHighlight.remove();
@@ -1886,6 +1937,9 @@ function navigateToResult(index, shouldFocus = true) {
       latestScrollTargetKey = null; // Ensure no scroll attempt
     }
   }, { tag: 'search-navigate' });
+
+  // Update highlights to reflect new active index
+  tick().then(updateSearchHighlights);
 
   // Scroll logic using the component-level variable, wrapped in tick()
   if (latestScrollTargetKey) {
@@ -2262,6 +2316,8 @@ $: if (editor && activeLayout) {
                         const input = searchUiContainerElement?.querySelector('input');
                         if (input) input.focus();
                     });
+                } else {
+                    updateSearchHighlights();
                 }
             }}
             title="Search"
@@ -2511,6 +2567,29 @@ $: if (editor && activeLayout) {
 
   button.active {
     @apply bg-gray-300 dark:bg-gray-500;
+  }
+
+  /* Search match highlights using CSS Custom Highlight API */
+  :global(::highlight(search-match)) {
+    background-color: rgba(255, 215, 0, 0.4);
+    color: black;
+  }
+
+  :global(::highlight(search-match-active)) {
+    background-color: rgba(255, 165, 0, 0.7);
+    color: black;
+    text-decoration: underline;
+  }
+
+  :global(html.dark ::highlight(search-match)) {
+    background-color: rgba(255, 215, 0, 0.3);
+    color: white;
+  }
+
+  :global(html.dark ::highlight(search-match-active)) {
+    background-color: rgba(255, 165, 0, 0.6);
+    color: white;
+    text-decoration: underline;
   }
 
 </style>
