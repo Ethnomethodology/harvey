@@ -13,16 +13,22 @@
   let findTerm = '';
   let replaceTerm = '';
 
+  // Draggable state
+  let x = 0;
+  let y = 0;
+  let isDragging = false;
+  let startX, startY;
+
   let lastShowModal = false;
   $: if (showModal && !lastShowModal) {
     findTerm = initialSearchTerm;
-    // We don't reset replaceTerm here if the user is just toggling or re-opening? 
-    // Usually resetting on open is expected.
     replaceTerm = ''; 
+    // Reset position when opening? Or preserve? Let's reset to center-ish.
+    x = 0;
+    y = 0;
     
     setTimeout(() => {
       tick().then(() => {
-        // If there's already a search term, focus replace. Otherwise focus find.
         if (findTerm && replaceInput) {
             replaceInput.focus();
         } else if (findInput) {
@@ -57,26 +63,64 @@
       closeModal();
     }
   }
+
+  function handlePointerDown(e) {
+    if (e.target.closest('.drag-handle')) {
+      isDragging = true;
+      startX = e.clientX - x;
+      startY = e.clientY - y;
+      
+      // Capture pointer to continue receiving events even if move outside handle
+      e.target.setPointerCapture(e.pointerId);
+    }
+  }
+
+  function handlePointerMove(e) {
+    if (!isDragging) return;
+    x = e.clientX - startX;
+    y = e.clientY - startY;
+  }
+
+  function handlePointerUp(e) {
+    isDragging = false;
+  }
 </script>
 
 {#if showModal}
   <div
-    class="fixed inset-0 z-[120] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
+    class="fixed inset-0 z-[120] flex items-center justify-center pointer-events-none"
     aria-labelledby="find-replace-modal-title"
     role="dialog"
     aria-modal="true"
-    on:click|self={closeModal}
     on:keydown|stopPropagation={handleKeydown}
     tabindex="-1"
   >
     <div
       bind:this={modalElement}
-      class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200"
+      class="bg-white dark:bg-surface-2 rounded-lg shadow-2xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200 pointer-events-auto border border-gray-300 dark:border-border relative"
+      style="transform: translate({x}px, {y}px);"
       role="document"
     >
-      <h2 id="find-replace-modal-title" class="text-lg font-semibold mb-3">
-        Find & Replace
-      </h2>
+      <!-- Header / Drag Handle -->
+      <div 
+        class="drag-handle cursor-move flex justify-between items-center mb-3 pb-2 border-b border-gray-100 dark:border-border select-none"
+        on:pointerdown={handlePointerDown}
+        on:pointermove={handlePointerMove}
+        on:pointerup={handlePointerUp}
+      >
+        <h2 id="find-replace-modal-title" class="text-lg font-semibold">
+          Find & Replace
+        </h2>
+        <button 
+          on:click={closeModal}
+          class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+          title="Close"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16">
+            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+          </svg>
+        </button>
+      </div>
 
       <div class="mb-3">
         <label
