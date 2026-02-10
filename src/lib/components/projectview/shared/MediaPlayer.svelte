@@ -571,7 +571,7 @@
 			console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onDestroy.');
 			unlistenShortcutFn();
 		}
-		// Removed try...catch for unregisterAll
+		clearTimeout(userActiveTimeout);
     });
 
 	// --- File Handling & Audio Processing ---
@@ -1163,13 +1163,15 @@
 	<div
 		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
+		class:cursor-none={isFullscreen && !userActive}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
+		on:mousemove={handleUserActivity}
 		role="button"
 		aria-label="Play or pause video"
 		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTogglePlay(); }}
 		tabindex="0"
-		on:mouseenter={() => { isHoveringVideo = true; }}
+		on:mouseenter={() => { isHoveringVideo = true; handleUserActivity(); }}
 	on:mouseleave={() => { isHoveringVideo = false; }}
 	>
 		{#if isLoadingMedia}
@@ -1200,7 +1202,7 @@
 			<!-- Overlay Icon Div -->
 			<div
 				class="absolute inset-0 flex items-center justify-center pointer-events-none"
-				style="color: white; opacity: { (isHoveringVideo || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
+				style="color: white; opacity: { ((isHoveringVideo && userActive) || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
 			>
 				{#if displayIsPlaying}
 					{@html ICON_PAUSE_OVERLAY}
@@ -1212,7 +1214,7 @@
 			<!-- Fullscreen Button -->
 			<button
 				class="absolute bottom-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-md transition-opacity duration-200 z-10"
-				style="opacity: {isHoveringVideo ? 1 : 0}; pointer-events: {isHoveringVideo ? 'auto' : 'none'};"
+				style="opacity: {userActive ? 1 : 0}; pointer-events: {userActive ? 'auto' : 'none'};"
 				on:click|stopPropagation={toggleFullscreen}
 				title={isFullscreen ? "Exit Fullscreen" : "Toggle Fullscreen"}
 			>
