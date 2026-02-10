@@ -81,6 +81,7 @@
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
+  import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
 
@@ -135,6 +136,9 @@
   let searchTerm = '';
   let searchResults = [];
   let currentSearchResultIndex = -1;
+  let showFindReplaceModal = false;
+  let showSearchOptionsDropdown = false;
+  let searchOptionsDropdownRef;
 
   const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)';
   const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';
@@ -199,6 +203,9 @@
       }
       if (isInsertDropdownOpen && insertDropdownRef && !insertDropdownRef.contains(event.target)) {
         isInsertDropdownOpen = false;
+      }
+      if (showSearchOptionsDropdown && searchOptionsDropdownRef && !searchOptionsDropdownRef.contains(event.target)) {
+        showSearchOptionsDropdown = false;
       }
       const menuElement = document.querySelector('.table-cell-action-menu-container');
       if (showTableCellMenu && menuElement && !menuElement.contains(event.target)) {
@@ -1749,8 +1756,8 @@ function updateSearchHighlights() {
     return;
   }
 
-  // Fast path: if no results or search inactive, clear everything immediately
-  if (!showSearchBox || !searchTerm.trim() || searchResults.length === 0) {
+  // Fast path: if no results or search inactive (and replace modal closed), clear everything immediately
+  if ((!showSearchBox && !showFindReplaceModal) || !searchTerm.trim() || searchResults.length === 0) {
     const prevMatch = CSS.highlights.get('search-match');
     if (prevMatch) {
       prevMatch.clear();
@@ -1890,6 +1897,78 @@ function executeSearch(termToSearch) {
   });
 
   dispatch('searchresultsupdated', { results: searchResults, term: term });
+}
+
+function toggleSearchOptionsDropdown() {
+  showSearchOptionsDropdown = !showSearchOptionsDropdown;
+}
+
+function openFindReplaceModal() {
+  showSearchOptionsDropdown = false;
+  showFindReplaceModal = true;
+}
+
+function handleReplace(event) {
+  const { find, replace } = event.detail;
+  if (currentSearchResultIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchResultIndex];
+      
+      editor.update(() => {
+          const node = _getNodeByKey(result.nodeKey);
+          if (_isTextNode(node)) {
+              try {
+                  node.select(result.offset, result.offset + result.length);
+                  const selection = _getSelection();
+                  if (_isRangeSelection(selection)) {
+                      selection.insertText(replace);
+                  }
+              } catch (e) {
+                  console.error("Replace failed:", e);
+              }
+          }
+      }, { tag: 'replace-one' });
+      
+      executeSearch(find);
+  }
+}
+
+function handleReplaceAll(event) {
+  const { find, replace } = event.detail;
+  if (searchResults.length === 0) return;
+
+  editor.update(() => {
+      const resultsByNode = new Map();
+      for (const res of searchResults) {
+          if (!resultsByNode.has(res.nodeKey)) {
+              resultsByNode.set(res.nodeKey, []);
+          }
+          resultsByNode.get(res.nodeKey).push(res);
+      }
+      
+      for (const [nodeKey, results] of resultsByNode) {
+          const node = _getNodeByKey(nodeKey);
+          if (_isTextNode(node)) {
+              results.sort((a, b) => b.offset - a.offset);
+              
+              const textContent = node.getTextContent();
+              let lastIndex = textContent.length;
+              let parts = [];
+              
+              for (const res of results) {
+                  const tail = textContent.slice(res.offset + res.length, lastIndex);
+                  parts.unshift(tail);
+                  parts.unshift(replace);
+                  lastIndex = res.offset;
+              }
+              const head = textContent.slice(0, lastIndex);
+              parts.unshift(head);
+              
+              node.setTextContent(parts.join(''));
+          }
+      }
+  }, { tag: 'replace-all' });
+  
+  executeSearch(find);
 }
 
 function clearSearchTermInput() {
@@ -2357,11 +2436,11 @@ $: if (editor && activeLayout) {
               class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
               bind:this={searchUiContainerElement}
             >
-              <div class="relative flex-grow">
+              <div class="relative flex-grow flex items-center">
                 <input
-                  type="search"
+                  type="text"
                   placeholder="Search..."
-                  class="w-full text-xs border border-gray-300 dark:border-border px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                  class="w-full text-xs border border-gray-300 dark:border-border pl-2 pr-16 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none search-input-with-count"
                   bind:value={searchTerm}
                   bind:this={searchInputRef}
                   on:input={(e) => executeSearch(e.currentTarget.value)}
@@ -2371,6 +2450,26 @@ $: if (editor && activeLayout) {
                   autocapitalize="off"
                   spellcheck="false"
                 />
+                <div class="absolute right-1 flex items-center gap-1 pointer-events-none">
+                  {#if searchTerm}
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {#if searchResults.length > 0}
+                        {currentSearchResultIndex + 1}/{searchResults.length}
+                      {:else}
+                        0/0
+                      {/if}
+                    </span>
+                    <button
+                      class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full pointer-events-auto transition-colors"
+                      on:click|stopPropagation={clearSearchTermInput}
+                      title="Clear Search"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                      </svg>
+                    </button>
+                  {/if}
+                </div>
               </div>
               
               <div class="flex items-center gap-0.5">
@@ -2394,15 +2493,29 @@ $: if (editor && activeLayout) {
                     <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
                   </svg>
                 </button>
-              </div>
 
-              <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[40px] text-center">
-                {#if searchResults.length > 0}
-                  {currentSearchResultIndex + 1} of {searchResults.length}
-                {:else if searchTerm}
-                  0 of 0
-                {/if}
-              </span>
+                <div class="relative" bind:this={searchOptionsDropdownRef}>
+                  <button
+                    class="mini-toolbar-button !p-1"
+                    on:click={toggleSearchOptionsDropdown}
+                    title="Search Options"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                      <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                    </svg>
+                  </button>
+                  {#if showSearchOptionsDropdown}
+                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg rounded overflow-hidden min-w-[100px]">
+                      <button
+                        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+                        on:click={openFindReplaceModal}
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  {/if}
+                </div>
+              </div>
             </div>
           {/if}
         </div>
@@ -2446,6 +2559,17 @@ $: if (editor && activeLayout) {
   on:confirm={handleLinkConfirm}
   on:delete={handleLinkDelete}
   on:close={() => showLinkModal = false}
+/>
+
+<FindReplaceModal
+  bind:showModal={showFindReplaceModal}
+  initialSearchTerm={searchTerm}
+  currentMatchIndex={currentSearchResultIndex}
+  totalMatches={searchResults.length}
+  on:replace={handleReplace}
+  on:replaceall={handleReplaceAll}
+  on:findchange={(e) => executeSearch(e.detail.term)}
+  on:close={() => showFindReplaceModal = false}
 />
 
 <InsertTableModal
