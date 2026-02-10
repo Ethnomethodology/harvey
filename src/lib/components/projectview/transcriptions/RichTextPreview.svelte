@@ -573,7 +573,7 @@
                 let match;
                 while ((match = regex.exec(text)) !== null) {
                     newResults.push({
-                        segmentIndex: segIdx,
+                        segmentIndex: item.segmentIndex,
                         isPrimary: item.isPrimary,
                         offset: match.index,
                         length: match[0].length,
@@ -587,7 +587,7 @@
                 let offset = -1;
                 while ((offset = textToUse.indexOf(termToUse, offset + 1)) !== -1) {
                     newResults.push({
-                        segmentIndex: segIdx,
+                        segmentIndex: item.segmentIndex,
                         isPrimary: item.isPrimary,
                         offset: offset,
                         length: term.length,
