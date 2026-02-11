@@ -988,3 +988,53 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
     info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
     Ok(new_table_path.to_string_lossy().to_string())
 }
+
+#[tauri::command]
+pub async fn export_table_to_csv(
+    table_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_table_to_csv] Exporting table from: {} to: {}", table_path_str, output_path_str);
+    
+    // Load current data
+    let loaded_data = load_table_data(table_path_str).await?;
+    let headers_val = loaded_data.get("headers").ok_or_else(|| CommandError::from("Missing 'headers' in table data"))?;
+    let data_val = loaded_data.get("data").ok_or_else(|| CommandError::from("Missing 'data' in table data"))?;
+
+    let headers: Vec<String> = serde_json::from_value(headers_val.clone())?;
+    let data: Vec<Value> = serde_json::from_value(data_val.clone())?;
+
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_csv_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}
+
+#[tauri::command]
+pub async fn export_table_to_xlsx(
+    table_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_table_to_xlsx] Exporting table from: {} to: {}", table_path_str, output_path_str);
+    
+    // Load current data
+    let loaded_data = load_table_data(table_path_str).await?;
+    let headers_val = loaded_data.get("headers").ok_or_else(|| CommandError::from("Missing 'headers' in table data"))?;
+    let data_val = loaded_data.get("data").ok_or_else(|| CommandError::from("Missing 'data' in table data"))?;
+
+    let headers: Vec<String> = serde_json::from_value(headers_val.clone())?;
+    let data: Vec<Value> = serde_json::from_value(data_val.clone())?;
+
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_xlsx_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}

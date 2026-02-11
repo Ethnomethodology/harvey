@@ -459,6 +459,8 @@ pub fn run() {
             projectview::table_handler::delete_table_column,
             projectview::table_handler::save_table_styles,
             projectview::table_handler::load_table_styles,
+            projectview::table_handler::export_table_to_csv, // Added
+            projectview::table_handler::export_table_to_xlsx, // Added
             projectview::core_commands::save_table_layout_prefs,
             projectview::core_commands::load_table_layout_prefs,
 

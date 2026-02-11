@@ -19,6 +19,7 @@
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
     import DocumentExportModal from '../modals/DocumentExportModal.svelte';
+    import TableExportModal from '../modals/TableExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
@@ -34,30 +35,43 @@
     let showLiveTranscribeModal = false;
     let showTranslateDocumentModal = false;
     let showDocumentExportModal = false;
+    let showTableExportModal = false;
     let isLexicalDocument = false;
     let isImportedTranscript = false;
     let isImage = false;
+    let isTable = false;
     let pathForExportModal = '';
 
     $: {
         const p = $project;
+        // console.log("[DataTopBar] Path:", p.selectedDocumentPath, "Type:", p.selectedDocumentType);
         if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
              isLexicalDocument = true;
              isImportedTranscript = !!p.currentImportedTranscriptPath;
              isImage = false;
+             isTable = false;
         } else if (p.currentImportedTranscriptPath) {
              isLexicalDocument = true;
              isImportedTranscript = true;
              isImage = false;
-        } else if (p.selectedDocumentType === 'images' || (p.selectedDocumentPath && /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath))) {
+             isTable = false;
+        } else if (p.selectedDocumentType === 'images' || p.selectedDocumentType === 'image' || (p.selectedDocumentPath && /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath))) {
              isImage = true;
+             isLexicalDocument = false;
+             isImportedTranscript = false;
+             isTable = false;
+        } else if (p.selectedDocumentType === 'tables' || p.selectedDocumentType === 'table' || (p.selectedDocumentPath && /\.(csv|xlsx)$/i.test(p.selectedDocumentPath))) {
+             isTable = true;
+             isImage = false;
              isLexicalDocument = false;
              isImportedTranscript = false;
         } else {
             isLexicalDocument = false;
             isImportedTranscript = false;
             isImage = false;
+            isTable = false;
         }
+        // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);
     }
 
     function handleDocumentTranslateConfirm(event) {
@@ -622,6 +636,12 @@
                 <span class="text-xs">Export</span>
             </button>
         {/if}
+        {#if isTable}
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showTableExportModal = true}" title="Export Table" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+                <span class="text-xs">Export</span>
+            </button>
+        {/if}
         {#if isImage}
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => dispatch('requestImageExport')}" title="Export Image" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
@@ -776,6 +796,13 @@
     documentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={() => message('Document exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showDocumentExportModal = false}
+/>
+
+<TableExportModal
+    bind:showModal={showTableExportModal}
+    tablePath={isTable ? $project.selectedDocumentPath : null}
+    on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
+    on:close={() => showTableExportModal = false}
 />
 
 <SplitTranscriptModal />
