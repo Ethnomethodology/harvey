@@ -84,6 +84,7 @@
   import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
+  import notificationStore from '$lib/stores/notificationStore.js';
 
   export let initialJson = null;
   export let editable = true;
@@ -111,6 +112,7 @@
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
+  export let enableSegmentPlayback = false; // New prop
   export let backgroundClass = 'bg-white dark:bg-surface-2';
   export let documentPath = null;
   export let initialHighlights = [];
@@ -173,6 +175,10 @@
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
   let clickedNodeKey = null;
+
+  let hoveredRowKey = null;
+  let playButtonPosition = { top: 0, left: 0 };
+  let showPlayButton = false;
 
   const MIN_COLUMN_WIDTH = 50;
 
@@ -427,6 +433,7 @@
 
 
   onMount(() => {
+    console.log('[LexicalEditor] onMount. enableSegmentPlayback:', enableSegmentPlayback);
     const instanceId = Math.random().toString(36).substring(7);
 
     if (!editorContainer) {
@@ -491,7 +498,7 @@
     }, true);
 
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
-    editorContainer.addEventListener('pointermove', handlePointerHover);
+    editorWrapper.addEventListener('pointermove', handlePointerHover);
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
 
     unregisterListeners = mergeRegister(
@@ -807,9 +814,11 @@
 
     return () => {
       unregisterListeners();
+      if (editorWrapper) {
+          editorWrapper.removeEventListener('pointermove', handlePointerHover);
+      }
       if (editorContainer) {
           editorContainer.removeEventListener('pointerdown', handlePointerDownOnContainer);
-          editorContainer.removeEventListener('pointermove', handlePointerHover);
           editorContainer.removeEventListener('contextmenu', handleContextMenu, true);
           editorContainer.removeEventListener('click', (e) => {
               const anchor = e.target.closest('a');
@@ -1561,7 +1570,73 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
   }
 
   function handlePointerHover(event) {
-      if (!editable || !editorContainer || isResizing) return;
+      if (!editorContainer || !editorWrapper || isResizing || !enableSegmentPlayback || !editor) return;
+      
+      const x = event.clientX;
+      const y = event.clientY;
+      const wrapperRect = editorWrapper.getBoundingClientRect();
+      
+      // Check if we are in the gutter (first 60px of the wrapper)
+      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
+      
+      // If we are in the gutter, scan slightly to the right to find the row at this Y level
+      const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
+      
+      // Use elementsFromPoint to find the row
+      const elements = document.elementsFromPoint(scanX, y);
+      const rowElement = elements.find(el => 
+          el.classList?.contains('editor-table-row') || 
+          el.closest?.('.editor-table-row')
+      );
+      const actualRow = rowElement?.classList?.contains('editor-table-row') ? rowElement : rowElement?.closest?.('.editor-table-row');
+      
+      if (actualRow) {
+          // Skip if this is a header row
+          const isHeaderRow = actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
+          if (isHeaderRow) {
+              if (showPlayButton) {
+                  showPlayButton = false;
+                  hoveredRowKey = null;
+              }
+              return;
+          }
+
+          let rowKey = actualRow.getAttribute('data-lexical-key');
+          
+          // Fallback if data-lexical-key is missing from DOM
+          if (!rowKey) {
+              editor.read(() => {
+                  const node = _getNearestNodeFromDOMNode(actualRow);
+                  if (node) rowKey = node.getKey();
+              });
+          }
+
+          if (rowKey && rowKey !== hoveredRowKey) {
+              // console.log('[LexicalEditor] Row detected. Key:', rowKey);
+              hoveredRowKey = rowKey;
+              const rect = actualRow.getBoundingClientRect();
+              
+              // Position button in the gutter (left: 20px relative to wrapper)
+              playButtonPosition = {
+                  top: rect.top - wrapperRect.top + editorWrapper.scrollTop + (rect.height / 2),
+                  left: 20,
+              };
+              showPlayButton = true;
+          }
+      } else {
+          // If NOT over a row, we hide if we are also NOT over the play button itself
+          // and NOT in the gutter (to prevent flickering)
+          const currentElements = document.elementsFromPoint(x, y);
+          const isOverPlayButton = currentElements.some(el => el.classList?.contains('play-segment-hover-btn'));
+          
+          if (!isOverPlayButton && !isWithinGutterX) {
+              if (showPlayButton) {
+                  showPlayButton = false;
+                  hoveredRowKey = null;
+              }
+          }
+      }
+
       // If table cell resizing is disabled, do nothing
       if (!enableTableCellResize) return;
 
@@ -1572,6 +1647,59 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
           editorContainer.style.cursor = '';
       }
   }
+
+  function parseTimestamp(text) {
+      // Flexible format: (HH:)?MM:SS.mmm - (HH:)?MM:SS.mmm
+      const timePattern = /(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}(?:\.\d{1,3})?)/;
+      const regex = new RegExp(`^${timePattern.source}\\s*-\\s*${timePattern.source}$`);
+      const match = text.match(regex);
+      if (!match) return null;
+      
+      const startTime = timeStringToSeconds(match[1], match[2], match[3]);
+      const endTime = timeStringToSeconds(match[4], match[5], match[6]);
+      return { startTime, endTime };
+  }
+  
+  function timeStringToSeconds(h, m, s) {
+      const hours = parseInt(h || '0', 10);
+      const minutes = parseInt(m || '0', 10);
+      const seconds = parseFloat(s || '0');
+      return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  function handlePlaySegmentClick() {
+      if (!hoveredRowKey || !editor) return;
+      
+      editor.getEditorState().read(() => {
+          const rowNode = _getNodeByKey(hoveredRowKey);
+          if (_isTableRowNode(rowNode)) {
+              const cells = rowNode.getChildren();
+              let timestampText = '';
+              for (const cell of cells) {
+                  if (_isTableCellNode(cell)) {
+                      const text = cell.getTextContent().trim();
+                      // Flexible check for timestamp pattern
+                      if (/(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?\s*-\s*(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?/.test(text)) {
+                          timestampText = text;
+                          break;
+                      }
+                  }
+              }
+
+              if (timestampText) {
+                  const parsed = parseTimestamp(timestampText);
+                  if (parsed) {
+                      dispatch('playsegment', parsed);
+                  } else {
+                      notificationStore.add('Invalid timestamp values. Expected format: MM:SS.mmm or HH:MM:SS.mmm', 'error');
+                  }
+              } else {
+                  notificationStore.add('Could not find a valid timestamp in this row.', 'error');
+              }
+          }
+      });
+  }
+
 
   function handlePointerDownOnContainer(event) {
       if (!editable || !editor || !editorContainer) return;
@@ -2520,7 +2648,8 @@ $: if (editor && activeLayout) {
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 p-2"
+    class="lexical-wrapper flex-grow min-h-0 relative"
+    style="{enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}"
     bind:this={editorWrapper}
   >
     <div
@@ -2534,6 +2663,19 @@ $: if (editor && activeLayout) {
     ></div>
 
     <div class="resizer-line" style={resizerLineStyle}></div>
+
+    {#if showPlayButton}
+      <button
+        class="play-segment-hover-btn absolute z-30 w-6 h-6 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md transition-all duration-200 border-2 border-white dark:border-gray-800"
+        style="top: {playButtonPosition.top}px; left: {playButtonPosition.left}px; transform: translateY(-50%);"
+        on:click|stopPropagation={handlePlaySegmentClick}
+        title="Play this segment"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
+          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+        </svg>
+      </button>
+    {/if}
   </div>
 
   {#if enableTableCellMenu}
@@ -2734,6 +2876,18 @@ $: if (editor && activeLayout) {
   :global(html.dark ::highlight(search-match-active)) {
     background-color: rgba(255, 165, 0, 0.6);
     color: white;
+  }
+
+  .play-segment-hover-btn {
+      pointer-events: auto;
+      cursor: pointer;
+      opacity: 0.9;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .play-segment-hover-btn:hover {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.1);
   }
 
 </style>

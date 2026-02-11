@@ -147,6 +147,8 @@
 	export let localAudioBuffer = null;
 	export let isMediaReadyForProcessing = false; // Default to false
 
+	let segmentPlayEndTime = null;
+
 	// --- Playback Speed State ---
 	const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 	let selectedPlaybackRate = 1;
@@ -716,6 +718,7 @@
 	function onPause() {
         localIsPlaying = false;
         if (!explicitMediaPath) togglePlayerPlaying(false);
+		segmentPlayEndTime = null;
     }
 	function onTimeUpdate(event) {
 		if (isLoadingMedia || !localDuration) return;
@@ -724,31 +727,44 @@
 		const duration = video.duration;
 
 		if (typeof currentTime === 'number' && !isNaN(currentTime) && duration > 0) {
+			// Segment playback auto-pause logic
+			if (segmentPlayEndTime !== null && currentTime >= segmentPlayEndTime) {
+				video.pause();
+				segmentPlayEndTime = null;
+			}
+
 			// Loop logic specific to main transcriptions view's trim/edit modes
-            if (!explicitMediaPath) {
-                if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
-                    if (currentTime < editSegmentStartTime || currentTime >= editSegmentEndTime) {
-                        video.currentTime = editSegmentStartTime;
-                        currentTime = editSegmentStartTime;
-                        if(video.paused && video.currentTime === editSegmentStartTime) video.play().catch(console.error);
-                    }
-                } else if (isTrimming && trimEndTime > trimStartTime) {
-                    if (currentTime < trimStartTime || currentTime >= trimEndTime) {
-                        video.currentTime = trimStartTime;
-                        currentTime = trimStartTime;
-                        if(video.paused && video.currentTime === trimStartTime) video.play().catch(console.error);
-                    }
-                }
-            } else if (enableLooping && loopEndTime > loopStartTime && explicitMediaPath) { // Added for inline trim looping
+			if (!explicitMediaPath) {
+				if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
+					if (currentTime < editSegmentStartTime || currentTime >= editSegmentEndTime) {
+						video.currentTime = editSegmentStartTime;
+						currentTime = editSegmentStartTime;
+						if(video.paused && video.currentTime === editSegmentStartTime) video.play().catch(console.error);
+					}
+				} else if (isTrimming && trimEndTime > trimStartTime) {
+					if (currentTime < trimStartTime || currentTime >= trimEndTime) {
+						video.currentTime = trimStartTime;
+						currentTime = trimStartTime;
+						if(video.paused && video.currentTime === trimStartTime) video.play().catch(console.error);
+					}
+				}
+			} else if (enableLooping && loopEndTime > loopStartTime && explicitMediaPath) { // Added for inline trim looping
 				if (currentTime < loopStartTime || currentTime >= loopEndTime) {
 					video.currentTime = loopStartTime;
 					currentTime = loopStartTime;
 					if (video.paused && video.currentTime === loopStartTime) video.play().catch(console.error);
 				}
 			}
-            localCurrentTime = currentTime;
+			localCurrentTime = currentTime;
 			if (!explicitMediaPath) updatePlayerTime(currentTime); // Update global for main player
 		}
+	}
+
+	export function playSegment(startTime, endTime) {
+		if (!videoElement) return;
+		seekTo(startTime);
+		segmentPlayEndTime = endTime;
+		videoElement.play().catch(console.error);
 	}
 	async function onLoadedMetadata(event) {
         if (event.target && typeof event.target.duration === 'number' && !isNaN(event.target.duration)) {

@@ -460,10 +460,16 @@
                         bind:this={lexicalEditorRef}
                         initialJson={currentTranscriptJson || defaultEmptyJson}
                         editable={true}
+                        enableSegmentPlayback={true}
                         placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
                         on:highlightschange={handleHighlightsChange}
                         on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+                        on:playsegment={(e) => {
+                            if (mediaPlayerInDataRef) {
+                                mediaPlayerInDataRef.playSegment(e.detail.startTime, e.detail.endTime);
+                            }
+                        }}
                         toolbarConfig={mediaToolbarConfig}
                         activeLayout={$activeLayout}
                         documentPath={associatedTranscriptPath}
@@ -492,7 +498,6 @@
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
         overflow-y: auto;
         height: 100%;
-        @apply p-3;
     }
     .lexical-editor-wrapper-style :global(.lexical-content) {
         @apply leading-normal whitespace-pre-wrap break-words;
