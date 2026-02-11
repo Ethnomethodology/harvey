@@ -477,6 +477,10 @@
             const newLexicalJson = event.detail.jsonString;
             if (editorJsonState !== newLexicalJson) {
                 editorJsonState = newLexicalJson;
+                
+                const rowCount = getRowCount(newLexicalJson);
+                dispatch('rowcountupdated', { rowCount });
+
                 if (!isLoading && !errorMessage) {
                     if (isPrimary) {
                         setImportedTranscriptEditorContent(itemPath, newLexicalJson);
@@ -490,6 +494,17 @@
             }
         }, 300);
 	}
+
+    function getRowCount(jsonString) {
+        if (!jsonString) return 0;
+        try {
+            const parsed = JSON.parse(jsonString);
+            const table = parsed.root.children.find(c => c.type === 'table');
+            return table?.children?.length || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
 
     // --- MODIFIED Save Handler ---
     async function handleSave() {
@@ -540,10 +555,12 @@
                 if(editorRef && initialLexicalJson != null && isValidLexicalState(initialLexicalJson)) {
                     editorRef.resetEditorState(initialLexicalJson);
                     editorJsonState = initialLexicalJson;
+                    dispatch('rowcountupdated', { rowCount: getRowCount(initialLexicalJson) });
                 } else if(editorRef) {
                     console.warn("[TranscriptEditorPanel Discard] Reverted state is invalid or null, resetting editor to empty.");
                     editorRef.resetEditorState('');
                     editorJsonState = '';
+                    dispatch('rowcountupdated', { rowCount: 0 });
                 }
                  console.log('[TranscriptEditorPanel] Changes discarded.');
             }
@@ -591,10 +608,12 @@
              if (isValidLexicalState(lexicalJsonString)) {
                  editorRef.resetEditorState(lexicalJsonString);
                  editorJsonState = lexicalJsonString || '';
+                 dispatch('rowcountupdated', { rowCount: getRowCount(lexicalJsonString) });
              } else {
                  console.error("[TranscriptEditorPanel resetEditorState] Received invalid JSON string, resetting to empty.");
                  editorRef.resetEditorState('');
                  editorJsonState = '';
+                 dispatch('rowcountupdated', { rowCount: 0 });
              }
         }
     }

@@ -24,6 +24,10 @@
     let currentTime = 0;
     let isPlaying = false;
 
+    // Row counts for comparison
+    let primaryRowCount = 0;
+    let secondaryRowCount = 0;
+
     function handleSyncManager(path, enabled) {
         if (path && enabled) {
             attemptSetupSync();
@@ -163,9 +167,19 @@
         }
     }
 
-    // Reset mediaPath when itemPath changes
+    function handlePrimaryRowCount(event) {
+        primaryRowCount = event.detail.rowCount;
+    }
+
+    function handleSecondaryRowCount(event) {
+        secondaryRowCount = event.detail.rowCount;
+    }
+
+    // Reset mediaPath and counts when itemPath changes
     $: if (itemPath) {
         mediaPath = null;
+        primaryRowCount = 0;
+        secondaryRowCount = 0;
         loadAttachments(itemPath);
     }
 
@@ -196,6 +210,15 @@
         </div>
     {/if}
 
+    {#if splitPartnerPath && primaryRowCount > 0 && secondaryRowCount > 0 && primaryRowCount !== secondaryRowCount}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800/50 px-4 py-2 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-xs shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625l6.28-10.875zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+            <span><strong>Row Count Mismatch:</strong> The primary transcript has {primaryRowCount} rows, while the partner transcript has {secondaryRowCount} rows. Scroll sync may be inaccurate.</span>
+        </div>
+    {/if}
+
     <div class="flex-grow min-h-0 overflow-hidden {mediaPath && !isVideoHidden ? 'h-1/2' : 'h-full'}">
         {#if splitPartnerPath}
             <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
@@ -211,6 +234,7 @@
                                 isPrimary={true} 
                                 enableSegmentPlayback={!!mediaPath}
                                 on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handlePrimaryRowCount}
                             />
                         {/key}
                     </div>
@@ -250,6 +274,7 @@
                                 isPrimary={false} 
                                 enableSegmentPlayback={!!mediaPath}
                                 on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handleSecondaryRowCount}
                             />
                         {/key}
                     </div>
@@ -266,6 +291,7 @@
                                 isPrimary={true} 
                                 enableSegmentPlayback={!!mediaPath}
                                 on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handlePrimaryRowCount}
                             />
                         </div>
                     </div>
