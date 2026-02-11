@@ -23,6 +23,7 @@
     export let transcriptPath = null;
     export let isPrimary = true;
     export let enableSegmentPlayback = true;
+    export let highlightedRowIndex = -1;
 
     const dispatch = createEventDispatcher();
 
@@ -272,10 +273,12 @@
                 editable={true}
                 enableSegmentPlayback={enableSegmentPlayback}
                 placeholder="Enter data for this transcript..."
+                externalHighlightedRowIndex={highlightedRowIndex}
                 on:change={handleEditorChange}
                 on:highlightschange={handleHighlightsChange}
                 on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                 on:playsegment={(e) => dispatch('playsegment', e.detail)}
+                on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
                 toolbarConfig={mediaToolbarConfig}
                 activeLayout={$activeLayout}
                 documentPath={transcriptPath}

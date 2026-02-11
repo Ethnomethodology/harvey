@@ -9,6 +9,7 @@
     FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, INDENT_CONTENT_COMMAND,
     OUTDENT_CONTENT_COMMAND, SELECTION_CHANGE_COMMAND, CLICK_COMMAND,
     UNDO_COMMAND, REDO_COMMAND, KEY_MODIFIER_COMMAND,
+    BLUR_COMMAND, FOCUS_COMMAND,
     COMMAND_PRIORITY_LOW, COMMAND_PRIORITY_NORMAL, COMMAND_PRIORITY_CRITICAL, COMMAND_PRIORITY_HIGH, COMMAND_PRIORITY_EDITOR,
     KEY_ENTER_COMMAND,
     RootNode, ParagraphNode, TextNode, LineBreakNode,
@@ -117,11 +118,14 @@
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];
+  export let externalHighlightedRowIndex = -1; // Prop to allow external highlighting
 
   let editorWrapper;
   let editorContainer;
   let editor = null;
   let isReady = false;
+  let isFocused = false; // Track focus state
+  let internalCursorRowIndex = -1; // Track local cursor position
   let unregisterListeners = () => {};
   let historyState = createEmptyHistoryState();
   let savedSelection = null;
@@ -738,7 +742,17 @@
                 return true;
             },
             COMMAND_PRIORITY_HIGH
-        )
+        ),
+        editor.registerCommand(FOCUS_COMMAND, () => {
+            isFocused = true;
+            updateToolbarState();
+            return false;
+        }, COMMAND_PRIORITY_LOW),
+        editor.registerCommand(BLUR_COMMAND, () => {
+            isFocused = false;
+            updateToolbarState();
+            return false;
+        }, COMMAND_PRIORITY_LOW)
     );
 
     tick().then(() => {
@@ -1054,16 +1068,34 @@
           const parentForLinkCheck = nodeForLinkCheck ? nodeForLinkCheck.getParent() : null;
           isLink = _isLinkNode(nodeForLinkCheck) || _isLinkNode(parentForLinkCheck);
 
-      } else { blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false; }
+          // Track current row index for glowing highlight
+          if (editorWrapper) {
+              const domNode = editor.getElementByKey(anchorNode.getKey());
+              const row = domNode?.closest('.editor-table-row');
+              if (row) {
+                  const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+                  const newIndex = rows.indexOf(row);
+                  if (newIndex !== internalCursorRowIndex) {
+                      internalCursorRowIndex = newIndex;
+                      dispatch('cursorrowchange', { index: internalCursorRowIndex });
+                  }
+              } else {
+                  internalCursorRowIndex = -1;
+              }
+          }
+
+      } else { blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false; internalCursorRowIndex = -1;}
 
     } else if (_isTableSelection(selection)) {
         blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false;
         isBold = false; isItalic = false; isUnderline = false; isStrikethrough = false;
         selectedTextColor = '#000000'; selectedHighlightColor = 'transparent';
+        internalCursorRowIndex = -1;
     } else {
         isBold = false; isItalic = false; isUnderline = false; isStrikethrough = false;
         isLink = false; blockType = 'paragraph'; selectedAlignment = 'left';
         selectedTextColor = '#000000'; selectedHighlightColor = 'transparent';
+        internalCursorRowIndex = -1;
     }
 
     isBold = isBold; isItalic = isItalic; isUnderline = isUnderline; isStrikethrough = isStrikethrough;
@@ -1071,6 +1103,19 @@
     selectedTextColor = selectedTextColor; selectedHighlightColor = selectedHighlightColor;
     canUndo = historyState.undoStack.length > 0;
     canRedo = historyState.redoStack.length > 0;
+  }
+
+  // Reactive row highlighting logic
+  $: if (editorWrapper && (internalCursorRowIndex !== undefined || externalHighlightedRowIndex !== undefined)) {
+      const rows = editorWrapper.querySelectorAll('.editor-table-row');
+      rows.forEach((row, i) => {
+          const shouldGlow = (i === externalHighlightedRowIndex) || (i === internalCursorRowIndex && isFocused);
+          if (shouldGlow) {
+              row.classList.add('cursor-row-glow');
+          } else {
+              row.classList.remove('cursor-row-glow');
+          }
+      });
   }
 
 
@@ -2905,6 +2950,20 @@ $: if (editor && activeLayout) {
   :global(html.dark ::highlight(search-match-active)) {
     background-color: rgba(255, 165, 0, 0.6);
     color: white;
+  }
+
+  /* Glowing row highlight */
+  :global(.editor-table-row.cursor-row-glow) {
+    box-shadow: inset 0 0 4px 1px rgba(59, 130, 246, 0.5), 0 0 4px 1px rgba(59, 130, 246, 0.5);
+    background-color: rgba(59, 130, 246, 0.05);
+    transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    z-index: 5;
+    position: relative;
+  }
+
+  :global(html.dark .editor-table-row.cursor-row-glow) {
+    box-shadow: inset 0 0 6px 1px rgba(96, 165, 250, 0.4), 0 0 6px 1px rgba(96, 165, 250, 0.4);
+    background-color: rgba(96, 165, 250, 0.1);
   }
 
   .play-segment-hover-btn {

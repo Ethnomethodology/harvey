@@ -27,6 +27,8 @@
     // Row counts for comparison
     let primaryRowCount = 0;
     let secondaryRowCount = 0;
+    let primaryHighlightedRowIndex = -1;
+    let secondaryHighlightedRowIndex = -1;
 
     function handleSyncManager(path, enabled) {
         if (path && enabled) {
@@ -40,6 +42,17 @@
 
     function toggleScrollSync() {
         isScrollSyncEnabled = !isScrollSyncEnabled;
+    }
+
+    function handleCursorRowChange(event, panelSource) {
+        const index = event.detail.index;
+        if (panelSource === 'primary') {
+            primaryHighlightedRowIndex = index;
+            secondaryHighlightedRowIndex = index; // Sync to partner
+        } else {
+            secondaryHighlightedRowIndex = index;
+            primaryHighlightedRowIndex = index; // Sync to partner
+        }
     }
 
     function attemptSetupSync() {
@@ -272,8 +285,10 @@
                                 itemPath={itemPath} 
                                 isPrimary={true} 
                                 enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={primaryHighlightedRowIndex}
                                 on:playsegment={handlePlaySegment}
                                 on:rowcountupdated={handlePrimaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
                             />
                         {/key}
                     </div>
@@ -312,8 +327,10 @@
                                 itemPath={splitPartnerPath} 
                                 isPrimary={false} 
                                 enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={secondaryHighlightedRowIndex}
                                 on:playsegment={handlePlaySegment}
                                 on:rowcountupdated={handleSecondaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'secondary')}
                             />
                         {/key}
                     </div>
@@ -329,8 +346,10 @@
                                 itemPath={itemPath} 
                                 isPrimary={true} 
                                 enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={primaryHighlightedRowIndex}
                                 on:playsegment={handlePlaySegment}
                                 on:rowcountupdated={handlePrimaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
                             />
                         </div>
                     </div>

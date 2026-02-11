@@ -33,6 +33,8 @@
     let isScrollSyncEnabled = true;
     let primaryRowCount = 0;
     let secondaryRowCount = 0;
+    let primaryHighlightedRowIndex = -1;
+    let secondaryHighlightedRowIndex = -1;
 
     $: splitInfo = $projectStore.importedTranscriptSplits[$projectStore.activeTranscriptPathInDataTab];
     $: splitPartnerPath = splitInfo?.partner;
@@ -50,6 +52,17 @@
 
     function toggleScrollSync() {
         isScrollSyncEnabled = !isScrollSyncEnabled;
+    }
+
+    function handleCursorRowChange(event, panelSource) {
+        const index = event.detail.index;
+        if (panelSource === 'primary') {
+            primaryHighlightedRowIndex = index;
+            secondaryHighlightedRowIndex = index; // Sync to partner
+        } else {
+            secondaryHighlightedRowIndex = index;
+            primaryHighlightedRowIndex = index; // Sync to partner
+        }
     }
 
     function attemptSetupSync() {
@@ -351,8 +364,10 @@
                                     mediaPath={mediaPath}
                                     transcriptPath={$projectStore.activeTranscriptPathInDataTab}
                                     isPrimary={true}
+                                    highlightedRowIndex={primaryHighlightedRowIndex}
                                     on:playsegment={(e) => handlePlaySegment(e.detail)}
                                     on:rowcountupdated={(e) => primaryRowCount = e.detail.rowCount}
+                                    on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
                                 />
                             {/key}
                         </div>
@@ -391,8 +406,10 @@
                                     mediaPath={mediaPath}
                                     transcriptPath={splitPartnerPath}
                                     isPrimary={false}
+                                    highlightedRowIndex={secondaryHighlightedRowIndex}
                                     on:playsegment={(e) => handlePlaySegment(e.detail)}
                                     on:rowcountupdated={(e) => secondaryRowCount = e.detail.rowCount}
+                                    on:cursorrowchange={(e) => handleCursorRowChange(e, 'secondary')}
                                 />
                             {/key}
                         </div>
@@ -405,8 +422,10 @@
                         mediaPath={mediaPath}
                         transcriptPath={$projectStore.activeTranscriptPathInDataTab}
                         isPrimary={true}
+                        highlightedRowIndex={primaryHighlightedRowIndex}
                         on:playsegment={(e) => handlePlaySegment(e.detail)}
                         on:rowcountupdated={(e) => primaryRowCount = e.detail.rowCount}
+                        on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
                     />
                 {/key}
             {:else if !mediaPath}

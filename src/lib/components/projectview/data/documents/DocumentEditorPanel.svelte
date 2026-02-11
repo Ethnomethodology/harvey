@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/documents/DocumentEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
@@ -15,6 +15,10 @@
     import { invoke } from '@tauri-apps/api/core';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+
+    const dispatch = createEventDispatcher();
+
+    export let highlightedRowIndex = -1;
 
     let editorRef;
     let editorJsonState = '';
@@ -204,9 +208,11 @@
                      placeholder="Start typing your document..."
                      enableTableCellMenu={true}
                      enableTableCellResize={true}
+                     externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+                     on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
                      enableSearch={true}
                      documentPath={selectedPath}
                      initialHighlights={initialHighlights}

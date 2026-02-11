@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/imported_transcripts/TranscriptEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
@@ -54,9 +54,12 @@
       ExtendedTextNode
     ];
 
+    const dispatch = createEventDispatcher();
+
     export let itemPath = null;
     export let isPrimary = true;
     export let enableSegmentPlayback = false;
+    export let highlightedRowIndex = -1;
 
     let editorRef;
     let editorJsonState = ''; // Holds the current Lexical JSON string
@@ -662,10 +665,12 @@
                      initialJson={currentLexicalJson}
                      editable={true}
                      placeholder="Transcript content will appear here as a table..."
+                     externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      on:playsegment
+                     on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
                      enableSegmentPlayback={enableSegmentPlayback}
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
