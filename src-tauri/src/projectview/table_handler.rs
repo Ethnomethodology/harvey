@@ -93,16 +93,17 @@ pub async fn import_table_file(
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
     
     let mut folder_counter = 0;
-    let folder_path = loop {
-        let folder_name = if folder_counter == 0 {
+    let (folder_path, final_table_filename) = loop {
+        let base_name = if folder_counter == 0 {
             table_file_stem_truncated.to_string()
         } else {
             format!("{}_{}", table_file_stem_truncated, folder_counter)
         };
-        let candidate = tables_base.join(&folder_name);
-        if !candidate.exists() {
-            debug!("[import_table_file] Found unique folder path: {}", candidate.display());
-            break candidate;
+        let candidate_folder = tables_base.join(&base_name);
+        if !candidate_folder.exists() {
+            let file_name = format!("{}.{}", base_name, original_source_extension);
+            debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
+            break (candidate_folder, file_name);
         }
         folder_counter += 1;
         if folder_counter > 1000 {
@@ -121,9 +122,7 @@ pub async fn import_table_file(
         })?;
     debug!("[import_table_file] Created unique folder: {}", folder_path.display());
 
-    // Now the filename inside the folder can be the truncated name without further suffixing, 
-    // because the folder itself is unique.
-    let final_table_path = folder_path.join(&truncated_table_filename_with_ext);
+    let final_table_path = folder_path.join(&final_table_filename);
 
     let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
     debug!("[import_table_file] Final table name: {}", final_table_name);
