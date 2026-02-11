@@ -91,39 +91,39 @@ pub async fn import_table_file(
     debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
-    let folder_path = tables_base.join(table_file_stem_truncated);
-    debug!("[import_table_file] Target folder path: {}", folder_path.display());
-
-    if !folder_path.exists() {
-        fs::create_dir_all(&folder_path)
-            .map_err(|e| {
-                error!("[import_table_file] Failed to create directory {}: {}", folder_path.display(), e);
-                CommandError::Io(format!("Failed to create directory {}: {}", folder_path.display(), e))
-            })?;
-        debug!("[import_table_file] Created folder: {}", folder_path.display());
-    }
-
-    let mut counter = 0;
-    let final_table_path = loop {
-        let file_name_to_try = if counter == 0 {
-            truncated_table_filename_with_ext.clone()
+    
+    let mut folder_counter = 0;
+    let folder_path = loop {
+        let folder_name = if folder_counter == 0 {
+            table_file_stem_truncated.to_string()
         } else {
-            format!("{}_{}.{}", table_file_stem_truncated, counter, original_source_extension)
+            format!("{}_{}", table_file_stem_truncated, folder_counter)
         };
-        let candidate = folder_path.join(&file_name_to_try);
+        let candidate = tables_base.join(&folder_name);
         if !candidate.exists() {
-            debug!("[import_table_file] Found unique filename: {}", candidate.display());
+            debug!("[import_table_file] Found unique folder path: {}", candidate.display());
             break candidate;
         }
-        counter += 1;
-        if counter > 1000 {
-            error!("[import_table_file] Could not find unique filename for table base '{}' after {} attempts.", table_file_stem_truncated, counter);
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            error!("[import_table_file] Could not find unique folder for table base '{}' after {} attempts.", table_file_stem_truncated, folder_counter);
             return Err(CommandError::from(format!(
-                "Could not find unique filename for table base '{}' (derived from truncated name) after {} attempts.",
-                table_file_stem_truncated, counter
+                "Could not find unique folder for table base '{}' after {} attempts.",
+                table_file_stem_truncated, folder_counter
             )));
         }
     };
+
+    fs::create_dir_all(&folder_path)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to create directory {}: {}", folder_path.display(), e);
+            CommandError::Io(format!("Failed to create directory {}: {}", folder_path.display(), e))
+        })?;
+    debug!("[import_table_file] Created unique folder: {}", folder_path.display());
+
+    // Now the filename inside the folder can be the truncated name without further suffixing, 
+    // because the folder itself is unique.
+    let final_table_path = folder_path.join(&truncated_table_filename_with_ext);
 
     let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
     debug!("[import_table_file] Final table name: {}", final_table_name);
