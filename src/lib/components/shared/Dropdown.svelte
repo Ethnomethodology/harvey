@@ -83,4 +83,7 @@
   .dropdown-option {
     @apply block w-full text-left px-3 py-1.5 text-xs font-normal truncate;
   }
+  .ui-dropdown-menu {
+    @apply max-h-60 overflow-y-auto;
+  }
 </style>

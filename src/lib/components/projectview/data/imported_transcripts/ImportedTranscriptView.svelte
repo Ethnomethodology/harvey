@@ -157,6 +157,12 @@
         }
     }
 
+    function handlePlaySegment(event) {
+        if (mediaPlayerRef) {
+            mediaPlayerRef.playSegment(event.detail.startTime, event.detail.endTime);
+        }
+    }
+
     // Reset mediaPath when itemPath changes
     $: if (itemPath) {
         mediaPath = null;
@@ -171,7 +177,7 @@
 </script>
 
 <!-- Main container for the Imported Transcript View -->
-<div class="h-full flex flex-col w-full bg-white dark:bg-surface-2 overflow-hidden">
+<div class="h-full flex flex-col w-full bg-white dark:bg-surface-2 overflow-hidden imported-transcript-view">
     {#if mediaPath}
         <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
             <MediaPlayer
@@ -199,7 +205,13 @@
                     </div>
                     <div class="flex-grow overflow-hidden">
                         {#key itemPath}
-                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                            <TranscriptEditorPanel 
+                                bind:this={primaryPanel} 
+                                itemPath={itemPath} 
+                                isPrimary={true} 
+                                enableSegmentPlayback={!!mediaPath}
+                                on:playsegment={handlePlaySegment}
+                            />
                         {/key}
                     </div>
                 </div>
@@ -232,7 +244,13 @@
                     </div>
                     <div class="flex-grow overflow-hidden">
                         {#key splitPartnerPath}
-                            <TranscriptEditorPanel bind:this={secondaryPanel} itemPath={splitPartnerPath} isPrimary={false} />
+                            <TranscriptEditorPanel 
+                                bind:this={secondaryPanel} 
+                                itemPath={splitPartnerPath} 
+                                isPrimary={false} 
+                                enableSegmentPlayback={!!mediaPath}
+                                on:playsegment={handlePlaySegment}
+                            />
                         {/key}
                     </div>
                 </div>
@@ -242,7 +260,13 @@
                 {#if itemPath}
                     <div class="h-full flex flex-col">
                         <div class="flex-grow overflow-hidden">
-                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                            <TranscriptEditorPanel 
+                                bind:this={primaryPanel} 
+                                itemPath={itemPath} 
+                                isPrimary={true} 
+                                enableSegmentPlayback={!!mediaPath}
+                                on:playsegment={handlePlaySegment}
+                            />
                         </div>
                     </div>
                 {:else}

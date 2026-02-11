@@ -56,6 +56,7 @@
 
     export let itemPath = null;
     export let isPrimary = true;
+    export let enableSegmentPlayback = false;
 
     let editorRef;
     let editorJsonState = ''; // Holds the current Lexical JSON string
@@ -633,6 +634,8 @@
                      on:change={handleEditorChange}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+                     on:playsegment
+                     enableSegmentPlayback={enableSegmentPlayback}
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
