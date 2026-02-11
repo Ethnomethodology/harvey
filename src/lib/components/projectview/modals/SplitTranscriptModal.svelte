@@ -5,12 +5,17 @@
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import { basename } from '@tauri-apps/api/path';
     import { normalizePath } from '$lib/services/projectService.js';
+    import { invoke } from '@tauri-apps/api/core';
 
     const dispatch = createEventDispatcher();
 
     let selectedPartnerPath = '';
     let currentFileName = '';
     let transcriptOptions = [];
+    
+    let currentTranscriptRowCount = 0;
+    let partnerTranscriptRowCount = 0;
+    let isLoadingCounts = false;
 
     $: {
         const p = $project;
@@ -41,6 +46,57 @@
         }
     }
 
+    // Reactive row count calculation
+    $: if ($project.showSplitTranscriptModal && $project.currentImportedTranscriptPath && selectedPartnerPath) {
+        calculateRowCounts($project.currentImportedTranscriptPath, selectedPartnerPath);
+    }
+
+    async function calculateRowCounts(currentPath, partnerPath) {
+        isLoadingCounts = true;
+        try {
+            // Count current transcript rows (from store if available, else file)
+            if ($project.currentImportedTranscriptLexicalJson) {
+                currentTranscriptRowCount = countRowsInJson($project.currentImportedTranscriptLexicalJson);
+            } else {
+                const content = await invoke('read_file_content', { path: currentPath });
+                currentTranscriptRowCount = countRowsInRaw(content);
+            }
+
+            // Count partner transcript rows (always file)
+            const partnerContent = await invoke('read_file_content', { path: partnerPath });
+            partnerTranscriptRowCount = countRowsInRaw(partnerContent);
+        } catch (e) {
+            console.error('[SplitTranscriptModal] Error counting rows:', e);
+        } finally {
+            isLoadingCounts = false;
+        }
+    }
+
+    function countRowsInJson(jsonString) {
+        try {
+            const parsed = JSON.parse(jsonString);
+            const table = parsed.root.children.find(c => c.type === 'table');
+            // Subtract 1 for header row if needed? Standard split transcripts have headers.
+            // Let's just compare total children (rows) for structural similarity.
+            return table?.children?.length || 0;
+        } catch (e) { return 0; }
+    }
+
+    function countRowsInRaw(content) {
+        if (!content) return 0;
+        try {
+            const parsed = JSON.parse(content);
+            // Handle both Lexical format and raw segment array
+            if (parsed.root) {
+                const table = parsed.root.children.find(c => c.type === 'table');
+                return table?.children?.length || 0;
+            } else if (Array.isArray(parsed)) {
+                return parsed.length + 1; // +1 for the header we generate on import
+            }
+            return 0;
+        } catch (e) { return 0; }
+    }
+
     function handleConfirm() {
         if (selectedPartnerPath) {
             setImportedTranscriptSplit(
@@ -54,6 +110,9 @@
 
     function handleClose() {
         project.update(p => ({ ...p, showSplitTranscriptModal: false }));
+        selectedPartnerPath = '';
+        currentTranscriptRowCount = 0;
+        partnerTranscriptRowCount = 0;
     }
 
     function handleKeydown(event) {
@@ -81,7 +140,12 @@
             <div class="space-y-4 mb-6">
                 <div class="flex flex-col space-y-1">
                     <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Current Transcript</span>
-                    <span class="text-md font-semibold truncate" title={currentFileName}>{currentFileName}</span>
+                    <div class="flex justify-between items-center">
+                        <span class="text-md font-semibold truncate flex-grow" title={currentFileName}>{currentFileName}</span>
+                        {#if currentTranscriptRowCount > 0}
+                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{currentTranscriptRowCount} rows</span>
+                        {/if}
+                    </div>
                 </div>
 
                 <div class="flex flex-col space-y-1">
@@ -93,10 +157,31 @@
                         placeholder="Select a Transcript"
                         disabled={transcriptOptions.length === 0}
                     />
+                    <div class="flex justify-end mt-1">
+                        {#if partnerTranscriptRowCount > 0}
+                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{partnerTranscriptRowCount} rows</span>
+                        {/if}
+                    </div>
+                    
                     {#if transcriptOptions.length === 0}
                         <p class="text-xs text-orange-500 mt-1">No other imported transcripts available to split with.</p>
                     {/if}
                 </div>
+
+                {#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
+                    <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-md flex gap-3 text-amber-800 dark:text-amber-200 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0 mt-0.5">
+                            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625l6.28-10.875zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                        </svg>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-xs font-bold">Row Count Mismatch</span>
+                            <p class="text-[11px] leading-relaxed">
+                                These transcripts have different row counts ({currentTranscriptRowCount} vs {partnerTranscriptRowCount}). 
+                                Scroll synchronization may not align perfectly.
+                            </p>
+                        </div>
+                    </div>
+                {/if}
             </div>
 
             <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -104,7 +189,7 @@
                 <button 
                     class="btn-primary" 
                     on:click={handleConfirm} 
-                    disabled={!selectedPartnerPath}
+                    disabled={!selectedPartnerPath || isLoadingCounts}
                 >
                     Split
                 </button>
