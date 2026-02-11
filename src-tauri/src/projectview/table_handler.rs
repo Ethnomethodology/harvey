@@ -663,13 +663,15 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
     for row_value in data {
         if let Some(row_map) = row_value.as_object() {
             let row: Vec<String> = headers.iter().map(|h| {
-                row_map.get(h).and_then(|v| {
-                    if v.is_string() {
-                        v.as_str().map(|s| s.to_string())
-                    } else {
-                        Some(v.to_string())
+                row_map.get(h).map(|v| {
+                    match v {
+                        Value::String(s) => s.to_string(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Null => "".to_string(),
+                        _ => v.to_string(),
                     }
-                }).unwrap_or("".to_string())
+                }).unwrap_or_else(|| "".to_string())
             }).collect();
             wtr.write_record(&row)?;
         }
