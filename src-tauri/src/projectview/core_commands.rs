@@ -1217,31 +1217,46 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let original_media_stem = source_path.file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from("Invalid source filename stem."))?;
-    let media_stem_identifier = Path::new(&truncate_filename_stem(&format!("{}.tmp", original_media_stem), MAX_FILENAME_STEM_LENGTH)) // Add dummy ext for truncate_filename_stem
-        .file_stem().unwrap_or_default().to_string_lossy().into_owned(); // Then get stem back
-    info!("[Backend Import] Original media stem: '{}', Truncated media_stem_identifier: '{}'", original_media_stem, media_stem_identifier);
-
-
-    let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR);
-    let media_stem_base_path = media_asset_dir.join(&media_stem_identifier); // Use truncated stem for directory
-    let media_subfolder_path = media_stem_base_path.join(MEDIA_SUBDIR);
-    let transcripts_subfolder_path = media_stem_base_path.join(TRANSCRIPTS_SUBDIR);
-    // Use truncated_source_filename for the actual file name
-    let destination_media_path = media_subfolder_path.join(&truncated_source_filename);
+    let media_stem_truncated = Path::new(&truncate_filename_stem(&format!("{}.tmp", original_media_stem), MAX_FILENAME_STEM_LENGTH))
+        .file_stem().unwrap_or_default().to_string_lossy().into_owned();
+    info!("[Backend Import] Original media stem: '{}', Truncated media stem: '{}'", original_media_stem, media_stem_truncated);
 
     let xml_content_check = fs::read_to_string(&project_xml_path)?;
     let project_data_check: ProjectXml = quick_xml::de::from_str(&xml_content_check)?;
-    // Check collision with the truncated media_stem_identifier
-    if project_data_check.media_files.files.iter().any(|f| f.name == media_stem_identifier) {
-        return Err(CommandError::from(format!("A media asset derived from this name (stem: '{}') already exists. Please rename the source file or the existing asset.", media_stem_identifier)));
-    }
 
-    if media_stem_base_path.exists() {
-        // This check now uses the truncated stem. If it exists, it's a collision based on the truncated name.
-        warn!("[Backend Import] Target media stem directory (from truncated name '{}') exists: {}. Files may be overwritten or structure reused if collision logic is not strict.", media_stem_identifier, media_stem_base_path.display());
-        // Depending on desired strictness, this could be an error:
-        // return Err(CommandError::from(format!("Directory for truncated stem '{}' already exists.", media_stem_identifier)));
-    }
+    let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR);
+
+    let mut folder_counter = 0;
+    let (media_stem_identifier, truncated_source_filename) = loop {
+        let current_stem = if folder_counter == 0 {
+            media_stem_truncated.clone()
+        } else {
+            format!("{}_{}", media_stem_truncated, folder_counter)
+        };
+
+        let candidate_folder = media_asset_dir.join(&current_stem);
+        
+        // Check if this stem is already used in project_data_check.media_files.files
+        let name_conflict = project_data_check.media_files.files.iter().any(|f| {
+            f.name == current_stem
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
+            let file_name = format!("{}.{}", current_stem, source_path.extension().and_then(|e| e.to_str()).unwrap_or(""));
+            debug!("[Backend Import] Found unique media stem identifier: {} and filename: {}", current_stem, file_name);
+            break (current_stem, file_name);
+        }
+
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            return Err(CommandError::from(format!("Could not find unique folder for media stem '{}' after 1000 attempts.", media_stem_truncated)));
+        }
+    };
+
+    let media_stem_base_path = media_asset_dir.join(&media_stem_identifier);
+    let media_subfolder_path = media_stem_base_path.join(MEDIA_SUBDIR);
+    let transcripts_subfolder_path = media_stem_base_path.join(TRANSCRIPTS_SUBDIR);
+    let destination_media_path = media_subfolder_path.join(&truncated_source_filename);
 
     fs::create_dir_all(&media_subfolder_path)?;
     fs::create_dir_all(&transcripts_subfolder_path)?;

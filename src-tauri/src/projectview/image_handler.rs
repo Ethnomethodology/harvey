@@ -5,7 +5,7 @@ use crate::welcome::config::{CommandError};
 use crate::projectview::db_handler;
     use chrono::Utc;
 use serde_json;
-use log::{info, warn, error};
+use log::{info, warn, error, debug};
 use std::{
     fs,
         path::{Path, PathBuf},
@@ -255,42 +255,50 @@ pub async fn import_image_file(
     let truncated_image_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
     info!("[import_image_file] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, truncated_image_filename_with_ext);
 
-    let image_file_stem_truncated = Path::new(&truncated_image_filename_with_ext).file_stem()
+    let image_file_stem_truncated_original = Path::new(&truncated_image_filename_with_ext).file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from(format!("Could not get stem from truncated image filename: {}", truncated_image_filename_with_ext)))?;
 
+    // Read project_data to check for name conflicts in XML
+    let xml_content = fs::read_to_string(&project_xml_path)?;
+    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+
     // Create folder under Images named after the truncated file stem
     let images_base = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
-    let folder_path = images_base.join(image_file_stem_truncated); // Folder uses truncated stem
+
+    let mut folder_counter = 0;
+    let (folder_path, final_image_name) = loop {
+        let current_stem = if folder_counter == 0 {
+            image_file_stem_truncated_original.to_string()
+        } else {
+            format!("{}_{}", image_file_stem_truncated_original, folder_counter)
+        };
+
+        let candidate_folder = images_base.join(&current_stem);
+
+        // Check if this stem is already used in project_data.image_files.files
+        let name_conflict = project_data.image_files.files.iter().any(|f| {
+            f.name == current_stem || f.name.starts_with(&format!("{}.", current_stem))
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
+            let file_name = format!("{}.{}", current_stem, original_source_extension);
+            debug!("[import_image_file] Found unique image folder: {} and filename: {}", candidate_folder.display(), file_name);
+            break (candidate_folder, file_name);
+        }
+
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            return Err(CommandError::from(format!("Could not find unique folder for image stem '{}' after 1000 attempts.", image_file_stem_truncated_original)));
+        }
+    };
+
     if !folder_path.exists() {
         fs::create_dir_all(&folder_path)
             .map_err(|e| CommandError::from(format!("Failed to create image folder {}: {}", folder_path.display(), e)))?;
     }
 
-    // Determine unique filename *inside* the (truncated stem) folder
-    let mut counter = 0;
-    let final_image_path = loop {
-        let file_name_to_try = if counter == 0 {
-            truncated_image_filename_with_ext.clone()
-        } else {
-            // If collision, append suffix to the *truncated stem* part, then add original extension
-            format!("{}_{}.{}", image_file_stem_truncated, counter, original_source_extension)
-        };
-        let candidate = folder_path.join(&file_name_to_try);
-        if !candidate.exists() {
-            break candidate;
-        }
-        counter += 1;
-        if counter > 1000 { // Safety break
-            return Err(CommandError::from(format!(
-                "Could not find unique filename for image base '{}' (derived from truncated name) after {} attempts.",
-                image_file_stem_truncated, counter
-            )));
-        }
-    };
-
-    // final_image_name is the name of the file as it will be saved (e.g., truncated_stem.png or truncated_stem_1.png)
-    let final_image_name = final_image_path.file_name().unwrap().to_string_lossy().into_owned();
+    let final_image_path = folder_path.join(&final_image_name);
 
     // Copy the file
     info!("[import_image_file] Copying image from '{}' to '{}'", source_path.display(), final_image_path.display());

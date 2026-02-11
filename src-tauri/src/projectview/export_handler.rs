@@ -1650,7 +1650,7 @@ pub async fn export_transcript_to_ass(
     ass_content.push_str("Style: Default,Arial,20,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1.5,0,2,10,10,10,1\n");
 
     // Highlight styles removed for simpler export.
-    let styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let _styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
 
     // [Events]
@@ -1704,23 +1704,13 @@ pub async fn export_document_to_docx<R: Runtime>(
         return Err(CommandError::from(msg));
     }
 
-     let base_dir = source_path
+     let _base_dir = source_path
          .parent()
          .and_then(|p| p.parent()) // .../documents/
          .and_then(|p| p.parent()) // .../data/
          .and_then(|p| p.parent()) // .../Harvery_Data/
          .ok_or_else(|| {
-             // Fallback or just assume a standard structure if strict parent navigation fails
-             // But for temp dir generation, we need a valid base.
-             // Let's try to find the project root via known structure.
-             // If source is /path/to/project/files/docs/doc.json, we need /path/to/project
-             let msg = format!("Could not determine project base directory from document path: {}", document_path_str);
-            //  error!("[export_document_to_docx] {}", msg);
-            //  CommandError::from(msg)
-            // Just use the parent of the document for now as base for temp lookup if full tree walk fails?
-            // ensure_base_asset_dirs logic usually expects the root "ProjectName" folder or "files" inside it.
-            // Let's rely on standard path manipulation used in other commands if possible.
-             msg // Propagate error
+             CommandError::from(format!("Could not determine project base directory from document path: {}", document_path_str))
          })?;
     
     // We can just use the document's directory to find the 'files' dir context if needed,
@@ -1756,7 +1746,7 @@ pub async fn export_document_to_docx<R: Runtime>(
 
     // Use a simpler base dir for temp file if the elaborate parent traversal is risky.
     // We just need A directory. source_path parent is safe.
-    let safe_base_dir = source_path.parent().unwrap_or(&source_path); 
+    let _safe_base_dir = source_path.parent().unwrap_or(&source_path); 
     // But get_unique_temp_path_for_conversion builds path: base_dir/files/documents/.tmp/...
     // So if safe_base_dir is .../documents, joining files/documents/.tmp will fail.
     // We need the Project Root.
