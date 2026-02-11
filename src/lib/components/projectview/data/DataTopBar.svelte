@@ -648,7 +648,7 @@
                 <span class="text-xs">Export</span>
             </button>
         {/if}
-        {#if isImportedTranscript}
+        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <button 
                 class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
                 on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}" 

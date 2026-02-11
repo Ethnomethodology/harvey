@@ -19,23 +19,56 @@
 
     $: {
         const p = $project;
-        const currentPath = p.currentImportedTranscriptPath;
+        const currentPath = p.currentImportedTranscriptPath || p.activeTranscriptPathInDataTab;
         if (currentPath) {
             basename(currentPath).then(name => currentFileName = name);
             
-            transcriptOptions = p.importedTranscriptFiles
-                .map(f => {
-                    const fullPath = normalizePath(`${p.baseDirectory}/${f.relativePath || f.relative_path}`);
-                    return {
-                        path: fullPath,
-                        name: f.name || f.relativePath || f.relative_path
-                    };
-                })
-                .filter(f => f.path !== currentPath)
-                .map(f => ({
-                    value: f.path,
-                    label: f.name
-                }));
+            if (p.currentImportedTranscriptPath) {
+                transcriptOptions = p.importedTranscriptFiles
+                    .map(f => {
+                        const fullPath = normalizePath(`${p.baseDirectory}/${f.relativePath || f.relative_path}`);
+                        return {
+                            path: fullPath,
+                            name: f.name || f.relativePath || f.relative_path
+                        };
+                    })
+                    .filter(f => f.path !== currentPath)
+                    .map(f => ({
+                        value: f.path,
+                        label: f.name
+                    }));
+            } else if (p.activeTranscriptPathInDataTab) {
+                // Find associated media file to get its transcripts
+                function findMediaFileInTree(nodes, transcriptPath) {
+                    if (!Array.isArray(nodes)) return null;
+                    for (const node of nodes) {
+                        if (node.file_type === 'media' && node.associated_transcripts) {
+                            if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
+                                return node;
+                            }
+                        }
+                        if (node.children) {
+                            const found = findMediaFileInTree(node.children, transcriptPath);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                }
+
+                const mediaFile = findMediaFileInTree(p.files, p.activeTranscriptPathInDataTab);
+                if (mediaFile && mediaFile.associated_transcripts) {
+                    transcriptOptions = mediaFile.associated_transcripts
+                        .filter(t => t.path !== currentPath)
+                        .map(t => {
+                            let label = t.language_code || 'Original';
+                            if (t.name) label += ` (${t.name})`;
+                            return {
+                                value: t.path,
+                                label: label
+                            };
+                        });
+                }
+            }
             
             if (transcriptOptions.length > 0 && !selectedPartnerPath) {
                 // Pre-select the first option if none selected
@@ -47,16 +80,18 @@
     }
 
     // Reactive row count calculation
-    $: if ($project.showSplitTranscriptModal && $project.currentImportedTranscriptPath && selectedPartnerPath) {
-        calculateRowCounts($project.currentImportedTranscriptPath, selectedPartnerPath);
+    $: if ($project.showSplitTranscriptModal && ($project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab) && selectedPartnerPath) {
+        calculateRowCounts($project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab, selectedPartnerPath);
     }
 
     async function calculateRowCounts(currentPath, partnerPath) {
         isLoadingCounts = true;
         try {
             // Count current transcript rows (from store if available, else file)
-            if ($project.currentImportedTranscriptLexicalJson) {
+            if ($project.currentImportedTranscriptLexicalJson && $project.currentImportedTranscriptPath === currentPath) {
                 currentTranscriptRowCount = countRowsInJson($project.currentImportedTranscriptLexicalJson);
+            } else if ($project.currentMediaNoteTranscriptJson && $project.activeTranscriptPathInDataTab === currentPath) {
+                currentTranscriptRowCount = countRowsInJson($project.currentMediaNoteTranscriptJson);
             } else {
                 const content = await invoke('read_file_content', { path: currentPath });
                 currentTranscriptRowCount = countRowsInRaw(content);
@@ -100,7 +135,7 @@
     function handleConfirm() {
         if (selectedPartnerPath) {
             setImportedTranscriptSplit(
-                $project.currentImportedTranscriptPath, 
+                $project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab, 
                 selectedPartnerPath, 
                 $project.pendingSplitOrientation
             );

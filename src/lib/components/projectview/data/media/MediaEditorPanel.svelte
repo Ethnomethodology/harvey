@@ -5,263 +5,118 @@
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import {
         project, // Store, aliased to projectStore below for clarity in functions
-        setLoadedMediaNoteTranscriptData,
-        setMediaNoteTranscriptLoadFailed,
-        setMediaNoteTranscriptEditorContent,
-        markMediaNoteTranscriptAsSaved,
-        markMediaNoteTranscriptChangesDiscarded,
-        setActiveMediaNoteEditorRef,
-        clearActiveMediaNoteEditorRef,
-        setDocumentHighlights,
-        highlightsLastUpdated
+        clearImportedTranscriptSplit
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { confirm, message } from '@tauri-apps/plugin-dialog';
-    import { basename, dirname, join } from '@tauri-apps/api/path';
+    import { message } from '@tauri-apps/plugin-dialog';
+    import { basename } from '@tauri-apps/api/path';
     import { project as projectStore } from '$lib/stores/projectStore.js';
-    import { handleTrimMediaConfirm, saveDocumentContent } from '$lib/services/projectService.js';
+    import { handleTrimMediaConfirm } from '$lib/services/projectService.js';
 
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
-    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import MediaTranscriptEditorSubPanel from './MediaTranscriptEditorSubPanel.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
     import TimestampInput from '../../shared/TimestampInput.svelte';
-    import { activeLayout } from '$lib/stores/layoutStore.js';
 
     export let mediaPath = null;
 
     const dispatch = createEventDispatcher();
 
-    $: console.log('[MediaEditorPanel] $projectStore.id value:', $projectStore.id);
+    let mediaPlayerInDataRef;
+
+    let isDataPlayerVideoHidden = false; // State for MediaPlayer's video visibility
+    
+    // Split View State
+    let primaryPanel;
+    let secondaryPanel;
+    let cleanupSync = () => {};
+    let isScrollSyncEnabled = true;
+    let primaryRowCount = 0;
+    let secondaryRowCount = 0;
+
+    $: splitInfo = $projectStore.importedTranscriptSplits[$projectStore.activeTranscriptPathInDataTab];
+    $: splitPartnerPath = splitInfo?.partner;
+    $: orientation = splitInfo?.orientation || 'horizontal';
+
+    function handleSyncManager(path, enabled) {
+        if (path && enabled) {
+            attemptSetupSync();
+        } else {
+            cleanupSync();
+        }
+    }
+
+    $: handleSyncManager(splitPartnerPath, isScrollSyncEnabled);
+
+    function toggleScrollSync() {
+        isScrollSyncEnabled = !isScrollSyncEnabled;
+    }
+
+    function attemptSetupSync() {
+        cleanupSync();
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            if (primaryPanel && secondaryPanel) {
+                const el1 = primaryPanel.getScrollElement();
+                const el2 = secondaryPanel.getScrollElement();
+                if (el1 && el2) {
+                    clearInterval(interval);
+                    startSync(el1, el2);
+                }
+            }
+            if (attempts > 20) {
+                clearInterval(interval);
+            }
+        }, 100);
+    }
+
+    function startSync(el1, el2) {
+        let isSyncing = false;
+        const onScroll1 = () => {
+            if (!isSyncing) {
+                isSyncing = true;
+                el2.scrollTop = el1.scrollTop;
+                requestAnimationFrame(() => isSyncing = false);
+            }
+        };
+        const onScroll2 = () => {
+            if (!isSyncing) {
+                isSyncing = true;
+                el1.scrollTop = el2.scrollTop;
+                requestAnimationFrame(() => isSyncing = false);
+            }
+        };
+
+        el1.addEventListener('scroll', onScroll1);
+        el2.addEventListener('scroll', onScroll2);
+
+        cleanupSync = () => {
+            el1.removeEventListener('scroll', onScroll1);
+            el2.removeEventListener('scroll', onScroll2);
+            cleanupSync = () => {};
+        };
+    }
 
     let showDataTrimUI = false;
     let currentTrimAudioBuffer = null; // Buffer for the active trim session
     let dataTrimStartTime = 0;
     let dataTrimEndTime = 0;
 
-    const mediaToolbarConfig = {
-      undo: true, redo: true, blockType: true, bold: true, italic: true,
-      underline: true, strikethrough: true, link: true, insertMenu: false,
-      indent: true, outdent: true, align: true, textColor: true, highlight: true,
-      clearFormatting: true, search: true
-    };
-
-    let lexicalEditorRef;
-    let mediaPlayerInDataRef;
-
-    let localEditorJsonState = '';
-    let isDataPlayerVideoHidden = false; // State for MediaPlayer's video visibility
-    let associatedTranscriptPath = null;
-    let transcriptName = 'N/A';
-
-    let currentTranscriptJson = null;
-    let initialTranscriptJson = null;
-    let isTranscriptDirty = false;
-    let isTranscriptLoading = true;
-    let transcriptLoadError = null;
-    
-    $: isFileNotFoundInfo = transcriptLoadError === "INFO:FILE_NOT_FOUND";
-
     // LIVE MediaPlayer properties needed by InteractiveWaveform
     let dataMediaPlayerCurrentTime = 0;
     let dataMediaPlayerIsPlaying = false;
 
-    const defaultEmptyJson = JSON.stringify({
-        root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }],
-            direction: null, format: '', indent: 0, type: 'root', version: 1 }
-    });
-
-    const unsubscribeProject = projectStore.subscribe(p => {
-        if (p.selectedMediaNotePath === mediaPath) {
-            if (currentTranscriptJson !== p.currentMediaNoteTranscriptJson) {
-                currentTranscriptJson = p.currentMediaNoteTranscriptJson;
-                if (lexicalEditorRef && localEditorJsonState !== currentTranscriptJson) {
-                    lexicalEditorRef.resetEditorState(currentTranscriptJson || defaultEmptyJson);
-                    localEditorJsonState = currentTranscriptJson || defaultEmptyJson;
-                }
-            }
-            if (initialTranscriptJson !== p.initialMediaNoteTranscriptJson) { initialTranscriptJson = p.initialMediaNoteTranscriptJson; }
-            if (isTranscriptDirty !== p.isMediaNoteTranscriptDirty) { isTranscriptDirty = p.isMediaNoteTranscriptDirty; }
-            if (isTranscriptLoading !== p.isMediaNoteTranscriptLoading) { isTranscriptLoading = p.isMediaNoteTranscriptLoading; }
-            if (transcriptLoadError !== p.mediaNoteTranscriptError) { transcriptLoadError = p.mediaNoteTranscriptError; }
-        }
-    });
-
-    async function loadTranscript(path) {
-        if (!path) {
-            setMediaNoteTranscriptLoadFailed(mediaPath, "Associated transcript/note path could not be determined.", false);
-            return;
-        }
-        projectStore.update(p => {
-            if (p.selectedMediaNotePath === mediaPath) { return { ...p, isMediaNoteTranscriptLoading: true, mediaNoteTranscriptError: null }; }
-            return p;
-        });
-        localEditorJsonState = defaultEmptyJson;
-        if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
-        try {
-            const jsonContent = await invoke('load_transcript_json', { transcriptPath: path });
-            if (!jsonContent || jsonContent.trim() === '') {
-                setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
-            } else {
-                let parsed = JSON.parse(jsonContent);
-                if (parsed && parsed.root && parsed.root.children) { setLoadedMediaNoteTranscriptData(mediaPath, jsonContent); }
-                else { throw new Error("Invalid Lexical JSON structure."); }
-            }
-        } catch (error) {
-            const errorMessage = error.message || String(error);
-            if (errorMessage.toLowerCase().includes('file not found') || errorMessage.toLowerCase().includes('json file not found')) {
-                 setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load attempt.", true);
-            } else { setMediaNoteTranscriptLoadFailed(mediaPath, errorMessage, false); }
-        }
-    }
-
-    async function loadHighlightsForTranscript(path) {
-        if (!path) {
-            setDocumentHighlights([]);
-            return;
-        }
-        try {
-            const projectId = get(projectStore).id;
-            const rawHighlights = await invoke('load_lexical_highlights', {
-                args: {
-                    projectId: projectId,
-                    documentPath: path,
-                }
-            });
-            const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
-            setDocumentHighlights(highlights);
-        } catch (e) {
-            console.error("[MediaEditorPanel] Error loading highlights:", e);
-            setDocumentHighlights([]);
-        }
-    }
-
-    let previousActiveTranscriptPathInDataTab = null;
-    $: if ($projectStore.activeTranscriptPathInDataTab && $projectStore.activeTranscriptPathInDataTab !== previousActiveTranscriptPathInDataTab) {
-        previousActiveTranscriptPathInDataTab = $projectStore.activeTranscriptPathInDataTab;
-        associatedTranscriptPath = $projectStore.activeTranscriptPathInDataTab;
-        transcriptName = associatedTranscriptPath.split(/[\\/]/).pop();
-        console.log(`[MediaEditorPanel] activeTranscriptPathInDataTab changed to: ${associatedTranscriptPath}`);
-        loadTranscript(associatedTranscriptPath);
-        loadHighlightsForTranscript(associatedTranscriptPath);
-        showDataTrimUI = false; // Hide trim UI when switching transcripts
-        currentTrimAudioBuffer = null;
-    } else if (!$projectStore.activeTranscriptPathInDataTab && previousActiveTranscriptPathInDataTab) {
-        // If activeTranscriptPathInDataTab becomes null (e.g., media file deselected)
-        previousActiveTranscriptPathInDataTab = null;
-        associatedTranscriptPath = null;
-        transcriptName = 'N/A';
-        currentTranscriptJson = null; initialTranscriptJson = null; isTranscriptDirty = false;
-        isTranscriptLoading = false; transcriptLoadError = null; showDataTrimUI = false; currentTrimAudioBuffer = null;
-        if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
-        localEditorJsonState = defaultEmptyJson;
-        setDocumentHighlights([]);
-        // Also clear the selectedMediaNotePath if it matches the previous one
-        if (get(projectStore).selectedMediaNotePath === mediaPath) {
-            projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null }));
-        }
-    }
-
-    // Initial load logic (when mediaPath first becomes available) - REMOVED, now handled by projectStore.js
-
-    function handleEditorChange(event) {
-        const newJson = event.detail.jsonString;
-        if (localEditorJsonState !== newJson) {
-            localEditorJsonState = newJson;
-            if (get(projectStore).selectedMediaNotePath === mediaPath) {
-                if (isFileNotFoundInfo && initialTranscriptJson === defaultEmptyJson) {
-                    projectStore.update(p => ({...p, initialMediaNoteTranscriptJson: defaultEmptyJson, mediaNoteTranscriptError: null}));
-                }
-                setMediaNoteTranscriptEditorContent(mediaPath, newJson);
-            }
-        }
-	}
-
-    function handleHighlightsChange(event) {
-        const { highlights } = event.detail;
-        setDocumentHighlights(highlights);
-    }
-
-    async function handleSave() {
-        if (!mediaPath) { console.error("[MediaEditorPanel] Save Error: No mediaPath for context."); await message("Cannot save: No media file is active for this note.", { title: "Save Error", type: "error" }); return; }
-        if (!associatedTranscriptPath) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated data path is not determined.`); await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" }); return; }
-        if (isTranscriptLoading || (transcriptLoadError && !isFileNotFoundInfo)) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state.`); await message(`Cannot save: ${isTranscriptLoading ? 'Note is still loading.' : `Note failed to load (${transcriptLoadError})`}`, { title: "Save Error", type: "error" }); return; }
-
-        const finalJsonToSave = localEditorJsonState || defaultEmptyJson;
-        projectStore.update(p => ({ ...p, statusMessage: `Saving data for ${transcriptName}...`}));
-
-        try {
-            // Use the centralized saveDocumentContent service which now handles highlights
-            await saveDocumentContent(associatedTranscriptPath, finalJsonToSave);
-            // The service now handles marking things as saved, but we can keep this for local state consistency if needed.
-            if (get(projectStore).selectedMediaNotePath === mediaPath) {
-                markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave);
-            }
-            projectStore.update(p => ({ ...p, statusMessage: `Data for ${transcriptName} saved.`}));
-        } catch (error) {
-             // Error message is already shown by the service, so we just update the status
-             projectStore.update(p => ({ ...p, statusMessage: `Error saving data for ${transcriptName}.`}));
-        }
-    }
-
-    async function handleDiscard() {
-        const currentStoreState = get(projectStore);
-        const dirtyFlagForThisNote = currentStoreState.selectedMediaNotePath === mediaPath && currentStoreState.isMediaNoteTranscriptDirty;
-        if (dirtyFlagForThisNote) {
-            const userConfirmed = await confirm(`Discard unsaved changes to the data for "${mediaPath.split(/[\\/]/).pop()}"?`, { type: 'warning', title: 'Discard Changes' });
-            if (userConfirmed) {
-                if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptChangesDiscarded(mediaPath); }
-            }
-        }
-    }
-
-    $: {
-        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
-        if (activeTranscriptPath && activeTranscriptPath !== associatedTranscriptPath) {
-            associatedTranscriptPath = activeTranscriptPath;
-            transcriptName = activeTranscriptPath.split(/[\\/]/).pop();
-            loadTranscript(activeTranscriptPath);
-            loadHighlightsForTranscript(activeTranscriptPath);
-        } else if (!activeTranscriptPath && mediaPath) {
-            if (associatedTranscriptPath) {
-                associatedTranscriptPath = null;
-                transcriptName = 'N/A';
-                setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
-                setDocumentHighlights([]);
-            }
-        }
-    }
-
     onMount(() => {
-        setActiveMediaNoteEditorRef(mediaPath, self);
         isMediaEditorOpen.set(true);
-        // Initial load is now handled by the reactive blocks
         showDataTrimUI = false;
         currentTrimAudioBuffer = null;
     });
 
 	onDestroy(() => {
-        const activeRefTuple = get(projectStore).activeMediaNoteEditorRef;
-        if (activeRefTuple && activeRefTuple.path === mediaPath) { clearActiveMediaNoteEditorRef(); }
         isMediaEditorOpen.set(false);
-        unsubscribeProject();
+        cleanupSync();
 	});
-
-    export function save() { return handleSave(); }
-    export function discard() { return handleDiscard(); }
-    export function resetEditorState(jsonString) {
-        if (lexicalEditorRef) {
-            lexicalEditorRef.resetEditorState(jsonString || defaultEmptyJson);
-            localEditorJsonState = jsonString || defaultEmptyJson;
-        }
-    }
-    export function getItemPath() { return mediaPath; }
-    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
-        if (lexicalEditorRef) {
-            lexicalEditorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
-        }
-    }
-
-    const self = { save, discard, resetEditorState, getItemPath, updateLiveTranscriptionText };
 
     function handleRequestDataTranscribe(event) {
         dispatch('requestTranscriptionTabWithMedia', { mediaPath: event.detail.mediaPath });
@@ -271,7 +126,6 @@
         if (showDataTrimUI) {
             showDataTrimUI = false;
             currentTrimAudioBuffer = null;
-            console.log('[MediaEditorPanel] Trim UI explicitly hidden by button toggle.');
         } else {
             const duration = event.detail.duration;
             const audioBuffer = event.detail.audioBuffer;
@@ -282,11 +136,9 @@
                 dataTrimEndTime = duration;
                 currentTrimAudioBuffer = audioBuffer;
                 showDataTrimUI = true;
-                console.log(`[MediaEditorPanel] Trim UI shown based on event data. Duration: ${duration}, Buffer Present: ${!!audioBuffer}, isReady Signal from Player: ${isReady}`);
             } else {
                 showDataTrimUI = false;
                 currentTrimAudioBuffer = null;
-                console.error(`[MediaEditorPanel] Error: MediaPlayer event indicated not ready or event data invalid. Duration from event: ${duration}, Buffer from event: ${!!audioBuffer}, isReady signal from event: ${isReady}`);
                 alert("MediaPlayer reported not ready or essential data was missing from the event. Cannot show trim UI.");
             }
         }
@@ -304,10 +156,10 @@
         if (dataTrimEndTime <= dataTrimStartTime) { await message("Error: Trim end time must be after start time.", { title: "Trim Error", type: "error" }); return; }
         projectStore.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media in data...' }));
         try {
-            await handleTrimMediaConfirm(mediaPath, dataTrimStartTime, dataTrimEndTime); // This is an existing external function call
+            await handleTrimMediaConfirm(mediaPath, dataTrimStartTime, dataTrimEndTime);
 
             const fileName = await basename(mediaPath);
-            let mediaTypeFolder = 'Media'; // Default or could be 'Output' or similar if type unknown
+            let mediaTypeFolder = 'Media';
             if (fileName) {
                 const lowerFileName = fileName.toLowerCase();
                 if (lowerFileName.endsWith('.mp3') || lowerFileName.endsWith('.wav') || lowerFileName.endsWith('.m4a') || lowerFileName.endsWith('.ogg') || lowerFileName.endsWith('.aac')) {
@@ -340,7 +192,12 @@
         currentTrimAudioBuffer = null;
         dataTrimStartTime = 0;
         dataTrimEndTime = 0;
-        console.log('[MediaEditorPanel] Trim cancelled. UI hidden, times reset, buffer cleared.');
+    }
+
+    function handlePlaySegment(detail) {
+        if (mediaPlayerInDataRef) {
+            mediaPlayerInDataRef.playSegment(detail.startTime, detail.endTime);
+        }
     }
 </script>
 
@@ -376,7 +233,7 @@
     </div>
 
     <div
-        class="min-h-0 overflow-hidden bg-white dark:bg-dark-bg-form-field {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
+        class="min-h-0 overflow-hidden bg-white dark:bg-dark-bg-form-field {!isDataPlayerVideoHidden ? 'h-1/2' : ''} flex flex-col"
         class:flex-grow={isDataPlayerVideoHidden}
     >
         {#if showDataTrimUI && mediaPath}
@@ -429,12 +286,92 @@
             </div>
         {/if}
 
-        {#if isTranscriptLoading && mediaPath}
-            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
-                Loading data for <span class="font-semibold ml-1">{transcriptName}</span>...
+        {#if splitPartnerPath && primaryRowCount > 0 && secondaryRowCount > 0 && primaryRowCount !== secondaryRowCount}
+            <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800/50 px-4 py-2 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-xs shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625l6.28-10.875zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
+                <span><strong>Row Count Mismatch:</strong> The primary transcript has {primaryRowCount} rows, while the partner transcript has {secondaryRowCount} rows. Scroll sync may be inaccurate.</span>
             </div>
-        {:else if transcriptLoadError && mediaPath}
-            {#if isFileNotFoundInfo}
+        {/if}
+
+        <div class="flex-grow min-h-0 overflow-hidden">
+            {#if splitPartnerPath}
+                <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
+                    <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
+                        <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                            <span class="truncate">{$projectStore.activeTranscriptPathInDataTab.split(/[\\/]/).pop()}</span>
+                        </div>
+                        <div class="flex-grow overflow-hidden">
+                            {#key $projectStore.activeTranscriptPathInDataTab}
+                                <MediaTranscriptEditorSubPanel
+                                    bind:this={primaryPanel}
+                                    mediaPath={mediaPath}
+                                    transcriptPath={$projectStore.activeTranscriptPathInDataTab}
+                                    isPrimary={true}
+                                    on:playsegment={(e) => handlePlaySegment(e.detail)}
+                                    on:rowcountupdated={(e) => primaryRowCount = e.detail.rowCount}
+                                />
+                            {/key}
+                        </div>
+                    </div>
+                    <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
+                        <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                            <div class="flex items-center min-w-0 flex-grow">
+                                <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
+                            </div>
+                            <button 
+                                class="ml-2 flex-shrink-0" 
+                                class:text-black={!isScrollSyncEnabled} 
+                                class:text-blue-500={isScrollSyncEnabled}
+                                class:dark:text-gray-400={!isScrollSyncEnabled} 
+                                title={isScrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"}
+                                on:click={toggleScrollSync}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-down-up" viewBox="0 0 16 16">
+                                    <path fill-rule="evenodd" d="M11.5 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L11 2.707V14.5a.5.5 0 0 0 .5.5m-7-14a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L4 13.293V1.5a.5.5 0 0 1 .5-.5"/>
+                                </svg>
+                            </button>
+                            <button 
+                                class="hover:text-red-500 ml-2 flex-shrink-0" 
+                                title="Close Split"
+                                on:click={() => clearImportedTranscriptSplit($projectStore.activeTranscriptPathInDataTab)}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="flex-grow overflow-hidden">
+                            {#key splitPartnerPath}
+                                <MediaTranscriptEditorSubPanel
+                                    bind:this={secondaryPanel}
+                                    mediaPath={mediaPath}
+                                    transcriptPath={splitPartnerPath}
+                                    isPrimary={false}
+                                    on:playsegment={(e) => handlePlaySegment(e.detail)}
+                                    on:rowcountupdated={(e) => secondaryRowCount = e.detail.rowCount}
+                                />
+                            {/key}
+                        </div>
+                    </div>
+                </div>
+            {:else if $projectStore.activeTranscriptPathInDataTab}
+                {#key $projectStore.activeTranscriptPathInDataTab}
+                    <MediaTranscriptEditorSubPanel
+                        bind:this={primaryPanel}
+                        mediaPath={mediaPath}
+                        transcriptPath={$projectStore.activeTranscriptPathInDataTab}
+                        isPrimary={true}
+                        on:playsegment={(e) => handlePlaySegment(e.detail)}
+                        on:rowcountupdated={(e) => primaryRowCount = e.detail.rowCount}
+                    />
+                {/key}
+            {:else if !mediaPath}
+                <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
+                    Select an audio or video file from the Data panel to view its player and data.
+                </div>
+            {:else}
                 <div class="flex-grow flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-4 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                     <p class="font-semibold">No Transcription Yet</p>
@@ -442,272 +379,12 @@
                         To generate a transcript, you can use the main "Transcribe" feature in the Transcription tab.
                     </p>
                 </div>
-            {:else}
-                <div class="flex-grow flex flex-col items-center justify-center text-orange-600 dark:text-orange-400 p-4 text-center">
-                    <p class="font-semibold">Error Loading Data</p>
-                    <p class="text-xs mt-1">{transcriptLoadError}</p>
-                    <p class="text-xs mt-2">Please check the file or try again.</p>
-                </div>
             {/if}
-        {:else if !mediaPath}
-            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
-                Select an audio or video file from the Data panel to view its player and data.
-            </div>
-        {:else}
-            <div class="lexical-editor-wrapper-style w-full h-full dark:text-gray-100 layout-{$activeLayout}">
-                {#key mediaPath}
-                    <LexicalEditor
-                        bind:this={lexicalEditorRef}
-                        initialJson={currentTranscriptJson || defaultEmptyJson}
-                        editable={true}
-                        enableSegmentPlayback={true}
-                        placeholder="Enter data for this media file..."
-                        on:change={handleEditorChange}
-                        on:highlightschange={handleHighlightsChange}
-                        on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
-                        on:playsegment={(e) => {
-                            if (mediaPlayerInDataRef) {
-                                mediaPlayerInDataRef.playSegment(e.detail.startTime, e.detail.endTime);
-                            }
-                        }}
-                        toolbarConfig={mediaToolbarConfig}
-                        activeLayout={$activeLayout}
-                        documentPath={associatedTranscriptPath}
-                        documentHighlights={$project.currentDocumentHighlights}
-                    />
-                {/key}
-            </div>
-        {/if}
+        </div>
     </div>
 </div>
 
 <style lang="postcss">
-    .lexical-editor-wrapper-style {
-        display: flex;
-        flex-direction: column;
-        @apply border-none shadow-none overflow-hidden;
-    }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
-        flex-grow: 1;
-        min-height: 0;
-        border: none !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        overflow: hidden;
-    }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
-        overflow-y: auto;
-        height: 100%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content) {
-        @apply leading-normal whitespace-pre-wrap break-words;
-        min-height: unset !important;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 12pt;
-        line-height: 1.5;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content p) {
-        @apply mt-0 mb-0;
-    }
-
-    .lexical-editor-wrapper-style :global(.lexical-content table) {
-        border-collapse: collapse;
-        border-spacing: 0;
-        width: 100%;
-        border: 1px solid #ccc;
-        margin-bottom: 1rem;
-        table-layout: fixed;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content th),
-    .lexical-editor-wrapper-style :global(.lexical-content td) {
-        border: 1px solid #ccc;
-        padding: 0.2rem 5.75pt;
-        text-align: left;
-        vertical-align: top;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 12pt;
-        line-height: 1.5;
-        word-break: break-word;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content th) {
-        background-color: #f0f0f0;
-        font-weight: 600;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content th p),
-    .lexical-editor-wrapper-style :global(.lexical-content td p) {
-        @apply mt-0 mb-0;
-    }
-
-    .lexical-editor-wrapper-style :global(table.editor-table tr.editor-table-row:nth-child(2)) {
-    background-color: #f2f2f2;
-}
-
-    /* =================================================================== */
-    /* STYLES FOR LAYOUT 1 (DEFAULT)                                       */
-    /* =================================================================== */
-    /* Widths are now handled by Lexical state and inline styles to support resizing */
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(1)) {
-        /* width: 5%; - controlled by JS */
-    }
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(2)) {
-        /* width: 15%; - controlled by JS */
-    }
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(3)) {
-        /* width: 15%; - controlled by JS */
-    }
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(4)) {
-        /* width: 65%; - controlled by JS */
-    }
-
-    /* =================================================================== */
-    /* STYLES FOR LAYOUT 2                                                 */
-    /* =================================================================== */
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table) {
-        table-layout: auto;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table tr) {
-        display: flex;
-        flex-wrap: wrap;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th),
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td) {
-        box-sizing: border-box;
-        padding: 8px;
-        border: 1px solid #ccc;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
-        flex: 1 0 25%;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
-        flex: 1 0 75%;
-        margin-left: -1px;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(n+3)),
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(n+3)) {
-        margin-top: -1px;
-    }
-
-    /* =================================================================== */
-    /* STYLES FOR LAYOUT 3                                                 */
-    /* =================================================================== */
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table) {
-        table-layout: auto;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table tr) {
-        display: flex;
-        flex-wrap: wrap;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
-        display: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(n+2)),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(n+2)) {
-        box-sizing: border-box;
-        padding: 8px;
-        border: 1px solid #ccc;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
-        flex: 1 0 25%;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
-        flex: 1 0 75%;
-        margin-left: -1px;
-    }
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
-        flex: 1 0 100%;
-        margin-top: -1px;
-    }
-
-    /* =================================================================== */
-    /* STYLES FOR LAYOUT 4                                                 */
-    /* =================================================================== */
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table) {
-        table-layout: auto;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table tr) {
-        display: flex;
-        flex-wrap: nowrap;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(-n+2)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(-n+2)) {
-        display: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(n+3)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(n+3)) {
-        box-sizing: border-box;
-        padding: 8px;
-        border: 1px solid #ccc;
-    }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
-        flex: 1 0 25%;
-    }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
-        flex: 1 0 75%;
-        margin-left: -1px;
-    }
-
-    /* =================================================================== */
-    /* STYLES FOR LAYOUT 5                                                 */
-    /* =================================================================== */
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table) {
-        table-layout: auto;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table tr) {
-        display: flex;
-        flex-wrap: nowrap;
-        border: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table th:nth-child(-n+3)),
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table td:nth-child(-n+3)) {
-        display: none;
-    }
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
-        flex: 1 0 100%;
-        box-sizing: border-box;
-        padding: 8px;
-        border: 1px solid #ccc;
-    }
-
-    /* =================================================================== */
-    /* COMMON RULE TO COLLAPSE ROWS VERTICALLY                             */
-    /* =================================================================== */
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table tr + tr),
-    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table tr + tr),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table tr + tr),
-    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table tr + tr) {
-        margin-top: -1px;
-    }
-
-
-    .lexical-editor-wrapper-style-placeholder {
-        display: flex;
-        flex-direction: column;
-        @apply border border-gray-300 dark:border-border overflow-hidden;
-    }
-     .lexical-editor-wrapper-style-placeholder.is-disabled {
-        @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-d-gray-700 dark:border-d-gray-500 dark:opacity-70;
-    }
-
     .flex-grow.min-h-0 {
         min-height: 0;
     }
