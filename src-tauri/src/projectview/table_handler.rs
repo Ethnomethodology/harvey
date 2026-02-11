@@ -94,17 +94,23 @@ pub async fn import_table_file(
     
     let mut folder_counter = 0;
     let (folder_path, final_table_filename) = loop {
-        let base_name = if folder_counter == 0 {
+        let folder_name = if folder_counter == 0 {
             table_file_stem_truncated.to_string()
         } else {
             format!("{}_{}", table_file_stem_truncated, folder_counter)
         };
-        let candidate_folder = tables_base.join(&base_name);
+        let candidate_folder = tables_base.join(&folder_name);
+        
+        // Ensure folder name is unique AND file inside doesn't exist
+        // In practice, if candidate_folder doesn't exist, we are good.
+        // But let's also check if it exists but is somehow empty or different.
+        // The safest is: if folder doesn't exist, use it.
         if !candidate_folder.exists() {
-            let file_name = format!("{}.{}", base_name, original_source_extension);
+            let file_name = format!("{}.{}", folder_name, original_source_extension);
             debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
             break (candidate_folder, file_name);
         }
+        
         folder_counter += 1;
         if folder_counter > 1000 {
             error!("[import_table_file] Could not find unique folder for table base '{}' after {} attempts.", table_file_stem_truncated, folder_counter);
