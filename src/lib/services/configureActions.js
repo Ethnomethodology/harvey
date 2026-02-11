@@ -258,10 +258,11 @@ export async function fetchAvailableModels() {
  * @param {Array<object>} segments - The array of segment data to export.
  * @param {string} transcriptJsonPath - The path to the transcript JSON file (used for DOCX export).
  * @param {string} [layoutChoice] - Optional. The chosen layout for DOCX export (e.g., 'Layout1', 'Layout2').
+ * @param {boolean} [excludeSpeakerNames] - Optional. If true, speaker names will be omitted in subtitle formats.
  * @returns {Promise<void>} A promise that resolves when export is complete or rejects on error.
  */
-export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice) {
-	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}")`);
+export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice, excludeSpeakerNames) {
+	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}", ExcludeSpeakers: ${excludeSpeakerNames})`);
 
 	if (format !== 'docx' && (!segments || segments.length === 0)) { // Segments not needed upfront for docx if using transcriptJsonPath
 		throw new Error("No transcript segments available to export.");
@@ -301,7 +302,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_srt with payload:', payload);
         const savedPath = await invoke('export_transcript_to_srt', payload);
@@ -318,7 +320,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_vtt with payload:', payload);
         const savedPath = await invoke('export_transcript_to_vtt', payload);
@@ -353,7 +356,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
           // No layoutChoice needed for ASS
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_ass with payload:', payload);

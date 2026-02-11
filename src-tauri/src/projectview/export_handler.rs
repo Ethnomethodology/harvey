@@ -702,6 +702,7 @@ pub async fn export_transcript_to_srt(
     _app_handle: AppHandle, // Not directly used but good practice for tauri commands
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_srt] Exporting to SRT: {}", output_path_str);
 
@@ -711,6 +712,8 @@ pub async fn export_transcript_to_srt(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for SRT export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     let mut srt_content = String::new();
     for (index, segment) in segments.iter().enumerate() { // Changed _index to index
@@ -723,10 +726,14 @@ pub async fn export_transcript_to_srt(
 
         let plain_text = get_plain_text_for_srt(&segment.text);
 
-        // Prepend speaker to text if speaker exists and is not empty
-        let text_line = if let Some(speaker_name) = &segment.speaker {
-            if !speaker_name.trim().is_empty() {
-                format!("{}: {}", speaker_name.trim(), plain_text)
+        // Prepend speaker to text if speaker exists and is not empty AND not excluded
+        let text_line = if !exclude_speakers {
+            if let Some(speaker_name) = &segment.speaker {
+                if !speaker_name.trim().is_empty() {
+                    format!("{}: {}", speaker_name.trim(), plain_text)
+                } else {
+                    plain_text
+                }
             } else {
                 plain_text
             }
@@ -956,6 +963,7 @@ pub async fn export_transcript_to_vtt(
     _app_handle: AppHandle,
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_vtt] Exporting to VTT with styling: {}", output_path_str);
 
@@ -965,6 +973,8 @@ pub async fn export_transcript_to_vtt(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for VTT export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     // Two-pass approach for VTT:
     // 1. Generate cue texts and collect all used classes (strikethrough and colors)
@@ -1005,9 +1015,13 @@ pub async fn export_transcript_to_vtt(
 
         let cue_text = &cue_texts[index];
 
-        let text_line = if let Some(speaker_name) = &segment.speaker {
-            if !speaker_name.trim().is_empty() {
-                format!("{}: {}", speaker_name.trim(), cue_text)
+        let text_line = if !exclude_speakers {
+            if let Some(speaker_name) = &segment.speaker {
+                if !speaker_name.trim().is_empty() {
+                    format!("{}: {}", speaker_name.trim(), cue_text)
+                } else {
+                    cue_text.clone()
+                }
             } else {
                 cue_text.clone()
             }
@@ -1602,6 +1616,7 @@ pub async fn export_transcript_to_ass(
     _app_handle: AppHandle,
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_ass] Exporting to ASS: {}", output_path_str);
 
@@ -1611,6 +1626,8 @@ pub async fn export_transcript_to_ass(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for ASS export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     let mut ass_content = String::new();
 
@@ -1647,8 +1664,8 @@ pub async fn export_transcript_to_ass(
         let speaker_name = segment.speaker.as_deref().unwrap_or("").trim();
         let dialogue_text_raw = get_ass_dialogue_line_from_lexical_string(&segment.text);
 
-        // Prepend speaker to dialogue text if speaker name is not empty
-        let final_text = if !speaker_name.is_empty() {
+        // Prepend speaker to dialogue text if speaker name is not empty AND not excluded
+        let final_text = if !exclude_speakers && !speaker_name.is_empty() {
             format!("{}: {}", speaker_name, dialogue_text_raw)
         } else {
             dialogue_text_raw

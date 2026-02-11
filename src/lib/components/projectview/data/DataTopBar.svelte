@@ -356,7 +356,7 @@
         }
     }
     async function handleExportConfirm(event) {
-        const { filePath, format, layoutChoice } = event.detail;
+        const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
         const activeTranscriptPath = pathForExportModal;
 
         if (!activeTranscriptPath) {
@@ -441,7 +441,7 @@
                 return;
             }
 
-            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice);
+            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice, excludeSpeakerNames);
             message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
 
         } catch (error) {

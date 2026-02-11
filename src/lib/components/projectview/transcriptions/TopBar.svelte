@@ -152,8 +152,8 @@
 		}
 	}
 	async function handleExportConfirm(event) {
-		const { filePath, format, layoutChoice } = event.detail;
-		console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format, layoutChoice });
+		const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
+		console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format, layoutChoice, excludeSpeakerNames });
 		const segmentsToExport = $transcriptStore.segments;
 		if (!segmentsToExport || segmentsToExport.length === 0) {
 			console.error("TopBar: Cannot export, no segments available in store.");
@@ -161,8 +161,8 @@
 			return;
 		}
 		try {
-			await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport, layoutChoice);
-			console.log(`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}) successful.`);
+			await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport, layoutChoice, excludeSpeakerNames);
+			console.log(`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}, ExcludeSpeakers: ${excludeSpeakerNames}) successful.`);
 			message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
 		} catch (error) {
 			console.error(`TopBar: Export failed to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}):`, error);
