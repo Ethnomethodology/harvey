@@ -90,6 +90,19 @@ pub async fn import_table_file(
         })?;
     debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
+    info!("[import_table_file] Updating project XML to include table: {}", original_source_filename_with_ext);
+    let xml_content = fs::read_to_string(&project_xml_path)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to read project XML for update from {}: {}", project_xml_path.display(), e);
+            CommandError::Io(format!("Failed to read project XML for update from {}: {}", project_xml_path.display(), e))
+        })?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to parse project XML for update from {}: {}", project_xml_path.display(), e);
+            CommandError::XmlDeserialization(format!("Failed to parse project XML for update from {}: {}", project_xml_path.display(), e))
+        })?;
+    debug!("[import_table_file] Project XML parsed for update.");
+
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
     
     let mut folder_counter = 0;
@@ -101,11 +114,14 @@ pub async fn import_table_file(
         };
         let candidate_folder = tables_base.join(&folder_name);
         
-        // Ensure folder name is unique AND file inside doesn't exist
-        // In practice, if candidate_folder doesn't exist, we are good.
-        // But let's also check if it exists but is somehow empty or different.
-        // The safest is: if folder doesn't exist, use it.
-        if !candidate_folder.exists() {
+        // Check if this stem is already used in project_data.table_files.files
+        // We want to avoid conflict even if the extension is different.
+        let name_conflict = project_data.table_files.files.iter().any(|f| {
+            // Check if f.name matches folder_name exactly or matches folder_name + suffix
+            f.name == folder_name || f.name.starts_with(&format!("{}.", folder_name))
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
             let file_name = format!("{}.{}", folder_name, original_source_extension);
             debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
             break (candidate_folder, file_name);
@@ -139,19 +155,6 @@ pub async fn import_table_file(
         CommandError::from(format!("Failed to copy table file: {}", e))
     })?;
     debug!("File copied to: {}", final_table_path.display());
-
-    info!("[import_table_file] Updating project XML to include table: {}", final_table_name);
-    let xml_content = fs::read_to_string(&project_xml_path)
-        .map_err(|e| {
-            error!("[import_table_file] Failed to read project XML for update from {}: {}", project_xml_path.display(), e);
-            CommandError::Io(format!("Failed to read project XML for update from {}: {}", project_xml_path.display(), e))
-        })?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)
-        .map_err(|e| {
-            error!("[import_table_file] Failed to parse project XML for update from {}: {}", project_xml_path.display(), e);
-            CommandError::XmlDeserialization(format!("Failed to parse project XML for update from {}: {}", project_xml_path.display(), e))
-        })?;
-    debug!("[import_table_file] Project XML parsed for update.");
 
     let relative_path_for_xml = final_table_path
         .strip_prefix(project_base_dir)
