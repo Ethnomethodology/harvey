@@ -66,30 +66,69 @@
 
     function startSync(el1, el2) {
         let isSyncing = false;
-        const onScroll1 = () => {
-            if (!isSyncing) {
-                isSyncing = true;
-                el2.scrollTop = el1.scrollTop;
-                // el2.scrollLeft = el1.scrollLeft;
-                requestAnimationFrame(() => isSyncing = false);
-            }
-        };
-        const onScroll2 = () => {
-            if (!isSyncing) {
-                isSyncing = true;
-                el1.scrollTop = el2.scrollTop;
-                // el1.scrollLeft = el2.scrollLeft;
-                requestAnimationFrame(() => isSyncing = false);
+        let activeElement = null;
+
+        const handleInteraction = (e) => {
+            activeElement = e.currentTarget;
+            if (isScrollSyncEnabled) {
+                if (e.type === 'click' || e.type === 'keyup') {
+                    syncFollower();
+                }
             }
         };
 
-        el1.addEventListener('scroll', onScroll1);
-        el2.addEventListener('scroll', onScroll2);
+        const syncFollower = () => {
+            if (isSyncing || !primaryPanel || !secondaryPanel) return;
+            isSyncing = true;
+            
+            const leader = activeElement === el1 ? primaryPanel : secondaryPanel;
+            const follower = activeElement === el1 ? secondaryPanel : primaryPanel;
+            
+            // Try cursor row first if visible
+            const cursorRow = leader.getCursorRowInfo();
+            if (cursorRow && cursorRow.index !== -1 && cursorRow.visible) {
+                follower.scrollToRow(cursorRow.index, cursorRow.offset);
+            } else {
+                // Fallback to top visible row
+                const topRow = leader.getTopVisibleRowInfo();
+                if (topRow && topRow.index !== -1) {
+                    follower.scrollToRow(topRow.index, topRow.offset);
+                }
+            }
+            
+            requestAnimationFrame(() => isSyncing = false);
+        };
+
+        const onScroll = () => {
+            if (isScrollSyncEnabled && activeElement) {
+                syncFollower();
+            }
+        };
+
+        el1.addEventListener('scroll', onScroll, { passive: true });
+        el2.addEventListener('scroll', onScroll, { passive: true });
+        
+        el1.addEventListener('pointerover', handleInteraction);
+        el2.addEventListener('pointerover', handleInteraction);
+        el1.addEventListener('wheel', handleInteraction, { passive: true });
+        el2.addEventListener('wheel', handleInteraction, { passive: true });
+        el1.addEventListener('click', handleInteraction);
+        el2.addEventListener('click', handleInteraction);
+        el1.addEventListener('keyup', handleInteraction);
+        el2.addEventListener('keyup', handleInteraction);
 
         cleanupSync = () => {
             console.log('[ImportedTranscriptView] Cleaning up sync listeners.');
-            el1.removeEventListener('scroll', onScroll1);
-            el2.removeEventListener('scroll', onScroll2);
+            el1.removeEventListener('scroll', onScroll);
+            el2.removeEventListener('scroll', onScroll);
+            el1.removeEventListener('pointerover', handleInteraction);
+            el2.removeEventListener('pointerover', handleInteraction);
+            el1.removeEventListener('wheel', handleInteraction);
+            el2.removeEventListener('wheel', handleInteraction);
+            el1.removeEventListener('click', handleInteraction);
+            el2.removeEventListener('click', handleInteraction);
+            el1.removeEventListener('keyup', handleInteraction);
+            el2.removeEventListener('keyup', handleInteraction);
             cleanupSync = () => {};
         };
     }

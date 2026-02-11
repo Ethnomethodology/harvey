@@ -239,8 +239,11 @@
     }
     export function getItemPath() { return transcriptPath; }
     export function getScrollElement() { return lexicalEditorRef?.getScrollElement(); }
+    export function getTopVisibleRowInfo() { return lexicalEditorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 }; }
+    export function getCursorRowInfo() { return lexicalEditorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false }; }
+    export function scrollToRow(index, offset) { lexicalEditorRef?.scrollToRow(index, offset); }
 
-    const self = { save, discard, resetEditorState, getItemPath, getScrollElement };
+    const self = { save, discard, resetEditorState, getItemPath, getScrollElement, getTopVisibleRowInfo, getCursorRowInfo, scrollToRow };
 
 </script>
 

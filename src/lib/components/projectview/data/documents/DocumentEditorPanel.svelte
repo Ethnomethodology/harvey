@@ -173,8 +173,17 @@
             editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
         }
     }
+    export function getTopVisibleRowInfo() {
+        return editorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 };
+    }
+    export function getCursorRowInfo() {
+        return editorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false };
+    }
+    export function scrollToRow(index, offset) {
+        editorRef?.scrollToRow(index, offset);
+    }
 
-    const self = { save, discard, resetEditorState, updateLiveTranscriptionText };
+    const self = { save, discard, resetEditorState, updateLiveTranscriptionText, getTopVisibleRowInfo, getCursorRowInfo, scrollToRow };
 
 </script>
 

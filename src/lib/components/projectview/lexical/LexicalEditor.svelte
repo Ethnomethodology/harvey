@@ -193,60 +193,7 @@
     TableNode, TableRowNode, TableCellNode
   ];
 
-  onMount(() => {
-    function handleClickOutside(event) {
-      if (isBlockDropdownOpen && blockDropdownRef && !blockDropdownRef.contains(event.target)) {
-        isBlockDropdownOpen = false;
-      }
-      if (isAlignDropdownOpen && alignmentDropdownRef && !alignmentDropdownRef.contains(event.target)) {
-        isAlignDropdownOpen = false;
-      }
-      if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
-        isColorDropdownOpen = false;
-      }
-      if (isHighlightDropdownOpen && highlightDropdownRef && !highlightDropdownRef.contains(event.target)) {
-        isHighlightDropdownOpen = false;
-      }
-      if (isInsertDropdownOpen && insertDropdownRef && !insertDropdownRef.contains(event.target)) {
-        isInsertDropdownOpen = false;
-      }
-      if (showSearchOptionsDropdown && searchOptionsDropdownRef && !searchOptionsDropdownRef.contains(event.target)) {
-        showSearchOptionsDropdown = false;
-      }
-      const menuElement = document.querySelector('.table-cell-action-menu-container');
-      if (showTableCellMenu && menuElement && !menuElement.contains(event.target)) {
-        closeTableCellMenu(false);
-      }
-    }
-
-    function handleClickOutsideSearch(event) {
-      if (showSearchBox) {
-        const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
-        const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
-
-        if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
-          showSearchBox = false;
-          updateSearchHighlights();
-        }
-      }
-    }
-
-    document.addEventListener('click', handleClickOutside, true);
-    document.addEventListener('click', handleClickOutsideSearch, true);
-    document.addEventListener('pointermove', handlePointerMove);
-    document.addEventListener('pointerup', handlePointerUp);
-
-    loadHighlights();
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside, true);
-      document.removeEventListener('click', handleClickOutsideSearch, true);
-      document.removeEventListener('pointermove', handlePointerMove);
-      document.removeEventListener('pointerup', handlePointerUp);
-    };
-  });
-  onMount(() => {
-    function handleShortcut(event) {
+  function handleShortcut(event) {
       if (!editable) return;
       const mod = event.metaKey || event.ctrlKey;
 
@@ -261,12 +208,7 @@
             toggleLink();
             return;
         }
-    }
-    document.addEventListener('keydown', handleShortcut);
-    return () => {
-      document.removeEventListener('keydown', handleShortcut);
-    };
-  });
+  }
 
   function toggleBlockDropdown() {
     if (!editable) return;
@@ -309,7 +251,7 @@
           documentPath,
         }
       });
-      if (highlightsJson) {
+      if (highlightsJson && editor) {
         const highlights = JSON.parse(highlightsJson);
         editor.update(() => {
           for (const highlight of highlights) {
@@ -802,6 +744,7 @@
     tick().then(() => {
       if (!editor) return;
       isReady = true;
+      loadHighlights();
       if (editor.isEditable()) {
         setTimeout(() => { if(editor) editor.focus(); }, 0);
         try {
@@ -955,6 +898,92 @@
 
   export function getScrollElement() {
       return editorWrapper;
+  }
+
+  export function getTopVisibleRowInfo() {
+    if (!editorWrapper || !editor) return { index: -1, offset: 0 };
+    
+    const wrapperRect = editorWrapper.getBoundingClientRect();
+    
+    // Attempt fast path using elementFromPoint
+    // We check a point slightly inside the wrapper to find the row at the top
+    const centerX = wrapperRect.left + (wrapperRect.width / 2);
+    const topY = wrapperRect.top + 5; // 5px down to avoid borders
+    
+    const elAtTop = document.elementFromPoint(centerX, topY);
+    const rowAtTop = elAtTop?.closest('.editor-table-row');
+    
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+    
+    if (rowAtTop) {
+        const index = rows.indexOf(rowAtTop);
+        if (index !== -1) {
+            const rowRect = rowAtTop.getBoundingClientRect();
+            return { index, offset: Math.round(rowRect.top - wrapperRect.top) };
+        }
+    }
+    
+    // Fallback to iteration with a stable threshold
+    for (let i = 0; i < rows.length; i++) {
+        const rowRect = rows[i].getBoundingClientRect();
+        // Use a 2px threshold to ignore tiny slivers that might cause jitter
+        if (rowRect.bottom > wrapperRect.top + 2) { 
+            return { index: i, offset: Math.round(rowRect.top - wrapperRect.top) };
+        }
+    }
+    
+    return { index: -1, offset: 0 };
+  }
+
+  export function getCursorRowInfo() {
+    if (!editorWrapper || !editor) return { index: -1, offset: 0, visible: false };
+    
+    let info = { index: -1, offset: 0, visible: false };
+    
+    editor.getEditorState().read(() => {
+        const selection = _getSelection();
+        if (_isRangeSelection(selection)) {
+            const anchorNode = selection.anchor.getNode();
+            const element = editor.getElementByKey(anchorNode.getKey());
+            const row = element?.closest('.editor-table-row');
+            
+            if (row) {
+                const wrapperRect = editorWrapper.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+                
+                info.index = rows.indexOf(row);
+                info.offset = Math.round(rowRect.top - wrapperRect.top);
+                // Visible if the row is within the viewport
+                info.visible = (rowRect.bottom > wrapperRect.top && rowRect.top < wrapperRect.bottom);
+            }
+        }
+    });
+    
+    return info;
+  }
+
+  export function scrollToRow(index, offset) {
+    if (!editorWrapper || !editor || index < 0) return;
+    
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+    if (index >= rows.length) return;
+    
+    const targetRow = rows[index];
+    if (targetRow) {
+        const wrapperRect = editorWrapper.getBoundingClientRect();
+        const rowRect = targetRow.getBoundingClientRect();
+        
+        const currentOffset = rowRect.top - wrapperRect.top;
+        const targetOffset = offset;
+        
+        const diff = currentOffset - targetOffset;
+        
+        // Only scroll if the difference is significant (more than 1 pixel) to avoid jitter
+        if (Math.abs(diff) >= 1) {
+            editorWrapper.scrollTop = Math.round(editorWrapper.scrollTop + diff);
+        }
+    }
   }
 
   function updateToolbarState() {
