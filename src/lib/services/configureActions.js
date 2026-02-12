@@ -445,7 +445,18 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 		for (const segment of segments) {
 			const startTime = formatTimestamp(segment.start_time);
 			const endTime = formatTimestamp(segment.end_time);
-			const speaker = segment.speaker || 'Unknown';
+			let speaker = segment.speaker || 'Unknown';
+			
+			// Ensure speaker name has a trailing colon for consistency with other export formats
+			if (speaker !== 'Unknown') {
+				const trimmedSpk = speaker.trim();
+				if (trimmedSpk.endsWith(':')) {
+					speaker = trimmedSpk;
+				} else {
+					speaker = `${trimmedSpk}:`;
+				}
+			}
+
 			const textData = segment.text || ''; // Can be JSON string or plain text
 
 			const plainText = getPlainText(textData); // Use the robust helper

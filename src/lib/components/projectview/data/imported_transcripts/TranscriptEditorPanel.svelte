@@ -370,7 +370,11 @@
                         dataRow.append(timeCell);
 
                         const speakerCell = lexicalCreateTableCellNode();
-                        speakerCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.speaker || 'N/A')));
+                        let speakerName = segment.speaker || 'N/A';
+                        if (speakerName !== 'N/A' && !speakerName.endsWith(':')) {
+                            speakerName += ':';
+                        }
+                        speakerCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(speakerName)));
                         dataRow.append(speakerCell);
 
                         const textCell = lexicalCreateTableCellNode();

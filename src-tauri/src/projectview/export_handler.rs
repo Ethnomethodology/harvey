@@ -291,15 +291,14 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         let children = root.get("children")
             .and_then(|c| c.as_array())
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing root.children"))?;
-        let table_node = children.get(0)
+        let table_node = children.iter().find(|node| node.get("type").and_then(|t| t.as_str()) == Some("table"))
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table node"))?;
-        if table_node.get("type").and_then(|t| t.as_str()) != Some("table") {
-            return Err(CommandError::from("Invalid Lexical JSON: first child is not a table"));
-        }
+        
         let rows = table_node.get("children")
             .and_then(|r| r.as_array())
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table children"))?;
-        // Helper to parse timestamp range "mm:ss.mmm - mm:ss.mmm"
+        
+        // Helper to parse timestamp range "mm:ss.mmm - mm:ss.mmm" or "hh:mm:ss.mmm - hh:mm:ss.mmm"
         fn parse_ts_range(range: &str) -> (f64, f64) {
             let parts: Vec<&str> = range.split(" - ").collect();
             fn parse_one(s: &str) -> f64 {
@@ -325,27 +324,41 @@ pub async fn export_transcript_to_docx<R: Runtime>(
                 (0.0, 0.0)
             }
         }
+
         let mut segs = Vec::new();
         for row in rows.iter().skip(1) {
             if let Some(cells) = row.get("children").and_then(|c| c.as_array()) {
-                // Extract cell texts
-                let texts: Vec<String> = cells.iter().map(|cell| {
-                    cell.get("children").and_then(|p| p.as_array())
-                        .and_then(|ps| ps.get(0))
-                        .and_then(|p| p.get("children"))
-                        .and_then(|ts| ts.as_array())
-                        .and_then(|ts| ts.get(0))
-                        .and_then(|t| t.get("text"))
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                }).collect();
-                let (start, end) = parse_ts_range(&texts[1]);
+                // We expect at least 4 cells: #, Timestamp, Speaker, Text
+                if cells.len() < 4 { continue; }
+
+                // Use the defined extract_plain_text_from_lexical_value helper for simple fields
+                let mut timestamp_buffer = String::new();
+                extract_plain_text_from_lexical_value(&cells[1], &mut timestamp_buffer);
+                let (start, end) = parse_ts_range(&timestamp_buffer);
+
+                let mut speaker_buffer = String::new();
+                extract_plain_text_from_lexical_value(&cells[2], &mut speaker_buffer);
+                let speaker = speaker_buffer.trim().to_string();
+
+                // For the Text column, we want to PRESERVE the Lexical structure if possible
+                // So we take the cell's children and wrap them in a pseudo-root.
+                let text_nodes = cells[3].get("children").cloned().unwrap_or(json!([]));
+                let text_json = json!({
+                    "root": {
+                        "type": "root",
+                        "children": text_nodes,
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "version": 1
+                    }
+                }).to_string();
+
                 let seg = json!({
                     "start_time": start,
                     "end_time": end,
-                    "speaker": texts.get(2).cloned().unwrap_or_default(),
-                    "text": texts.get(3).cloned().unwrap_or_default(),
+                    "speaker": speaker,
+                    "text": text_json,
                 });
                 segs.push(seg);
             }
@@ -363,7 +376,10 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         'Liberation Mono', 'Courier New', monospace; \
         font-size: 14px; \
         line-height: 1.5; \
-    }\n");
+    }\n\
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }\n\
+    td { vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; }\n\
+    p { margin: 0; padding: 0; text-align: left; }\n");
     html_output.push_str("</style></head><body>\n");
 
     html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n");
@@ -429,21 +445,21 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         }
     };
 
-    for (index, entry) in entries.iter().enumerate() { // Changed _index to index
-        let segment_number = index + 1; // Use index here
+    for (index, entry) in entries.iter().enumerate() {
+        let segment_number = index + 1;
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
         let raw_speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
-        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 {
-            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_to_format = if raw_speaker.ends_with(':') {
+            &raw_speaker[0..raw_speaker.len()-1]
         } else {
-            format!("{}:", raw_speaker)
+            raw_speaker
         };
-        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 {
-            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_display_with_colon = if speaker_to_format.chars().count() > 12 && speaker_to_format != "Unknown" {
+            format!("{}:", speaker_to_format.chars().take(12).collect::<String>() + "...")
         } else {
-            raw_speaker.to_string()
+            format!("{}:", speaker_to_format)
         };
         let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let segment_html_content = convert_lexical_or_plain_text_to_html(raw_text_content);
@@ -451,49 +467,49 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         match current_layout.as_str() {
             "Layout1" => { // | No | Timestamp | Speaker | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout2" => { // | No | Timestamp | then | Speaker | Text | (Default)
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{} {}</td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{} {}</p></td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_with_colon)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout4" => { // | Speaker | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout5" => { // | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             _ => { // Fallback to Layout2 if layout_choice is unknown
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
         }
@@ -729,8 +745,14 @@ pub async fn export_transcript_to_srt(
         // Prepend speaker to text if speaker exists and is not empty AND not excluded
         let text_line = if !exclude_speakers {
             if let Some(speaker_name) = &segment.speaker {
-                if !speaker_name.trim().is_empty() {
-                    format!("{}: {}", speaker_name.trim(), plain_text)
+                let trimmed_spk = speaker_name.trim();
+                if !trimmed_spk.is_empty() {
+                    let spk_with_colon = if trimmed_spk.ends_with(':') {
+                        trimmed_spk.to_string()
+                    } else {
+                        format!("{}:", trimmed_spk)
+                    };
+                    format!("{} {}", spk_with_colon, plain_text)
                 } else {
                     plain_text
                 }
@@ -1017,8 +1039,14 @@ pub async fn export_transcript_to_vtt(
 
         let text_line = if !exclude_speakers {
             if let Some(speaker_name) = &segment.speaker {
-                if !speaker_name.trim().is_empty() {
-                    format!("{}: {}", speaker_name.trim(), cue_text)
+                let trimmed_spk = speaker_name.trim();
+                if !trimmed_spk.is_empty() {
+                    let spk_with_colon = if trimmed_spk.ends_with(':') {
+                        trimmed_spk.to_string()
+                    } else {
+                        format!("{}:", trimmed_spk)
+                    };
+                    format!("{} {}", spk_with_colon, cue_text)
                 } else {
                     cue_text.clone()
                 }
@@ -1206,15 +1234,16 @@ pub async fn export_transcript_to_markdown(
         let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
         let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");
 
-        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
-            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_to_format = if raw_speaker.ends_with(':') {
+            &raw_speaker[0..raw_speaker.len()-1]
         } else {
-            raw_speaker.to_string()
+            raw_speaker
         };
-        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
-            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+
+        let speaker_display_with_colon = if speaker_to_format.chars().count() > 12 && speaker_to_format != "Unknown" {
+            format!("{}:", speaker_to_format.chars().take(12).collect::<String>() + "...")
         } else {
-            format!("{}:", raw_speaker)
+            format!("{}:", speaker_to_format)
         };
 
         let markdown_text = get_markdown_text_from_lexical_string(&segment.text);
@@ -1229,7 +1258,7 @@ pub async fn export_transcript_to_markdown(
                     "| {} | {} | {} | {} |\n",
                     segment_number,
                     encode_text(&timestamp_str),
-                    encode_text(&speaker_display_no_colon),
+                    encode_text(&speaker_display_with_colon),
                     table_cell_text // Already contains Markdown, no further encode_text
                 ));
             }
@@ -1240,14 +1269,14 @@ pub async fn export_transcript_to_markdown(
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
                 if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
-                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_with_colon)));
                 md_content.push_str(&format!("{}\n", markdown_text));
             }
             "Layout4" => { // | Speaker | Text |
                 let table_cell_text = markdown_text.replace("\n", " ");
                  md_content.push_str(&format!(
                     "| {} | {} |\n",
-                    encode_text(&speaker_display_no_colon),
+                    encode_text(&speaker_display_with_colon),
                     table_cell_text
                 ));
             }
@@ -1666,7 +1695,12 @@ pub async fn export_transcript_to_ass(
 
         // Prepend speaker to dialogue text if speaker name is not empty AND not excluded
         let final_text = if !exclude_speakers && !speaker_name.is_empty() {
-            format!("{}: {}", speaker_name, dialogue_text_raw)
+            let spk_with_colon = if speaker_name.ends_with(':') {
+                speaker_name.to_string()
+            } else {
+                format!("{}:", speaker_name)
+            };
+            format!("{} {}", spk_with_colon, dialogue_text_raw)
         } else {
             dialogue_text_raw
         };

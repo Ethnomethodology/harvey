@@ -1294,7 +1294,7 @@
                         {/if}
                         {#if showSpeakerCol}
                         <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
-                            {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}
+                            {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
                         </div>
                         {/if}
                         {#if showTextCol}
@@ -1324,7 +1324,7 @@
                                 {#if $activeLayout === 'Layout3'}
                                     <span class="select-none text-gray-600 dark:text-white" title="Timestamp & Speaker">
                                         {seg.startTime} – {seg.endTime}
-                                        <span class="ml-1">{seg.speaker}</span>
+                                        <span class="ml-1">{seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}</span>
                                     </span>
                                 {:else}
                                     <span class="select-none" title="Start time">{seg.startTime}</span>
@@ -1342,7 +1342,7 @@
                             {#if showSpeakerCol && $activeLayout !== 'Layout3' && $activeLayout !== 'Layout5'}
                             <div class="flex-shrink-0 text-gray-800 dark:text-d-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
                                 <span class="truncate block w-full" title={seg.speaker}>
-                                    {seg.speaker.length > ($activeLayout === 'Layout4' ? 10 : 12) ? seg.speaker.slice(0, ($activeLayout === 'Layout4' ? 10 : 12)) + '...' : seg.speaker}:
+                                    {(seg.speaker.length > ($activeLayout === 'Layout4' ? 10 : 12) ? seg.speaker.slice(0, ($activeLayout === 'Layout4' ? 10 : 12)) + '...' : seg.speaker)}{#if !seg.speaker.endsWith(':')}:{/if}
                                 </span>
                             </div>
                             {/if}
