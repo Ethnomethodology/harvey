@@ -710,7 +710,7 @@
             {@html themeIconHtml}
          </button> -->
     <div class="flex-shrink-0">
-        {#if $isMediaEditorOpen}
+        {#if $isMediaEditorOpen || isLexicalDocument || $activeMediaFile}
         <button
             on:click="{() => openLayoutSettingsModal()}"
             class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"

@@ -2377,7 +2377,7 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm layout-{activeLayout}">
   {#if editable}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md z-10">
       {#if toolbarConfig.undo}
@@ -2977,5 +2977,134 @@ $: if (editor && activeLayout) {
       opacity: 1;
       transform: translateY(-50%) scale(1.1);
   }
+
+    /* =================================================================== */
+    /* LAYOUT SPECIFIC RENDERING RULES FOR TRANSCRIPT TABLES               */
+    /* =================================================================== */
+
+    /* STYLES FOR LAYOUT 2 (Segment Block) */
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(n+3)) {
+        margin-top: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 3 (Timestamped Paragraph) */
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(n+2)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(n+2)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        margin-top: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 4 (Speaker & Text) */
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(-n+2)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(-n+2)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(n+3)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 5 (Plain Text) */
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(-n+3)),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(-n+3)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+
+    /* COMMON RULE TO COLLAPSE ROWS VERTICALLY */
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr + tr) {
+        margin-top: -1px;
+    }
 
 </style>

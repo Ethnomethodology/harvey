@@ -15,6 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
 
     const dispatch = createEventDispatcher();
 
