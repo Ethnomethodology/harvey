@@ -648,6 +648,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
                 on:requestmanualsettings={handleRequestManualSettings}
+                on:playsegment={(e) => {
+                    const segment = $transcriptStore.segments?.[e.detail];
+                    if (segment && mediaPlayerRef) {
+                        mediaPlayerRef.playSegment(segment.start_time, segment.end_time);
+                    }
+                }}
                 on:replacetranscripttext={handleReplaceTranscriptText}
                 on:replacealltranscripttext={handleReplaceAllTranscriptText}
              />

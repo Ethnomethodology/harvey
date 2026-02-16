@@ -1229,10 +1229,11 @@
                     class:segment-block={true}
                     class:secondary-segment={$transcriptStore.isDualModeActive && !seg.isPrimary}
                     class:hovering={hoveredSegment === seg.segmentIndex}
+                    class:group={true}
                     on:mouseenter={() => hoveredSegment = seg.segmentIndex}
                     on:mouseleave={() => hoveredSegment = -1}
                     style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
-                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2"
+                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2 relative"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
                     class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
@@ -1251,30 +1252,36 @@
                     aria-pressed={seg.segmentIndex === activeSegmentIndex}
                     aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}
                 >
-                    <!-- Item 1: Delete Button (conditionally rendered) -->
-                    <div class="flex-shrink-0 flex flex-col"> <!-- Container for button to manage visibility and spacing -->
-                        <button
-                            class="btn-icon p-0.5"
-                            class:invisible={!previewEditMode}
-                            class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode}
-                            class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode}
-                            on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)}
-                            title="Delete this segment"
-                            aria-label="Delete this segment"
-                        >
-                            {@html DELETE_ICON}
-                        </button>
-                        <button
-                            class="btn-icon p-0.5 mt-1"
-                            class:invisible={!previewEditMode}
-                            class:text-gray-500={previewEditMode} class:hover:text-gray-700={previewEditMode}
-                            class:dark:text-gray-400={previewEditMode} class:dark:hover:text-gray-300={previewEditMode}
-                            on:click|stopPropagation={(e) => handleSplitSegment(seg.segmentIndex)}
-                            title="Split this segment"
-                            aria-label="Split this segment"
-                        >
-                            {@html SPLIT_ICON}
-                        </button>
+                    <!-- Item 1: Control Column (Delete/Split in edit mode, Play on hover in read mode) -->
+                    <div class="flex-shrink-0 flex flex-col items-center justify-start min-w-[24px] self-center">
+                        {#if previewEditMode}
+                            <button
+                                class="btn-icon p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)}
+                                title="Delete this segment"
+                                aria-label="Delete this segment"
+                            >
+                                {@html DELETE_ICON}
+                            </button>
+                            <button
+                                class="btn-icon p-0.5 mt-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                on:click|stopPropagation={(e) => handleSplitSegment(seg.segmentIndex)}
+                                title="Split this segment"
+                                aria-label="Split this segment"
+                            >
+                                {@html SPLIT_ICON}
+                            </button>
+                        {:else}
+                            <button
+                                class="play-segment-hover-btn-preview w-6 h-6 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md transition-all duration-200 border-2 border-white dark:border-gray-800 opacity-0 group-hover:opacity-100 scale-90 hover:scale-105"
+                                on:click|stopPropagation={() => dispatch('playsegment', seg.segmentIndex)}
+                                title="Play this segment"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
+                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                </svg>
+                            </button>
+                        {/if}
                     </div>
 
                     <!-- Item 2: Main Content Block (structure depends on layout) -->
