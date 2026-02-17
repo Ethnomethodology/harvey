@@ -158,7 +158,12 @@
 	let unlistenProgress = null;
 	let unlistenComplete = null;
 	let unlistenError = null;
-    let unlistenLog = null; // For faster-whisper which uses logs
+
+    // Faster-whisper specific listeners
+    let unlistenTranscriptionStart = null;
+    let unlistenTranscriptionLog = null;
+    let unlistenTranscriptionComplete = null;
+    let unlistenTranscriptionError = null;
 
 	onMount(async () => {
 		configError = '';
@@ -223,19 +228,8 @@
 				downloadStatus = { ...downloadStatus, [modelName]: finalStatus };
 			});
 
-            // Faster-whisper events (reusing translation-download-log style if possible, or new events)
-            // Ideally we should use standard names. Let's assume we use 'transcription-download-*' for faster-whisper to differentiate?
-            // Or 'download-*' if we can unify.
-            // Current 'download-*' logic in backend (welcome/commands.rs) is for single binary.
-            // Faster-whisper will use a script similar to translation, emitting logs.
-            // Let's assume new events: 'transcription-download-start', 'transcription-download-log', 'transcription-download-complete', 'transcription-download-error'
-
-            // Re-using the same listeners but checking event names if needed? No, separate listeners.
-
-            // For now, I'll bind the log modal to these new events too.
-            // NOTE: I need to ensure backend emits these new events.
-
-            app.listen('transcription-download-start', (event) => {
+            // Faster-whisper events
+            unlistenTranscriptionStart = await listen('transcription-download-start', (event) => {
 				const modelName = event.payload;
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
@@ -243,14 +237,14 @@
 				showLogModal = true;
 			});
 
-            app.listen('transcription-download-log', (event) => {
+            unlistenTranscriptionLog = await listen('transcription-download-log', (event) => {
 				const { model_name, log_line } = event.payload;
 				if (downloadStatus[model_name] === 'downloading') {
 					modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
 				}
 			});
 
-            app.listen('transcription-download-complete', async (event) => {
+            unlistenTranscriptionComplete = await listen('transcription-download-complete', async (event) => {
 				const modelName = event.payload;
 				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
 				try {
@@ -261,7 +255,7 @@
                 isDownloading = false;
 			});
 
-            app.listen('transcription-download-error', (event) => {
+            unlistenTranscriptionError = await listen('transcription-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
 				let finalStatus;
 				if (error_message.toLowerCase().includes('cancel')) { finalStatus = 'cancelled'; } else { finalStatus = 'error'; alert(`Error downloading ${model_name}: ${error_message}`); }
@@ -282,6 +276,11 @@
 		if (unlistenProgress) unlistenProgress();
 		if (unlistenComplete) unlistenComplete();
 		if (unlistenError) unlistenError();
+
+        if (unlistenTranscriptionStart) unlistenTranscriptionStart();
+        if (unlistenTranscriptionLog) unlistenTranscriptionLog();
+        if (unlistenTranscriptionComplete) unlistenTranscriptionComplete();
+        if (unlistenTranscriptionError) unlistenTranscriptionError();
 	});
 
 	async function handleRefreshModels() {
