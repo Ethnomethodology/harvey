@@ -308,8 +308,6 @@ pub async fn download_faster_whisper_model_command(
         return Err(CommandError::Message("Transcription model download failed.".to_string()));
     }
 
-    window.emit("transcription-download-complete", &model_name).unwrap();
-
     if success {
         log::info!("Transcription model '{}' downloaded successfully. Updating config.", &model_name);
         match || -> Result<(), CommandError> {
@@ -329,7 +327,11 @@ pub async fn download_faster_whisper_model_command(
             log::info!("Config updated successfully for '{}'.", &model_name);
             Ok(())
         }() {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                // Emit complete event ONLY after config is updated to avoid race conditions
+                window.emit("transcription-download-complete", &model_name).unwrap();
+                Ok(())
+            },
             Err(e) => {
                 log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
                 Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
@@ -1423,6 +1425,11 @@ async fn download_and_save_bin(
     }
     write_config(&config)?;
     log::info!("Config updated for '{}'.", model_info.name);
+
+    // Emit completion event AFTER config update to avoid race conditions in frontend
+    log::info!("Download success for {}", model_name);
+    app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+
     Ok(())
 }
 #[command] pub async fn cancel_download_command( cancellation_state: State<'_, DownloadCancellationState>, model_name: String, ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: cancel_download: {}", model_name); if let Some(flag_entry)=cancellation_state.0.get(&model_name){let flag=flag_entry.value(); flag.store(true,Ordering::Relaxed); log::info!("Cancel flag set for {}",model_name);} else {log::warn!("No active download token for '{}'.",model_name);} Ok(()) }
