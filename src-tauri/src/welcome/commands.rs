@@ -32,6 +32,34 @@ use crate::welcome::python_env;
 use walkdir::WalkDir;
 
 // --- Structs for Translation Model Download ---
+
+// Helper function to resolve model path
+fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool) {
+    let family = model.family.as_deref().unwrap_or("");
+    let is_faster_whisper = family == "faster-whisper";
+    let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper;
+
+    let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
+        format!("models--{}", model.name.replace('/', "--"))
+    } else {
+        model.name.clone()
+    };
+
+    let sub_dir = if is_faster_whisper {
+        PathBuf::from("transcription").join("faster-whisper")
+    } else if is_translation {
+         let family = model.family.as_deref().unwrap_or("helsinki");
+         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+         PathBuf::from("translation").join(org_dir)
+    } else {
+         PathBuf::from("transcription").join("whisper-cpp")
+    };
+
+    let path = PathBuf::from(base_location).join(sub_dir).join(&folder_name);
+    // Return path and whether it is expected to be a directory-based model (HF style)
+    (path, is_translation || is_faster_whisper)
+}
+
 #[derive(Clone, serde::Serialize)]
 struct TranslationDownloadProgress {
   model_name: String,
@@ -1006,12 +1034,41 @@ fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), Command
 pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
+    let download_location = if !config.download_location.trim().is_empty() {
+        config.download_location.clone()
+    } else {
+        get_default_download_location()?
+    };
     
-    // Automatically clean up paraphrase models if they exist in config
-    config.downloaded_models.retain(|m| !m.name.contains("paraphrase"));
+    // Automatically clean up paraphrase models AND models that don't exist on disk
+    config.downloaded_models.retain(|m| {
+        if m.name.contains("paraphrase") {
+            return false;
+        }
+
+        // Use model-specific download location if available, otherwise use global default
+        let model_base_loc = m.download_location.as_ref()
+            .filter(|l| !l.trim().is_empty())
+            .unwrap_or(&download_location);
+
+        let (path, is_dir_based) = resolve_model_path(model_base_loc, m);
+        if path.exists() {
+            true
+        } else {
+            // For whisper-cpp (file based), check fallback .bin extension
+            if !is_dir_based {
+                let bin_path = path.with_extension("bin");
+                if bin_path.exists() {
+                    return true;
+                }
+            }
+            log::warn!("Model '{}' not found on disk at {:?}. Removing from config.", m.name, path);
+            false
+        }
+    });
     
     if config.downloaded_models.len() < initial_len {
-        log::info!("Cleaned up {} legacy paraphrase model(s) from config.", initial_len - config.downloaded_models.len());
+        log::info!("Cleaned up {} missing/legacy model(s) from config.", initial_len - config.downloaded_models.len());
         write_config(&config)?;
     }
 
@@ -1025,45 +1082,24 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
 
-    let base_location = if !config.download_location.trim().is_empty() {
+    let global_location = if !config.download_location.trim().is_empty() {
         config.download_location.clone()
     } else {
-        log::warn!("Config/Delete: Download location is empty, using default.");
         get_default_download_location()?
     };
+
+    // Use model-specific location if available, else global
+    let base_location = model_to_delete.download_location.as_ref()
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or(&global_location);
+
     if base_location.trim().is_empty() {
         return Err(CommandError::from(format!("Cannot determine download location to delete model '{}'.", model_to_delete.name)));
     }
 
-    // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
-    // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-    let family = model_to_delete.family.as_deref().unwrap_or("");
-    let is_faster_whisper = family == "faster-whisper";
-    let is_translation = (model_to_delete.name.contains('/') || model_to_delete.family.is_some()) && !is_faster_whisper;
+    let (model_path, is_dir_based) = resolve_model_path(base_location, &model_to_delete);
     
-    let folder_name = if (is_translation || is_faster_whisper) && model_to_delete.name.contains('/') {
-        let transformed = format!("models--{}", model_to_delete.name.replace('/', "--"));
-        log::info!("Transforming model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
-        transformed
-    } else {
-        model_to_delete.name.clone()
-    };
-
-    let sub_dir = if is_faster_whisper {
-        PathBuf::from("transcription").join("faster-whisper")
-    } else if is_translation {
-         let family = model_to_delete.family.as_deref().unwrap_or("helsinki");
-         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
-         PathBuf::from("translation").join(org_dir)
-    } else {
-         PathBuf::from("transcription").join("whisper-cpp")
-    };
-
-    let model_path = PathBuf::from(&base_location).join(&sub_dir).join(&folder_name);
-
-    // Attempt to delete. For whisper-cpp, it might be a file (e.g., ggml-base.bin).
-    // For others, it's typically a directory.
-    // Also check for potential variants (e.g., model name provided might be 'ggml-base' but file is 'ggml-base.bin').
+    log::info!("CMD: delete_model: Resolved path: {:?} (is_dir_based: {})", model_path, is_dir_based);
 
     if model_path.exists() {
         log::info!("Deleting model from filesystem at path: {:?}", model_path);
@@ -1076,19 +1112,14 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
         }
     } else {
         // Fallback for whisper-cpp: check if .bin extension is needed
-        let bin_path = if !is_faster_whisper && !is_translation && !folder_name.ends_with(".bin") {
-             Some(PathBuf::from(&base_location).join(&sub_dir).join(format!("{}.bin", folder_name)))
-        } else {
-            None
-        };
-
-        if let Some(p) = bin_path {
-            if p.exists() && p.is_file() {
-                log::info!("Found binary file at fallback path: {:?}. Deleting.", p);
-                fs::remove_file(&p)?;
-            } else {
-                 log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, p);
-            }
+        if !is_dir_based && model_path.extension().and_then(|s| s.to_str()) != Some("bin") {
+             let bin_path = model_path.with_extension("bin");
+             if bin_path.exists() && bin_path.is_file() {
+                log::info!("Found binary file at fallback path: {:?}. Deleting.", bin_path);
+                fs::remove_file(&bin_path)?;
+             } else {
+                 log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, bin_path);
+             }
         } else {
              log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
         }
