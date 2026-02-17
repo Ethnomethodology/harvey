@@ -121,8 +121,30 @@
 	$: displayedModels = (() => {
 		let baseList = selectedFamily === 'whisper-cpp' ? [...availableWhisperCppModels] : [...availableFasterWhisperModels];
 
-        // Enrich base list with local info if available (e.g. for faster-whisper where we might want to show locally downloaded ones even if not in hardcoded list)
-        // For now, simple logic:
+        // Add downloaded models that are not in the predefined lists (ghost models)
+        const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
+        const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
+        const isFasterWhisper = (m) => m.family === 'faster-whisper';
+
+        const relevantDownloaded = currentDownloaded.filter(m =>
+            (selectedFamily === 'whisper-cpp' && isWhisperCpp(m)) ||
+            (selectedFamily === 'faster-whisper' && isFasterWhisper(m))
+        );
+
+        for (const dlModel of relevantDownloaded) {
+            if (!baseList.some(m => m.name === dlModel.name)) {
+                // It's a custom or legacy model. Add it to the list so it can be managed.
+                baseList.push({
+                    ...dlModel,
+                    description: dlModel.description || 'Downloaded Model',
+                    size: dlModel.size || 'Unknown',
+                    language: dlModel.language || 'Unknown',
+                    family: dlModel.family || (selectedFamily === 'faster-whisper' ? 'faster-whisper' : 'whisper-cpp'),
+                    info_url: dlModel.info_url || '',
+                    download_url: dlModel.download_url || ''
+                });
+            }
+        }
 
 		// Filter by search query
 		if (searchQuery.trim() !== '') {
