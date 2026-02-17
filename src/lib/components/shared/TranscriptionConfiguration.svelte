@@ -70,10 +70,15 @@
 	$: {
 		const newData = {};
 		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
+
+        // Define helper functions for clarity and consistency
+        const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
+        const isFasterWhisper = (m) => m.family === 'faster-whisper';
+
         // Count depends on what we consider "available" or just total
 		downloadedCount = currentDownloaded.filter(m =>
-            (selectedFamily === 'whisper-cpp' && !m.name.includes('/') && m.family !== 'faster-whisper') ||
-            (selectedFamily === 'faster-whisper' && (m.name.includes('/') || m.family === 'faster-whisper'))
+            (selectedFamily === 'whisper-cpp' && isWhisperCpp(m)) ||
+            (selectedFamily === 'faster-whisper' && isFasterWhisper(m))
         ).length;
 
         const targetList = selectedFamily === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;

@@ -49,10 +49,11 @@ export async function getDownloadedModels() {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
 	// Filter out translation models.
-	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper'.
+	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper' OR family === 'whisper-cpp'.
 	const transcriptionModels = Array.isArray(models) ? models.filter(model =>
 		(!model.family && !model.name.includes('/')) ||
-		model.family === 'faster-whisper'
+		model.family === 'faster-whisper' ||
+		model.family === 'whisper-cpp'
 	) : [];
 	return transcriptionModels;
   } catch (error) {
