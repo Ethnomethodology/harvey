@@ -26,7 +26,8 @@ def download_model(model_name, target_dir, token):
 
     print(f"Downloading model {model_name} to {final_model_dir}", flush=True)
     try:
-        if token:
+        if token and token.strip():
+            print(f"Logging in with token...", flush=True)
             login(token=token)
 
         # Download the full repository snapshot to a specific directory (flattened)
@@ -38,7 +39,13 @@ def download_model(model_name, target_dir, token):
         )
 
         print("Download complete.", flush=True)
+    except ImportError as e:
+        print(f"Error: Missing required library: {e}. Please ensure 'huggingface_hub' is installed.", file=sys.stderr, flush=True)
+        sys.exit(1)
     except Exception as e:
+        # Print full stack trace for better debugging
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         print(f"Error downloading model: {e}", file=sys.stderr, flush=True)
         sys.exit(1)
 

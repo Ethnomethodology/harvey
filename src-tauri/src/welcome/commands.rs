@@ -1059,7 +1059,11 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
          PathBuf::from("transcription").join("whisper-cpp")
     };
 
-    let model_path = PathBuf::from(&base_location).join(sub_dir).join(&folder_name);
+    let model_path = PathBuf::from(&base_location).join(&sub_dir).join(&folder_name);
+
+    // Attempt to delete. For whisper-cpp, it might be a file (e.g., ggml-base.bin).
+    // For others, it's typically a directory.
+    // Also check for potential variants (e.g., model name provided might be 'ggml-base' but file is 'ggml-base.bin').
 
     if model_path.exists() {
         log::info!("Deleting model from filesystem at path: {:?}", model_path);
@@ -1067,13 +1071,27 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
             fs::remove_dir_all(&model_path)?;
             log::info!("Successfully deleted directory.");
         } else if model_path.is_file() {
-            log::warn!("Expected model path {:?} to be a directory, but it's a file. Deleting file.", model_path);
             fs::remove_file(&model_path)?;
-        } else {
-            log::warn!("Model path {:?} is not a file or directory. Skipping filesystem delete.", model_path);
+            log::info!("Successfully deleted file.");
         }
     } else {
-        log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
+        // Fallback for whisper-cpp: check if .bin extension is needed
+        let bin_path = if !is_faster_whisper && !is_translation && !folder_name.ends_with(".bin") {
+             Some(PathBuf::from(&base_location).join(&sub_dir).join(format!("{}.bin", folder_name)))
+        } else {
+            None
+        };
+
+        if let Some(p) = bin_path {
+            if p.exists() && p.is_file() {
+                log::info!("Found binary file at fallback path: {:?}. Deleting.", p);
+                fs::remove_file(&p)?;
+            } else {
+                 log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, p);
+            }
+        } else {
+             log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
+        }
     }
 
     // Remove from config using the original name
