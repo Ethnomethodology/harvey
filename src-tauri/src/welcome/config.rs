@@ -79,6 +79,9 @@ pub struct Config {
     #[serde(rename = "selected_translation_family", default)]
     pub selected_translation_family: Option<String>, // "helsinki" or "nllb"
 
+    #[serde(rename = "selected_transcription_engine", default)]
+    pub selected_transcription_engine: Option<String>, // "whisper-cpp" or "faster-whisper"
+
     // --- NEW: Theme Preference Field ---
     #[serde(rename = "themePreference", default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>, // Stores "light", "dark", or "system"
