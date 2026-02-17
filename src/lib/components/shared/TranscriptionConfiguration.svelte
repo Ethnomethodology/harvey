@@ -5,9 +5,11 @@
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
 	import {
 		downloadModel,
+        downloadFasterWhisperModel,
 		deleteModel,
 		getDownloadedModels,
 		cancelDownload,
+        cancelFasterWhisperModelDownload,
 	} from '$lib/services/configureActions';
 	import { configStatus, setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
@@ -21,6 +23,8 @@
 	let downloadStatus = {};
 	let downloadProgress = {};
 
+    let selectedFamily = 'whisper-cpp'; // 'whisper-cpp' or 'faster-whisper'
+
 	// --- State variables for Modal binding ---
 	let showLogModal = false;
 	let modalLogs = [];
@@ -29,19 +33,27 @@
 	const WHISPER_CPP_INFO_URL = 'https://huggingface.co/ggerganov/whisper.cpp';
 	const HUGGING_FACE_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
 
-	const availableModels = [
-		{ name: 'ggml-large-v3', language: 'Multilingual', size: '2.9 GiB', description: 'Latest and most accurate multilingual model.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3.bin` },
-		{ name: 'ggml-large-v3-turbo', language: 'Multilingual', size: '1.5 GiB', description: 'Optimized for speed, great for real-time transcription.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3-turbo.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3-turbo.bin` },
-		{ name: 'ggml-large-v3-turbo-q5_0', language: 'Multilingual', size: '1.1 GiB', description: 'Quantized version of turbo model. Good balance.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3-turbo-q5_0.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3-turbo-q5_0.bin` },
-		{ name: 'ggml-medium.en', language: 'English-only', size: '1.5 GiB', description: 'Highest accuracy for English-only applications.', download_url: `${HUGGING_FACE_BASE}/ggml-medium.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-medium.en.bin` },
-		{ name: 'ggml-medium', language: 'Multilingual', size: '1.5 GiB', description: 'High accuracy across multiple languages.', download_url: `${HUGGING_FACE_BASE}/ggml-medium.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-medium.bin` },
-		{ name: 'ggml-small.en', language: 'English-only', size: '466 MiB', description: 'Excellent balance of speed and accuracy for English.', download_url: `${HUGGING_FACE_BASE}/ggml-small.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-small.en.bin` },
-		{ name: 'ggml-small', language: 'Multilingual', size: '466 MiB', description: 'Excellent balance for multilingual use.', download_url: `${HUGGING_FACE_BASE}/ggml-small.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-small.bin` },
-		{ name: 'ggml-base.en', language: 'English-only', size: '142 MiB', description: 'Fast and lightweight for English.', download_url: `${HUGGING_FACE_BASE}/ggml-base.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-base.en.bin` },
-		{ name: 'ggml-base', language: 'Multilingual', size: '142 MiB', description: 'Fast and lightweight for multilingual use.', download_url: `${HUGGING_FACE_BASE}/ggml-base.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-base.bin` },
-		{ name: 'ggml-tiny.en', language: 'English-only', size: '75 MiB', description: 'Smallest and fastest for English, for limited resources.', download_url: `${HUGGING_FACE_BASE}/ggml-tiny.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-tiny.en.bin` },
-		{ name: 'ggml-tiny', language: 'Multilingual', size: '75 MiB', description: 'Smallest and fastest multilingual model.', download_url: `${HUGGING_FACE_BASE}/ggml-tiny.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-tiny.bin` },
+	const availableWhisperCppModels = [
+		{ name: 'ggml-large-v3', language: 'Multilingual', size: '2.9 GiB', description: 'Latest and most accurate multilingual model.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-large-v3-turbo', language: 'Multilingual', size: '1.5 GiB', description: 'Optimized for speed, great for real-time transcription.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3-turbo.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3-turbo.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-large-v3-turbo-q5_0', language: 'Multilingual', size: '1.1 GiB', description: 'Quantized version of turbo model. Good balance.', download_url: `${HUGGING_FACE_BASE}/ggml-large-v3-turbo-q5_0.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-large-v3-turbo-q5_0.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-medium.en', language: 'English-only', size: '1.5 GiB', description: 'Highest accuracy for English-only applications.', download_url: `${HUGGING_FACE_BASE}/ggml-medium.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-medium.en.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-medium', language: 'Multilingual', size: '1.5 GiB', description: 'High accuracy across multiple languages.', download_url: `${HUGGING_FACE_BASE}/ggml-medium.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-medium.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-small.en', language: 'English-only', size: '466 MiB', description: 'Excellent balance of speed and accuracy for English.', download_url: `${HUGGING_FACE_BASE}/ggml-small.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-small.en.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-small', language: 'Multilingual', size: '466 MiB', description: 'Excellent balance for multilingual use.', download_url: `${HUGGING_FACE_BASE}/ggml-small.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-small.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-base.en', language: 'English-only', size: '142 MiB', description: 'Fast and lightweight for English.', download_url: `${HUGGING_FACE_BASE}/ggml-base.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-base.en.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-base', language: 'Multilingual', size: '142 MiB', description: 'Fast and lightweight for multilingual use.', download_url: `${HUGGING_FACE_BASE}/ggml-base.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-base.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-tiny.en', language: 'English-only', size: '75 MiB', description: 'Smallest and fastest for English, for limited resources.', download_url: `${HUGGING_FACE_BASE}/ggml-tiny.en.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-tiny.en.bin`, family: 'whisper-cpp' },
+		{ name: 'ggml-tiny', language: 'Multilingual', size: '75 MiB', description: 'Smallest and fastest multilingual model.', download_url: `${HUGGING_FACE_BASE}/ggml-tiny.bin`, info_url: `${WHISPER_CPP_INFO_URL}/blob/main/ggml-tiny.bin`, family: 'whisper-cpp' },
 	];
+
+    const availableFasterWhisperModels = [
+        { name: 'Systran/faster-whisper-large-v3', language: 'Multilingual', size: '3.1 GiB', description: 'Large v3 model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-large-v3' },
+        { name: 'Systran/faster-whisper-medium', language: 'Multilingual', size: '1.5 GiB', description: 'Medium model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-medium' },
+        { name: 'Systran/faster-whisper-small', language: 'Multilingual', size: '484 MiB', description: 'Small model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-small' },
+        { name: 'Systran/faster-whisper-base', language: 'Multilingual', size: '145 MiB', description: 'Base model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-base' },
+        { name: 'Systran/faster-whisper-tiny', language: 'Multilingual', size: '75 MiB', description: 'Tiny model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-tiny' },
+    ];
 
 	// --- Marketplace / Search View State ---
 	let searchQuery = '';
@@ -56,9 +68,15 @@
 	$: {
 		const newData = {};
 		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
-		downloadedCount = currentDownloaded.filter((m) => availableModels.some((am) => am.name === m.name)).length;
+        // Count depends on what we consider "available" or just total
+		downloadedCount = currentDownloaded.filter(m =>
+            (selectedFamily === 'whisper-cpp' && !m.name.includes('/') && m.family !== 'faster-whisper') ||
+            (selectedFamily === 'faster-whisper' && (m.name.includes('/') || m.family === 'faster-whisper'))
+        ).length;
 
-		for (const model of availableModels) {
+        const targetList = selectedFamily === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;
+
+		for (const model of targetList) {
 			const name = model.name;
 			const getStatus = (modelName) => {
 				const liveStatus = downloadStatus[modelName];
@@ -93,22 +111,11 @@
 		modelDisplayData = newData;
 	}
 
-	// Combined list logic:
-	// If not fetched: show ONLY downloaded models (plus those currently downloading/cancelling/error)
-	// If fetched: show ALL available models (filtered by search)
-	// Always sort downloaded to top
 	$: displayedModels = (() => {
-		let baseList = [];
-		if (!hasFetched) {
-			// Show only models that are downloaded OR have active state (downloading/error etc)
-			baseList = availableModels.filter((m) => {
-				const status = modelDisplayData[m.name]?.status;
-				return status && status !== 'not_downloaded';
-			});
-		} else {
-			// Show all models
-			baseList = availableModels;
-		}
+		let baseList = selectedFamily === 'whisper-cpp' ? [...availableWhisperCppModels] : [...availableFasterWhisperModels];
+
+        // Enrich base list with local info if available (e.g. for faster-whisper where we might want to show locally downloaded ones even if not in hardcoded list)
+        // For now, simple logic:
 
 		// Filter by search query
 		if (searchQuery.trim() !== '') {
@@ -139,9 +146,10 @@
 		if (searchQuery.trim() === '') {
 			autoFetchTriggered = false;
 		} else {
-			if (!hasFetched && !isFetchingModels && !autoFetchTriggered) {
-				autoFetchTriggered = true;
-				handleRefreshModels();
+            // For faster-whisper we might implement fetch from HF later
+			if (!hasFetched && !isFetchingModels && !autoFetchTriggered && selectedFamily === 'faster-whisper') {
+				// autoFetchTriggered = true;
+				// handleRefreshModels();
 			}
 		}
 	}
@@ -150,6 +158,7 @@
 	let unlistenProgress = null;
 	let unlistenComplete = null;
 	let unlistenError = null;
+    let unlistenLog = null; // For faster-whisper which uses logs
 
 	onMount(async () => {
 		configError = '';
@@ -161,16 +170,18 @@
 		}
 
 		try {
+            // Whisper.cpp events
 			unlistenStart = await listen('download-start', (event) => {
 				const modelName = event.payload;
-				if (!modelName || !availableModels.some((m) => m.name === modelName)) return;
+				if (!modelName) return;
+                // Check if it's one of ours
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				downloadProgress = { ...downloadProgress, [modelName]: { downloadedBytes: 0, totalBytes: undefined } };
 			});
 
 			unlistenProgress = await listen('download-progress', (event) => {
 				const { model_name, downloaded_bytes, total_bytes } = event.payload;
-				if (!model_name || !availableModels.some((m) => m.name === model_name)) return;
+				if (!model_name) return;
 				if (downloadStatus[model_name] === 'downloading') {
 					downloadProgress = {
 						...downloadProgress,
@@ -181,7 +192,7 @@
 
 			unlistenComplete = await listen('download-complete', async (event) => {
 				const modelName = event.payload;
-				if (!modelName || !availableModels.some((m) => m.name === modelName)) return;
+				if (!modelName) return;
 				const newProgress = { ...downloadProgress };
 				delete newProgress[modelName];
 				downloadProgress = newProgress;
@@ -196,8 +207,7 @@
 
 			unlistenError = await listen('download-error', (event) => {
 				const payload = event.payload;
-				if (!payload || !payload.model_name || !availableModels.some((m) => m.name === payload.model_name))
-					return;
+				if (!payload || !payload.model_name) return;
 				const modelName = payload.model_name;
 				const errorMessage = payload.error_message || 'Unknown error.';
 				let finalStatus;
@@ -212,6 +222,55 @@
 				downloadProgress = newProgress;
 				downloadStatus = { ...downloadStatus, [modelName]: finalStatus };
 			});
+
+            // Faster-whisper events (reusing translation-download-log style if possible, or new events)
+            // Ideally we should use standard names. Let's assume we use 'transcription-download-*' for faster-whisper to differentiate?
+            // Or 'download-*' if we can unify.
+            // Current 'download-*' logic in backend (welcome/commands.rs) is for single binary.
+            // Faster-whisper will use a script similar to translation, emitting logs.
+            // Let's assume new events: 'transcription-download-start', 'transcription-download-log', 'transcription-download-complete', 'transcription-download-error'
+
+            // Re-using the same listeners but checking event names if needed? No, separate listeners.
+
+            // For now, I'll bind the log modal to these new events too.
+            // NOTE: I need to ensure backend emits these new events.
+
+            app.listen('transcription-download-start', (event) => {
+				const modelName = event.payload;
+				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
+				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
+				isDownloading = true;
+				showLogModal = true;
+			});
+
+            app.listen('transcription-download-log', (event) => {
+				const { model_name, log_line } = event.payload;
+				if (downloadStatus[model_name] === 'downloading') {
+					modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
+				}
+			});
+
+            app.listen('transcription-download-complete', async (event) => {
+				const modelName = event.payload;
+				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
+				try {
+					downloadedModels = await getDownloadedModels();
+					setTranscriptionModelsDownloaded(downloadedModels.length > 0);
+				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
+				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
+                isDownloading = false;
+			});
+
+            app.listen('transcription-download-error', (event) => {
+				const { model_name, error_message } = event.payload;
+				let finalStatus;
+				if (error_message.toLowerCase().includes('cancel')) { finalStatus = 'cancelled'; } else { finalStatus = 'error'; alert(`Error downloading ${model_name}: ${error_message}`); }
+				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
+				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
+				isDownloading = false;
+			});
+
+
 		} catch (err) {
 			console.error('Failed to attach download event listeners:', err);
 			configError = 'Could not set up download monitoring.';
@@ -252,22 +311,38 @@
 			alert('Please set a valid model download location first.');
 			return;
 		}
-		if (!model?.download_url) {
-			alert(`Model "${model?.name || 'Unknown'}" is missing a download URL.`);
-			return;
-		}
+
 		downloadStatus = { ...downloadStatus, [model.name]: 'downloading' };
-		downloadProgress = { ...downloadProgress, [model.name]: { downloadedBytes: 0, totalBytes: undefined } };
 		configError = '';
-		try {
-			await downloadModel(model, downloadLocation);
-		} catch (err) {
-			alert(`Failed to start download for ${model.name}: ${err.message || err}`);
-			const newProgress = { ...downloadProgress };
-			delete newProgress[model.name];
-			downloadProgress = newProgress;
-			downloadStatus = { ...downloadStatus, [model.name]: 'error' };
-		}
+
+        if (model.family === 'faster-whisper') {
+            modalLogs = [];
+            isDownloading = true;
+            showLogModal = true;
+            try {
+                await downloadFasterWhisperModel(model, downloadLocation);
+            } catch (err) {
+                alert(`Failed to start download for ${model.name}: ${err.message || err}`);
+                downloadStatus = { ...downloadStatus, [model.name]: 'error' };
+                isDownloading = false;
+            }
+        } else {
+            // whisper.cpp
+            if (!model?.download_url) {
+                alert(`Model "${model?.name || 'Unknown'}" is missing a download URL.`);
+                return;
+            }
+            downloadProgress = { ...downloadProgress, [model.name]: { downloadedBytes: 0, totalBytes: undefined } };
+            try {
+                await downloadModel(model, downloadLocation);
+            } catch (err) {
+                alert(`Failed to start download for ${model.name}: ${err.message || err}`);
+                const newProgress = { ...downloadProgress };
+                delete newProgress[model.name];
+                downloadProgress = newProgress;
+                downloadStatus = { ...downloadStatus, [model.name]: 'error' };
+            }
+        }
 	}
 
 	async function handleDelete(model) {
@@ -306,13 +381,20 @@
 	}
 
 	async function handleCancel(modelName) {
-		if (!modelName || !availableModels.some((m) => m.name === modelName)) return;
+        // Find model to check family
+        const model = [...availableWhisperCppModels, ...availableFasterWhisperModels].find(m => m.name === modelName);
+        if (!model) return;
+
 		const currentStatus = modelDisplayData[modelName]?.status;
 		if (currentStatus !== 'downloading') return;
 		downloadStatus = { ...downloadStatus, [modelName]: 'cancelling' };
 		configError = '';
 		try {
-			await cancelDownload(modelName);
+            if (model.family === 'faster-whisper') {
+			    await cancelFasterWhisperModelDownload(modelName);
+            } else {
+                await cancelDownload(modelName);
+            }
 		} catch (err) {
 			alert(`Failed to send cancel request for ${modelName}: ${err.message || err}`);
 			downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
@@ -334,6 +416,55 @@
 		</div>
 	</div>
 
+    <!-- Family Toggle -->
+	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
+		<div class="flex items-center justify-between mb-2">
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Model Engine</span>
+			<div class="flex space-x-2">
+				<button
+					class="px-3 py-1 text-xs rounded-full border transition-all"
+					class:bg-blue-600={selectedFamily === 'whisper-cpp'}
+					class:text-white={selectedFamily === 'whisper-cpp'}
+					class:border-transparent={selectedFamily === 'whisper-cpp'}
+					class:bg-white={selectedFamily !== 'whisper-cpp'}
+					class:dark:bg-gray-800={selectedFamily !== 'whisper-cpp'}
+					class:text-gray-600={selectedFamily !== 'whisper-cpp'}
+					class:dark:text-gray-400={selectedFamily !== 'whisper-cpp'}
+					class:border-gray-200={selectedFamily !== 'whisper-cpp'}
+					class:dark:border-gray-700={selectedFamily !== 'whisper-cpp'}
+					on:click={() => { selectedFamily = 'whisper-cpp'; }}
+				>
+					whisper.cpp
+				</button>
+				<button
+					class="px-3 py-1 text-xs rounded-full border transition-all"
+					class:bg-blue-600={selectedFamily === 'faster-whisper'}
+					class:text-white={selectedFamily === 'faster-whisper'}
+					class:border-transparent={selectedFamily === 'faster-whisper'}
+					class:bg-white={selectedFamily !== 'faster-whisper'}
+					class:dark:bg-gray-800={selectedFamily !== 'faster-whisper'}
+					class:text-gray-600={selectedFamily !== 'faster-whisper'}
+					class:dark:text-gray-400={selectedFamily !== 'faster-whisper'}
+					class:border-gray-200={selectedFamily !== 'faster-whisper'}
+					class:dark:border-gray-700={selectedFamily !== 'faster-whisper'}
+					on:click={() => { selectedFamily = 'faster-whisper'; }}
+				>
+					faster-whisper
+				</button>
+			</div>
+		</div>
+
+		{#if selectedFamily === 'whisper-cpp'}
+			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Recommended for macOS.</strong> Uses the highly optimized whisper.cpp engine. Fast on Apple Silicon.</p>
+			</div>
+		{:else}
+			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Recommended for Windows (CPU).</strong> Uses CTranslate2 backend. Often faster than whisper.cpp on Intel/AMD CPUs.</p>
+			</div>
+		{/if}
+	</div>
+
 	<InstallLogModal
 		bind:showModal={showLogModal}
 		logs={modalLogs}
@@ -352,15 +483,7 @@
 
 	<div class="flex flex-col space-y-3 h-full">
 		<div class="flex-shrink-0 mb-2">
-			<p class="text-sm text-gray-600 dark:text-gray-400 px-1 mb-1">
-				Harvey uses <a
-					href="https://github.com/ggml-org/whisper.cpp"
-					target="_blank"
-					rel="noopener noreferrer"
-					on:click|preventDefault={() => openLink('https://github.com/ggml-org/whisper.cpp')}
-					class="text-blue-600 dark:text-blue-400 hover:underline">whisper.cpp</a
-				> for transcription.
-			</p>
+            <!-- Info text updated based on selection? Or generic? -->
 			{#if !$configStatus.python_libraries_installed}
 				<p class="text-orange-600 dark:text-orange-400 text-sm px-1">
 					Please install the required Python libraries first to enable model downloads.
@@ -387,7 +510,7 @@
 						bind:value={searchQuery}
 						class="input w-full"
 						style="padding-left: 2.25rem;"
-						placeholder="Browse all available models (e.g. 'large', 'turbo')..."
+						placeholder="Browse available models..."
 						autocomplete="off"
 						autocorrect="off"
 						autocapitalize="off"
@@ -409,7 +532,7 @@
 							!isBusy &&
 							downloadLocation &&
 							downloadLocation.trim() !== '' &&
-							model.download_url &&
+							(model.download_url || model.family === 'faster-whisper') &&
 							$configStatus.python_libraries_installed}
 						{@const isDeleteEnabled = !isBusy}
 						{@const isCancelEnabled = status === 'downloading'}
@@ -420,12 +543,14 @@
 							{#if status === 'downloading'}
 								<div
 									class="absolute top-0 left-0 bottom-0 bg-blue-100 dark:bg-blue-900/50 bg-opacity-75 transition-all duration-150 ease-linear pointer-events-none"
-									style:width={`${display.progressPercent}%`}
+									style:width={model.family === 'faster-whisper' ? '100%' : `${display.progressPercent}%`}
 								></div>
+                                {#if model.family !== 'faster-whisper'}
 								<div
 									class="absolute top-0 left-0 bottom-0 border-r-2 border-blue-300 dark:border-blue-600 transition-all duration-150 ease-linear pointer-events-none"
 									style:width={`${display.progressPercent}%`}
 								></div>
+                                {/if}
 							{/if}
 
 							<div class="relative z-10 flex justify-between items-start">
@@ -436,7 +561,7 @@
 										</span>
 										<button
 											class="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 focus:outline-none p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-											title="View on GitHub"
+											title="View on Hugging Face"
 											on:click|stopPropagation={() => openLink(model.info_url)}
 										>
 											<svg
@@ -470,6 +595,10 @@
 											<span>{model.language}</span>
 											<span>&bull;</span>
 											<span>{model.size}</span>
+                                            {#if model.family}
+                                                <span>&bull;</span>
+                                                <span>{model.family === 'faster-whisper' ? 'Faster-Whisper' : 'Whisper.cpp'}</span>
+                                            {/if}
 										</span>
 									</div>
 								</div>
@@ -485,8 +614,7 @@
 									{:else if status === 'downloading' || status === 'cancelling'}
 										<div class="flex flex-col items-end">
 											<span class="text-[10px] text-blue-700 dark:text-blue-300 font-medium tabular-nums mb-1">
-												{#if status === 'cancelling'}Cancelling...{:else}{display.progressText ||
-														'Starting...'}{/if}
+												{#if status === 'cancelling'}Cancelling...{:else}{display.progressText || (model.family === 'faster-whisper' ? 'Downloading...' : 'Starting...')}{/if}
 											</span>
 											<button
 												class="btn-cancel"
@@ -524,19 +652,7 @@
 				</div>
 
 				{#if !hasFetched && searchQuery.trim() === ''}
-					<div class="py-4 flex justify-center">
-						<button
-							on:click={handleRefreshModels}
-							class="btn-blue-small px-4 py-2 text-sm"
-							title="Refresh available transcription models"
-						>
-							{#if isFetchingModels}
-								Loading available models...
-							{:else}
-								List models from HuggingFace
-							{/if}
-						</button>
-					</div>
+                    <!-- Refresh button logic if needed, currently disabled for faster-whisper/hardcoded -->
 				{/if}
 
 				{#if hasFetched && displayedModels.length === 0 && searchQuery.trim() !== ''}

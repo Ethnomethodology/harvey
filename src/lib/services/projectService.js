@@ -1467,6 +1467,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         speaker_names: currentTs.speakers.names || [],
         translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
         transcription_mode: transcriptionMode,
+        transcription_engine: currentTs.selectedModelFamily,
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.

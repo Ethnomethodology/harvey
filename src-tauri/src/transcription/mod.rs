@@ -6,6 +6,7 @@ use crate::projectview::shared_types::TranscriptSegment;
 
 pub mod whisper_cpp;
 pub mod python_engine;
+pub mod faster_whisper;
 
 #[derive(Debug, Clone)]
 pub struct TranscriptionOptions {

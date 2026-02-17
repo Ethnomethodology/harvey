@@ -213,7 +213,8 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let mut pip_packages = vec![
         "torch~=2.9.0", "torchaudio~=2.9.0",
         "pyannote.audio~=4.0.1", "pypandoc~=1.15",
-        "transformers~=4.57.1", "sacremoses~=0.1.1", "sentencepiece~=0.2.1", "torchcodec~=0.8.0"
+        "transformers~=4.57.1", "sacremoses~=0.1.1", "sentencepiece~=0.2.1", "torchcodec~=0.8.0",
+        "faster-whisper"
     ];
     if strategy == PyTorchInstallStrategy::Cpu {
         pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
@@ -347,6 +348,7 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             ("sacremoses", "sacremoses"),
             ("sentencepiece", "sentencepiece"),
             ("pypandoc", "pypandoc"),
+            ("faster-whisper", "faster_whisper"),
         ];
 
         // Prepare Windows PATH once, before the loop

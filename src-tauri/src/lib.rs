@@ -320,6 +320,7 @@ pub fn run() {
             welcome::commands::get_local_translation_models,
             welcome::commands::delete_model,
             welcome::commands::download_model_command,
+            welcome::commands::download_faster_whisper_model_command,
             welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
             welcome::commands::fetch_available_models_command,

@@ -32,6 +32,7 @@ use regex::Regex;
 use crate::welcome::python_env::get_python_path;
 use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
 use crate::transcription::whisper_cpp::WhisperCppEngine;
+use crate::transcription::faster_whisper::FasterWhisperEngine;
 
 // Helper to read the HuggingFace token
 fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String> {
@@ -1040,6 +1041,8 @@ pub struct TranscribeMediaPayload {
     translate_to_english: bool,
     speaker_names: Vec<String>, // For original transcript
     translated_speaker_names: Option<Vec<String>>, // For translated transcript
+    #[serde(default)]
+    transcription_engine: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -1165,7 +1168,7 @@ pub async fn transcribe_media_command<R: Runtime>(
 
     emit_progress_cmd(&app_handle_clone, &job_id, 5.0, &format!("Audio for {} prepared.", media_filename_for_progress))?;
 
-    let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id)?;
+    let whisper_model_path_str = resolve_model_path_cmd(&payload.model_name, &job_id, payload.transcription_engine.as_deref())?;
 
     // Pre-execute_transcription_pass (Original Language) Cancellation Check
     if cancel_flag.load(AtomicOrdering::Relaxed) {
@@ -1202,6 +1205,7 @@ pub async fn transcribe_media_command<R: Runtime>(
         &payload.speaker_names,
         &media_filename_for_progress,
         cancel_flag.clone(),
+        payload.transcription_engine.clone(),
     ).await {
         Ok(segments) => segments,
         Err(e) => {
@@ -1357,6 +1361,7 @@ pub async fn transcribe_media_command<R: Runtime>(
                 &payload.speaker_names,
                 &media_filename_for_progress,
                 cancel_flag.clone(),
+                payload.transcription_engine.clone(),
             ).await;
 
             let mut translated_segments = match translation_result {
@@ -1795,9 +1800,10 @@ struct RttmRecord {
 }
 
 
-pub(crate) fn resolve_whisper_model_path_cmd(
+pub(crate) fn resolve_model_path_cmd(
     model_name: &str,
     job_id: &str, // Kept for logging consistency, though not strictly needed by logic
+    engine: Option<&str>,
 ) -> Result<String, CommandError> {
     let config = read_config()?; // This is synchronous
     let base_model_dir_str = if !config.download_location.trim().is_empty() {
@@ -1805,32 +1811,47 @@ pub(crate) fn resolve_whisper_model_path_cmd(
     } else {
         get_default_download_location()? // This is synchronous
     };
-    
-    // New directory structure: transcription/whisper-cpp/model_name
-    let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
-    let model_dir_path = PathBuf::from(&base_model_dir_str).join(sub_dir).join(model_name);
 
-    // Fallback logic
-    let model_dir_path = if model_dir_path.exists() {
-        model_dir_path
-    } else {
-        let legacy_model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
-        if legacy_model_dir_path.exists() {
-             legacy_model_dir_path
-        } else {
-             // If neither exists, default to new structure so error message reflects preferred path
-             model_dir_path
+    if engine == Some("faster-whisper") {
+        let sub_dir = PathBuf::from("transcription").join("faster-whisper");
+        // Matches the folder name constructed in python script and expected by delete_model
+        let folder_name = format!("models--{}", model_name.replace('/', "--"));
+        let model_dir_path = PathBuf::from(&base_model_dir_str).join(sub_dir).join(&folder_name);
+
+        if !model_dir_path.exists() || !model_dir_path.is_dir() {
+             let e_msg = format!("Faster-whisper model directory not found: '{}'. Please download the model first.", model_dir_path.display());
+             error!("[Transcription CMD][{}] Error resolving model path: {}", job_id, e_msg);
+             return Err(CommandError::from(e_msg));
         }
-    };
+        // faster-whisper takes the directory path
+        Ok(model_dir_path.to_string_lossy().to_string())
+    } else {
+        // New directory structure: transcription/whisper-cpp/model_name
+        let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
+        let model_dir_path = PathBuf::from(&base_model_dir_str).join(sub_dir).join(model_name);
 
-    if !model_dir_path.exists() || !model_dir_path.is_dir() {
-        let e_msg = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());
-        error!("[Transcription CMD][{}] Error resolving model path: {}", job_id, e_msg);
-        return Err(CommandError::from(e_msg));
+        // Fallback logic
+        let model_dir_path = if model_dir_path.exists() {
+            model_dir_path
+        } else {
+            let legacy_model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
+            if legacy_model_dir_path.exists() {
+                 legacy_model_dir_path
+            } else {
+                 // If neither exists, default to new structure so error message reflects preferred path
+                 model_dir_path
+            }
+        };
+
+        if !model_dir_path.exists() || !model_dir_path.is_dir() {
+            let e_msg = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());
+            error!("[Transcription CMD][{}] Error resolving model path: {}", job_id, e_msg);
+            return Err(CommandError::from(e_msg));
+        }
+        // Call the adapted find_model_file_cmd
+        let model_file_path = find_model_file_cmd(&model_dir_path)?;
+        Ok(model_file_path.to_string_lossy().to_string())
     }
-    // Call the adapted find_model_file_cmd
-    let model_file_path = find_model_file_cmd(&model_dir_path)?;
-    Ok(model_file_path.to_string_lossy().to_string())
 }
 
 // --- START: Adapted Helper Functions for execute_transcription_pass ---
@@ -2035,8 +2056,9 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     speaker_names: &[String],
     media_filename_for_progress: &str,
     cancel_flag: Arc<AtomicBool>,
+    transcription_engine: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
-    info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}", job_id, language_code, is_translation_pass, num_speakers);
+    info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, Engine: {:?}", job_id, language_code, is_translation_pass, num_speakers, transcription_engine);
 
     let output_dir = expected_whisper_json_output_path.parent()
         .ok_or_else(|| CommandError::from("Invalid output path"))?
@@ -2049,7 +2071,11 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         translate: is_translation_pass,
     };
 
-    let engine = WhisperCppEngine::new(app_handle.clone());
+    let engine: Box<dyn TranscriptionEngine> = if transcription_engine.as_deref() == Some("faster-whisper") {
+        Box::new(FasterWhisperEngine::new(app_handle.clone()))
+    } else {
+        Box::new(WhisperCppEngine::new(app_handle.clone()))
+    };
     
     info!("[Exec Pass][{}] Calling TranscriptionEngine...", job_id);
     let mut segments = engine.transcribe(
@@ -2603,7 +2629,7 @@ pub async fn start_live_transcription(
         return Err("Live transcription is already running.".to_string());
     }
 
-    let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
+    let model_path = resolve_model_path_cmd(&model_name, "live", None)
         .map_err(|e| e.to_string())?;
 
     let mut args = vec![

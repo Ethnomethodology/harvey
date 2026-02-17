@@ -204,6 +204,113 @@ pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<b
     python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
 }
 
+// --- Transcription Model Download Command (Faster-Whisper) ---
+#[command]
+pub async fn download_faster_whisper_model_command(
+    app: AppHandle,
+    model_info: ModelInfo,
+    download_location: String,
+) -> Result<(), CommandError> {
+    log::info!("CMD: download_faster_whisper_model: {} -> {}", model_info.name, download_location);
+    let model_name = model_info.name.clone();
+
+    let sub_dir = "faster-whisper";
+    let target_dir = PathBuf::from(&download_location).join("transcription").join(sub_dir);
+    let target_dir_str = target_dir.to_string_lossy().to_string();
+
+    if download_location.trim().is_empty() {
+        return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
+    }
+    if !target_dir.exists() {
+        log::info!("Target directory {:?} does not exist. Creating...", target_dir);
+        fs::create_dir_all(&target_dir)?;
+    } else if !target_dir.is_dir() {
+        return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
+    }
+
+    let python_path = python_env::get_python_path()?;
+    let window = app.get_webview_window("main").unwrap();
+
+    let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
+
+    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
+    let token = if token_path.exists() {
+        fs::read_to_string(token_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let (mut rx, _child) = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        .spawn()
+        .map_err(|e| format!("Failed to spawn python script: {}", e))?;
+
+    window.emit("transcription-download-start", &model_name).unwrap();
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::info!("[Python] {}", &line_str);
+                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::error!("[Python] {}", &line_str);
+                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                log::info!("Transcription download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                if payload.code == Some(0) {
+                    success = true;
+                } else {
+                    window.emit("transcription-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if !success {
+        return Err(CommandError::Message("Transcription model download failed.".to_string()));
+    }
+
+    window.emit("transcription-download-complete", &model_name).unwrap();
+
+    if success {
+        log::info!("Transcription model '{}' downloaded successfully. Updating config.", &model_name);
+        match || -> Result<(), CommandError> {
+            let mut config = read_config()?;
+            let mut downloaded_model_info = model_info.clone();
+            downloaded_model_info.download_location = Some(download_location.clone());
+            downloaded_model_info.family = Some("faster-whisper".to_string());
+
+            if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+                log::info!("Model '{}' already in config. Updating.", &model_name);
+                config.downloaded_models[idx] = downloaded_model_info;
+            } else {
+                log::info!("Adding new model '{}' to config.", &model_name);
+                config.downloaded_models.push(downloaded_model_info);
+            }
+            write_config(&config)?;
+            log::info!("Config updated successfully for '{}'.", &model_name);
+            Ok(())
+        }() {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
+                Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
+            }
+        }
+    } else {
+        Err(CommandError::Message("Transcription model download failed.".to_string()))
+    }
+}
+
 // --- Translation Model Download Command ---
 #[command]
 pub async fn download_translation_model_command(
@@ -915,17 +1022,21 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
 
     // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
     // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-    let is_translation = model_to_delete.name.contains('/') || model_to_delete.family.is_some();
+    let family = model_to_delete.family.as_deref().unwrap_or("");
+    let is_faster_whisper = family == "faster-whisper";
+    let is_translation = (model_to_delete.name.contains('/') || model_to_delete.family.is_some()) && !is_faster_whisper;
     
-    let folder_name = if is_translation && model_to_delete.name.contains('/') {
+    let folder_name = if (is_translation || is_faster_whisper) && model_to_delete.name.contains('/') {
         let transformed = format!("models--{}", model_to_delete.name.replace('/', "--"));
-        log::info!("Transforming translation model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
+        log::info!("Transforming model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
         transformed
     } else {
         model_to_delete.name.clone()
     };
 
-    let sub_dir = if is_translation {
+    let sub_dir = if is_faster_whisper {
+        PathBuf::from("transcription").join("faster-whisper")
+    } else if is_translation {
          let family = model_to_delete.family.as_deref().unwrap_or("helsinki");
          let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
          PathBuf::from("translation").join(org_dir)
@@ -1016,8 +1127,13 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
 
     for model in &models_in_config {
         // Determine subdirectory based on model type and family
-        let is_translation = model.name.contains('/') || model.family.is_some();
-        let sub_dir = if is_translation {
+        let family = model.family.as_deref().unwrap_or("");
+        let is_faster_whisper = family == "faster-whisper";
+        let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper;
+
+        let sub_dir = if is_faster_whisper {
+            PathBuf::from("transcription").join("faster-whisper")
+        } else if is_translation {
              let family = model.family.as_deref().unwrap_or("helsinki");
              let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
              PathBuf::from("translation").join(org_dir)
@@ -1027,7 +1143,7 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
 
         // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
         // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-        let folder_name = if is_translation && model.name.contains('/') {
+        let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
             format!("models--{}", model.name.replace('/', "--"))
         } else {
             model.name.clone()

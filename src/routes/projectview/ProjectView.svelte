@@ -42,7 +42,7 @@
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
     import { fetchAllTags } from '$lib/stores/tagStore.js';
-    import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData, insertTranscriptSegment } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedModelFamily, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData, insertTranscriptSegment } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
@@ -119,7 +119,7 @@ async function loadTranscriptionConfigData() {
 	}
 
 async function onConfirmTranscriptionStart(event) {
-    const { transcriptionMode, selectedModel, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig, manualSettings } = event.detail;
+    const { transcriptionMode, selectedModel, selectedModelFamily, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig, manualSettings } = event.detail;
 
     // Common: Update speaker config
     if (speakersConfig) {
@@ -129,6 +129,7 @@ async function onConfirmTranscriptionStart(event) {
     if (transcriptionMode === 'automatic') {
         // Update store with automatic settings
         setSelectedModel(selectedModel);
+        setSelectedModelFamily(selectedModelFamily);
         setSelectedLanguage(selectedLanguage);
         setTranslateToEnglish(translateToEnglish);
         setDiarizationPreference(enableDiarization);

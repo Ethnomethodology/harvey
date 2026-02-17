@@ -1,0 +1,53 @@
+import sys
+import os
+import logging
+from huggingface_hub import snapshot_download, login
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger('huggingface_hub')
+logger.setLevel(logging.INFO)
+
+def download_model(model_name, target_dir, token):
+    """
+    Downloads a transcription model (faster-whisper) from Hugging Face.
+    """
+    # Construct target directory based on model name to flatten structure
+    # e.g., target_dir/models--Systran--faster-whisper-tiny
+    # Actually, if we use local_dir, we can control exact path.
+    # But to match existing pattern of `delete_model` which expects `models--...`,
+    # we should construct that path here or in Rust.
+    # Rust passes `target_dir` which is `.../transcription/faster-whisper`.
+    # We should append the folder name here or Rust should pass the full final path.
+
+    # Let's match the standard naming convention for consistency but flatten it.
+    folder_name = f"models--{model_name.replace('/', '--')}"
+    final_model_dir = os.path.join(target_dir, folder_name)
+
+    print(f"Downloading model {model_name} to {final_model_dir}", flush=True)
+    try:
+        if token:
+            login(token=token)
+
+        # Download the full repository snapshot to a specific directory (flattened)
+        snapshot_download(
+            repo_id=model_name,
+            local_dir=final_model_dir,
+            local_dir_use_symlinks=False,
+            resume_download=True
+        )
+
+        print("Download complete.", flush=True)
+    except Exception as e:
+        print(f"Error downloading model: {e}", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("Usage: python download_transcription_model.py <model_name> <cache_dir> <token>", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    model_name = sys.argv[1]
+    cache_dir = sys.argv[2]
+    token = sys.argv[3]
+    download_model(model_name, cache_dir, token)

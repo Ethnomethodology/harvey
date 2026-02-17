@@ -105,6 +105,46 @@ export async function deleteModel(model) {
 	throw new Error(`Failed to delete model: ${error?.message || error}`);
   }
 }
+
+export async function downloadFasterWhisperModel(model, downloadLocation) {
+  if (!model?.name) {
+      console.error('Model name is missing.');
+      throw new Error('Model name is missing.');
+  }
+  if (!downloadLocation || downloadLocation.trim() === '') {
+       const errorMsg = `Download location is not set. Cannot download model.`;
+       console.error(errorMsg);
+       throw new Error(errorMsg);
+  }
+  console.log(`Attempting to download faster-whisper model: ${model.name} to ${downloadLocation}`);
+  try {
+    await invoke('download_faster_whisper_model_command', {
+      modelInfo: model,
+      downloadLocation: downloadLocation
+    });
+    console.log(`Download command invoked for faster-whisper model: ${model.name}`);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking download_faster_whisper_model_command for ${model.name}:`, error);
+    throw new Error(`Failed to start faster-whisper model download: ${error?.message || error}`);
+  }
+}
+
+export async function cancelFasterWhisperModelDownload(modelName) {
+    if (!modelName) {
+        console.error("Cannot cancel download without a model name.");
+        return;
+    }
+    console.log(`Requesting cancellation for faster-whisper model: ${modelName}`);
+    try {
+        await invoke('cancel_download_command', { modelName: modelName });
+        console.log(`Cancellation command invoked for ${modelName}.`);
+    } catch (error) {
+        console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
+        throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+    }
+}
+
 export async function cancelDownload(modelName) {
 	if (!modelName) {
 		console.error("Cannot cancel download without a model name.");

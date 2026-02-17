@@ -100,9 +100,13 @@
 	function handleConfirm() {
 		// Start time is now handled by store
 		if (modalTab === 'automatic') {
+            const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel);
+            const family = selectedModelObj?.family || 'whisper-cpp';
+
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
 				selectedModel: modalSelectedModel,
+                selectedModelFamily: family,
 				selectedLanguage: modalSelectedLanguage,
 				enableDiarization: modalEnableDiarization,
 				speakersConfig: modalSpeakersConfig,
@@ -337,7 +341,7 @@
 								<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
 								<Dropdown
 									containerClasses="w-full"
-									options={downloadedModelsList.map((m) => ({ value: m.name, label: m.name }))}
+									options={downloadedModelsList.map((m) => ({ value: m.name, label: `${m.name} (${m.family || 'whisper.cpp'})` }))}
 									bind:value={modalSelectedModel}
 									placeholder="Select a Model"
 									disabled={downloadedModelsList.length === 0}
