@@ -45,7 +45,18 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
 
     // Always re-verify model presence if config says they are there
     let models = get_downloaded_models().await?;
-    let has_transcription = models.iter().any(|m| m.family.is_none() && !m.name.contains('/') && !m.name.contains("paraphrase"));
+
+    // Check for valid transcription models (whisper-cpp or faster-whisper)
+    // whisper-cpp: family is None (legacy) or "whisper-cpp", and no '/' in name (unless handled elsewhere)
+    // faster-whisper: family is "faster-whisper"
+    let has_transcription = models.iter().any(|m| {
+        let family = m.family.as_deref().unwrap_or("whisper-cpp");
+        let is_whisper_cpp = family == "whisper-cpp" || (m.family.is_none() && !m.name.contains('/'));
+        let is_faster_whisper = family == "faster-whisper";
+
+        !m.name.contains("paraphrase") && (is_whisper_cpp || is_faster_whisper)
+    });
+
     let has_translation = !get_local_translation_models().await?.is_empty();
 
     if !transcription_models_downloaded && has_transcription {
