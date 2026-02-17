@@ -214,7 +214,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         "torch~=2.9.0", "torchaudio~=2.9.0",
         "pyannote.audio~=4.0.1", "pypandoc~=1.15",
         "transformers~=4.57.1", "sacremoses~=0.1.1", "sentencepiece~=0.2.1", "torchcodec~=0.8.0",
-        "faster-whisper"
+        "faster-whisper", "ctranslate2"
     ];
     if strategy == PyTorchInstallStrategy::Cpu {
         pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);

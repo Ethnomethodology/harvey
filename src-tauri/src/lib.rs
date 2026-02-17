@@ -341,6 +341,8 @@ pub fn run() {
             
             welcome::commands::set_selected_translation_family,
             welcome::commands::get_selected_translation_family,
+            welcome::commands::set_selected_transcription_engine,
+            welcome::commands::get_selected_transcription_engine,
             welcome::commands::is_ctranslate2_installed,
             welcome::status::check_config_status,
             welcome::python_env::list_venv_lib_contents,

@@ -5,8 +5,8 @@ import argparse
 # faster_whisper should be installed in the environment
 try:
     from faster_whisper import WhisperModel
-except ImportError:
-    print(json.dumps({"error": "faster_whisper not installed"}), flush=True)
+except ImportError as e:
+    print(json.dumps({"error": f"faster_whisper import failed: {str(e)}"}), flush=True)
     sys.exit(1)
 
 # Configure logging to stderr to avoid polluting stdout which is used for JSON output

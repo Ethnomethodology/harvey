@@ -48,8 +48,12 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models (those with a family set or containing '/')
-	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.family && !model.name.includes('/')) : [];
+	// Filter out translation models.
+	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper'.
+	const transcriptionModels = Array.isArray(models) ? models.filter(model =>
+		(!model.family && !model.name.includes('/')) ||
+		model.family === 'faster-whisper'
+	) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
@@ -287,6 +291,25 @@ export async function fetchAvailableModels() {
 		console.error("Error invoking fetch_available_models_command:", error);
 		throw new Error(`Failed to fetch available models: ${error?.message || error}`);
 	}
+}
+
+export async function getSelectedTranscriptionEngine() {
+    try {
+        return await invoke('get_selected_transcription_engine');
+    } catch (error) {
+        console.error("Error invoking get_selected_transcription_engine:", error);
+        return null;
+    }
+}
+
+export async function setSelectedTranscriptionEngine(engine) {
+    try {
+        await invoke('set_selected_transcription_engine', { engine });
+        return true;
+    } catch (error) {
+        console.error("Error invoking set_selected_transcription_engine:", error);
+        return false;
+    }
 }
 
 // --- Export Action ---

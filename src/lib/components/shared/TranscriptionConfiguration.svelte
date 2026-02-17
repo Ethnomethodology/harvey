@@ -10,6 +10,8 @@
 		getDownloadedModels,
 		cancelDownload,
         cancelFasterWhisperModelDownload,
+        getSelectedTranscriptionEngine,
+        setSelectedTranscriptionEngine
 	} from '$lib/services/configureActions';
 	import { configStatus, setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
@@ -169,6 +171,10 @@
 		configError = '';
 		try {
 			downloadedModels = await getDownloadedModels();
+            const persistedEngine = await getSelectedTranscriptionEngine();
+            if (persistedEngine) {
+                selectedFamily = persistedEngine;
+            }
 		} catch (e) {
 			console.error('Error loading transcription configuration:', e);
 			configError = `Failed to load transcription configuration: ${e.message || e}`;
@@ -431,7 +437,10 @@
 					class:dark:text-gray-400={selectedFamily !== 'whisper-cpp'}
 					class:border-gray-200={selectedFamily !== 'whisper-cpp'}
 					class:dark:border-gray-700={selectedFamily !== 'whisper-cpp'}
-					on:click={() => { selectedFamily = 'whisper-cpp'; }}
+					on:click={async () => {
+                        selectedFamily = 'whisper-cpp';
+                        await setSelectedTranscriptionEngine('whisper-cpp');
+                    }}
 				>
 					whisper.cpp
 				</button>
@@ -446,7 +455,10 @@
 					class:dark:text-gray-400={selectedFamily !== 'faster-whisper'}
 					class:border-gray-200={selectedFamily !== 'faster-whisper'}
 					class:dark:border-gray-700={selectedFamily !== 'faster-whisper'}
-					on:click={() => { selectedFamily = 'faster-whisper'; }}
+					on:click={async () => {
+                        selectedFamily = 'faster-whisper';
+                        await setSelectedTranscriptionEngine('faster-whisper');
+                    }}
 				>
 					faster-whisper
 				</button>

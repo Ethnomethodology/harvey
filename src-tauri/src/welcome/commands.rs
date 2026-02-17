@@ -554,6 +554,21 @@ pub async fn get_platform_info() -> Result<String, CommandError> {
     Ok(format!("{}-{}", os, arch))
 }
 
+#[command]
+pub async fn set_selected_transcription_engine(engine: String) -> Result<(), CommandError> {
+    log::info!("CMD: set_selected_transcription_engine: {}", engine);
+    let mut config = read_config()?;
+    config.selected_transcription_engine = Some(engine);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
+pub async fn get_selected_transcription_engine() -> Result<Option<String>, CommandError> {
+    let config = read_config()?;
+    Ok(config.selected_transcription_engine)
+}
+
 #[derive(Deserialize)]
 struct HuggingFaceApiResponse {
     siblings: Vec<HuggingFaceApiFile>,
