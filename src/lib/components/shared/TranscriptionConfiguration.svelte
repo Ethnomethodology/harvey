@@ -29,6 +29,8 @@
 
 	// --- State variables for Modal binding ---
 	let showLogModal = false;
+    let showDeleteConfirmModal = false;
+    let modelToDelete = null;
 	let modalLogs = [];
 	let isDownloading = false;
 
@@ -383,21 +385,25 @@
         }
 	}
 
-	async function handleDelete(model) {
+	function handleDelete(model) {
 		if (isBusy) return;
 		if (!model?.name) {
 			alert("Cannot delete model: Missing name.");
 			return;
 		}
-		const modelName = model.name;
+        modelToDelete = model;
+        showDeleteConfirmModal = true;
+	}
+
+    async function executeDelete() {
+        if (!modelToDelete) return;
+        const model = modelToDelete;
+        const modelName = model.name;
+        showDeleteConfirmModal = false;
+        modelToDelete = null;
+
 		configError = '';
-		const confirmed = await ask(`Are you sure you want to delete the model "${modelName}"? This will remove it from disk.`, {
-			title: 'Confirm Deletion',
-			type: 'warning',
-			okLabel: 'Delete',
-			cancelLabel: 'Cancel',
-		});
-		if (!confirmed) return;
+
 		const newStatus = { ...downloadStatus };
 		delete newStatus[modelName];
 		const newProgress = { ...downloadProgress };
@@ -420,7 +426,7 @@
 				console.error('Failed to refresh models after delete error:', refreshErr);
 			}
 		}
-	}
+    }
 
 	async function handleCancel(modelName) {
         // Find model to check family
@@ -520,6 +526,32 @@
 		title="Downloading Transcription Model"
 		inProgressText="Downloading..."
 	/>
+
+    <!-- Delete Confirmation Modal -->
+    {#if showDeleteConfirmModal}
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Deletion</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                    Are you sure you want to delete the model <span class="font-bold text-gray-800 dark:text-gray-200">"{modelToDelete?.name}"</span>? This will remove it from your disk.
+                </p>
+                <div class="flex justify-end space-x-3">
+                    <button
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        on:click={() => { showDeleteConfirmModal = false; modelToDelete = null; }}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        on:click={executeDelete}
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
 	{#if configError}
 		<p
 			class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0"
