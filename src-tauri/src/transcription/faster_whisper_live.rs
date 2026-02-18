@@ -12,6 +12,7 @@ pub async fn start_faster_whisper_live<R: Runtime>(
     app_handle: AppHandle<R>,
     model_path: String,
     language: String,
+    save_audio: bool,
     active_document_path: String,
     project_uuid: String,
     project_base_dir: String,
@@ -33,14 +34,25 @@ pub async fn start_faster_whisper_live<R: Runtime>(
         "--length".to_string(), "5000".to_string(),
     ];
 
+    let mut command = app_handle
+        .shell()
+        .command(python_path.to_string_lossy().to_string());
+
+    if save_audio {
+        let active_doc_path = std::path::PathBuf::from(&active_document_path);
+        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+        std::fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+
+        args.push("--save-audio".to_string());
+        command = command.current_dir(attachments_dir);
+    }
+
     // Additional configuration from read_config could be added here (threads, device)
     // For now, we use defaults in the script.
 
     info!("[Faster-Whisper Live] Spawning Python script: {:?} {:?}", python_path, args);
 
-    let (mut rx, child) = app_handle
-        .shell()
-        .command(python_path.to_string_lossy().to_string())
+    let (mut rx, child) = command
         .args(args)
         .spawn()
         .map_err(|e| e.to_string())?;

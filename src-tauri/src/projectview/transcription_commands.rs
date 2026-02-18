@@ -2638,6 +2638,7 @@ pub async fn start_live_transcription(
             app_handle,
             model_path,
             language,
+            save_audio,
             active_document_path,
             project_uuid,
             project_base_dir,
