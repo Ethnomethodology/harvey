@@ -5,6 +5,8 @@ import argparse
 import time
 import numpy as np
 import collections
+import wave
+import os
 
 # Configure logging to stderr
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -16,7 +18,7 @@ except ImportError as e:
     print(json.dumps({"error": f"Import failed: {str(e)}"}), flush=True)
     sys.exit(1)
 
-def run_live_transcription(model_path, language=None, device="auto", threads=4, step_ms=5000, length_ms=5000):
+def run_live_transcription(model_path, language=None, device="auto", threads=4, step_ms=5000, length_ms=5000, save_audio=False):
     """
     Live transcription using faster-whisper and sounddevice.
     Mimics whisper-stream output format for Harvey integration.
@@ -37,12 +39,26 @@ def run_live_transcription(model_path, language=None, device="auto", threads=4, 
     # Buffer to hold audio for transcription
     audio_buffer = collections.deque(maxlen=int(sample_rate * (length_ms / 1000.0)))
     
+    wav_file = None
+    if save_audio:
+        timestamp = time.strftime("%Y%m%d%H%M%S")
+        filename = f"{timestamp}.wav"
+        wav_file = wave.open(filename, 'wb')
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2) # 16-bit
+        wav_file.setframerate(sample_rate)
+        logging.info(f"Saving audio to {os.path.abspath(filename)}")
+
     print("[Start speaking]", flush=True)
 
     def audio_callback(indata, frames, time, status):
         if status:
             logging.warning(status)
         audio_buffer.extend(indata[:, 0])
+        if wav_file:
+            # Convert float32 to int16 for WAV saving
+            audio_int16 = (indata[:, 0] * 32767).astype(np.int16)
+            wav_file.writeframes(audio_int16.tobytes())
 
     try:
         with sd.InputStream(samplerate=sample_rate, channels=1, callback=audio_callback, blocksize=chunk_samples):
@@ -78,6 +94,9 @@ def run_live_transcription(model_path, language=None, device="auto", threads=4, 
         pass
     except Exception as e:
         print(json.dumps({"error": f"Live transcription failed: {str(e)}"}), flush=True)
+    finally:
+        if wav_file:
+            wav_file.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -87,6 +106,7 @@ if __name__ == "__main__":
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--step", type=int, default=5000)
     parser.add_argument("--length", type=int, default=5000)
+    parser.add_argument("--save-audio", action="store_true")
 
     args = parser.parse_args()
 
@@ -100,5 +120,6 @@ if __name__ == "__main__":
         args.device, 
         args.threads, 
         args.step, 
-        args.length
+        args.length,
+        args.save_audio
     )
