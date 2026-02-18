@@ -669,6 +669,7 @@
                      nodes={LEXICAL_NODES}
                      initialJson={currentLexicalJson}
                      editable={true}
+                     enableTableCellResize={true}
                      placeholder="Transcript content will appear here as a table..."
                      externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}

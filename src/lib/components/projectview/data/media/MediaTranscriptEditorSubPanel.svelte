@@ -272,6 +272,7 @@
                 initialJson={currentTranscriptJson || defaultEmptyJson}
                 editable={true}
                 enableSegmentPlayback={enableSegmentPlayback}
+                enableTableCellResize={true}
                 placeholder="Enter data for this transcript..."
                 externalHighlightedRowIndex={highlightedRowIndex}
                 on:change={handleEditorChange}

@@ -1644,73 +1644,74 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
   }
 
   function handlePointerHover(event) {
-      if (!editorContainer || !editorWrapper || isResizing || !enableSegmentPlayback || !editor) return;
+      if (!editorContainer || !editorWrapper || isResizing || !editor) return;
       
-      const x = event.clientX;
-      const y = event.clientY;
-      const wrapperRect = editorWrapper.getBoundingClientRect();
-      
-      // Check if we are in the gutter (first 60px of the wrapper)
-      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
-      
-      // If we are in the gutter, scan slightly to the right to find the row at this Y level
-      const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
-      
-      // Use elementsFromPoint to find the row
-      const elements = document.elementsFromPoint(scanX, y);
-      const rowElement = elements.find(el => 
-          el.classList?.contains('editor-table-row') || 
-          el.closest?.('.editor-table-row')
-      );
-      const actualRow = rowElement?.classList?.contains('editor-table-row') ? rowElement : rowElement?.closest?.('.editor-table-row');
-      
-      if (actualRow) {
-          // Skip if this is a header row
-          const isHeaderRow = actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
-          // Also skip if it's the very first row of the table (index 0), as this is invariably the header in our transcript structure
-          // We use actualRow.rowIndex if available (standard HTMLTableRowElement), or fallback to checking siblings
-          const isFirstRow = actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
+      if (enableSegmentPlayback) {
+          const x = event.clientX;
+          const y = event.clientY;
+          const wrapperRect = editorWrapper.getBoundingClientRect();
+          
+          // Check if we are in the gutter (first 60px of the wrapper)
+          const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
+          
+          // If we are in the gutter, scan slightly to the right to find the row at this Y level
+          const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
+          
+          // Use elementsFromPoint to find the row
+          const elements = document.elementsFromPoint(scanX, y);
+          const rowElement = elements.find(el => 
+              el.classList?.contains('editor-table-row') || 
+              el.closest?.('.editor-table-row')
+          );
+          const actualRow = rowElement?.classList?.contains('editor-table-row') ? rowElement : rowElement?.closest?.('.editor-table-row');
+          
+          if (actualRow) {
+              // Skip if this is a header row
+              const isHeaderRow = actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
+              // Also skip if it's the very first row of the table (index 0), as this is invariably the header in our transcript structure
+              // We use actualRow.rowIndex if available (standard HTMLTableRowElement), or fallback to checking siblings
+              const isFirstRow = actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
 
-          if (isHeaderRow || isFirstRow) {
-              if (showPlayButton) {
-                  showPlayButton = false;
-                  hoveredRowKey = null;
+              if (isHeaderRow || isFirstRow) {
+                  if (showPlayButton) {
+                      showPlayButton = false;
+                      hoveredRowKey = null;
+                  }
+                  // We continue here to allow resize detection even if over header
+              } else {
+                  let rowKey = actualRow.getAttribute('data-lexical-key');
+                  
+                  // Fallback if data-lexical-key is missing from DOM
+                  if (!rowKey) {
+                      editor.read(() => {
+                          const node = _getNearestNodeFromDOMNode(actualRow);
+                          if (node) rowKey = node.getKey();
+                      });
+                  }
+
+                  if (rowKey && rowKey !== hoveredRowKey) {
+                      hoveredRowKey = rowKey;
+                      const rect = actualRow.getBoundingClientRect();
+                      
+                      // Position button in the gutter (left: 20px relative to wrapper)
+                      playButtonPosition = {
+                          top: rect.top - wrapperRect.top + editorWrapper.scrollTop + (rect.height / 2),
+                          left: 20,
+                      };
+                      showPlayButton = true;
+                  }
               }
-              return;
-          }
-
-          let rowKey = actualRow.getAttribute('data-lexical-key');
-          
-          // Fallback if data-lexical-key is missing from DOM
-          if (!rowKey) {
-              editor.read(() => {
-                  const node = _getNearestNodeFromDOMNode(actualRow);
-                  if (node) rowKey = node.getKey();
-              });
-          }
-
-          if (rowKey && rowKey !== hoveredRowKey) {
-              // console.log('[LexicalEditor] Row detected. Key:', rowKey);
-              hoveredRowKey = rowKey;
-              const rect = actualRow.getBoundingClientRect();
+          } else {
+              // If NOT over a row, we hide if we are also NOT over the play button itself
+              // and NOT in the gutter (to prevent flickering)
+              const currentElements = document.elementsFromPoint(x, y);
+              const isOverPlayButton = currentElements.some(el => el.classList?.contains('play-segment-hover-btn'));
               
-              // Position button in the gutter (left: 20px relative to wrapper)
-              playButtonPosition = {
-                  top: rect.top - wrapperRect.top + editorWrapper.scrollTop + (rect.height / 2),
-                  left: 20,
-              };
-              showPlayButton = true;
-          }
-      } else {
-          // If NOT over a row, we hide if we are also NOT over the play button itself
-          // and NOT in the gutter (to prevent flickering)
-          const currentElements = document.elementsFromPoint(x, y);
-          const isOverPlayButton = currentElements.some(el => el.classList?.contains('play-segment-hover-btn'));
-          
-          if (!isOverPlayButton && !isWithinGutterX) {
-              if (showPlayButton) {
-                  showPlayButton = false;
-                  hoveredRowKey = null;
+              if (!isOverPlayButton && !isWithinGutterX) {
+                  if (showPlayButton) {
+                      showPlayButton = false;
+                      hoveredRowKey = null;
+                  }
               }
           }
       }
@@ -1811,6 +1812,9 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
           resizeStartPos = { x: event.clientX, y: event.clientY };
           updateResizerLine(event.clientX, event.clientY);
           document.body.style.cursor = direction === 'col' ? 'col-resize' : 'row-resize';
+
+          window.addEventListener('pointermove', handlePointerMove);
+          window.addEventListener('pointerup', handlePointerUp);
       }
   }
 
@@ -1955,6 +1959,9 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       resizerLineStyle = 'display: none;';
       document.body.style.cursor = 'auto';
       if (editorContainer) editorContainer.style.cursor = 'auto';
+
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
   }
 
 function updateSearchHighlights() {
