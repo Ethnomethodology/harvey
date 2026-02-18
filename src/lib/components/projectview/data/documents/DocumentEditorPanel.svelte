@@ -238,7 +238,7 @@
         @apply p-3 m-0;
     }
     :global(html.dark .lexical-wrapper) {
-        background-color: theme('colors.dark-bg-lexical-editor');
+        background-color: theme('colors.gray.900');
     }
      :global(.lexical-wrapper > .lexical-editor-root > *) {
          @apply mt-0 mb-0;

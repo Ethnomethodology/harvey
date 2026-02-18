@@ -1782,7 +1782,7 @@
         background-color: theme('colors.gray.300');
     }
     :global(html.dark) .osd-viewer-container {
-        background-color: theme('colors.dark-bg-form-field');
+        background-color: theme('colors.gray.900');
     }
     .opacity-0 { opacity: 0; }
 
