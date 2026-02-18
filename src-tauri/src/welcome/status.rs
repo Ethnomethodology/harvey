@@ -18,6 +18,7 @@ pub struct ConfigStatus {
     pub diarization_model_downloaded: bool,
     pub translation_models_downloaded: bool,
     pub ctranslate2_installed: bool,
+    pub faster_whisper_dependencies_installed: bool,
 }
 
 use crate::welcome::config::{read_config, write_config};
@@ -35,6 +36,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
     let mut hf_token_present = config.verification_status.hf_token_verified;
     let mut ct2_installed = false;
+    let mut fw_deps_installed = false;
 
     // --- Lightweight Checks ---
     if python_libs_installed && !python_env::get_env_path()?.exists() {
@@ -98,6 +100,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     // CTranslate2 check
     if python_libs_installed {
         ct2_installed = is_ctranslate2_installed(app_handle.clone()).await.unwrap_or(false);
+        fw_deps_installed = super::commands::is_faster_whisper_dependencies_installed(app_handle.clone()).await.unwrap_or(false);
     }
 
     let current_hf_token_status = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
@@ -125,5 +128,6 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         diarization_model_downloaded,
         translation_models_downloaded,
         ctranslate2_installed: ct2_installed,
+        faster_whisper_dependencies_installed: fw_deps_installed,
     })
 }

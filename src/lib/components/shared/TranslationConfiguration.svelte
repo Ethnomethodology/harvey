@@ -3,7 +3,7 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 	import {
 		downloadTranslationModel,
 		deleteTranslationModel,
@@ -12,7 +12,8 @@
 		fetchAvailableModels,
 		getSelectedTranslationFamily,
 		setSelectedTranslationFamily,
-		isCTranslate2Installed
+		isCTranslate2Installed,
+        installFasterWhisperDependencies
 	} from '$lib/services/configureActions';
 	import { setTranslationModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import notificationStore from '$lib/stores/notificationStore.js';
@@ -37,6 +38,7 @@
 	let showLogModal = false;
 	let modalLogs = [];
 	let isDownloading = false;
+    let isInstallingDependencies = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
 	let selectedFamily = 'helsinki';
@@ -87,7 +89,7 @@
 			// but we can add it if backend supports it. For now, just status.
 			newData[id] = { status };
 		}
-		modelDisplayData = newData;
+		newData;
 	}
 
 	// Combined list logic
@@ -263,6 +265,7 @@
 			unlistenFinished = await listen('translation-download-finished', () => {
 				console.log('Frontend: Received translation-download-finished event. Setting isDownloading to false.');
 				isDownloading = false;
+                updateConfigStatus(true);
 			});
 		} catch (err) {
 			console.error('Failed to attach download event listeners:', err);
@@ -334,6 +337,29 @@
 		}
 	}
 
+    async function handleInstallDependencies() {
+        if (isInstallingDependencies) return;
+        isInstallingDependencies = true;
+        showLogModal = true;
+        modalLogs = [{ id: uuidv4(), message: "Starting installation of optimized translation backend (CTranslate2)..." }];
+        
+        const unlistenLog = await listen('installation-log', (event) => {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
+        });
+
+        try {
+            await installFasterWhisperDependencies(); // This installs ctranslate2, faster-whisper, and sounddevice
+            modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
+            await updateConfigStatus(true);
+            ct2Installed = await isCTranslate2Installed();
+        } catch (err) {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
+        } finally {
+            unlistenLog();
+            isInstallingDependencies = false;
+        }
+    }
+
     function formatModelDisplayName(modelName) {
         const parts = modelName.split('/');
 		const baseName = parts[parts.length - 1] || modelName;
@@ -402,7 +428,7 @@
 		</div>
 	</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading} title="Downloading Translation Model" inProgressText="Downloading..." />
+	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 	{#if configError}
 		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
@@ -453,19 +479,35 @@
 			</div>
 
 			{#if !ct2Installed}
-				<div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300">
+				<div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
 					<div class="flex items-center">
 						<svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
 							<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
 						</svg>
-						<p>CTranslate2 will be installed automatically along with your first model download.</p>
+						<p>CTranslate2 backend is missing. Optimized translation is disabled.</p>
 					</div>
+                    <button class="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-[10px] transition-colors" on:click={handleInstallDependencies} disabled={isInstallingDependencies}>
+                        Install Now
+                    </button>
 				</div>
 			{/if}
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Larger file size, slower on lower-end CPUs. Best with GPU.</p>
+                {#if !ct2Installed}
+                    <div class="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
+                        <div class="flex items-center">
+                            <svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <p>CTranslate2 backend is missing. Translation may fail.</p>
+                        </div>
+                        <button class="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-[10px] transition-colors" on:click={handleInstallDependencies} disabled={isInstallingDependencies}>
+                            Install Now
+                        </button>
+                    </div>
+                {/if}
 			</div>
 		{/if}
 	</div>

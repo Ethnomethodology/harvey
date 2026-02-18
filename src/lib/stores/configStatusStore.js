@@ -10,6 +10,8 @@ const initialStatus = {
     transcription_models_downloaded: true,
     diarization_model_downloaded: true,
     translation_models_downloaded: true,
+    ctranslate2_installed: true,
+    faster_whisper_dependencies_installed: true,
 };
 
 // Create the writable store
@@ -38,6 +40,8 @@ export async function updateConfigStatus(force = false) {
             transcription_models_downloaded: false,
             diarization_model_downloaded: false,
             translation_models_downloaded: false,
+            ctranslate2_installed: false,
+            faster_whisper_dependencies_installed: false,
         });
     }
 }
@@ -57,4 +61,7 @@ export const setDiarizationModelDownloaded = (status) => {
 };
 export const setTranslationModelsDownloaded = (status) => {
     configStatus.update(s => ({ ...s, translation_models_downloaded: status }));
+};
+export const setFasterWhisperDependenciesInstalled = (status) => {
+    configStatus.update(s => ({ ...s, faster_whisper_dependencies_installed: status }));
 };

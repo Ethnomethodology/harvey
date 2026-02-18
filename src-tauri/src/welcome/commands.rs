@@ -233,6 +233,73 @@ pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<b
     python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
 }
 
+#[command]
+pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Result<Vec<String>, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    let mut errors = Vec::new();
+    let packages = vec!["faster_whisper", "sounddevice", "ctranslate2"];
+
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    for pkg in packages {
+        if let Some(err) = python_env::get_package_import_error(&shell, &python_path, pkg, &windows_path_env, &env_path).await? {
+            errors.push(format!("{}: {}", pkg, err));
+        }
+    }
+
+    Ok(errors)
+}
+
+#[command]
+pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Check for faster-whisper, sounddevice, and ctranslate2
+    let fw_installed = python_env::check_package_installed(&shell, &python_path, "faster_whisper", &windows_path_env, &env_path).await?;
+    let sd_installed = python_env::check_package_installed(&shell, &python_path, "sounddevice", &windows_path_env, &env_path).await?;
+    let ct2_installed = python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await?;
+    
+    let all_installed = fw_installed && sd_installed && ct2_installed;
+    log::info!("Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}", fw_installed, sd_installed, ct2_installed, all_installed);
+    
+    Ok(all_installed)
+}
+
+#[command]
+pub async fn install_faster_whisper_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+    log::info!("CMD: install_faster_whisper_dependencies_command");
+    python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None).await
+}
+
 // --- Transcription Model Download Command (Faster-Whisper) ---
 #[command]
 pub async fn download_faster_whisper_model_command(
@@ -257,9 +324,18 @@ pub async fn download_faster_whisper_model_command(
         return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
     }
 
-    let python_path = python_env::get_python_path()?;
     let window = app.get_webview_window("main").unwrap();
 
+    // 1. Check/Install dependencies
+    let dependencies_installed = is_faster_whisper_dependencies_installed(app.clone()).await.unwrap_or(false);
+    if !dependencies_installed {
+        log::info!("Faster-Whisper dependencies not found. Installing...");
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Faster-Whisper dependencies are missing. Installing them now..." })).unwrap();
+        python_env::install_faster_whisper_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Dependencies installed successfully." })).unwrap();
+    }
+
+    let python_path = python_env::get_python_path()?;
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
 
     let token_path = app.path().app_config_dir().unwrap().join("hf_token");
@@ -380,7 +456,7 @@ pub async fn download_translation_model_command(
         if !ct2_installed {
             log::info!("CTranslate2 not found. Installing...");
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
-            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log").await?;
+            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log", Some(&model_name)).await?;
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 installed successfully." })).unwrap();
         }
     }

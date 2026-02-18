@@ -220,8 +220,20 @@ export async function isCTranslate2Installed() {
 	return await invoke('is_ctranslate2_installed');
 }
 
+export async function isFasterWhisperDependenciesInstalled() {
+	return await invoke('is_faster_whisper_dependencies_installed');
+}
+
+export async function installFasterWhisperDependencies() {
+	return await invoke('install_faster_whisper_dependencies_command');
+}
+
+export async function getDependencyCheckErrors() {
+	return await invoke('get_dependency_check_errors');
+}
 
 export async function setSelectedTranslationFamily(family) {
+
 	try {
 		await invoke('set_selected_translation_family', { family });
 		return true;

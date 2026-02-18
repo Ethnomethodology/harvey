@@ -72,7 +72,17 @@ async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchIn
     PyTorchInstallStrategy::Cpu
 }
 
-
+fn emit_log<R: Runtime>(app: &AppHandle<R>, event_name: &str, message: String, model_name: Option<&str>) {
+    if event_name == "transcription-download-log" || event_name == "translation-download-log" {
+        let payload = serde_json::json!({
+            "model_name": model_name.unwrap_or("System"),
+            "log_line": message
+        });
+        let _ = app.emit(event_name, payload);
+    } else {
+        let _ = app.emit(event_name, LogPayload { message });
+    }
+}
 
 // --- Main Installation Logic ---
 
@@ -85,12 +95,12 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
 #[allow(unused_variables)]
 async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
     let emitter = app.clone();
-    emitter.emit("installation-log", LogPayload { message: "Starting installation... Cleaning up previous attempts.".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Starting installation... Cleaning up previous attempts.".into(), None);
 
     let env_path = get_env_path()?;
     if env_path.exists() {
         log::info!("Removing existing environment at: {:?}", env_path);
-        emitter.emit("installation-log", LogPayload { message: "Removing existing environment...".into() }).unwrap();
+        emit_log(&emitter, "installation-log", "Removing existing environment...".into(), None);
         std::fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to remove existing env: {}", e)))?;
     }
 
@@ -98,10 +108,10 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     fs::create_dir_all(&config_dir)
         .map_err(|e| CommandError::Message(format!("Failed to create config directory: {}", e)))?;
 
-    emitter.emit("installation-log", LogPayload { message: "Found environment manager.".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Found environment manager.".into(), None);
 
     // Clear micromamba cache to prevent issues with corrupted downloads
-    emitter.emit("installation-log", LogPayload { message: "Clearing micromamba cache...".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Clearing micromamba cache...".into(), None);
     let mut clean_command = shell.sidecar("micromamba")?;
     clean_command = clean_command.args(&["clean", "--all", "-y"])
         .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
@@ -116,7 +126,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
+                emit_log(&emitter, "installation-log", line_str, None);
             },
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code != Some(0) {
@@ -127,12 +137,12 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
             _ => {}
         }
     }
-    emitter.emit("installation-log", LogPayload { message: "Micromamba cache cleared.".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Micromamba cache cleared.".into(), None);
 
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     // Step 1: Create environment with Python and pip
-    emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Creating Python environment...".into(), None);
 
     let create_args = vec![
         "create".to_string(),
@@ -154,7 +164,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     while attempts < max_attempts {
         attempts += 1;
-        emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
+        emit_log(&emitter, "installation-log", format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts), None);
 
         let mut create_command = shell.sidecar("micromamba")?;
         create_command = create_command.args(&create_args)
@@ -172,19 +182,19 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
             match event {
                 tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                     let line_str = String::from_utf8_lossy(&line).to_string();
-                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                    emit_log(&emitter, "installation-log", line_str.clone(), None);
                     output_lines.push(line_str);
                 }
                 tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                     let line_str = String::from_utf8_lossy(&line).to_string();
-                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                    emit_log(&emitter, "installation-log", line_str.clone(), None);
                     output_lines.push(line_str);
                 }
                 tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                     if payload.code != Some(0) {
                         let full_log = output_lines.join("\n");
                         let error_message = format!("Failed to create conda environment. Full log:\n{}", full_log);
-                        emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                        emit_log(&emitter, "installation-log", error_message.clone(), None);
                         if attempts == max_attempts {
                             return Err(CommandError::Message(error_message));
                         }
@@ -207,14 +217,13 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     }
 
     // Step 2: Install packages using pip
-    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Installing Python libraries...".into(), None);
 
     let strategy = get_pytorch_install_strategy(shell).await;
     let mut pip_packages = vec![
         "torch~=2.9.0", "torchaudio~=2.9.0",
         "pyannote.audio~=4.0.1", "pypandoc~=1.15",
         "transformers~=4.57.1", "sacremoses~=0.1.1", "sentencepiece~=0.2.1", "torchcodec~=0.8.0",
-        "faster-whisper", "ctranslate2"
     ];
     if strategy == PyTorchInstallStrategy::Cpu {
         pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
@@ -248,19 +257,19 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                emit_log(&emitter, "installation-log", line_str.clone(), None);
                 pip_output_lines.push(line_str);
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                emit_log(&emitter, "installation-log", line_str.clone(), None);
                 pip_output_lines.push(line_str);
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code != Some(0) {
                     let full_log = pip_output_lines.join("\n");
                     let error_message = format!("Failed to install pip packages. Full log:\n{}", full_log);
-                    emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                    emit_log(&emitter, "installation-log", error_message.clone(), None);
                     return Err(CommandError::Message(error_message));
                 }
                 break;
@@ -269,10 +278,10 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         }
     }
 
-    emitter.emit("installation-log", LogPayload { message: "Successfully installed Python libraries.".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Successfully installed Python libraries.".into(), None);
 
     // Step 3: Download pandoc binaries
-    emitter.emit("installation-log", LogPayload { message: "Downloading Pandoc binaries...".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Downloading Pandoc binaries...".into(), None);
     let python_path = get_python_path()?;
     let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
     let output = shell.command(python_path.to_str().unwrap())
@@ -282,12 +291,12 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
+        emit_log(&emitter, "installation-log", format!("Failed to download pandoc: {}", stderr), None);
     } else {
-        emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
+        emit_log(&emitter, "installation-log", "Pandoc downloaded successfully.".into(), None);
     }
 
-    emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
+    emit_log(&emitter, "installation-log", "Installation complete.".into(), None);
     emitter.emit("installation-finished", ()).unwrap();
     Ok(())
 }
@@ -348,7 +357,6 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             ("sacremoses", "sacremoses"),
             ("sentencepiece", "sentencepiece"),
             ("pypandoc", "pypandoc"),
-            ("faster-whisper", "faster_whisper"),
         ];
 
         // Prepare Windows PATH once, before the loop
@@ -393,33 +401,49 @@ pub async fn check_package_installed<R: Runtime>(
     windows_path_env: &Option<String>,
     env_path: &std::path::Path,
 ) -> Result<bool, CommandError> {
+    let output = run_python_import_check(shell, python_path, import_name, windows_path_env, env_path).await?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::warn!("Import check failed for '{}': {}", import_name, stderr);
+    }
+    Ok(output.status.success())
+}
+
+pub async fn get_package_import_error<R: Runtime>(
+    shell: &Shell<R>,
+    python_path: &std::path::Path,
+    import_name: &str,
+    windows_path_env: &Option<String>,
+    env_path: &std::path::Path,
+) -> Result<Option<String>, CommandError> {
+    let output = run_python_import_check(shell, python_path, import_name, windows_path_env, env_path).await?;
+    if !output.status.success() {
+        Ok(Some(String::from_utf8_lossy(&output.stderr).to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+async fn run_python_import_check<R: Runtime>(
+    shell: &Shell<R>,
+    python_path: &std::path::Path,
+    import_name: &str,
+    windows_path_env: &Option<String>,
+    _env_path: &std::path::Path,
+) -> Result<tauri_plugin_shell::process::Output, CommandError> {
     let mut command = shell.command(python_path.to_str().unwrap());
 
     // Apply the pre-calculated PATH for Windows
     if let Some(path_val) = &windows_path_env {
         command = command.env("PATH", path_val.clone());
-    } else if cfg!(target_os = "macos") {
-        let env_lib_path = env_path.join("lib");
-        if env_lib_path.exists() {
-            let existing_path = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
-            let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
-            command = command.env("DYLD_LIBRARY_PATH", new_path);
-        }
-    } else if cfg!(target_os = "linux") {
-        let env_lib_path = env_path.join("lib");
-        if env_lib_path.exists() {
-            let existing_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
-            let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
-            command = command.env("LD_LIBRARY_PATH", new_path);
-        }
     }
 
     let output = command
         .args(&["-c", &format!("import {}", import_name)])
         .output()
         .await?;
-
-    Ok(output.status.success())
+    
+    Ok(output)
 }
 
 pub async fn install_pip_packages<R: Runtime>(
@@ -427,6 +451,7 @@ pub async fn install_pip_packages<R: Runtime>(
     shell: &Shell<R>,
     packages: Vec<&str>,
     log_event_name: &str,
+    model_name: Option<&str>,
 ) -> Result<(), CommandError> {
     let emitter = app.clone();
     let env_path = get_env_path()?;
@@ -459,7 +484,7 @@ pub async fn install_pip_packages<R: Runtime>(
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit(log_event_name, LogPayload { message: line_str }).unwrap();
+                emit_log(&emitter, log_event_name, line_str, model_name);
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code != Some(0) {
@@ -470,6 +495,53 @@ pub async fn install_pip_packages<R: Runtime>(
             _ => {}
         }
     }
+    Ok(())
+}
+
+pub async fn install_faster_whisper_dependencies<R: Runtime>(
+    app: &AppHandle<R>,
+    shell: &Shell<R>,
+    log_event_name: &str,
+    model_name: Option<&str>,
+) -> Result<(), CommandError> {
+    let emitter = app.clone();
+    let env_path = get_env_path()?;
+    let config_dir = get_config_dir()?;
+
+    // Step 1: Install portaudio via micromamba
+    emit_log(&emitter, log_event_name, "Installing system audio libraries (portaudio)...".into(), model_name);
+    let mut conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "portaudio", "-c", "conda-forge", "-y"];
+    let mut conda_command = shell.sidecar("micromamba")?;
+    conda_command = conda_command.args(&conda_args)
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+    
+    if cfg!(target_os = "windows") {
+        conda_command = conda_command.env("MAMBA_SSL_NO_REVOKE", "true");
+    }
+
+    let (mut rx_conda, _child_conda) = conda_command.spawn()?;
+    while let Some(event) = rx_conda.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                emit_log(&emitter, log_event_name, line_str, model_name);
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    return Err(CommandError::Message(format!("Failed to install portaudio: {:?}", payload.code)));
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Step 2: Install pip packages
+    emit_log(&emitter, log_event_name, "Installing Python transcription libraries...".into(), model_name);
+    let pip_packages = vec!["faster-whisper", "ctranslate2", "sounddevice"];
+    install_pip_packages(app, shell, pip_packages, log_event_name, model_name).await?;
+
+    emit_log(&emitter, log_event_name, "Transcription libraries installed successfully.".into(), model_name);
     Ok(())
 }
 

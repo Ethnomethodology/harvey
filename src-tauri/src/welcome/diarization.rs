@@ -52,25 +52,7 @@ pub async fn check_diarization_model_access<R: Runtime>(
 
 
     let mut command = shell.command(python_path.to_string_lossy().to_string());
-
     command = command.args(&[script_path.to_string_lossy().to_string()]);
-
-
-
-    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our Conda environment's lib path
-    if cfg!(target_os = "macos") {
-        let env_path = super::python_env::get_env_path().map_err(|e| e.to_string())?;
-        let env_lib_path = env_path.join("lib");
-        if env_lib_path.exists() {
-            let env_lib_path_str = env_lib_path.to_string_lossy();
-            if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
-                command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", env_lib_path_str, existing_path));
-            } else {
-                command = command.env("DYLD_LIBRARY_PATH", env_lib_path_str.to_string());
-            }
-        }
-    }
-
 
     let output = command.output().await.map_err(|e| e.to_string())?;
 
@@ -114,29 +96,6 @@ pub async fn download_diarization_model<R: Runtime>(
     let mut command = shell.command(python_path.to_string_lossy().to_string());
     command = command.args(&[script_path.to_string_lossy().to_string(), token.clone()]);
     command = command.env("HF_HUB_DISABLE_PROGRESS_BARS", "1");
-
-    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our bundled ffmpeg libs
-    // and the python venv libs, so torchcodec can find everything.
-    if cfg!(target_os = "macos") {
-        let mut new_paths = Vec::new();
-
-        // 1. No longer bundling ffmpeg, so this path is removed.
-        // 2. Add venv lib path
-        if let Some(venv_dir) = python_path.parent().and_then(|p| p.parent()) {
-            new_paths.push(venv_dir.join("lib").to_string_lossy().to_string());
-        }
-
-        // 3. Prepend to existing path if it exists
-        if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
-            if !existing_path.is_empty() {
-                new_paths.push(existing_path);
-            }
-        }
-        
-        if !new_paths.is_empty() {
-            command = command.env("DYLD_LIBRARY_PATH", new_paths.join(":"));
-        }
-    }
 
     let (mut rx, _child) = command.spawn().map_err(|e| e.to_string())?;
 

@@ -31,7 +31,13 @@
             message('Please select a model.', { title: 'Error', type: 'error' });
             return;
         }
-        dispatch('confirm', { model: selectedModel, language: selectedLanguage, saveAudio });
+        const modelObj = models.find(m => m.name === selectedModel);
+        dispatch('confirm', { 
+            model: selectedModel, 
+            language: selectedLanguage, 
+            saveAudio,
+            family: modelObj?.family || 'whisper-cpp'
+        });
         closeModal();
     }
 

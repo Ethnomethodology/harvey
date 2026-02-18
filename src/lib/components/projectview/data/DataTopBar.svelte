@@ -511,7 +511,7 @@
     }
 
     async function handleLiveTranscribe(event) {
-        const { model, language, saveAudio } = event.detail;
+        const { model, language, saveAudio, family } = event.detail;
         try {
             const projectState = get(project);
             const activePath = projectState.selectedDocumentPath || projectState.selectedMediaNotePath;
@@ -531,7 +531,8 @@
                 saveAudio: saveAudio,
                 activeDocumentPath: activePath,
                 projectUuid: projectState.id,
-                projectBaseDir: projectState.baseDirectory
+                projectBaseDir: projectState.baseDirectory,
+                engine: family
             });
             if (started) {
                 isLiveTranscriptionActive = true;

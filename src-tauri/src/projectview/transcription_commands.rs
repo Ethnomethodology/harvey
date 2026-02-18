@@ -2623,14 +2623,27 @@ pub async fn start_live_transcription(
     active_document_path: String,
     project_uuid: String,
     project_base_dir: String,
+    engine: Option<String>,
     state: tauri::State<'_, LiveTranscriptionState>,
 ) -> Result<bool, String> {
     if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
         return Err("Live transcription is already running.".to_string());
     }
 
-    let model_path = resolve_model_path_cmd(&model_name, "live", None)
+    let model_path = resolve_model_path_cmd(&model_name, "live", engine.as_deref())
         .map_err(|e| e.to_string())?;
+
+    if engine.as_deref() == Some("faster-whisper") {
+        return crate::transcription::faster_whisper_live::start_faster_whisper_live(
+            app_handle,
+            model_path,
+            language,
+            active_document_path,
+            project_uuid,
+            project_base_dir,
+            state
+        ).await;
+    }
 
     let mut args = vec![
         "-m".to_string(),

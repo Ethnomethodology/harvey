@@ -11,9 +11,12 @@
 		cancelDownload,
         cancelFasterWhisperModelDownload,
         getSelectedTranscriptionEngine,
-        setSelectedTranscriptionEngine
+        setSelectedTranscriptionEngine,
+        isFasterWhisperDependenciesInstalled,
+        installFasterWhisperDependencies,
+        getDependencyCheckErrors
 	} from '$lib/services/configureActions';
-	import { configStatus, setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
+	import { configStatus, setTranscriptionModelsDownloaded, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
 	import { v4 as uuidv4 } from 'uuid';
 
@@ -22,6 +25,7 @@
 
 	let downloadedModels = [];
 	let configError = '';
+    let dependencyErrors = [];
 	let downloadStatus = {};
 	let downloadProgress = {};
 
@@ -33,6 +37,7 @@
     let modelToDelete = null;
 	let modalLogs = [];
 	let isDownloading = false;
+    let isInstallingDependencies = false;
 
 	const WHISPER_CPP_INFO_URL = 'https://huggingface.co/ggerganov/whisper.cpp';
 	const HUGGING_FACE_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
@@ -67,6 +72,8 @@
 
 	let modelDisplayData = {};
 	let totalDownloadedCount = 0; // Total across ALL families
+
+    $: hasDownloadedFasterWhisper = Array.isArray(downloadedModels) && downloadedModels.some(m => m.family === 'faster-whisper');
 
 	// Update display data reactively
 	$: {
@@ -247,6 +254,25 @@
 				}
 			});
 
+			unlistenComplete = await listen('download-complete', async (event) => {
+				const modelName = event.payload;
+				if (!modelName) return;
+				const newProgress = { ...downloadProgress };
+				delete newProgress[modelName];
+				downloadProgress = newProgress;
+				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
+				try {
+					downloadedModels = await getDownloadedModels();
+                    // Helper to check valid models
+                    const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
+                    const isFasterWhisper = (m) => m.family === 'faster-whisper';
+                    const validCount = downloadedModels.filter(m => isWhisperCpp(m) || isFasterWhisper(m)).length;
+					setTranscriptionModelsDownloaded(validCount > 0);
+				} catch (e) {
+					console.error(`Failed to refresh models after ${modelName} completion:`, e);
+				}
+			});
+
 			unlistenError = await listen('download-error', (event) => {
 				const payload = event.payload;
 				if (!payload || !payload.model_name) return;
@@ -294,6 +320,7 @@
 				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
                 isDownloading = false;
+                await updateConfigStatus(true);
 			});
 
             unlistenTranscriptionError = await listen('transcription-download-error', (event) => {
@@ -359,12 +386,21 @@
             modalLogs = [];
             isDownloading = true;
             showLogModal = true;
+
+            // Listen for installation logs in case lazy install triggers
+            const unlistenInstallLog = await listen('installation-log', (event) => {
+                modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
+            });
+
             try {
                 await downloadFasterWhisperModel(model, downloadLocation);
+                await updateConfigStatus(true);
             } catch (err) {
                 alert(`Failed to start download for ${model.name}: ${err.message || err}`);
                 downloadStatus = { ...downloadStatus, [model.name]: 'error' };
                 isDownloading = false;
+            } finally {
+                unlistenInstallLog();
             }
         } else {
             // whisper.cpp
@@ -448,6 +484,41 @@
 			downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 		}
 	}
+
+    async function handleInstallFWDependencies() {
+        if (isInstallingDependencies) return;
+        isInstallingDependencies = true;
+        showLogModal = true;
+        modalLogs = [{ id: uuidv4(), message: "Starting installation of Faster-Whisper dependencies..." }];
+        dependencyErrors = [];
+        
+        const unlistenLog = await listen('installation-log', (event) => {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
+        });
+
+        try {
+            await installFasterWhisperDependencies();
+            modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
+            await updateConfigStatus(true);
+        } catch (err) {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
+        } finally {
+            unlistenLog();
+            isInstallingDependencies = false;
+        }
+    }
+
+    async function checkDependencyErrors() {
+        try {
+            dependencyErrors = await getDependencyCheckErrors();
+        } catch (e) {
+            console.error("Failed to get dependency errors:", e);
+        }
+    }
+
+    $: if ($configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper) {
+        checkDependencyErrors();
+    }
 </script>
 
 <div class="flex flex-col h-full overflow-y-auto p-1">
@@ -463,6 +534,29 @@
 			{/if}
 		</div>
 	</div>
+
+    {#if $configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper}
+        <div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center">
+                    <svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Faster-Whisper libraries are missing.</span>
+                </div>
+                <button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallFWDependencies} disabled={isInstallingDependencies}>
+                    Install Now
+                </button>
+            </div>
+            {#if dependencyErrors.length > 0}
+                <div class="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80 font-mono bg-orange-50/50 dark:bg-orange-950/30 p-2 rounded border border-orange-200/50 dark:border-orange-800/50 max-h-32 overflow-y-auto">
+                    {#each dependencyErrors as err}
+                        <div class="mb-1 last:mb-0">{err}</div>
+                    {/each}
+                </div>
+            {/if}
+        </div>
+    {/if}
 
     <!-- Family Toggle -->
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
@@ -522,9 +616,9 @@
 	<InstallLogModal
 		bind:showModal={showLogModal}
 		logs={modalLogs}
-		isInstalling={isDownloading}
-		title="Downloading Transcription Model"
-		inProgressText="Downloading..."
+		isInstalling={isDownloading || isInstallingDependencies}
+		title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Transcription Model"}
+		inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."}
 	/>
 
     <!-- Delete Confirmation Modal -->
