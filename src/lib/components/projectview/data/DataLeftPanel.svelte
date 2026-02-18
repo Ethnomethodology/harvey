@@ -907,7 +907,7 @@
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
-        <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary"
+        <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
             class:mb-0={$panelStateStore.dataLeftPanelCollapsed}>
 
@@ -1106,7 +1106,7 @@
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
 		<div
             id="notes-left-panel-context-menu"
-            class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[150px]"
+            class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[150px]"
             style="left: {contextMenuX}px; top: {contextMenuY}px;"
             on:click|stopPropagation
             role="menu"
@@ -1130,7 +1130,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-                <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+                <hr class="my-1 border-gray-200 dark:border-gray-800" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'doc'}
@@ -1149,7 +1149,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-                 <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+                 <hr class="my-1 border-gray-200 dark:border-gray-800" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
@@ -1164,7 +1164,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-                 <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+                 <hr class="my-1 border-gray-200 dark:border-gray-800" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
@@ -1179,7 +1179,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-                 <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+                 <hr class="my-1 border-gray-200 dark:border-gray-800" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
@@ -1194,7 +1194,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-                 <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+                 <hr class="my-1 border-gray-200 dark:border-gray-800" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else}
@@ -1206,7 +1206,7 @@
     {#if showGroupSubMenu && groupSubMenuItem}
         <div
             id="notes-left-panel-group-sub-menu"
-            class="fixed z-[51] bg-white dark:bg-gray-900 border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[150px]"
+            class="fixed z-[51] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[150px]"
             style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
             on:mouseenter={handleEnterGroupSubMenu}
             on:mouseleave={handleLeaveGroupSubMenu}
@@ -1220,7 +1220,7 @@
             }}
         >
             <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">New group...</button>
-            <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+            <hr class="my-1 border-gray-200 dark:border-gray-800" />
             {#if localProjectGroupsForSubMenu && localProjectGroupsForSubMenu.length > 0}
                 {#each localProjectGroupsForSubMenu as group (group.id)}
                     <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
@@ -1237,7 +1237,7 @@
         {#if categoryContextMenuVisible && !$panelStateStore.dataLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[120px]"
         style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
         on:click|stopPropagation
         role="menu"
@@ -1361,7 +1361,7 @@
 {#if groupContextMenuVisible && groupContextMenuItem}
     <div
         id="notes-left-panel-group-item-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[120px]"
         style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
         on:click|stopPropagation
         role="menu"
@@ -1374,7 +1374,7 @@
     >
         <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Open</button>
         <button on:click={() => handleGroupContextMenuAction('Rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename...</button>
-        <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
+        <hr class="my-1 border-gray-200 dark:border-gray-800" />
         <button on:click={() => handleGroupContextMenuAction('Delete')} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete...</button>
     </div>
 {/if}

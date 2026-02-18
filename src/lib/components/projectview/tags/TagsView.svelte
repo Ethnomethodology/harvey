@@ -585,7 +585,7 @@
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
         <div class="w-64 flex-shrink-0 h-full bg-white dark:bg-gray-900 flex flex-col" transition:slide={{ axis: 'x' }}>
             <!-- Header -->
-            <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary mb-3">
+            <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 mb-3">
                 <div class="flex items-center space-x-2 transition-opacity duration-200">
                     <span class="pl-2">All Tags</span>
                 </div>

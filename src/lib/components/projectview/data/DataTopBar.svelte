@@ -552,7 +552,7 @@
   </script>
   
   <div
-    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-dark-bg-tertiary relative z-50"
+    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-50"
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <!-- Drag Handle Background -->

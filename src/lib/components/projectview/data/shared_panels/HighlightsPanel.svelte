@@ -245,7 +245,7 @@
 </script>
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
-    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-dark-bg-tertiary text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
+    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
         <div class="flex items-center space-x-2">
             <span class="ml-1">Highlights</span>
         </div>
@@ -255,7 +255,7 @@
         {#if processedHighlights.length > 0}
             <ul class="space-y-3">
                 {#each processedHighlights as highlight (highlight.id)}
-                    <li class="border border-gray-200 dark:border-dark-bg-tertiary rounded-md shadow-sm hover:shadow-md transition-shadow relative focus-within:z-10" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                    <li class="border border-gray-200 dark:border-gray-800 rounded-md shadow-sm hover:shadow-md transition-shadow relative focus-within:z-10" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div 
                             class="p-3 bg-white dark:bg-gray-800 rounded-t-md cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors group relative"
                             on:click={() => handleHighlightClick(highlight)}
@@ -283,7 +283,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="border-t border-gray-100 dark:border-dark-bg-tertiary px-3 py-2 rounded-b-md flex flex-col bg-gray-50/30 dark:bg-gray-900/50">
+                        <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-2 rounded-b-md flex flex-col bg-gray-50/30 dark:bg-gray-900/50">
                             <div class="flex items-center w-full">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-tags-fill mr-2 flex-shrink-0 text-gray-400" viewBox="0 0 16 16">
                                     <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>

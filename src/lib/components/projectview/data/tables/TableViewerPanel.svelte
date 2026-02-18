@@ -1006,7 +1006,7 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
-     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-gray-800">
+     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
         <div class="flex items-center space-x-2">
             <button id="history-undo" class="ui-button-icon" title="Undo">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
@@ -1036,7 +1036,7 @@
                   }
               }}
               placeholder="Search table..."
-              class="text-xs border border-gray-300 dark:border-dark-bg-tertiary px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+              class="text-xs border border-gray-300 dark:border-gray-800 px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="off"

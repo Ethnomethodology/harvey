@@ -11,7 +11,7 @@ import { project } from '$lib/stores/projectStore.js';
 
 </script>
 
-<div class="p-1.5 px-4 text-xs bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-dark-bg-tertiary text-gray-600 dark:text-gray-400 flex justify-between items-center h-8 flex-shrink-0">
+<div class="p-1.5 px-4 text-xs bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 flex justify-between items-center h-8 flex-shrink-0">
 {#if isLoading}
   <span>Loading project...</span>
   {:else if error}

@@ -131,7 +131,7 @@
 </script>
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
-    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-dark-bg-tertiary text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
+    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
         <span class="ml-1">Attachments</span>
         {#if itemType !== 'doc'}
             <button 
@@ -147,7 +147,7 @@
         {#if isLoading}
             <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">Loading...</p>
         {:else if attachments.length > 0}
-            <ul class="divide-y divide-gray-200 dark:divide-dark-bg-tertiary">
+            <ul class="divide-y divide-gray-200 dark:divide-gray-800">
                 {#each attachments as attachment, i (attachment)}
                     <li
                         class="p-2 flex items-center justify-between group cursor-pointer"

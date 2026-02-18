@@ -227,7 +227,7 @@
 
 	<!-- Media Files Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
 		on:click="{() => toggleSection('files')}"
 		aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
 		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
@@ -264,7 +264,7 @@
 
 	<!-- Shortcuts Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {openSection !== 'files' ? '' : 'border-t'}"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {openSection !== 'files' ? '' : 'border-t'}"
 		on:click="{() => toggleSection('shortcuts')}"
 		aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
 		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"
