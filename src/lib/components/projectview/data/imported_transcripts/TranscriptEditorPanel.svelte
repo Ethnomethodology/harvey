@@ -732,8 +732,7 @@
         word-break: break-word;
     }
     .imported-transcript-editor-panel :global(.lexical-content th) {
-        background-color: #f0f0f0;
-        font-weight: 600;
+        @apply bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-semibold;
     }
     .imported-transcript-editor-panel :global(.lexical-content th p),
     .imported-transcript-editor-panel :global(.lexical-content td p) {
