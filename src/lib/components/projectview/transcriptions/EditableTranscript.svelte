@@ -547,7 +547,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm editable-transcript-controls"
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-gray-900 rounded-md shadow-sm editable-transcript-controls"
      class:read-mode="{!editEnabled}"
      class:edit-mode="{editEnabled}">
     {#if !isEditorVisible}
@@ -636,15 +636,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
 	.input-field {
-		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-gray-400;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
+		@apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded;
 	}
 
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
-    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:bg-transparent dark:border dark:border-[var(--color-border)] dark:hover:bg-[var(--color-border)] focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
-    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-transparent dark:text-white dark:border dark:border-[var(--color-border)] dark:hover:bg-[var(--color-border)] rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
+    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:bg-transparent dark:border dark:border-[#404040] dark:hover:bg-[#404040] focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
+    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-transparent dark:text-white dark:border dark:border-[#404040] dark:hover:bg-[#404040] rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
 
     .lexical-editor-wrapper-style {
         display: flex;
@@ -653,7 +653,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         overflow: visible;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
-        @apply border border-gray-300 dark:border-border bg-white dark:bg-transparent;
+        @apply border border-gray-300 dark:border-gray-700 bg-white dark:bg-transparent;
     }
     .lexical-editor-wrapper-style.is-disabled {
         @apply border-transparent dark:border-transparent bg-transparent;
@@ -682,31 +682,31 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         line-height: 1.5;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) :global(.lexical-content) {
-        @apply text-gray-900 dark:text-text-primary;
+        @apply text-gray-900 dark:text-gray-200;
     }
     .lexical-editor-wrapper-style.is-disabled :global(.lexical-content) {
-        @apply text-gray-800 dark:text-text-primary cursor-not-allowed;
+        @apply text-gray-800 dark:text-gray-200 cursor-not-allowed;
     }
 
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
 
     :global(html.dark .input-field:disabled) {
-        background-color: var(--color-surface-3);
-        border: 1px solid var(--color-surface-2);
+        background-color: #262626;
+        border: 1px solid #171717;
         color: white;
     }
     :global(html.dark .input-field:not(:disabled)) {
-        background-color: var(--color-surface-2);
-        border: 1px solid var(--color-surface-3);
+        background-color: #171717;
+        border: 1px solid #262626;
         color: white;
     }
 
     /* Read Mode */
     :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style) {
-        border: 1px solid var(--color-surface-2) !important;
+        border: 1px solid #171717 !important;
     }
     :global(html.dark .editable-transcript-wrapper.read-mode .lexical-wrapper) {
-        background-color: var(--color-surface-3) !important;
+        background-color: #262626 !important;
     }
     :global(html.dark .editable-transcript-wrapper.read-mode .lexical-content) {
         color: white !important;
@@ -714,18 +714,18 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
     /* Edit Mode */
     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style) {
-        border: 1px solid var(--color-surface-3) !important;
+        border: 1px solid #262626 !important;
     }
     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-wrapper) {
-        background-color: var(--color-surface-2) !important;
+        background-color: #171717 !important;
     }
     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-content) {
         color: white !important;
     }
 
     :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled) {
-        background-color: var(--color-surface-3);
-        border-color: var(--color-surface-2);
+        background-color: #262626;
+        border-color: #171717;
         color: white;
         opacity: 1;
     }

@@ -243,9 +243,9 @@
 </script>
 
 <!-- Main container for the Imported Transcript View -->
-<div class="h-full flex flex-col w-full bg-white dark:bg-surface-2 overflow-hidden imported-transcript-view">
+<div class="h-full flex flex-col w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-view">
     {#if mediaPath}
-        <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
+        <div class="border-b border-gray-200 dark:border-gray-700 flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
             <MediaPlayer
                 bind:this={mediaPlayerRef}
                 bind:isVideoMinimized={isVideoHidden}
@@ -275,7 +275,7 @@
         {#if splitPartnerPath}
             <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
                 <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                    <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
                         <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
                     </div>
                     <div class="flex-grow overflow-hidden">
@@ -294,7 +294,7 @@
                     </div>
                 </div>
                 <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                    <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
                         <div class="flex items-center min-w-0 flex-grow">
                             <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
                         </div>
@@ -354,7 +354,7 @@
                         </div>
                     </div>
                 {:else}
-                    <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500">
+                    <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500">
                         <span>No transcript path provided to ImportedTranscriptView.</span>
                     </div>
                 {/if}

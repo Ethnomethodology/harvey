@@ -48,7 +48,7 @@
 
 {#if showDialog}
 <div
-    class="annotation-dialog absolute z-[1001] bg-white dark:bg-gray-700 border border-gray-300 dark:border-border rounded-md shadow-xl p-3 flex flex-col space-y-2"
+    class="annotation-dialog absolute z-[1001] bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl p-3 flex flex-col space-y-2"
     style={popupStyle}>
     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Add Annotation Details</h3>
 
@@ -58,7 +58,7 @@
             type="text"
             id="annotation-title"
             bind:value={title}
-            class="w-full px-2 py-1 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter title"
             autocomplete="off"
             autocorrect="off"
@@ -70,7 +70,7 @@
         <textarea
             id="annotation-description"
             bind:value={description}
-            class="w-full px-2 py-1 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 h-16 resize-y"
+            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 h-16 resize-y"
             placeholder="Enter description"
             autocomplete="off"
             autocorrect="off"

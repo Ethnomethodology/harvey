@@ -123,13 +123,13 @@
   >
     <div
       bind:this={modalElement}
-      class="bg-white dark:bg-surface-2 rounded-lg shadow-2xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200 pointer-events-auto border border-gray-300 dark:border-border relative"
+      class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200 pointer-events-auto border border-gray-300 dark:border-gray-700 relative"
       style="transform: translate({x}px, {y}px);"
       role="document"
     >
       <!-- Header / Drag Handle -->
       <div 
-        class="drag-handle cursor-move flex justify-between items-center mb-3 pb-2 border-b border-gray-100 dark:border-border select-none"
+        class="drag-handle cursor-move flex justify-between items-center mb-3 pb-2 border-b border-gray-100 dark:border-gray-700 select-none"
         on:pointerdown={handlePointerDown}
         on:pointermove={handlePointerMove}
         on:pointerup={handlePointerUp}

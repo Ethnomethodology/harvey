@@ -1,4 +1,4 @@
-<div class="h-screen w-screen bg-gray-100 dark:bg-surface-1 p-8 overflow-y-auto">
+<div class="h-screen w-screen bg-gray-100 dark:bg-gray-950 p-8 overflow-y-auto">
     <div class="flex items-center mb-6">
         <img src="/logo.png" alt="Harvey Logo" class="w-12 h-12 mr-4 -ml-2 [filter:drop-shadow(0_2px_4px_rgba(0,0,0,0.1))]" />
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">License</h1>

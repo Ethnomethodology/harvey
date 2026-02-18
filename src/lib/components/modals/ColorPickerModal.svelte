@@ -42,7 +42,7 @@
             ></button>
             {/each}
         </div>
-        <div class="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-border">
+        <div class="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button class="px-4 py-2 text-sm rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" on:click={handleClose}>Cancel</button>
             <button class="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700" on:click={handleConfirm}>Apply</button>
         </div>

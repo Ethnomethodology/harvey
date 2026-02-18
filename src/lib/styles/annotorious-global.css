@@ -13,7 +13,7 @@
 :global(#image-annotation-toolbar-container .a9s-toolbar button) {
     /* Tailwind‑style control button – matches other toolbars */
     @apply inline-flex items-center justify-center px-2 py-1 border
-            border-gray-300 dark:border-border bg-white dark:bg-gray-800
+            border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800
             text-gray-700 dark:text-gray-300 text-xs rounded-md
             hover:bg-gray-100 dark:hover:bg-gray-700
             focus:outline-none focus:ring-2 focus:ring-blue-500;

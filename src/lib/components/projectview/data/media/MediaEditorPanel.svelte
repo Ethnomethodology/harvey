@@ -256,9 +256,9 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-surface-2">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900">
     <div
-        class="border-b border-gray-200 dark:border-border flex flex-col
+        class="border-b border-gray-200 dark:border-gray-700 flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
     >
         {#if mediaPath}
@@ -281,21 +281,21 @@
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
         {:else}
-            <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-d-gray-400">
+            <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-gray-600">
                 <span>Media player requires a path.</span>
             </div>
         {/if}
     </div>
 
     <div
-        class="min-h-0 overflow-hidden bg-white dark:bg-dark-bg-form-field {!isDataPlayerVideoHidden ? 'h-1/2' : ''} flex flex-col"
+        class="min-h-0 overflow-hidden bg-white dark:bg-gray-900 {!isDataPlayerVideoHidden ? 'h-1/2' : ''} flex flex-col"
         class:flex-grow={isDataPlayerVideoHidden}
     >
         {#if showDataTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">
                     <div class="flex items-center gap-x-2">
-                        <p class="text-xs text-gray-600 dark:text-d-gray-400">
+                        <p class="text-xs text-gray-600 dark:text-gray-600">
                             Adjust start and end times:
                         </p>
                         <TimestampInput
@@ -314,7 +314,7 @@
                     </div>
                 </div>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-d-gray-700 overflow-hidden">
+                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <InteractiveWaveform
                             startZoomedOut={true}
                             externalAudioBuffer={currentTrimAudioBuffer}
@@ -334,7 +334,7 @@
                         />
                     </div>
                 {:else}
-                    <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-d-gray-700 rounded text-xs text-gray-500">
+                    <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-500">
                         Audio data not available for waveform.
                     </div>
                 {/if}
@@ -354,7 +354,7 @@
             {#if splitPartnerPath}
                 <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
                     <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                        <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                        <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
                             <span class="truncate">{$projectStore.activeTranscriptPathInDataTab.split(/[\\/]/).pop()}</span>
                         </div>
                         <div class="flex-grow overflow-hidden">
@@ -373,7 +373,7 @@
                         </div>
                     </div>
                     <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                        <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                        <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
                             <div class="flex items-center min-w-0 flex-grow">
                                 <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
                             </div>
@@ -429,7 +429,7 @@
                     />
                 {/key}
             {:else if !mediaPath}
-                <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
+                <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4">
                     Select an audio or video file from the Data panel to view its player and data.
                 </div>
             {:else}

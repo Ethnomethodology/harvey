@@ -265,7 +265,7 @@
 		on:keydown={handleKeydown}
 	>
 		<div
-			class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+			class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
 			role="document"
 			tabindex="-1"
 			on:click|stopPropagation
@@ -358,7 +358,7 @@
 								/>
 							</div>
 
-							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
+							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">
 								<div class="flex justify-between items-center">
 									<div>
 										<strong>Speakers:</strong>
@@ -377,7 +377,7 @@
 								{/if}
 							</div>
 
-							<div class="pt-2 border-t border-gray-200 dark:border-border mt-3">
+							<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
 								{#if $configStatus.diarization_model_downloaded}
 									<div class="flex items-center space-x-2">
 										<input
@@ -473,7 +473,7 @@
 						</div>
 
 						<div
-							class="mt-2 p-2 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1"
+							class="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1"
 						>
 							<div class="flex justify-between">
 								<span>Media Duration:</span>
@@ -498,7 +498,7 @@
 							{/if}
 						</div>
 
-						<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3 mb-2">
+						<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3 mb-2">
 							<div class="flex justify-between items-center">
 								<div>
 									<strong>Speakers:</strong>
@@ -542,7 +542,7 @@
 						</div>
 					{/if}
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-border">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button
 						class="btn-primary"

@@ -114,7 +114,7 @@
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
   export let enableSegmentPlayback = false; // New prop
-  export let backgroundClass = 'bg-white dark:bg-surface-2';
+  export let backgroundClass = 'bg-white dark:bg-gray-900';
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];
@@ -401,11 +401,11 @@
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
-        quote: 'border-l-4 border-gray-300 dark:border-border pl-2 italic my-1',
+        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
         code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 text-sm block whitespace-pre-wrap',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
-        table: 'editor-table w-full border-collapse border dark:border-border my-2 table-fixed',
-        tableCell: 'editor-table-cell border dark:border-border px-2 py-1 align-top min-w-[50px] relative',
+        table: 'editor-table w-full border-collapse border dark:border-gray-700 my-2 table-fixed',
+        tableCell: 'editor-table-cell border dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
         tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-700 dark:text-gray-200 text-center',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
@@ -2379,7 +2379,7 @@ $: if (editor && activeLayout) {
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm layout-{activeLayout}">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md z-10">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -2403,7 +2403,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2469,7 +2469,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
                 class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2497,7 +2497,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2631,14 +2631,14 @@ $: if (editor && activeLayout) {
 
           {#if showSearchBox}
             <div
-              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
               bind:this={searchUiContainerElement}
             >
               <div class="relative flex-grow flex items-center">
                 <input
                   type="text"
                   placeholder="Search..."
-                  class="w-full text-xs border border-gray-300 dark:border-border pl-2 pr-16 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none search-input-with-count"
+                  class="w-full text-xs border border-gray-300 dark:border-gray-700 pl-2 pr-16 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none search-input-with-count"
                   bind:value={searchTerm}
                   bind:this={searchInputRef}
                   on:input={(e) => executeSearch(e.currentTarget.value)}
@@ -2703,7 +2703,7 @@ $: if (editor && activeLayout) {
                     </svg>
                   </button>
                   {#if showSearchOptionsDropdown}
-                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg rounded overflow-hidden min-w-[120px]">
+                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]">
                       <button
                         class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 whitespace-nowrap"
                         on:click={openFindReplaceModal}
@@ -2882,15 +2882,15 @@ $: if (editor && activeLayout) {
 
   html.dark .toolbar button.mini-toolbar-button,
   html.dark .toolbar select.mini-toolbar-select {
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-border);
+      color: #e5e5e5;
+      border: 1px solid #404040;
       background-color: transparent;
   }
 
   html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
   html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
-      background-color: var(--color-border);
-      border-color: var(--color-border);
+      background-color: #404040;
+      border-color: #404040;
   }
 
   html.dark .toolbar button.mini-toolbar-button.active {

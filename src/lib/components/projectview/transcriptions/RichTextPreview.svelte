@@ -1036,10 +1036,10 @@
 </script>
 
 <div
-  class="p-3 h-full flex flex-col text-base text-gray-900 dark:text-white dark:bg-surface-1"
+  class="p-3 h-full flex flex-col text-base text-gray-900 dark:text-white dark:bg-gray-950"
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
-    <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-d-gray-300 border-b border-gray-300 dark:border-d-gray-600 pb-1 flex items-center justify-between w-full">
+    <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-400 border-b border-gray-300 dark:border-gray-700 pb-1 flex items-center justify-between w-full">
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
             <!-- Transcript Dropdown using custom component -->
             {#if $transcriptStore.selectedMediaFile}
@@ -1062,15 +1062,15 @@
 				/>
 				{/if}
             {:else}
-                <span class="px-3 py-1 text-xs text-gray-500 dark:text-d-gray-400 italic">No Media Selected</span>
+                <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-600 italic">No Media Selected</span>
             {/if}
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
             {#if allSegmentsData.length || previewEditMode}
-                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
+                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
-                  <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-d-gray-500={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-d-gray-400={canUndo} class:dark:hover:text-d-gray-200={canUndo} on:click={handleUndo} title={`Undo (${modKeyName}+Z)`} aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
-                  <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-d-gray-500={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-d-gray-400={canRedo} class:dark:hover:text-d-gray-200={canRedo} on:click={handleRedo} title={`Redo (${modKeyName}+Y)`} aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>
+                  <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-gray-700={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-600={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title={`Undo (${modKeyName}+Z)`} aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
+                  <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-gray-700={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-600={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title={`Redo (${modKeyName}+Y)`} aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>
                 {/if}
             {/if}
             <!-- Edit/Save/Undo/Redo buttons HTML block ends here -->
@@ -1080,7 +1080,7 @@
             {#if allSegmentsData.length || previewEditMode}
                 <button
                     bind:this={searchToggleButtonElement}
-                    class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200"
+                    class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200"
                     class:active={showSearchBox}
                     on:click={toggleSearchBox}
                     title="Search"
@@ -1092,7 +1092,7 @@
               <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
-                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-d-gray-400 dark:hover:text-d-gray-200"
+                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200"
                   title="More options"
                   aria-label="More options"
                 >
@@ -1100,28 +1100,28 @@
                 </button>
                 {#if showExportMenu}
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
-                  <div class="absolute right-0 mt-2 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
+                  <div class="absolute right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
                     <button
                       on:click={openFindReplaceModal}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
                     >
                       Find & Replace
                     </button>
                     <button
                       on:click={() => { showExportMenu = false; dispatch('requestmanualsettings'); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
                     >
                       Manual Transcription Settings
                     </button>
                     <button
                       on:click={() => { showExportMenu = false; handleAddToTranscriptsClick(); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200 border-b border-gray-200 dark:border-gray-700"
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
                     >
                       Save in Transcripts
                     </button>
                     <button
                       on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200"
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
                     >
                       Save in Documents
                     </button>
@@ -1133,13 +1133,13 @@
             {#if showSearchBox}
                 <div 
                     bind:this={searchUiContainerElement}
-                    class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-d-gray-600 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+                    class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
                 >
                     <div class="relative flex-grow flex items-center">
                         <input
                             type="text"
                             placeholder="Search transcript..."
-                            class="w-full text-xs border border-gray-300 dark:border-d-gray-600 pl-2 pr-16 py-1 bg-white dark:bg-d-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                            class="w-full text-xs border border-gray-300 dark:border-gray-700 pl-2 pr-16 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
                             bind:value={searchTerm}
                             bind:this={searchInputRef}
                             on:input={(e) => executeSearch(e.currentTarget.value)}
@@ -1233,7 +1233,7 @@
                     on:mouseenter={() => hoveredSegment = seg.segmentIndex}
                     on:mouseleave={() => hoveredSegment = -1}
                     style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
-                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2 relative"
+                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2 relative"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
                     class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
@@ -1241,7 +1241,7 @@
                     class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex}
                     class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
                     class:bg-white={seg.segmentIndex !== activeSegmentIndex}
-                    class:dark:bg-d-gray-800={seg.segmentIndex !== activeSegmentIndex}
+                    class:dark:bg-gray-900={seg.segmentIndex !== activeSegmentIndex}
                     class:hover:bg-blue-50={true}
                     class:dark:hover:bg-blue-800={true}
                     class:cursor-pointer={true}
@@ -1347,7 +1347,7 @@
                         {#if ($activeLayout !== 'Layout3' && showSpeakerCol) || showTextCol}
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
                             {#if showSpeakerCol && $activeLayout !== 'Layout3' && $activeLayout !== 'Layout5'}
-                            <div class="flex-shrink-0 text-gray-800 dark:text-d-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
                                 <span class="truncate block w-full" title={seg.speaker}>
                                     {(seg.speaker.length > ($activeLayout === 'Layout4' ? 10 : 12) ? seg.speaker.slice(0, ($activeLayout === 'Layout4' ? 10 : 12)) + '...' : seg.speaker)}{#if !seg.speaker.endsWith(':')}:{/if}
                                 </span>
@@ -1393,29 +1393,29 @@
 />
 
 <style lang="postcss">
-	.btn-icon { @apply p-1 rounded focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-d-gray-800 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
+	.btn-icon { @apply p-1 rounded focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-900 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
 	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
-    .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-d-gray-500; }
+    .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-gray-700; }
 	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }
 	
 	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
 	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
 	.preview-interaction-disabled { @apply cursor-default opacity-80; }
 	div[class*='overflow-y-auto']::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-d-gray-800 rounded-lg; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-d-gray-500 rounded-lg border-2 border-solid border-gray-100 dark:border-d-gray-800; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-d-gray-400; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-900 rounded-lg; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-600; }
 	div[class*='overflow-y-auto'] { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-gutter: stable; }
 	:root { --scrollbar-thumb: rgba(160, 174, 192, 1); --scrollbar-track: rgba(243, 244, 246, 1); }
 	html.dark { --scrollbar-thumb: rgba(107, 114, 128, 1); --scrollbar-track: rgba(31, 41, 55, 1); }
 	.preview-editor-wrapper :global(.lexical-editor-root) { @apply border-none shadow-none rounded-none m-0 p-0 outline-none; background-color: transparent !important; box-shadow: none !important; border: none !important; }
 	.preview-editor-wrapper :global(.lexical-wrapper) { @apply p-0 overflow-visible; }
-	.preview-editor-wrapper :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-d-gray-100 pt-px; min-height: unset !important; outline: none !important; caret-color: transparent !important; padding: 0 !important; margin: 0 !important; background-color: transparent !important; overflow-wrap: break-word; word-break: break-word; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
+	.preview-editor-wrapper :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-200 pt-px; min-height: unset !important; outline: none !important; caret-color: transparent !important; padding: 0 !important; margin: 0 !important; background-color: transparent !important; overflow-wrap: break-word; word-break: break-word; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
     .preview-editor-wrapper :global(.lexical-content[contenteditable="false"]) { caret-color: transparent !important; }
 	.preview-editor-wrapper :global(.lexical-content p) { @apply mt-0 mb-0; overflow-wrap: break-word; word-break: break-word; }
 	.segment-active .preview-editor-wrapper :global(.lexical-editor-root), .segment-active .preview-editor-wrapper :global(.lexical-content) { background-color: transparent !important; }
 	.speech-plain-text {
-        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-d-gray-100 pt-px; /* Changed to pre-wrap */
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px; /* Changed to pre-wrap */
         padding: 0; margin: 0;
         overflow-wrap: break-word;
         word-break: normal;
@@ -1423,7 +1423,7 @@
     }
 	.speech-plain-text .italic { @apply not-italic; }
 	.speech-rich-text {
-        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-d-gray-100 pt-px; /* Changed to pre-wrap */
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px; /* Changed to pre-wrap */
         padding: 0; margin: 0;
         overflow-wrap: break-word;
         word-break: normal;
@@ -1446,7 +1446,7 @@
         @apply bg-blue-600 text-white;
     }
     	.btn-switch-inactive {
-            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-d-gray-700 dark:text-d-gray-200 dark:hover:bg-d-gray-600;
+            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700;
         }
     
     	:global(.dark .speech-rich-text) {

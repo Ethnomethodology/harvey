@@ -1251,8 +1251,8 @@
     <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-gray-800">
         <div id="image-annotation-toolbar-container" class="flex items-center">
             <!-- Highlights Group -->
             <div class="flex items-center space-x-1 border-r border-gray-300 dark:border-gray-600 pr-2 mr-2">
@@ -1360,9 +1360,9 @@
 
     <div class="flex-grow overflow-hidden min-h-0 relative">
         {#if isLoading && !error}
-            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400 z-10 bg-white/50 dark:bg-d-gray-800/50">Loading image viewer...</div>
+            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600 z-10 bg-white/50 dark:bg-gray-900/50">Loading image viewer...</div>
         {:else if error}
-            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-d-gray-800/80">{error}</div>
+            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-gray-900/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
         </div>

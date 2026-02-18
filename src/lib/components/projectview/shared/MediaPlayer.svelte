@@ -1178,7 +1178,7 @@
 </script>
 
 <div id="media-player-root" 
-	class="p-1 flex flex-col bg-gray-50 dark:bg-surface-2 h-full relative" 
+	class="p-1 flex flex-col bg-gray-50 dark:bg-gray-900 h-full relative"
 	class:fullscreen-mode={isFullscreen}
 	on:mouseenter={() => { isHoveringPlayer = true; handleUserActivity(); }}
 	on:mouseleave={() => { isHoveringPlayer = false; }}
@@ -1246,7 +1246,7 @@
 				{/if}
 			</button>
 		{:else}
-		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
+		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600">
 				<span>No media selected or media failed to load</span>
 			</div>
 		{/if}
@@ -1254,7 +1254,7 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md transition-opacity duration-300"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-800 rounded-b-md border border-gray-300 dark:border-gray-700 shadow-md transition-opacity duration-300"
 		class:floating-controls={isFullscreen}
 		style="position: relative; z-index: 30; opacity: {isFullscreen ? (userActive ? 1 : 0) : 1}; pointer-events: {isFullscreen && !userActive ? 'none' : 'auto'};"
 	>
@@ -1330,7 +1330,7 @@
 			</button>
 
 			<!-- Time Display -->
-			<span class="text-xs font-mono text-gray-600 dark:text-d-gray-400 tabular-nums whitespace-nowrap">
+			<span class="text-xs font-mono text-gray-600 dark:text-gray-600 tabular-nums whitespace-nowrap">
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
 
@@ -1468,14 +1468,14 @@
 {#if showPlaybackSpeedMenu}
 	<div
 		bind:this={playbackSpeedMenuRef}
-		class="fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[80px]"
+		class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-xs min-w-[80px]"
 		style="left: {playbackSpeedMenuPosition.x}px; top: {playbackSpeedMenuPosition.y}px;"
 		role="menu"
 	>
 		{#each playbackRates as rate (rate)}
 			<button
 				on:click={() => selectPlaybackRate(rate)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
 				class:bg-blue-100={selectedPlaybackRate === rate}
 				class:dark:bg-blue-800={selectedPlaybackRate === rate}
 				role="menuitemradio"
@@ -1572,7 +1572,7 @@
 		background: #9ca3af; /* Darker gray for better visibility on transparent widget */
 	}
 	.dark .video-progress {
-		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
+		background: linear-gradient(to right, #e5e5e5 calc(var(--progress, 0) * 100%), #a3a3a3 calc(var(--progress, 0) * 100%));
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1588,7 +1588,7 @@
 		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
 	.dark .video-progress::-webkit-slider-thumb {
-		background: var(--color-accent-primary);
+		background: #3b82f6;
 		border-color: transparent;
 	}
 	.video-progress::-moz-range-thumb {
@@ -1600,7 +1600,7 @@
 		border: 1px solid white;
 	}
 	.dark .video-progress::-moz-range-thumb {
-		background: var(--color-accent-primary);
+		background: #3b82f6;
 		border-color: transparent;
 	}
 
@@ -1619,7 +1619,7 @@
 		background: #9ca3af;
 	}
 	.dark .volume-slider {
-		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
+		background: linear-gradient(to right, #e5e5e5 calc(var(--progress, 0) * 100%), #a3a3a3 calc(var(--progress, 0) * 100%));
 	}
 	.volume-slider:hover {
 		opacity: 1;
@@ -1629,7 +1629,7 @@
 		height: 0.875rem; /* 14px */
 	}
 	.dark .volume-slider::-webkit-slider-thumb {
-		background: var(--color-accent-primary);
+		background: #3b82f6;
 		border-color: transparent;
 	}
 	.volume-slider::-moz-range-thumb {
@@ -1641,7 +1641,7 @@
 		border: 1px solid white;
 	}
 	.dark .volume-slider::-moz-range-thumb {
-		background: var(--color-accent-primary);
+		background: #3b82f6;
 		border-color: transparent;
 	}
 

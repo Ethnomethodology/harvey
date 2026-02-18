@@ -294,7 +294,7 @@
             if (tags.length === 0) return '';
 
             const tagElements = tags.map(tag =>
-                `<span class=\"inline-block bg-gray-200 dark:bg-surface-3 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-text-primary mr-2 mb-1 border border-gray-300 dark:border-border\">${tag}</span>`
+                `<span class=\"inline-block bg-gray-200 dark:bg-gray-800 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1 border border-gray-300 dark:border-gray-700\">${tag}</span>`
             ).join('');
 
             return `<div class=\"flex flex-wrap items-center\">${tagElements}</div>`;
@@ -579,19 +579,19 @@
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-950 overflow-hidden">
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-border">
         <!-- Left Panel: List of groups and tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
-        <div class="w-64 flex-shrink-0 h-full bg-white dark:bg-surface-2 flex flex-col" transition:slide={{ axis: 'x' }}>
+        <div class="w-64 flex-shrink-0 h-full bg-white dark:bg-gray-900 flex flex-col" transition:slide={{ axis: 'x' }}>
             <!-- Header -->
-            <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary mb-3">
+            <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary mb-3">
                 <div class="flex items-center space-x-2 transition-opacity duration-200">
                     <span class="pl-2">All Tags</span>
                 </div>
                 <button
                     id="add-tag-btn"
-                    class="p-1 flex items-center justify-center text-gray-400 dark:text-d-gray-500 hover:text-gray-600 dark:hover:text-d-gray-300 transition-opacity duration-200"
+                    class="p-1 flex items-center justify-center text-gray-400 dark:text-gray-700 hover:text-gray-600 dark:hover:text-gray-400 transition-opacity duration-200"
                     on:click|stopPropagation={() => showAddMenu = !showAddMenu}
                     title="Options"
                 >
@@ -601,7 +601,7 @@
                 </button>
 
                 {#if showAddMenu}
-                    <div id="add-tag-menu" class="absolute top-full right-0 w-40 bg-white dark:bg-surface-3 border border-gray-200 dark:border-border rounded shadow-lg z-50 py-1 font-normal">
+                    <div id="add-tag-menu" class="absolute top-full right-0 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-50 py-1 font-normal">
                         <button
                             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
                             on:click={() => { showAddMenu = false; isAddTagModalOpen = true; }}
@@ -625,7 +625,7 @@
                     <div class="mb-2 rounded border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                         <!-- Group Header -->
                         <div
-                            class="flex items-center justify-between px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
+                            class="flex items-center justify-between px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                             class:bg-blue-100={$selectedTagGroup?.id === group.id}
                             class:dark:bg-blue-900={$selectedTagGroup?.id === group.id}
                             on:click={() => handleSelect(group, 'group')}
@@ -647,12 +647,12 @@
                         >
                             {#each group.tags as tag (tag.id)}
                                 <div
-                                    class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
+                                    class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-gray-800"
                                     class:bg-blue-100={$selectedTag?.id === tag.id}
                                     class:dark:bg-blue-900={$selectedTag?.id === tag.id}
                                     on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                                 >
-                                    <span class="truncate dark:text-text-secondary"
+                                    <span class="truncate dark:text-gray-400"
                                         class:!text-blue-700={$selectedTag?.id === tag.id}
                                         class:dark:!text-blue-200={$selectedTag?.id === tag.id}
                                     >{tag.name}</span>
@@ -675,12 +675,12 @@
                     >
                         {#each ungroupedTags as tag (tag.id)}
                             <div
-                                class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
+                                class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-gray-800"
                                 class:bg-blue-100={$selectedTag?.id === tag.id}
                                 class:dark:bg-blue-900={$selectedTag?.id === tag.id}
                                 on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                             >
-                                <span class="truncate dark:text-text-secondary"
+                                <span class="truncate dark:text-gray-400"
                                     class:!text-blue-700={$selectedTag?.id === tag.id}
                                     class:dark:!text-blue-200={$selectedTag?.id === tag.id}
                                 >{tag.name}</span>
@@ -693,10 +693,10 @@
         {/if}
 
         <!-- Middle Panel -->
-        <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-surface-1">
+        <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-gray-950">
             {#if $selectedTag || $selectedTagGroup}
                 {#if isLoading}
-                    <p class="dark:text-text-primary">Loading information...</p>
+                    <p class="dark:text-gray-200">Loading information...</p>
                 {:else if $tagInfo}
                     <div class="h-[20%] flex flex-col">
                         <div class="flex items-center space-x-2">
@@ -723,9 +723,9 @@
                     <div class="h-[75%] flex flex-col">
                         <div class="flex justify-between items-center mb-2 flex-shrink-0">
                             <h3 class="text-lg font-semibold dark:text-white">Highlights ({$tagInfo.highlight_count})</h3>
-                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" autocomplete="off" autocorrect="off">
+                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" autocomplete="off" autocorrect="off">
                         </div>
-                        <div class="flex-grow overflow-auto border border-gray-300 dark:border-border rounded-md" bind:this={tableContainer}>
+                        <div class="flex-grow overflow-auto border border-gray-300 dark:border-gray-700 rounded-md" bind:this={tableContainer}>
                         </div>
                     </div>
                 {:else}

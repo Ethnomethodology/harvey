@@ -145,10 +145,10 @@
     aria-labelledby="help-modal-title"
     tabindex="-1"
   >
-    <div class="bg-white dark:bg-surface-2 rounded-lg shadow-xl w-[80vw] h-[80vh] flex flex-col relative overflow-hidden" role="document">
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-[80vw] h-[80vh] flex flex-col relative overflow-hidden" role="document">
       
       <!-- Main Modal Header -->
-      <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-border flex justify-between items-center bg-gray-50 dark:bg-dark-bg-secondary">
+      <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
         <div class="flex items-center space-x-3">
             <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
             <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
@@ -176,7 +176,7 @@
 
                 <!-- Search Results Dropdown -->
                 {#if showSearchResults && filteredResults.length > 0}
-                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-surface-3 border border-gray-200 dark:border-border rounded-lg shadow-xl z-[160] py-1 max-h-64 overflow-y-auto">
+                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] py-1 max-h-64 overflow-y-auto">
                         {#each filteredResults as result}
                             <button 
                                 class="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 dark:text-gray-200 transition-colors flex items-center justify-between group"
@@ -188,7 +188,7 @@
                         {/each}
                     </div>
                 {:else if showSearchResults && searchQuery.trim() !== ''}
-                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-surface-3 border border-gray-200 dark:border-border rounded-lg shadow-xl z-[160] p-4 text-center">
+                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] p-4 text-center">
                         <p class="text-sm text-gray-500">No results found for "{searchQuery}"</p>
                     </div>
                 {/if}
@@ -209,7 +209,7 @@
       <!-- Main Body -->
       <div class="flex flex-grow overflow-hidden">
         <!-- Sidebar -->
-        <div class="w-64 bg-gray-50 dark:bg-dark-bg-secondary border-r border-gray-200 dark:border-border p-4 flex flex-col flex-shrink-0 overflow-y-auto font-sans">
+        <div class="w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col flex-shrink-0 overflow-y-auto font-sans">
           <nav class="flex flex-col space-y-1">
             {#each sidebarTabs as tab}
               <button
@@ -225,10 +225,10 @@
         </div>
 
         <!-- Content Area Container -->
-        <div class="flex-grow flex flex-col overflow-hidden bg-white dark:bg-surface-2 font-sans">
+        <div class="flex-grow flex flex-col overflow-hidden bg-white dark:bg-gray-900 font-sans">
           
           <!-- Inner Page Header (Navigation) -->
-          <div class="flex-shrink-0 px-8 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-dark-bg-secondary h-12">
+          <div class="flex-shrink-0 px-8 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900 h-12">
             <button 
                 class="flex items-center space-x-1 text-sm font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors disabled:opacity-0"
                 on:click={goToPrev}
@@ -261,7 +261,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8">
                     <button 
                         on:click={() => navigateTo('about-harvey')}
-                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-surface-3/30"
+                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-gray-800/30"
                     >
                         <span class="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-gray-800 dark:text-gray-100">About Harvey</span>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Learn about the vision and core features of the platform.</p>
@@ -269,7 +269,7 @@
 
                     <button 
                         on:click={() => navigateTo('getting-started')}
-                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-surface-3/30"
+                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-gray-800/30"
                     >
                         <span class="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-gray-800 dark:text-gray-100">Getting Started</span>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Quick guide to your first transcription and project setup.</p>
@@ -277,7 +277,7 @@
 
                     <button 
                         on:click={() => navigateTo('projects')}
-                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-surface-3/30"
+                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-gray-800/30"
                     >
                         <span class="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-gray-800 dark:text-gray-100">Projects</span>
                         <p class="text-sm text-gray-500 dark:text-gray-400">How to create, open, and organize your project workspace.</p>
@@ -285,7 +285,7 @@
 
                     <button 
                         on:click={() => navigateTo('supported-platforms')}
-                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-surface-3/30"
+                        class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-gray-800/30"
                     >
                         <span class="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-gray-800 dark:text-gray-100">Supported Platforms</span>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Check compatibility and optimized performance guides.</p>
@@ -359,23 +359,23 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Configure</h3>
                 <p>The Configure screen allows you to manage system-level settings, hardware acceleration, and AI models.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <button on:click={() => navigateTo('config-app')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('config-app')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Application</span>
                         <span class="text-xs text-gray-500">Theme and download locations.</span>
                     </button>
-                    <button on:click={() => navigateTo('config-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('config-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcription Engine</span>
                         <span class="text-xs text-gray-500">Whisper model management.</span>
                     </button>
-                    <button on:click={() => navigateTo('config-diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('config-diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Diarization Engine</span>
                         <span class="text-xs text-gray-500">Speaker identification setup.</span>
                     </button>
-                    <button on:click={() => navigateTo('config-translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('config-translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation Engine</span>
                         <span class="text-xs text-gray-500">Local translation models.</span>
                     </button>
-                    <button on:click={() => navigateTo('config-advanced')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('config-advanced')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Advanced Settings</span>
                         <span class="text-xs text-gray-500">Developer tools and logs.</span>
                     </button>
@@ -439,35 +439,35 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Data</h3>
                 <p>The Data tab is the central hub for all project assets. This section covers how to organize and work with various file types.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <button on:click={() => navigateTo('data-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('data-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Data Tab</span>
                         <span class="text-xs text-gray-500">Navigation, categories, and organization.</span>
                     </button>
-                    <button on:click={() => navigateTo('audio')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('audio')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Audios</span>
                         <span class="text-xs text-gray-500">Working with sound recordings.</span>
                     </button>
-                    <button on:click={() => navigateTo('video')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('video')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Videos</span>
                         <span class="text-xs text-gray-500">Managing visual media.</span>
                     </button>
-                    <button on:click={() => navigateTo('documents')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('documents')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Documents</span>
                         <span class="text-xs text-gray-500">Text analysis and annotation.</span>
                     </button>
-                    <button on:click={() => navigateTo('images')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('images')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Images</span>
                         <span class="text-xs text-gray-500">Visual evidence and screenshots.</span>
                     </button>
-                    <button on:click={() => navigateTo('tables')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('tables')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Tables</span>
                         <span class="text-xs text-gray-500">CSV and Excel data management.</span>
                     </button>
-                    <button on:click={() => navigateTo('transcripts')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('transcripts')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcripts</span>
                         <span class="text-xs text-gray-500">Working with external text sources.</span>
                     </button>
-                    <button on:click={() => navigateTo('groups')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('groups')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Groups</span>
                         <span class="text-xs text-gray-500">Custom organization folders.</span>
                     </button>
@@ -568,47 +568,47 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Transcription</h3>
                 <p>The Transcription tab is the heart of Harvey's media processing capabilities.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pb-8">
-                    <button on:click={() => navigateTo('transcription-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('transcription-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcription Tab</span>
                         <span class="text-xs text-gray-500">Interface overview and navigation.</span>
                     </button>
-                    <button on:click={() => navigateTo('auto-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('auto-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Automatic Transcription</span>
                         <span class="text-xs text-gray-500">AI-powered speech-to-text.</span>
                     </button>
-                    <button on:click={() => navigateTo('manual-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('manual-transcription')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Manual Transcription</span>
                         <span class="text-xs text-gray-500">Direct text entry and segmentation.</span>
                     </button>
-                    <button on:click={() => navigateTo('diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('diarization')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Diarization</span>
                         <span class="text-xs text-gray-500">Speaker identification.</span>
                     </button>
-                    <button on:click={() => navigateTo('translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('translation')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation</span>
                         <span class="text-xs text-gray-500">Local multilingual support.</span>
                     </button>
-                    <button on:click={() => navigateTo('media-player')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('media-player')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Media Player</span>
                         <span class="text-xs text-gray-500">Playback controls and features.</span>
                     </button>
-                    <button on:click={() => navigateTo('editing')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('editing')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Editing</span>
                         <span class="text-xs text-gray-500">Fixing and refining transcripts.</span>
                     </button>
-                    <button on:click={() => navigateTo('waveform')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('waveform')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Waveform</span>
                         <span class="text-xs text-gray-500">Visual audio representation.</span>
                     </button>
-                    <button on:click={() => navigateTo('layout')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('layout')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Layout</span>
                         <span class="text-xs text-gray-500">Customizing the workspace.</span>
                     </button>
-                    <button on:click={() => navigateTo('shortcuts')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('shortcuts')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Shortcuts</span>
                         <span class="text-xs text-gray-500">Keyboard productivity.</span>
                     </button>
-                    <button on:click={() => navigateTo('export')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('export')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Export</span>
                         <span class="text-xs text-gray-500">Outputting your results.</span>
                     </button>
@@ -758,15 +758,15 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Tags</h3>
                 <p>The Tags system is a powerful tool for qualitative analysis across your entire project.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <button on:click={() => navigateTo('tags-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('tags-tab')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Tags Tab</span>
                         <span class="text-xs text-gray-500">Interface and tag management.</span>
                     </button>
-                    <button on:click={() => navigateTo('highlights')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('highlights')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Highlights</span>
                         <span class="text-xs text-gray-500">Creating and assigning tags.</span>
                     </button>
-                    <button on:click={() => navigateTo('tag-groups')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('tag-groups')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Tag Groups</span>
                         <span class="text-xs text-gray-500">Thematic organization.</span>
                     </button>
@@ -811,31 +811,31 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Annotate</h3>
                 <p>Annotation is the core process of adding analytical value to your project data. Harvey supports a wide range of annotation types across different media and document formats.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <button on:click={() => navigateTo('media-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('media-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Media Annotations</span>
                         <span class="text-xs text-gray-500">Annotating audio and video segments.</span>
                     </button>
-                    <button on:click={() => navigateTo('document-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('document-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Document Annotations</span>
                         <span class="text-xs text-gray-500">Working with text documents.</span>
                     </button>
-                    <button on:click={() => navigateTo('pdf-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('pdf-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">PDF Annotations</span>
                         <span class="text-xs text-gray-500">Visual highlights on PDFs.</span>
                     </button>
-                    <button on:click={() => navigateTo('image-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('image-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Image Annotations</span>
                         <span class="text-xs text-gray-500">Geometric bounding boxes.</span>
                     </button>
-                    <button on:click={() => navigateTo('table-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('table-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Table Annotations</span>
                         <span class="text-xs text-gray-500">Categorizing tabular data.</span>
                     </button>
-                    <button on:click={() => navigateTo('transcript-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('transcript-annotations')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Transcript Annotations</span>
                         <span class="text-xs text-gray-500">Interpreting dialogue.</span>
                     </button>
-                    <button on:click={() => navigateTo('highlights-panel')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('highlights-panel')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Highlights Panel</span>
                         <span class="text-xs text-gray-500">Reviewing all annotations.</span>
                     </button>
@@ -924,15 +924,15 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white border-b pb-4 border-gray-100 dark:border-gray-800">Translate</h3>
                 <p>The Translate section covers Harvey's offline machine translation capabilities.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <button on:click={() => navigateTo('translate-transcript')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('translate-transcript')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translating Transcript</span>
                         <span class="text-xs text-gray-500">Multilingual audio support.</span>
                     </button>
-                    <button on:click={() => navigateTo('translate-document')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('translate-document')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translating Document</span>
                         <span class="text-xs text-gray-500">Converting research notes.</span>
                     </button>
-                    <button on:click={() => navigateTo('translate-models')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-surface-3/30">
+                    <button on:click={() => navigateTo('translate-models')} class="p-4 text-left border rounded-lg hover:border-blue-500 transition-colors bg-gray-50/50 dark:bg-gray-800/30">
                         <span class="font-bold block mb-1 text-gray-800 dark:text-gray-100">Translation Models</span>
                         <span class="text-xs text-gray-500">Managing Helsinki and NLLB.</span>
                     </button>
@@ -979,7 +979,7 @@
                 <section class="space-y-4">
                     <p>Encountered a bug or have a feature request? We use <strong>GitHub Issues</strong> to track and manage all feedback. Reporting an issue helps us make Harvey better for everyone.</p>
                     
-                    <div class="bg-gray-50 dark:bg-surface-3 border border-gray-200 dark:border-gray-700 p-6 rounded-xl">
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 rounded-xl">
                         <h4 class="font-bold text-gray-900 dark:text-white mb-3 text-sm">How to report on GitHub:</h4>
                         <ol class="list-decimal pl-5 space-y-3 text-sm">
                             <li>Visit the <strong>Harvey Issues</strong> page: <a href="https://github.com/Ethnomethodology/harvey/issues" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">github.com/Ethnomethodology/harvey/issues</a></li>
@@ -996,7 +996,7 @@
           </div>
 
           <!-- Inner Page Footer (Navigation) -->
-          <div class="flex-shrink-0 px-8 py-4 border-t border-gray-200 dark:border-border flex justify-between items-center bg-gray-50 dark:bg-dark-bg-secondary h-14">
+          <div class="flex-shrink-0 px-8 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 h-14">
             <button 
                 class="flex items-center space-x-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-0"
                 on:click={goToPrev}

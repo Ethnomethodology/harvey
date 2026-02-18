@@ -248,7 +248,7 @@
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
             role="document"
             tabindex="-1"
             on:click|stopPropagation

@@ -138,7 +138,7 @@
 
 <div
     bind:this={dialogElement}
-    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
+    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; min-width: 200px;"
 >
     {#if !isCensoredMode}
@@ -147,7 +147,7 @@
                 <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
                 <textarea
                     id="annotation-text"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                     bind:value={text}
                     placeholder="Enter text..."
                     rows="2"
@@ -223,7 +223,7 @@
                 <input
                     type="text"
                     id="annotation-title"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                     bind:value={title}
                     placeholder="Enter title"
                     autocomplete="off"
@@ -233,7 +233,7 @@
                 <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea
                     id="annotation-description"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                     bind:value={description}
                     placeholder="Enter description"
                     rows="2"

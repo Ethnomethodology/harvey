@@ -1025,10 +1025,10 @@ export let compactMode = false; // New prop, defaults to false
 	}
 </script>
 
-<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-d-gray-800 border-x border-b border-gray-200 dark:border-border rounded overflow-hidden">
+<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<div
 		bind:this={waveformScrollContainerRef}
-		class="waveform-scroll-container flex-grow bg-white dark:bg-d-gray-700 relative overflow-x-auto overflow-y-hidden h-full"
+		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-800 relative overflow-x-auto overflow-y-hidden h-full"
 		role="region" aria-label="Interactive Waveform Timeline"
 		on:scroll={handleScroll}
 	>
@@ -1076,7 +1076,7 @@ export let compactMode = false; // New prop, defaults to false
             </div>
 		{/if}
 	</div>
-	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-border bg-white dark:bg-d-gray-800">
+	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
 		<button class="ui-button-icon-panelheader" title="Zoom In Waveform ({modKeyName}+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || visibleCanvasWidth <= 0}">
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
@@ -1101,7 +1101,7 @@ export let compactMode = false; // New prop, defaults to false
 		scrollbar-color: #a0aec0 #e2e8f0; /* Light mode: gray-400 thumb, gray-200 track */
 	}
 	.dark .waveform-scroll-container:hover {
-		scrollbar-color: theme('colors.d-gray.500') theme('colors.d-gray.800'); /* Dark mode: d-gray-500 thumb, d-gray-800 track */
+		scrollbar-color: theme('colors.gray.700') theme('colors.gray.900'); /* Dark mode: gray-700 thumb, gray-900 track */
 	}
 	.waveform-scroll-container::-webkit-scrollbar {
 		height: 8px;
@@ -1114,7 +1114,7 @@ export let compactMode = false; // New prop, defaults to false
 		background: #e2e8f0; /* Light mode: gray-200 */
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
-		background: theme('colors.d-gray.800'); /* d-gray-800 */
+		background: theme('colors.gray.900'); /* gray-900 */
 	}
 	.waveform-scroll-container::-webkit-scrollbar-thumb {
 		background-color: transparent; /* Default: transparent */
@@ -1124,18 +1124,18 @@ export let compactMode = false; // New prop, defaults to false
 		background-color: #a0aec0; /* Light mode: gray-400 */
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-thumb {
-		background-color: theme('colors.d-gray.600'); /* d-gray-600 */
+		background-color: theme('colors.gray.700'); /* gray-700 */
 	}
 
 	.timescale-canvas { position: absolute; top: 0; left: 0; width: 100%; display: block; pointer-events: none; z-index: 5; }
 	.waveform-canvas { position: absolute; left: 0; width: 100%; display: block; }
 	.cursor-grabbing { cursor: grabbing; }
 	.overlay-message {
-		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white bg-opacity-80 dark:bg-d-gray-900 dark:bg-opacity-80 text-gray-600 dark:text-d-gray-300 pointer-events-none z-30;
+		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white bg-opacity-80 dark:bg-gray-950 dark:bg-opacity-80 text-gray-600 dark:text-gray-400 pointer-events-none z-30;
 		text-align: center;
 	}
 	.ui-button-icon-panelheader {
-		@apply p-1 rounded text-gray-600 dark:text-d-gray-400 bg-gray-100 dark:bg-d-gray-700 hover:bg-gray-200 dark:hover:bg-d-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-d-gray-800 focus:bg-gray-200 dark:focus:bg-d-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-d-gray-700;
+		@apply p-1 rounded text-gray-600 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-900 focus:bg-gray-200 dark:focus:bg-gray-700 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-800;
 	}
 	.w-5 { width: 1.25rem; }
 	.h-5 { height: 1.25rem; }

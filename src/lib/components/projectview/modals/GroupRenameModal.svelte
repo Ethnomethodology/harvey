@@ -70,7 +70,7 @@
 
 {#if showModal}
     <div class="fixed inset-0 z-[60] bg-gray-900 bg-opacity-50 dark:bg-opacity-75 flex items-center justify-center p-4" on:click|self={closeModal} role="dialog" aria-modal="true" aria-labelledby="rename-group-title">
-        <div class="bg-white dark:bg-surface-2 p-5 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
+        <div class="bg-white dark:bg-gray-900 p-5 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
             <h2 id="rename-group-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rename Group</h2>
 
             <div class="space-y-4">

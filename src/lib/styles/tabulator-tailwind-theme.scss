@@ -86,7 +86,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       &.tabulator-sortable {
         &:hover { background-color: var(--ui-icon-hover-bg); }
         &[aria-sort] {
-          background-color: var(--color-surface-3);
+          background-color: #262626;
           color: var(--ui-optgroup-text); // Use actual theme text color for sorted header
           .tabulator-col-content .tabulator-arrow {
              border-top-color: var(--ui-optgroup-text);

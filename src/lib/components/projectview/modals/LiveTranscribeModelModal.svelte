@@ -58,7 +58,7 @@
 
 {#if showModal}
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md">
+    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md">
         <h2 class="text-lg font-semibold mb-4">Live Transcription Settings</h2>
 
         <div class="mb-4">

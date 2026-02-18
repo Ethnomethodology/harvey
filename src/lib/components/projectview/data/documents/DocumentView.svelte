@@ -116,9 +116,9 @@
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->
-<div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-d-gray-800">
+<div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-gray-900">
     {#if mediaPath}
-        <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
+        <div class="border-b border-gray-200 dark:border-gray-700 flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
             <MediaPlayer
                 bind:this={mediaPlayerRef}
                 bind:isVideoMinimized={isVideoHidden}
@@ -147,12 +147,12 @@
                 {:else if isJsonDoc} <!-- Assuming .json documents are handled by DocumentEditorPanel -->
                     <DocumentEditorPanel />
                 {:else} <!-- Fallback for other non-PDF, non-JSON document types -->
-                    <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
+                    <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-600">
                         <span>Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span>
                     </div>
                 {/if} 
             {:else}
-                <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
+                <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-600">
                     <span>No document path provided to DocumentView.</span>
                 </div>
             {/if}

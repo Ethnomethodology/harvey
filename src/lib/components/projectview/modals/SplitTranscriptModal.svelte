@@ -167,7 +167,7 @@
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
             on:click|stopPropagation
         >
             <h2 class="text-lg font-semibold mb-4 text-center">Split Transcript View</h2>
