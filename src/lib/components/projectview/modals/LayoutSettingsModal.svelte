@@ -9,6 +9,7 @@
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
 	export let hideWaveformOptions = false; // New prop to control waveform options visibility
+    export let hideDualModeOptions = false; // New prop to control dual mode options visibility
 
 	const dispatch = createEventDispatcher();
 
@@ -101,6 +102,7 @@
 			{/if}
 
             <!-- Dual Transcript Mode Section -->
+            {#if !hideDualModeOptions}
             <div class="mb-6">
                 <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Dual Transcript Mode</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
@@ -115,6 +117,7 @@
 					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
 				/>
             </div>
+            {/if}
 
 			<!-- DOCX Export Layout Section -->
 			<div>

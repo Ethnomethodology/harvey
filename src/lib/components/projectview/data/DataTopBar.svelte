@@ -771,6 +771,7 @@
 				on:selectLayout="{handleLayoutSelected}"
 				on:close={() => isLayoutSettingsModalOpen = false}
 				hideWaveformOptions={true}
+                hideDualModeOptions={true}
 			/>
 <ExportModal
     bind:showModal={isExportModalOpen}
