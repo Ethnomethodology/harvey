@@ -722,7 +722,7 @@
     }
     .imported-transcript-editor-panel :global(.lexical-content th),
     .imported-transcript-editor-panel :global(.lexical-content td) {
-        border: 1px solid #ccc;
+        /* Border handled by Lexical theme classes */
         padding: 0.2rem 5.75pt;
         text-align: left;
         vertical-align: top;
@@ -731,9 +731,7 @@
         line-height: 1.5;
         word-break: break-word;
     }
-    .imported-transcript-editor-panel :global(.lexical-content th) {
-        @apply bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-semibold;
-    }
+    /* Removed specific th background overrides to let Lexical theme control it */
     .imported-transcript-editor-panel :global(.lexical-content th p),
     .imported-transcript-editor-panel :global(.lexical-content td p) {
         @apply mt-0 mb-0;

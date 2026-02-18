@@ -323,7 +323,7 @@
     }
     .lexical-editor-wrapper-style :global(.lexical-content th),
     .lexical-editor-wrapper-style :global(.lexical-content td) {
-        border: 1px solid #ccc;
+        /* Border handled by Lexical theme classes, but we keep padding/typography here if needed */
         padding: 0.2rem 5.75pt;
         text-align: left;
         vertical-align: top;
@@ -332,7 +332,5 @@
         line-height: 1.5;
         word-break: break-word;
     }
-    .lexical-editor-wrapper-style :global(.lexical-content th) {
-        @apply bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-semibold;
-    }
+    /* Removed specific th background overrides to let Lexical theme control it */
 </style>
