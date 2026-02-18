@@ -1667,7 +1667,11 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       if (actualRow) {
           // Skip if this is a header row
           const isHeaderRow = actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
-          if (isHeaderRow) {
+          // Also skip if it's the very first row of the table (index 0), as this is invariably the header in our transcript structure
+          // We use actualRow.rowIndex if available (standard HTMLTableRowElement), or fallback to checking siblings
+          const isFirstRow = actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
+
+          if (isHeaderRow || isFirstRow) {
               if (showPlayButton) {
                   showPlayButton = false;
                   hoveredRowKey = null;
