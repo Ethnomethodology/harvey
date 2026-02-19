@@ -1467,29 +1467,30 @@
     			:global(html.dark .segment-block.hovering .speech-plain-text *),
     			:global(html.dark .segment-block.hovering .flex-shrink-0),
     			:global(html.dark .segment-block.hovering .flex-shrink-0 *),
-    			:global(html.dark .segment-block.hovering .flex-1),
-    			:global(html.dark .segment-block.hovering .flex-1 *) {
-    				color: black !important;
-    			}
-
-                /* Search match highlights using CSS Custom Highlight API */
-                :global(::highlight(search-match)) {
-                    background-color: rgba(255, 215, 0, 0.4);
-                    color: black;
-                }
-
-                :global(::highlight(search-match-active)) {
-                    background-color: rgba(255, 165, 0, 0.7);
-                    color: black;
-                }
-
-                :global(html.dark ::highlight(search-match)) {
-                    background-color: rgba(255, 215, 0, 0.3);
-                    color: white;
-                }
-
-                :global(html.dark ::highlight(search-match-active)) {
-                    background-color: rgba(255, 165, 0, 0.6);
-                    color: white;
-                }
-    		</style>
+    			                :global(html.dark .segment-block.hovering .flex-1),
+    			    			:global(html.dark .segment-block.hovering .flex-1 *) {
+    			    				color: black !important;
+    			    			}
+    			
+    			                /* Search match highlights using CSS Custom Highlight API */
+    			                :global(::highlight(search-match)) {
+    			                    background-color: rgba(255, 215, 0, 0.4);
+    			                    color: black;
+    			                }
+    			
+    			                :global(::highlight(search-match-active)) {
+    			                    background-color: rgba(255, 165, 0, 0.7);
+    			                    color: black;
+    			                }
+    			
+    			                :global(html.dark ::highlight(search-match)) {
+    			                    background-color: rgba(255, 215, 0, 0.3);
+    			                    color: white;
+    			                }
+    			
+    			                :global(html.dark ::highlight(search-match-active)) {
+    			                    background-color: rgba(255, 165, 0, 0.6);
+    			                    color: white;
+    			                }
+    			    		</style>
+    			

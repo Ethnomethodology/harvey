@@ -236,3 +236,8 @@ body {
 .dark .interactive-waveform {
   background-color: var(--app-panel-bg);
 }
+
+/* Fix for strikethrough and underline not appearing together in Lexical/Tailwind */
+.underline.line-through {
+  text-decoration: underline line-through !important;
+}
