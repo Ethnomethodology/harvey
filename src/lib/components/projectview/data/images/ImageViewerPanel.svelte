@@ -270,21 +270,15 @@
                         ctx.fillStyle = fillColor;
                         ctx.fill(path);
                         ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = strokeWidth; 
+                        ctx.lineWidth = strokeWidth * Math.min(sx, sy); 
                         ctx.stroke(path);
                     }
 
                     // 3. Draw Text
-                    if (textBody && textBody.value) {
-                        const text = textBody.value;
-                        const fontSize = fontSizeBody ? fontSizeBody.value : 14;
+                    if ((textBody && textBody.value) || htmlBody) {
+                        const fontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
                         const textColor = textColorBody ? textColorBody.value : 'black';
                         
-                        ctx.fillStyle = textColor;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = `600 ${fontSize * Math.min(sx, sy)}px sans-serif`;
-
                         let tx, ty, tw, th;
                         if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
                             tx = shapeData.x * S * sx;
@@ -297,7 +291,37 @@
                             tw = shapeData.r * 2 * S * sx;
                             th = shapeData.r * 2 * S * sy;
                         }
-                        ctx.fillText(text, tx + tw/2, ty + th/2);
+
+                        if (htmlBody) {
+                            // Rich text rendering via SVG data URL
+                            const svgData = `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="${tw}" height="${th}">
+                                    <foreignObject width="100%" height="100%">
+                                        <div xmlns="http://www.w3.org/1999/xhtml" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden; text-align: center; color: ${textColor}; font-family: sans-serif; font-size: ${fontSize}px; line-height: 1.2;">
+                                            <div style="width: 100%;">${htmlBody.value}</div>
+                                        </div>
+                                    </foreignObject>
+                                </svg>
+                            `;
+                            
+                            const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                            const url = URL.createObjectURL(svgBlob);
+                            const tempImg = new Image();
+                            await new Promise((resolve) => {
+                                tempImg.onload = resolve;
+                                tempImg.onerror = resolve; // Continue even on error
+                                tempImg.src = url;
+                            });
+                            ctx.drawImage(tempImg, tx, ty);
+                            URL.revokeObjectURL(url);
+                        } else if (textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))) {
+                            // Fallback to plain text
+                            ctx.fillStyle = textColor;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.font = `600 ${fontSize}px sans-serif`;
+                            ctx.fillText(textBody.value, tx + tw/2, ty + th/2);
+                        }
                     }
                 }
             }
@@ -1000,7 +1024,7 @@
     }
 
     async function handleAnnotationDialogUpdate(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
+        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -1051,6 +1075,9 @@
         if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
         if (text !== undefined && text !== null && text !== '') {
             newBody.push({ type: 'TextualBody', value: text, purpose: 'content' });
+        }
+        if (html) {
+            newBody.push({ type: 'HtmlBody', value: html, purpose: 'rendering' });
         }
         if (textColor) newBody.push({ type: 'TextColor', value: textColor, purpose: 'rendering' });
         if (fontSize) newBody.push({ type: 'FontSize', value: fontSize, purpose: 'rendering' });
@@ -1649,6 +1676,7 @@
             {#each $currentAnnotations as annotation (annotation.id)}
                 {@const shapeData = annotation.target.selector.value}
                 {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
+                {@const htmlBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody')}
                 {@const textColorBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'TextColor')}
                 {@const fontSizeBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'FontSize')}
                 
@@ -1656,21 +1684,29 @@
                 {@const fontSize = fontSizeBody ? `${fontSizeBody.value}px` : '14px'}
                 
                 {@const S = 1000}
-                {#if textBody}
+                {#if textBody || htmlBody}
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
                         <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
-                                    {textBody.value}
-                                </p>
+                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
+                                    {#if htmlBody}
+                                        {@html htmlBody.value}
+                                    {:else if textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))}
+                                        <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
+                                    {/if}
+                                </div>
                             </div>
                         </foreignObject>
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
                         <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
-                                    {textBody.value}
-                                </p>
+                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
+                                    {#if htmlBody}
+                                        {@html htmlBody.value}
+                                    {:else if textBody && !textBody.value.startsWith('{"root":')}
+                                        <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
+                                    {/if}
+                                </div>
                             </div>
                         </foreignObject>
                     {/if}
@@ -1744,6 +1780,7 @@
                     initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || 
                         ((annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area') 
                         ? '' : null)}
+                    initialHtml={annotationBeingEdited?.body?.find(b => b.type === 'HtmlBody' && b.purpose === 'rendering')?.value || null}
                     initialTextColor={annotationBeingEdited?.body?.find(b => b.type === 'TextColor' && b.purpose === 'rendering')?.value || 'black'}
                     initialFontSize={annotationBeingEdited?.body?.find(b => b.type === 'FontSize' && b.purpose === 'rendering')?.value || 14}
                     initialBorderColor={annotationBeingEdited?.body?.find(b => b.type === 'BorderColor' && b.purpose === 'rendering')?.value || null}

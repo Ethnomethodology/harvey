@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -10,6 +11,7 @@
     export let initialTitle = '';
     export let initialDescription = '';
     export let initialText = null; // If not null, shows a text content field (for speech bubbles)
+    export let initialHtml = null; // HTML representation for rendering
     export let initialTextColor = 'black';
     export let initialFontSize = 14;
     export let initialBorderColor = null;
@@ -27,6 +29,7 @@
     let title = initialTitle;
     let description = initialDescription;
     let text = initialText || '';
+    let html = initialHtml || '';
     let selectedColor = initialColor;
     let selectedTextColor = initialTextColor;
     let selectedFontSize = initialFontSize;
@@ -80,7 +83,7 @@
 
     $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
-    $: notifyChanges(title, description, selectedColor, text, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval);
+    $: notifyChanges(title, description, selectedColor, text, html, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval);
 
     function notifyChanges() {
         dispatch('save', { 
@@ -88,6 +91,7 @@
             description, 
             color: selectedColor, 
             text, 
+            html,
             textColor: selectedTextColor, 
             fontSize: selectedFontSize, 
             borderColor: selectedBorderColor, 
@@ -112,9 +116,14 @@
         dispatch('delete');
     }
 
+    function handleLexicalChange(event) {
+        text = event.detail.jsonString;
+        html = event.detail.htmlString;
+    }
+
     // Adjust position to keep dialog within viewport (basic implementation)
     let dialogElement;
-    let dialogWidth = 200;
+    let dialogWidth = 400; // Increased width for Lexical toolbar
     let dialogHeight = 200;
 
     $: if (dialogElement && panelBounds) {
@@ -144,8 +153,8 @@
 
     function handleClickOutside(event) {
         if (dialogElement && !dialogElement.contains(event.target)) {
-            // Don't close if clicking a dropdown menu
-            if (event.target.closest('.ui-dropdown-menu')) return;
+            // Don't close if clicking a dropdown menu or Lexical modal
+            if (event.target.closest('.ui-dropdown-menu') || event.target.closest('.lexical-modal')) return;
             handleDone();
         }
     }
@@ -159,12 +168,33 @@
     onDestroy(() => {
         window.removeEventListener('pointerdown', handleClickOutside, true);
     });
+
+    const lexicalToolbarConfig = {
+        undo: false,
+        redo: false,
+        blockType: false,
+        bold: true,
+        italic: true,
+        underline: true,
+        strikethrough: true,
+        link: false,
+        fontFamily: true,
+        fontSize: true, // Assuming we want this based on user request
+        insertMenu: false,
+        indent: false,
+        outdent: false,
+        align: false,
+        textColor: true,
+        highlight: true,
+        clearFormatting: true,
+        search: false
+    };
 </script>
 
 <div
     bind:this={dialogElement}
     class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
-    style="left: {x}px; top: {y}px; min-width: 200px;"
+    style="left: {x}px; top: {y}px; width: {dialogWidth}px;"
     on:click|stopPropagation
     on:pointerdown|stopPropagation
 >
@@ -172,13 +202,15 @@
         {#if initialText !== null}
             <div class="mb-3">
                 <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
-                <textarea
-                    id="annotation-text"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                    bind:value={text}
-                    placeholder="Enter text..."
-                    rows="2"
-                ></textarea>
+                <div class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-hidden bg-white dark:bg-gray-900">
+                    <LexicalEditor
+                        initialJson={text.startsWith('{') ? text : null}
+                        placeholder={!text.startsWith('{') ? text : "Enter text..."}
+                        editable={true}
+                        toolbarConfig={lexicalToolbarConfig}
+                        on:change={handleLexicalChange}
+                    />
+                </div>
             </div>
 
             {#if initialShape?.startsWith('speech-bubble')}
@@ -318,29 +350,9 @@
     </div>
 
     {#if initialText !== null}
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Text Color</label>
-            <Dropdown
-                containerClasses="w-full"
-                options={textColors}
-                bind:value={selectedTextColor}
-                on:change={(e) => selectedTextColor = e.detail}
-                showColorPreview={true}
-                boundaryRect={panelBounds}
-            />
-        </div>
-
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Font Size</label>
-            <Dropdown
-                containerClasses="w-full"
-                options={fontSizes.map(s => ({ value: s, label: s.toString() }))}
-                bind:value={selectedFontSize}
-                on:change={(e) => selectedFontSize = e.detail}
-                boundaryRect={panelBounds}
-            />
-        </div>
-
+        <!-- Lexical handles Text Color and Font Size, so we only show them for title/description if needed, but here it's speech bubble/text area -->
+        <!-- User said we can remove them -->
+        
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Border Color</label>
             <Dropdown
@@ -395,3 +407,20 @@
         </div>
     </div>
 </div>
+
+<style lang="postcss">
+    .lexical-container {
+        max-height: 200px;
+        min-height: 100px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    :global(.lexical-container .toolbar) {
+        @apply p-0.5 gap-0.5;
+    }
+
+    :global(.lexical-container .lexical-wrapper) {
+        min-height: 60px;
+    }
+</style>

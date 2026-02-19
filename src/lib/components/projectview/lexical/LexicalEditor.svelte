@@ -68,6 +68,7 @@
     $setBlocksType as _setBlocksType, $patchStyleText as _patchStyleText,
     $getSelectionStyleValueForProperty as _getSelectionStyleValueForProperty
   } from '@lexical/selection';
+  import { $generateHtmlFromNodes as _generateHtmlFromNodes } from '@lexical/html';
   import { createEmptyHistoryState, registerHistory } from '@lexical/history';
   import { createEventDispatcher } from 'svelte';
   import { v4 as uuidv4 } from 'uuid';
@@ -449,7 +450,19 @@
                     console.warn(`[LexicalEditor] initialJson prop looks like JSON but lacks root.children. Using default empty state.`);
                   }
               } else {
-                  console.warn(`[LexicalEditor] initialJson prop doesn't look like a JSON object string. Using default empty state.`);
+                  // Support plain text by wrapping it
+                  return JSON.stringify({
+                      root: { 
+                          children: [
+                              { 
+                                  type: 'paragraph', 
+                                  version: 1, 
+                                  children: [{ type: 'text', text: jsonProp, version: 1 }] 
+                              }
+                          ], 
+                          direction: null, format: '', indent: 0, type: 'root', version: 1 
+                      }
+                  });
               }
           } catch(e) {
               console.error(`[LexicalEditor] Error during basic validation of initialJson prop. Using default empty state.`, e);
@@ -503,22 +516,6 @@
     });
 
 
-    let initialStateString = createInitialEditorState(initialJson);
-    try {
-        const parsedState = editor.parseEditorState(initialStateString);
-        editor.setEditorState(parsedState);
-        areNodesReady = true;
-    } catch (e) {
-        console.error(`[LexicalEditor ${instanceId}] Failed to parse and set initial editor state:`, e);
-        editor.update(() => {
-            const root = _getRoot();
-            root.clear();
-            root.append(_createParagraphNode());
-            areNodesReady = true;
-        });
-    }
-
-
     editor.setRootElement(editorContainer);
 
     editorContainer.addEventListener('click', (e) => {
@@ -531,6 +528,8 @@
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
     window.addEventListener('mousedown', handleClickOutside, true);
 
+    isReady = true; // Set to true before registering listener and setting state
+
     unregisterListeners = mergeRegister(
         editor.registerUpdateListener(({ editorState }) => {
             if (isReady) {
@@ -540,7 +539,15 @@
                     console.error("Error reading editor state in update listener:", readError);
                 }
                 const jsonString = JSON.stringify(editorState.toJSON());
-                dispatch('change', { jsonString: jsonString });
+                let htmlString = '';
+                try {
+                    editorState.read(() => {
+                        htmlString = _generateHtmlFromNodes(editor);
+                    });
+                } catch (htmlError) {
+                    console.error("Error generating HTML in update listener:", htmlError);
+                }
+                dispatch('change', { jsonString, htmlString });
             }
             if (showTableCellMenu) {
                 try {
@@ -839,9 +846,25 @@
         }, COMMAND_PRIORITY_LOW)
     );
 
+    // Now set the initial state, which will trigger the listener we just registered
+    let initialStateString = createInitialEditorState(initialJson);
+    try {
+        const parsedState = editor.parseEditorState(initialStateString);
+        editor.setEditorState(parsedState);
+        areNodesReady = true;
+    } catch (e) {
+        console.error(`[LexicalEditor] Failed to parse and set initial editor state:`, e);
+        editor.update(() => {
+            const root = _getRoot();
+            root.clear();
+            root.append(_createParagraphNode());
+            areNodesReady = true;
+        });
+    }
+
     tick().then(() => {
       if (!editor) return;
-      isReady = true;
+      // loadHighlights is already called via setEditorState if highlights were in the state
       loadHighlights();
       if (editor.isEditable()) {
         setTimeout(() => { if(editor) editor.focus(); }, 0);
