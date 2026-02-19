@@ -214,6 +214,35 @@
         }
   }
 
+  function handleClickOutside(event) {
+    // Check if click was inside any of the dropdown buttons or their menus
+    const refs = [
+      blockDropdownRef,
+      insertDropdownRef,
+      alignmentDropdownRef,
+      colorDropdownRef,
+      highlightDropdownRef,
+      searchOptionsDropdownRef
+    ];
+
+    let clickedInside = false;
+    for (const ref of refs) {
+      if (ref && ref.contains(event.target)) {
+        clickedInside = true;
+        break;
+      }
+    }
+
+    if (!clickedInside) {
+      isBlockDropdownOpen = false;
+      isInsertDropdownOpen = false;
+      isAlignDropdownOpen = false;
+      isColorDropdownOpen = false;
+      isHighlightDropdownOpen = false;
+      showSearchOptionsDropdown = false;
+    }
+  }
+
   function toggleBlockDropdown() {
     if (!editable) return;
     isBlockDropdownOpen = !isBlockDropdownOpen;
@@ -446,6 +475,7 @@
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
     editorWrapper.addEventListener('pointermove', handlePointerHover);
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('mousedown', handleClickOutside, true);
 
     unregisterListeners = mergeRegister(
         editor.registerUpdateListener(({ editorState }) => {
@@ -771,6 +801,7 @@
 
     return () => {
       unregisterListeners();
+      window.removeEventListener('mousedown', handleClickOutside, true);
       if (editorWrapper) {
           editorWrapper.removeEventListener('pointermove', handlePointerHover);
       }
@@ -2807,6 +2838,10 @@ $: if (editor && activeLayout) {
   editor={editor}
   showToolbar={showModifyToolbar}
   toolbarPosition={modifyToolbarPosition}
+  on:close={() => {
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
   onChangeColor={(color) => {
     if (clickedNodeKey) {
       editor.update(() => {

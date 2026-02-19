@@ -1,5 +1,6 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+    import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -31,7 +32,7 @@
     let selectedFontSize = initialFontSize;
     let selectedBorderColor = selectedColor === 'url(#censoredPattern)' ? 'black' : (initialBorderColor || (initialColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : initialColor.replace(', 0.5', ', 1')));
     let selectedBorderSize = initialBorderSize;
-    let selectedShape = (initialShape && initialShape.includes('circle')) ? 'circle' : 'rectangle';
+    let selectedShape = initialShape;
     let selectedTailStyle = initialTailStyle || 'straight';
     let tailFlipped = initialTailFlipped || false;
     let rounded = initialRounded || false;
@@ -79,7 +80,9 @@
 
     $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
-    function handleSave() {
+    $: notifyChanges(title, description, selectedColor, text, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval);
+
+    function notifyChanges() {
         dispatch('save', { 
             title, 
             description, 
@@ -97,6 +100,10 @@
         });
     }
 
+    function handleDone() {
+        dispatch('done');
+    }
+
     function handleCancel() {
         dispatch('cancel');
     }
@@ -107,7 +114,7 @@
 
     // Adjust position to keep dialog within viewport (basic implementation)
     let dialogElement;
-    let dialogWidth = 200; // Simplified dialog
+    let dialogWidth = 200;
     let dialogHeight = 200;
 
     $: if (dialogElement && panelBounds) {
@@ -134,12 +141,32 @@
         dialogElement.style.left = `${newX}px`;
         dialogElement.style.top = `${newY}px`;
     }
+
+    function handleClickOutside(event) {
+        if (dialogElement && !dialogElement.contains(event.target)) {
+            // Don't close if clicking a dropdown menu
+            if (event.target.closest('.ui-dropdown-menu')) return;
+            handleDone();
+        }
+    }
+
+    onMount(() => {
+        setTimeout(() => {
+            window.addEventListener('pointerdown', handleClickOutside, true);
+        }, 100);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener('pointerdown', handleClickOutside, true);
+    });
 </script>
 
 <div
     bind:this={dialogElement}
     class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; min-width: 200px;"
+    on:click|stopPropagation
+    on:pointerdown|stopPropagation
 >
     {#if !isCensoredMode}
         {#if initialText !== null}
@@ -154,45 +181,47 @@
                 ></textarea>
             </div>
 
-            <div class="mb-3">
-                <div class="flex space-x-2">
-                    <button
-                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedTailStyle === 'straight'}
-                        class:text-white={selectedTailStyle === 'straight'}
-                        class:bg-gray-100={selectedTailStyle !== 'straight'}
-                        class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
-                        on:click={() => (selectedTailStyle = 'straight')}
-                    >
-                        Straight Tail
-                    </button>
-                    <button
-                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedTailStyle === 'curved'}
-                        class:text-white={selectedTailStyle === 'curved'}
-                        class:bg-gray-100={selectedTailStyle !== 'curved'}
-                        class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
-                        on:click={() => (selectedTailStyle = 'curved')}
-                    >
-                        Curved Tail
-                    </button>
-                </div>
-            </div>
-
-            {#if selectedTailStyle === 'curved'}
+            {#if initialShape?.startsWith('speech-bubble')}
                 <div class="mb-3">
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                            bind:checked={tailFlipped}
-                        />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Tail</span>
-                    </label>
+                    <div class="flex space-x-2">
+                        <button
+                            class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                            class:bg-blue-600={selectedTailStyle === 'straight'}
+                            class:text-white={selectedTailStyle === 'straight'}
+                            class:bg-gray-100={selectedTailStyle !== 'straight'}
+                            class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
+                            on:click={() => (selectedTailStyle = 'straight')}
+                        >
+                            Straight Tail
+                        </button>
+                        <button
+                            class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                            class:bg-blue-600={selectedTailStyle === 'curved'}
+                            class:text-white={selectedTailStyle === 'curved'}
+                            class:bg-gray-100={selectedTailStyle !== 'curved'}
+                            class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
+                            on:click={() => (selectedTailStyle = 'curved')}
+                        >
+                            Curved Tail
+                        </button>
+                    </div>
                 </div>
+
+                {#if selectedTailStyle === 'curved'}
+                    <div class="mb-3">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                                bind:checked={tailFlipped}
+                            />
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Tail</span>
+                        </label>
+                    </div>
+                {/if}
             {/if}
 
-            {#if selectedShape === 'rectangle'}
+            {#if selectedShape === 'rectangle' || initialShape === 'speech-bubble-rect'}
                 <div class="mb-3">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input
@@ -205,7 +234,7 @@
                 </div>
             {/if}
 
-            {#if selectedShape === 'circle'}
+            {#if selectedShape === 'circle' || initialShape === 'speech-bubble-circle'}
                 <div class="mb-3">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input
@@ -278,94 +307,61 @@
 
     <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{isCensoredMode ? 'Anonymise Style' : 'Background Color'}</label>
-        <div class="flex items-center space-x-1.5">
-            {#each highlightOptions as option}
-                <button
-                    title={option.label}
-                    class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                    class:ring-2={selectedColor === option.value}
-                    class:ring-blue-500={selectedColor === option.value}
-                    style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : (option.value === 'url(#censoredPattern)' ? 'linear-gradient(to bottom right, #fff 25%, #888 25%, #888 50%, #444 50%, #444 75%, #000 75%)' : option.value.replace(', 0.5', ', 1'))};"
-                    on:click={() => {
-                        selectedColor = option.value;
-                    }}
-                >
-                </button>
-            {/each}
-        </div>
+        <Dropdown
+            containerClasses="w-full"
+            options={highlightOptions}
+            bind:value={selectedColor}
+            on:change={(e) => selectedColor = e.detail}
+            showColorPreview={true}
+            boundaryRect={panelBounds}
+        />
     </div>
 
     {#if initialText !== null}
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Text Color</label>
-            <div class="flex items-center space-x-1.5">
-                {#each textColors as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                        class:ring-2={selectedTextColor === option.value}
-                                            class:ring-blue-500={selectedTextColor === option.value}
-                                            style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : option.value};"
-                                            on:click={() => (selectedTextColor = option.value)}
-                                        >
-                        
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={textColors}
+                bind:value={selectedTextColor}
+                on:change={(e) => selectedTextColor = e.detail}
+                showColorPreview={true}
+                boundaryRect={panelBounds}
+            />
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Font Size</label>
-            <div class="grid grid-cols-5 gap-1">
-                {#each fontSizes as size}
-                    <button
-                        class="px-1 py-1 text-[10px] font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedFontSize === size}
-                        class:text-white={selectedFontSize === size}
-                        class:bg-gray-100={selectedFontSize !== size}
-                        class:dark:bg-gray-700={selectedFontSize !== size}
-                        on:click={() => (selectedFontSize = size)}
-                    >
-                        {size}
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={fontSizes.map(s => ({ value: s, label: s.toString() }))}
+                bind:value={selectedFontSize}
+                on:change={(e) => selectedFontSize = e.detail}
+                boundaryRect={panelBounds}
+            />
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Border Color</label>
-            <div class="flex items-center space-x-1.5">
-                {#each textColors as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                        class:ring-2={selectedBorderColor === option.value}
-                                            class:ring-blue-500={selectedBorderColor === option.value}
-                                            style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : option.value};"
-                                            on:click={() => (selectedBorderColor = option.value)}
-                                        >
-                        
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={textColors}
+                bind:value={selectedBorderColor}
+                on:change={(e) => selectedBorderColor = e.detail}
+                showColorPreview={true}
+                boundaryRect={panelBounds}
+            />
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Border Size</label>
-            <div class="flex items-center space-x-2">
-                {#each borderSizes as size}
-                    <button
-                        class="w-8 h-8 flex items-center justify-center text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedBorderSize === size}
-                        class:text-white={selectedBorderSize === size}
-                        class:bg-gray-100={selectedBorderSize !== size}
-                        class:dark:bg-gray-700={selectedBorderSize !== size}
-                        on:click={() => (selectedBorderSize = size)}
-                    >
-                        {size}
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={borderSizes.map(s => ({ value: s, label: s.toString() }))}
+                bind:value={selectedBorderSize}
+                on:change={(e) => selectedBorderSize = e.detail}
+                boundaryRect={panelBounds}
+            />
         </div>
     {/if}
 
@@ -391,16 +387,10 @@
         {/if}
         <div class="flex space-x-2">
             <button
-                class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                on:click={handleCancel}
-            >
-                Cancel
-            </button>
-            <button
                 class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
-                on:click={handleSave}
+                on:click={handleDone}
             >
-                {isEditing ? 'Update' : 'Add'}
+                Done
             </button>
         </div>
     </div>

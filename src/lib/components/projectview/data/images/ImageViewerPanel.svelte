@@ -616,6 +616,9 @@
         // because the SVG event handlers fire before OSD canvas-press.
         if (!activeDrawingTool && !isDraggingShape && !isDraggingTail && !isDraggingResizeHandle) {
              selectedAnnotationId = null;
+             if (showAnnotationCreationDialog) {
+                 closeAnnotationDialog();
+             }
         }
 
         if (!activeDrawingTool) return;
@@ -923,6 +926,7 @@
                 // event.position is already relative to the viewer element
                 dialogX = event.position.x;
                 dialogY = event.position.y;
+                selectedAnnotationId = null; // Unselect so user can see their border changes
                 showAnnotationCreationDialog = true;
                 activeDrawingTool = null; // Deactivate tool
             } else {
@@ -951,17 +955,16 @@
         updateImageAnnotations([...$currentAnnotations, newAnnotation]);
         await saveImageAnnotations();
 
-        annotationBeingEdited = null;
+        annotationBeingEdited = newAnnotation;
         isEditingExisting = false;
+        dialogX = event.position.x;
+        dialogY = event.position.y;
+        showAnnotationCreationDialog = true;
         activeDrawingTool = null; // Deactivate tool
-        // dialogX = event.position.x;
-        // dialogY = event.position.y;
-        // showAnnotationCreationDialog = true;
 
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
         currentPreviewPolygonPoints = [];
-        activeDrawingTool = null;
         startViewportPoint = null;
     }
 
@@ -992,10 +995,11 @@
         dialogX = annotationRect.left - osdRect.left + annotationRect.width;
         dialogY = annotationRect.top - osdRect.top + annotationRect.height;
 
+        selectedAnnotationId = null; // Unselect so user can see their border changes
         showAnnotationCreationDialog = true;
     }
 
-    async function handleAnnotationDialogSave(event) {
+    async function handleAnnotationDialogUpdate(event) {
         const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
         if (!annotationBeingEdited) return;
 
@@ -1023,17 +1027,15 @@
                 const cy = updatedSelector.y + updatedSelector.height / 2;
                 const r = Math.min(updatedSelector.width, updatedSelector.height) / 2;
                 updatedSelector = { shape: oldShape === 'censored' ? 'censored' : 'circle', cx, cy, r };
-                // Wait, if it was censored it should stay censored shape but maybe user wants circular censored? 
-                // Let's assume if they picked 'circle' in dialog, they want the circle version of current tool
-                if (oldShape === 'censored') updatedSelector.shape = 'censored-circle'; // Need to add this type
-                else if (oldShape === 'text-area') updatedSelector.shape = 'text-area-circle'; // Add this too
+                if (oldShape === 'censored') updatedSelector.shape = 'censored-circle'; 
+                else if (oldShape === 'text-area') updatedSelector.shape = 'text-area-circle';
                 else updatedSelector.shape = 'circle';
             } else if (shape === 'rectangle' && (oldShape === 'circle' || oldShape === 'speech-bubble-circle' || oldShape.endsWith('-circle'))) {
                 // Convert circle to rect
-                const width = updatedSelector.r * 2;
-                const height = updatedSelector.r * 2;
-                const x = updatedSelector.cx - updatedSelector.r;
-                const y = updatedSelector.cy - updatedSelector.r;
+                const width = (updatedSelector.r || 0) * 2;
+                const height = (updatedSelector.r || 0) * 2;
+                const x = (updatedSelector.cx || 0) - (updatedSelector.r || 0);
+                const y = (updatedSelector.cy || 0) - (updatedSelector.r || 0);
                 updatedSelector = { shape: 'rectangle', x, y, width, height };
                 if (oldShape === 'censored-circle' || oldShape === 'censored') updatedSelector.shape = 'censored';
                 else if (oldShape === 'text-area-circle' || oldShape === 'text-area') updatedSelector.shape = 'text-area';
@@ -1071,10 +1073,10 @@
             a.id === updatedAnnotation.id ? updatedAnnotation : a
         );
 
+        // Update local state reactively
+        annotationBeingEdited = updatedAnnotation;
         updateImageAnnotations(updatedAnnotations);
         await saveImageAnnotations();
-
-        closeAnnotationDialog();
     }
     
     function startTailWidthDrag(event, annotationId) {
@@ -1758,7 +1760,8 @@
                     useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape.startsWith('text-area')}
                     isCensoredMode={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('censored')}
                     panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
-                    on:save={handleAnnotationDialogSave}
+                    on:save={handleAnnotationDialogUpdate}
+                    on:done={closeAnnotationDialog}
                     on:cancel={handleAnnotationDialogCancel}
                     on:delete={handleAnnotationDialogDelete}
                 />
