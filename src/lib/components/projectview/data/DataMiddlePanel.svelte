@@ -166,7 +166,7 @@
 <div class="h-full flex flex-col bg-white dark:bg-gray-900 rounded-md shadow p-2 space-y-2">
     <div class="text-xs text-gray-500 dark:text-gray-600">Minimal Test Editor (Dropdowns):</div>
     <!-- Minimal Toolbar (Unchanged) -->
-    <div class="toolbar flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-700 pb-1 mb-1 flex-shrink-0">
+    <div class="toolbar flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 pb-1 mb-1 flex-shrink-0">
          <select class="mini-toolbar-select" value={blockType} on:change={handleBlockTypeChange} title="Block Type"> {#each blockTypeOptions as option} <option value={option.value}>{option.label}</option> {/each} </select> <div class="separator"></div>
          <button class="mini-toolbar-button font-bold" on:click={() => formatText('bold')} class:active={isBold} title="Bold">B</button> <button class="mini-toolbar-button italic" on:click={() => formatText('italic')} class:active={isItalic} title="Italic">I</button> <button class="mini-toolbar-button underline" on:click={() => formatText('underline')} class:active={isUnderline} title="Underline">U</button> <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough">S</button> <div class="separator"></div>
          <select class="mini-toolbar-select" value={selectedAlignment} on:change={(e) => alignElement(e.target.value)} title="Alignment"> {#each alignmentOptions as option} <option value={option.value}>{option.label}</option> {/each} </select> <div class="separator"></div>

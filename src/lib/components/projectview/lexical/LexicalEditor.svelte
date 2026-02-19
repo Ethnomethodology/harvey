@@ -2481,7 +2481,7 @@ $: if (editor && activeLayout) {
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm layout-{activeLayout}">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -2912,6 +2912,7 @@ $: if (editor && activeLayout) {
     {/if}
   </div>
 
+
   {#if enableTableCellMenu}
     <TableCellActionMenu
       editor={editor}
@@ -3022,8 +3023,6 @@ $: if (editor && activeLayout) {
   }}
 />
 {/if}
-
-
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
       @apply p-1.5 rounded inline-flex items-center justify-center
