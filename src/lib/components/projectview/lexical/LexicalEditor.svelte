@@ -2762,9 +2762,6 @@ $: if (editor && activeLayout) {
           </svg>
         </button>
       {/if}
-      {#if toolbarConfig.clearFormatting && toolbarConfig.search}
-        <div class="separator"></div>
-      {/if}
 
       {#if toolbarConfig.search}
         <div class="ml-auto relative flex items-center" bind:this={searchToggleButtonElement}>
