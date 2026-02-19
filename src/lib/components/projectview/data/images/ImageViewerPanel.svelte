@@ -114,6 +114,7 @@
             const imgUrl = URL.createObjectURL(blobBody);
 
             const img = new Image();
+            img.crossOrigin = 'Anonymous';
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = reject;
@@ -190,6 +191,7 @@
                     const body = annotation.body || [];
                     const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
                     const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
                     const borderColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor');
                     const borderSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize');
                     const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
@@ -292,35 +294,190 @@
                             th = shapeData.r * 2 * S * sy;
                         }
 
-                        if (htmlBody) {
-                            // Rich text rendering via SVG data URL
-                            const svgData = `
-                                <svg xmlns="http://www.w3.org/2000/svg" width="${tw}" height="${th}">
-                                    <foreignObject width="100%" height="100%">
-                                        <div xmlns="http://www.w3.org/1999/xhtml" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden; text-align: center; color: ${textColor}; font-family: sans-serif; font-size: ${fontSize}px; line-height: 1.5; white-space: pre-wrap;">
-                                            <div style="width: 100%;">${htmlBody.value}</div>
-                                        </div>
-                                    </foreignObject>
-                                </svg>
-                            `;
+                        // 3. Draw Rich Text via Canvas
+                        if ((textBody && textBody.value) || htmlBody) {
+                            const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
+                            const defaultTextColor = textColorBody ? textColorBody.value : 'black';
                             
-                            const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
-                            const url = URL.createObjectURL(svgBlob);
-                            const tempImg = new Image();
-                            await new Promise((resolve) => {
-                                tempImg.onload = resolve;
-                                tempImg.onerror = resolve; // Continue even on error
-                                tempImg.src = url;
-                            });
-                            ctx.drawImage(tempImg, tx, ty);
-                            URL.revokeObjectURL(url);
-                        } else if (textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))) {
-                            // Fallback to plain text
-                            ctx.fillStyle = textColor;
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.font = `600 ${fontSize}px sans-serif`;
-                            ctx.fillText(textBody.value, tx + tw/2, ty + th/2);
+                            let tx, ty, tw, th;
+                            if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
+                                tx = shapeData.x * S * sx;
+                                ty = shapeData.y * S * sy;
+                                tw = shapeData.width * S * sx;
+                                th = shapeData.height * S * sy;
+                            } else {
+                                tx = (shapeData.cx - shapeData.r) * S * sx;
+                                ty = (shapeData.cy - shapeData.r) * S * sy;
+                                tw = shapeData.r * 2 * S * sx;
+                                th = shapeData.r * 2 * S * sy;
+                            }
+
+                            // Secure Canvas Rich Text Renderer
+                            const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                                const parser = new DOMParser();
+                                const doc = parser.parseFromString(html || '', 'text/html');
+                                
+                                const p = padding * Math.min(sx, sy);
+                                const availableW = width - (p * 2);
+                                const availableH = height - (p * 2);
+                                const startX = x + p;
+                                const startY_box = y + p;
+
+                                if (availableW <= 0 || availableH <= 0) return;
+
+                                // Flatten DOM to styled segments
+                                const segments = [];
+                                const walk = (node, styles) => {
+                                    if (node.nodeType === Node.TEXT_NODE) {
+                                        if (node.textContent) segments.push({ text: node.textContent, ...styles });
+                                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                        const newStyles = { ...styles };
+                                        const tag = node.tagName.toLowerCase();
+                                        const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
+
+                                        if (tag === 'strong' || tag === 'b') newStyles.bold = true;
+                                        if (tag === 'em' || tag === 'i') newStyles.italic = true;
+                                        if (tag === 'u') newStyles.underline = true;
+                                        if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
+                                        
+                                        const styleAttr = node.getAttribute('style') || '';
+                                        const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
+                                        if (colorMatch) newStyles.color = colorMatch[1].trim();
+                                        
+                                        const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
+                                        if (bgMatch) newStyles.highlight = bgMatch[1].trim();
+
+                                        const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
+                                        if (alignMatch) newStyles.align = alignMatch[1].trim();
+
+                                        const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
+                                        if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
+
+                                        if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+
+                                        node.childNodes.forEach(child => walk(child, newStyles));
+                                        
+                                        if (isBlock) {
+                                            const lastChild = node.lastChild;
+                                            const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
+                                            if (!endsWithBr) {
+                                                segments.push({ text: '\n', ...newStyles });
+                                            }
+                                        }
+                                    }
+                                };
+                                walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
+
+                                // Word Wrap & Layout
+                                const lines = [[]];
+                                let currentLine = lines[0];
+                                let currentX = 0;
+
+                                segments.forEach(seg => {
+                                    const parts = seg.text.split(/(\n)/);
+                                    parts.forEach(part => {
+                                        if (part === '\n') {
+                                            lines.push([]);
+                                            currentLine = lines[lines.length - 1];
+                                            currentX = 0;
+                                        } else if (part) {
+                                            ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px Inter, Roboto, Arial, sans-serif`;
+                                            const words = part.split(/(\s+)/);
+                                            words.forEach(word => {
+                                                let wordWidth = ctx.measureText(word).width;
+                                                // Handle very long words (break-word)
+                                                if (wordWidth > availableW && word.trim() !== "") {
+                                                    for (const char of word) {
+                                                        const charWidth = ctx.measureText(char).width;
+                                                        if (currentX + charWidth > availableW && currentX > 0) {
+                                                            lines.push([]);
+                                                            currentLine = lines[lines.length - 1];
+                                                            currentX = 0;
+                                                        }
+                                                        currentLine.push({ ...seg, text: char, width: charWidth });
+                                                        currentX += charWidth;
+                                                    }
+                                                } else {
+                                                    if (currentX + wordWidth > availableW && currentX > 0 && word.trim() !== "") {
+                                                        lines.push([]);
+                                                        currentLine = lines[lines.length - 1];
+                                                        currentX = 0;
+                                                    }
+                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                    currentX += wordWidth;
+                                                }
+                                            });
+                                        }
+                                    });
+                                });
+
+                                if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+
+                                // Vertical Layout
+                                const lineHeights = lines.map(line => {
+                                    if (line.length === 0) return baseFontSize * 1.5;
+                                    return Math.max(...line.map(s => s.fontSize), baseFontSize) * 1.5;
+                                });
+                                const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+
+                                let currentY = startY_box + (availableH - totalHeight) / 2;
+                                ctx.textBaseline = 'alphabetic';
+
+                                lines.forEach((line, i) => {
+                                    const h = lineHeights[i];
+                                    const lineAlign = line[0]?.align || 'center';
+                                    
+                                    // For horizontal centering/right-align, ignore trailing whitespace
+                                    let visibleLine = [...line];
+                                    while(visibleLine.length > 0 && visibleLine[visibleLine.length-1].text.trim() === "") visibleLine.pop();
+                                    const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+                                    
+                                    let lineX;
+                                    if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                                    else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                                    else lineX = startX;
+
+                                    const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                    const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + (maxFontSizeInLine * 0.8);
+
+                                    line.forEach(seg => {
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px Inter, Roboto, Arial, sans-serif`;
+                                        
+                                        if (seg.highlight && seg.highlight !== 'transparent') {
+                                            ctx.fillStyle = seg.highlight;
+                                            ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.8, seg.width, seg.fontSize * 1.1);
+                                        }
+
+                                        ctx.fillStyle = seg.color || baseColor;
+                                        ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                        if (seg.underline) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            ctx.moveTo(lineX, lineBaseline + seg.fontSize * 0.15);
+                                            ctx.lineTo(lineX + seg.width, lineBaseline + seg.fontSize * 0.15);
+                                            ctx.stroke();
+                                        }
+
+                                        if (seg.strikethrough) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            ctx.moveTo(lineX, lineBaseline - seg.fontSize * 0.3);
+                                            ctx.lineTo(lineX + seg.width, lineBaseline - seg.fontSize * 0.3);
+                                            ctx.stroke();
+                                        }
+                                        lineX += seg.width;
+                                    });
+                                    currentY += h;
+                                });
+                            };
+
+                            ctx.textBaseline = 'alphabetic';
+                            const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
+                            const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
                         }
                     }
                 }
