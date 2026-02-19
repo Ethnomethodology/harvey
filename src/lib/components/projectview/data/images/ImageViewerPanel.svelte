@@ -297,7 +297,7 @@
                             const svgData = `
                                 <svg xmlns="http://www.w3.org/2000/svg" width="${tw}" height="${th}">
                                     <foreignObject width="100%" height="100%">
-                                        <div xmlns="http://www.w3.org/1999/xhtml" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden; text-align: center; color: ${textColor}; font-family: sans-serif; font-size: ${fontSize}px; line-height: 1.2; white-space: pre-wrap;">
+                                        <div xmlns="http://www.w3.org/1999/xhtml" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden; text-align: center; color: ${textColor}; font-family: sans-serif; font-size: ${fontSize}px; line-height: 1.5; white-space: pre-wrap;">
                                             <div style="width: 100%;">${htmlBody.value}</div>
                                         </div>
                                     </foreignObject>
@@ -1688,7 +1688,7 @@
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
                         <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
-                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
                                         {@html htmlBody.value}
                                     {:else if textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))}
@@ -1700,7 +1700,7 @@
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle' || shapeData.shape === 'text-area-circle'}
                         <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
-                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
                                         {@html htmlBody.value}
                                     {:else if textBody && !textBody.value.startsWith('{"root":')}

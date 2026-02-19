@@ -3082,6 +3082,8 @@ $: if (editor && activeLayout) {
 
   .lexical-content {
       min-width: 150px; /* Prevent it from being too tiny when empty */
+      line-height: 1.5;
+      white-space: pre-wrap;
   }
 
   .editor-table {
