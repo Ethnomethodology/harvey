@@ -350,6 +350,8 @@
     { label: 'Inter', value: 'Inter' },
     { label: 'Roboto', value: 'Roboto' },
     { label: 'Montserrat', value: 'Montserrat' },
+    { label: 'Comic Neue', value: "'Comic Neue'" },
+    { label: 'Gloria Hallelujah', value: "'Gloria Hallelujah'" },
     { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
     { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
     { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },

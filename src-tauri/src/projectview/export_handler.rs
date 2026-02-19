@@ -116,12 +116,15 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    // Parse CSS style for color and background-color
+                    // Parse CSS style for color, background-color, and font-family
                     let mut text_color: Option<&str> = None;
+                    let mut font_family: Option<&str> = None;
                     let mut has_highlight_flag = format_flags & IS_HIGHLIGHT != 0;
                     for decl in style_str.split(';').map(str::trim) {
                         if let Some(value) = decl.strip_prefix("color:") {
                             text_color = Some(value.trim());
+                        } else if let Some(value) = decl.strip_prefix("font-family:") {
+                            font_family = Some(value.trim());
                         } else if let Some(_) = decl.strip_prefix("background-color:") {
                             has_highlight_flag = true;
                         }
@@ -132,6 +135,10 @@ fn append_node_html(node: &Value, html: &mut String) {
                     // Open highlight tag if needed
                     if has_highlight_flag {
                         html.push_str("<mark>");
+                    }
+                    // Open font family span if needed
+                    if let Some(family) = font_family {
+                        html.push_str(&format!("<span style=\"font-family: {};\">", encode_text(family)));
                     }
                     // Open font color tag if needed
                     if let Some(color) = text_color {
@@ -148,6 +155,10 @@ fn append_node_html(node: &Value, html: &mut String) {
                     // Close font tag if used
                     if text_color.is_some() {
                         html.push_str("</font>");
+                    }
+                    // Close font family span if used
+                    if font_family.is_some() {
+                        html.push_str("</span>");
                     }
                     // Close highlight tag if used
                     if has_highlight_flag {
@@ -372,7 +383,7 @@ pub async fn export_transcript_to_docx<R: Runtime>(
     html_output.push_str("<!DOCTYPE html>\n");
     html_output.push_str("<html><head><meta charset=\"utf-8\"/><style>\n");
     html_output.push_str("body { \
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \
+        font-family: 'Inter', Roboto, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \
         'Liberation Mono', 'Courier New', monospace; \
         font-size: 14px; \
         line-height: 1.5; \
@@ -529,11 +540,20 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let pandoc_args = vec![
+    let reference_doc_path = app_handle.path()
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
+
+    if let Some(ref_path) = reference_doc_path {
+        pandoc_args.push("--reference-doc".to_string());
+        pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
@@ -1770,7 +1790,7 @@ pub async fn export_document_to_docx<R: Runtime>(
     html_output.push_str("<!DOCTYPE html>\n");
     html_output.push_str("<html><head><meta charset=\"utf-8\"/><style>\n");
     html_output.push_str("body { \
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; \
+        font-family: 'Inter', Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; \
         font-size: 11pt; \
         line-height: 1.5; \
     }\n");
@@ -1800,11 +1820,20 @@ pub async fn export_document_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let pandoc_args = vec![
+    let reference_doc_path = app_handle.path()
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
+
+    if let Some(ref_path) = reference_doc_path {
+        pandoc_args.push("--reference-doc".to_string());
+        pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
