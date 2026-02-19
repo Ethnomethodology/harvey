@@ -363,7 +363,7 @@
   ];
 
   const fontSizeOptions = [
-    '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '26px', '28px', '30px', '32px', '36px', '40px', '48px', '64px', '72px', '96px'
+    '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '24', '26', '28', '30', '32', '36', '40', '48', '64', '72', '96'
   ];
 
   const alignmentOptions = [ { value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }, { value: 'justify', label: 'Justify' } ];
@@ -396,7 +396,7 @@
     isFontDropdownOpen = false;
   }
 
-  let selectedFontSize = '15px';
+  let selectedFontSize = '15';
   let isFontSizeDropdownOpen = false;
   let fontSizeDropdownRef;
 
@@ -407,7 +407,7 @@
 
   function applyFontSize(fontSize) {
     if (!editor || !isReady || !editor.isEditable()) return;
-    applyStyle('font-size', fontSize);
+    applyStyle('font-size', fontSize + 'px');
     isFontSizeDropdownOpen = false;
   }
 
@@ -1105,7 +1105,9 @@
       selectedTextColor = _getSelectionStyleValueForProperty(selection, 'color', '#000000') || '#000000';
       selectedHighlightColor = _getSelectionStyleValueForProperty(selection, 'background-color', 'transparent') || 'transparent';
       selectedFontFamily = _getSelectionStyleValueForProperty(selection, 'font-family', 'Inter') || 'Inter';
-      selectedFontSize = _getSelectionStyleValueForProperty(selection, 'font-size', '15px') || '15px';
+      
+      const rawFontSize = _getSelectionStyleValueForProperty(selection, 'font-size', '15px') || '15px';
+      selectedFontSize = rawFontSize.replace('px', '');
 
       const anchorNode = selection.anchor.getNode();
       if (anchorNode) {
@@ -2554,7 +2556,7 @@ $: if (editor && activeLayout) {
 
         <div class="relative" bind:this={fontSizeDropdownRef}>
           <button
-            class="mini-toolbar-button flex items-center gap-1 min-w-[60px] justify-between"
+            class="mini-toolbar-button flex items-center gap-1 min-w-[48px] justify-between"
             on:click={toggleFontSizeDropdown}
             title="Font Size"
             disabled={!editable}
