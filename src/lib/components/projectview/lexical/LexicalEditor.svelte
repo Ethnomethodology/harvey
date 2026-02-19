@@ -100,6 +100,7 @@
     underline: true,
     strikethrough: true,
     link: true,
+    fontFamily: true,
     insertMenu: true,
     indent: true,
     outdent: true,
@@ -222,7 +223,8 @@
       alignmentDropdownRef,
       colorDropdownRef,
       highlightDropdownRef,
-      searchOptionsDropdownRef
+      searchOptionsDropdownRef,
+      fontDropdownRef
     ];
 
     let clickedInside = false;
@@ -240,6 +242,7 @@
       isColorDropdownOpen = false;
       isHighlightDropdownOpen = false;
       showSearchOptionsDropdown = false;
+      isFontDropdownOpen = false;
     }
   }
 
@@ -342,6 +345,20 @@
     quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
     code:      `<span class="inline-block w-4 text-xs"></></span>`
   };
+
+  const fontOptions = [
+    { label: 'Inter', value: 'Inter' },
+    { label: 'Roboto', value: 'Roboto' },
+    { label: 'Montserrat', value: 'Montserrat' },
+    { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
+    { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
+    { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },
+    { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
+    { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+    { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+    { label: 'Console', value: 'Monaco, Consolas, "Lucida Console", monospace' },
+  ];
+
   const alignmentOptions = [ { value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }, { value: 'justify', label: 'Justify' } ];
   const alignmentIcons = {
     left:    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM3 8h10v2H3V8zM3 12h14v2H3v-2zM3 16h10v2H3v-2z" clip-rule="evenodd"/></svg>`,
@@ -355,6 +372,21 @@
   function toggleAlignDropdown() {
     if (!editable) return;
     isAlignDropdownOpen = !isAlignDropdownOpen;
+  }
+
+  let selectedFontFamily = 'Inter';
+  let isFontDropdownOpen = false;
+  let fontDropdownRef;
+
+  function toggleFontDropdown() {
+    if (!editable) return;
+    isFontDropdownOpen = !isFontDropdownOpen;
+  }
+
+  function applyFontFamily(fontFamily) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    applyStyle('font-family', fontFamily);
+    isFontDropdownOpen = false;
   }
 
   const colorOptions = [
@@ -1040,6 +1072,7 @@
     selectedAlignment = 'left';
     selectedTextColor = '#000000';
     selectedHighlightColor = 'transparent';
+    selectedFontFamily = 'Inter';
 
     if (_isRangeSelection(selection)) {
       isBold = selection.hasFormat('bold');
@@ -1048,6 +1081,7 @@
       isStrikethrough = selection.hasFormat('strikethrough');
       selectedTextColor = _getSelectionStyleValueForProperty(selection, 'color', '#000000') || '#000000';
       selectedHighlightColor = _getSelectionStyleValueForProperty(selection, 'background-color', 'transparent') || 'transparent';
+      selectedFontFamily = _getSelectionStyleValueForProperty(selection, 'font-family', 'Inter') || 'Inter';
 
       const anchorNode = selection.anchor.getNode();
       if (anchorNode) {
@@ -2458,6 +2492,36 @@ $: if (editor && activeLayout) {
                     <span>{option.label}</span>
                   </span>
                   <span class="text-xs text-gray-500">{option.shortcut}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {#if toolbarConfig.fontFamily}
+        <div class="relative" bind:this={fontDropdownRef}>
+          <button
+            class="mini-toolbar-button flex items-center gap-1 min-w-[100px] justify-between"
+            on:click={toggleFontDropdown}
+            title="Font Family"
+            disabled={!editable}
+          >
+            <span class="truncate">{fontOptions.find(f => f.value === selectedFontFamily)?.label ?? selectedFontFamily}</span>
+            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          {#if isFontDropdownOpen}
+            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+              {#each fontOptions as option}
+                <div
+                  class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
+                  on:click={() => applyFontFamily(option.value)}
+                  style="font-family: {option.value}"
+                  role="menuitem"
+                  tabindex="-1"
+                >
+                  {option.label}
                 </div>
               {/each}
             </div>
