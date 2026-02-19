@@ -98,12 +98,3 @@
   font-display: swap;
   src: url('./comic-neue-700.ttf') format('truetype');
 }
-
-/* Gloria Hallelujah */
-@font-face {
-  font-family: 'Gloria Hallelujah';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./gloria-hallelujah.ttf') format('truetype');
-}
