@@ -224,7 +224,8 @@
       colorDropdownRef,
       highlightDropdownRef,
       searchOptionsDropdownRef,
-      fontDropdownRef
+      fontDropdownRef,
+      fontSizeDropdownRef
     ];
 
     let clickedInside = false;
@@ -243,6 +244,7 @@
       isHighlightDropdownOpen = false;
       showSearchOptionsDropdown = false;
       isFontDropdownOpen = false;
+      isFontSizeDropdownOpen = false;
     }
   }
 
@@ -360,6 +362,10 @@
     { label: 'Console', value: 'Monaco, Consolas, "Lucida Console", monospace' },
   ];
 
+  const fontSizeOptions = [
+    '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '26px', '28px', '30px', '32px', '36px', '40px', '48px', '64px', '72px', '96px'
+  ];
+
   const alignmentOptions = [ { value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }, { value: 'justify', label: 'Justify' } ];
   const alignmentIcons = {
     left:    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM3 8h10v2H3V8zM3 12h14v2H3v-2zM3 16h10v2H3v-2z" clip-rule="evenodd"/></svg>`,
@@ -388,6 +394,21 @@
     if (!editor || !isReady || !editor.isEditable()) return;
     applyStyle('font-family', fontFamily);
     isFontDropdownOpen = false;
+  }
+
+  let selectedFontSize = '15px';
+  let isFontSizeDropdownOpen = false;
+  let fontSizeDropdownRef;
+
+  function toggleFontSizeDropdown() {
+    if (!editable) return;
+    isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
+  }
+
+  function applyFontSize(fontSize) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    applyStyle('font-size', fontSize);
+    isFontSizeDropdownOpen = false;
   }
 
   const colorOptions = [
@@ -1074,6 +1095,7 @@
     selectedTextColor = '#000000';
     selectedHighlightColor = 'transparent';
     selectedFontFamily = 'Inter';
+    selectedFontSize = '15px';
 
     if (_isRangeSelection(selection)) {
       isBold = selection.hasFormat('bold');
@@ -1083,6 +1105,7 @@
       selectedTextColor = _getSelectionStyleValueForProperty(selection, 'color', '#000000') || '#000000';
       selectedHighlightColor = _getSelectionStyleValueForProperty(selection, 'background-color', 'transparent') || 'transparent';
       selectedFontFamily = _getSelectionStyleValueForProperty(selection, 'font-family', 'Inter') || 'Inter';
+      selectedFontSize = _getSelectionStyleValueForProperty(selection, 'font-size', '15px') || '15px';
 
       const anchorNode = selection.anchor.getNode();
       if (anchorNode) {
@@ -2523,6 +2546,34 @@ $: if (editor && activeLayout) {
                   tabindex="-1"
                 >
                   {option.label}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="relative" bind:this={fontSizeDropdownRef}>
+          <button
+            class="mini-toolbar-button flex items-center gap-1 min-w-[60px] justify-between"
+            on:click={toggleFontSizeDropdown}
+            title="Font Size"
+            disabled={!editable}
+          >
+            <span class="truncate">{selectedFontSize}</span>
+            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          {#if isFontSizeDropdownOpen}
+            <div class="absolute mt-1 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+              {#each fontSizeOptions as size}
+                <div
+                  class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
+                  on:click={() => applyFontSize(size)}
+                  role="menuitem"
+                  tabindex="-1"
+                >
+                  {size}
                 </div>
               {/each}
             </div>
