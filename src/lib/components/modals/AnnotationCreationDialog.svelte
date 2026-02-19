@@ -123,7 +123,7 @@
 
     // Adjust position to keep dialog within viewport (basic implementation)
     let dialogElement;
-    let dialogWidth = 400; // Increased width for Lexical toolbar
+    let dialogWidth = 500; // Increased width for Lexical toolbar
     let dialogHeight = 200;
 
     $: if (dialogElement && panelBounds) {
@@ -410,17 +410,49 @@
 
 <style lang="postcss">
     .lexical-container {
-        max-height: 200px;
-        min-height: 100px;
+        height: 200px;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
     }
     
+    :global(.lexical-container > .lexical-editor-root) {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
     :global(.lexical-container .toolbar) {
         @apply p-0.5 gap-0.5;
+        flex-shrink: 0;
     }
 
     :global(.lexical-container .lexical-wrapper) {
-        min-height: 60px;
+        min-height: 0;
+        overflow-y: auto !important;
+        flex-grow: 1;
+    }
+
+    /* Scrollbar styles for the Lexical wrapper within the dialog */
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar {
+        @apply w-[8px];
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-track {
+        @apply bg-gray-100 dark:bg-gray-900 rounded-lg;
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-thumb {
+        @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900;
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-500 dark:bg-gray-600;
+    }
+    :global(.lexical-container .lexical-wrapper) {
+        scrollbar-width: thin;
+        scrollbar-color: theme('colors.gray.400') theme('colors.gray.100');
+    }
+    :global(html.dark .lexical-container .lexical-wrapper) {
+        scrollbar-color: theme('colors.gray.700') theme('colors.gray.900');
     }
 </style>

@@ -1267,15 +1267,12 @@
         }
         const normalizedSelection = _getSelection();
         if (_isRangeSelection(normalizedSelection)) {
-            const isDarkMode = document.documentElement.classList.contains('dark');
             const styles = {};
 
             if (colorToApply !== 'transparent') {
                 styles['background-color'] = colorToApply;
-                styles['color'] = isDarkMode ? '#111827' : '#000000';
             } else {
                 styles['background-color'] = null;
-                styles['color'] = null;
             }
 
             _patchStyleText(normalizedSelection, styles);
@@ -2502,7 +2499,7 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm layout-{activeLayout}">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-hidden shadow-sm layout-{activeLayout}">
   {#if editable}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       {#if toolbarConfig.undo}
@@ -2902,7 +2899,7 @@ $: if (editor && activeLayout) {
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 relative"
+    class="lexical-wrapper flex-grow min-h-0 relative overflow-y-auto"
     style="{enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}"
     bind:this={editorWrapper}
   >
