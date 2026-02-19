@@ -350,6 +350,9 @@
                                         const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
                                         if (alignMatch) newStyles.align = alignMatch[1].trim();
 
+                                        const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+                                        if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
+
                                         const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
                                         if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
 
@@ -381,7 +384,8 @@
                                             currentLine = lines[lines.length - 1];
                                             currentX = 0;
                                         } else if (part) {
-                                            ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px Inter, Roboto, Arial, sans-serif`;
+                                            const fontFamily = seg.fontFamily ? `${seg.fontFamily}, Inter, Roboto, Arial, sans-serif` : 'Inter, Roboto, Arial, sans-serif';
+                                            ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
                                             const words = part.split(/(\s+)/);
                                             words.forEach(word => {
                                                 let wordWidth = ctx.measureText(word).width;
@@ -441,7 +445,9 @@
                                     const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + (maxFontSizeInLine * 0.8);
 
                                     line.forEach(seg => {
-                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px Inter, Roboto, Arial, sans-serif`;
+                                        // Use user-selected font if available, otherwise fallback to Inter/system
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, Inter, Roboto, Arial, sans-serif` : 'Inter, Roboto, Arial, sans-serif';
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
                                         
                                         if (seg.highlight && seg.highlight !== 'transparent') {
                                             ctx.fillStyle = seg.highlight;
