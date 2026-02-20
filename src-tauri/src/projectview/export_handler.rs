@@ -116,63 +116,53 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    // Parse CSS styles: color, background-color, font-family, font-size
-                    let mut data_attributes = String::new();
-                    let mut has_specific_bg_color = false;
-
-                    for decl in style_str.split(';') {
-                        let decl = decl.trim();
-                        if decl.is_empty() { continue; }
-
-                        if decl.starts_with("color:") {
-                            let val = decl.trim_start_matches("color:").trim();
-                            data_attributes.push_str(&format!(" data-color=\"{}\"", encode_text(val)));
-                        } else if decl.starts_with("background-color:") {
-                            let val = decl.trim_start_matches("background-color:").trim();
-                            if !val.is_empty() && val != "transparent" {
-                                data_attributes.push_str(&format!(" data-bg-color=\"{}\"", encode_text(val)));
-                                has_specific_bg_color = true;
-                            }
-                        } else if decl.starts_with("font-family:") {
-                            let val = decl.trim_start_matches("font-family:").trim();
-                            // Split by comma first to isolate the primary font
-                            let val = val.split(',').next().unwrap_or(val).trim();
-                            // Then remove quotes from that specific font name
-                            let val = val.trim_matches('"').trim_matches('\'');
-                            data_attributes.push_str(&format!(" data-font-family=\"{}\"", encode_text(val)));
-                        } else if decl.starts_with("font-size:") {
-                            let val = decl.trim_start_matches("font-size:").trim();
-                            data_attributes.push_str(&format!(" data-font-size=\"{}\"", encode_text(val)));
+                    // Parse CSS style for color, background-color, and font-family
+                    let mut text_color: Option<&str> = None;
+                    let mut font_family: Option<&str> = None;
+                    let mut has_highlight_flag = format_flags & IS_HIGHLIGHT != 0;
+                    for decl in style_str.split(';').map(str::trim) {
+                        if let Some(value) = decl.strip_prefix("color:") {
+                            text_color = Some(value.trim());
+                        } else if let Some(value) = decl.strip_prefix("font-family:") {
+                            font_family = Some(value.trim());
+                        } else if let Some(_) = decl.strip_prefix("background-color:") {
+                            has_highlight_flag = true;
                         }
-                    }
-
-                    // Handle IS_HIGHLIGHT flag fallback (default yellow highlight if no specific bg color provided)
-                    if (format_flags & IS_HIGHLIGHT != 0) && !has_specific_bg_color {
-                        data_attributes.push_str(" data-bg-color=\"#ffff00\"");
                     }
 
                     let escaped_text = encode_text(text_content);
 
-                    // Open span with data attributes if any
-                    let has_data_attrs = !data_attributes.is_empty();
-                    if has_data_attrs {
-                        html.push_str(&format!("<span{}>", data_attributes));
+                    // Open highlight tag if needed
+                    if has_highlight_flag {
+                        html.push_str("<mark>");
                     }
-
-                    // Open format tags (<b>, <i>, etc.)
+                    // Open font family span if needed
+                    if let Some(family) = font_family {
+                        html.push_str(&format!("<span style=\"font-family: {};\">", encode_text(family)));
+                    }
+                    // Open font color tag if needed
+                    if let Some(color) = text_color {
+                        html.push_str(&format!("<font color=\"{}\">", encode_text(color)));
+                    }
+                    // Open format tags
                     html.push_str(&format_tags_to_open);
-
                     // Insert the actual text
                     html.push_str(&escaped_text);
-
                     // Close format tags
                     while let Some(tag) = format_tags_to_close.pop() {
                         html.push_str(tag);
                     }
-
-                    // Close span if used
-                    if has_data_attrs {
+                    // Close font tag if used
+                    if text_color.is_some() {
+                        html.push_str("</font>");
+                    }
+                    // Close font family span if used
+                    if font_family.is_some() {
                         html.push_str("</span>");
+                    }
+                    // Close highlight tag if used
+                    if has_highlight_flag {
+                        html.push_str("</mark>");
                     }
                 }
             }
@@ -551,29 +541,18 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
     let reference_doc_path = app_handle.path()
-       .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-       .ok();
-
-    // if reference_doc_path.is_some() {
-    //    warn!("[export_transcript_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
-    // }
-
-    let lua_filter_path = app_handle.path()
-        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::from(format!("Failed to resolve docx_styles.lua path: {}", e)))?;
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
-        "--lua-filter".to_string(),
-        lua_filter_path.to_string_lossy().to_string(),
     ];
 
-    // Optional: Re-enable reference doc if needed for table layout, but noted it causes Compatibility Mode
     if let Some(ref_path) = reference_doc_path {
-       pandoc_args.push("--reference-doc".to_string());
-       pandoc_args.push(ref_path.to_string_lossy().to_string());
+        pandoc_args.push("--reference-doc".to_string());
+        pandoc_args.push(ref_path.to_string_lossy().to_string());
     }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
@@ -1842,29 +1821,18 @@ pub async fn export_document_to_docx<R: Runtime>(
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
     let reference_doc_path = app_handle.path()
-       .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-       .ok();
-
-    // if reference_doc_path.is_some() {
-    //    warn!("[export_document_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
-    // }
-
-    let lua_filter_path = app_handle.path()
-        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::from(format!("Failed to resolve docx_styles.lua path: {}", e)))?;
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
-        "--lua-filter".to_string(),
-        lua_filter_path.to_string_lossy().to_string(),
     ];
 
-    // Optional: Re-enable reference doc if needed for table layout
     if let Some(ref_path) = reference_doc_path {
-       pandoc_args.push("--reference-doc".to_string());
-       pandoc_args.push(ref_path.to_string_lossy().to_string());
+        pandoc_args.push("--reference-doc".to_string());
+        pandoc_args.push(ref_path.to_string_lossy().to_string());
     }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
