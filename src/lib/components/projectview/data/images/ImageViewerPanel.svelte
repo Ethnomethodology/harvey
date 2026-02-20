@@ -376,6 +376,12 @@
                                 let currentLine = lines[0];
                                 let currentX = 0;
 
+                                // Reduce line height multiplier to reduce spacing
+                                const LINE_HEIGHT_MULTIPLIER = 1.3;
+
+                                // Reduce effective width slightly to ensure wrapping happens slightly earlier than edge to avoid clipping
+                                const effectiveAvailableW = Math.max(1, availableW - 2);
+
                                 segments.forEach(seg => {
                                     const parts = seg.text.split(/(\n)/);
                                     parts.forEach(part => {
@@ -386,14 +392,18 @@
                                         } else if (part) {
                                             const fontFamily = seg.fontFamily ? `${seg.fontFamily}, Inter, Roboto, Arial, sans-serif` : 'Inter, Roboto, Arial, sans-serif';
                                             ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+
+                                            // Split by space but keep delimiters to measure spaces correctly
                                             const words = part.split(/(\s+)/);
                                             words.forEach(word => {
+                                                // Measure with a tiny buffer to account for sub-pixel rendering differences
                                                 let wordWidth = ctx.measureText(word).width;
+
                                                 // Handle very long words (break-word)
-                                                if (wordWidth > availableW && word.trim() !== "") {
+                                                if (wordWidth > effectiveAvailableW && word.trim() !== "") {
                                                     for (const char of word) {
                                                         const charWidth = ctx.measureText(char).width;
-                                                        if (currentX + charWidth > availableW && currentX > 0) {
+                                                        if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
                                                             lines.push([]);
                                                             currentLine = lines[lines.length - 1];
                                                             currentX = 0;
@@ -402,13 +412,28 @@
                                                         currentX += charWidth;
                                                     }
                                                 } else {
-                                                    if (currentX + wordWidth > availableW && currentX > 0 && word.trim() !== "") {
+                                                    // Wrap if adding this word exceeds width
+                                                    // Special handling for spaces: only wrap if the space ITSELF doesn't fit?
+                                                    // No, standard greedy: if it doesn't fit, wrap.
+                                                    // However, we don't start a new line just for a trailing space usually.
+                                                    // But splitting by (\s+) gives us " " as a word.
+
+                                                    const isSpace = /^\s+$/.test(word);
+
+                                                    if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
                                                         lines.push([]);
                                                         currentLine = lines[lines.length - 1];
                                                         currentX = 0;
                                                     }
-                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
-                                                    currentX += wordWidth;
+
+                                                    // If it's a space at the start of a new line, we can skip it visually or include it with 0 width?
+                                                    // Standard behavior is to swallow leading space on new line.
+                                                    if (currentX === 0 && isSpace) {
+                                                        // Skip leading space on new line
+                                                    } else {
+                                                        currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                        currentX += wordWidth;
+                                                    }
                                                 }
                                             });
                                         }
@@ -419,8 +444,8 @@
 
                                 // Vertical Layout
                                 const lineHeights = lines.map(line => {
-                                    if (line.length === 0) return baseFontSize * 1.5;
-                                    return Math.max(...line.map(s => s.fontSize), baseFontSize) * 1.5;
+                                    if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                                    return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
                                 });
                                 const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
 
@@ -433,7 +458,7 @@
                                     
                                     // For horizontal centering/right-align, ignore trailing whitespace
                                     let visibleLine = [...line];
-                                    while(visibleLine.length > 0 && visibleLine[visibleLine.length-1].text.trim() === "") visibleLine.pop();
+                                    while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
                                     const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
                                     
                                     let lineX;
@@ -442,6 +467,10 @@
                                     else lineX = startX;
 
                                     const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+
+                                    // Baseline calculation: center text in line height
+                                    // distance from top of line box to baseline = (h - fontHeight)/2 + ascent
+                                    // approximating ascent as 0.8 * fontSize
                                     const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + (maxFontSizeInLine * 0.8);
 
                                     line.forEach(seg => {
@@ -451,6 +480,7 @@
                                         
                                         if (seg.highlight && seg.highlight !== 'transparent') {
                                             ctx.fillStyle = seg.highlight;
+                                            // Adjust highlight rect to match new line height logic
                                             ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.8, seg.width, seg.fontSize * 1.1);
                                         }
 
