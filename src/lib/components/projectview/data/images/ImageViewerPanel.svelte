@@ -487,9 +487,9 @@
 
                                     if (seg.highlight && seg.highlight !== 'transparent') {
                                         ctx.fillStyle = seg.highlight;
-                                        // Increase highlight height to match UI appearance (taller than font size)
-                                        // Adjusted to cover more vertical space, reducing apparent line gap
-                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.95, seg.width, seg.fontSize * 1.2);
+                                        // Increase highlight height further to match UI appearance (significantly taller than font size)
+                                        // This effectively doubles the vertical padding around the glyph
+                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 1.1, seg.width, seg.fontSize * 1.4);
                                     }
 
                                     ctx.fillStyle = seg.color || baseColor;
