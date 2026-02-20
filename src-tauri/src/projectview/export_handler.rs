@@ -135,10 +135,10 @@ fn append_node_html(node: &Value, html: &mut String) {
                             }
                         } else if decl.starts_with("font-family:") {
                             let val = decl.trim_start_matches("font-family:").trim();
-                            // Remove quotes if present and ensure it is a clean string
-                            let val = val.trim_matches('"').trim_matches('\'');
-                            // If multiple fonts are listed (e.g. "Arial, sans-serif"), take only the first one
+                            // Split by comma first to isolate the primary font
                             let val = val.split(',').next().unwrap_or(val).trim();
+                            // Then remove quotes from that specific font name
+                            let val = val.trim_matches('"').trim_matches('\'');
                             data_attributes.push_str(&format!(" data-font-family=\"{}\"", encode_text(val)));
                         } else if decl.starts_with("font-size:") {
                             let val = decl.trim_start_matches("font-size:").trim();
