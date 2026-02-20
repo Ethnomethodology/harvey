@@ -117,7 +117,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
                     // Parse CSS styles: color, background-color, font-family, font-size
-                    let mut style_decls = Vec::new();
+                    let mut data_attributes = String::new();
                     let mut has_specific_bg_color = false;
 
                     for decl in style_str.split(';') {
@@ -125,31 +125,36 @@ fn append_node_html(node: &Value, html: &mut String) {
                         if decl.is_empty() { continue; }
 
                         if decl.starts_with("color:") {
-                            style_decls.push(decl.to_string());
+                            let val = decl.trim_start_matches("color:").trim();
+                            data_attributes.push_str(&format!(" data-color=\"{}\"", encode_text(val)));
                         } else if decl.starts_with("background-color:") {
                             let val = decl.trim_start_matches("background-color:").trim();
                             if !val.is_empty() && val != "transparent" {
-                                style_decls.push(decl.to_string());
+                                data_attributes.push_str(&format!(" data-bg-color=\"{}\"", encode_text(val)));
                                 has_specific_bg_color = true;
                             }
                         } else if decl.starts_with("font-family:") {
-                            style_decls.push(decl.to_string());
+                            let val = decl.trim_start_matches("font-family:").trim();
+                            // Remove quotes if present
+                            let val = val.trim_matches('"').trim_matches('\'');
+                            data_attributes.push_str(&format!(" data-font-family=\"{}\"", encode_text(val)));
                         } else if decl.starts_with("font-size:") {
-                            style_decls.push(decl.to_string());
+                            let val = decl.trim_start_matches("font-size:").trim();
+                            data_attributes.push_str(&format!(" data-font-size=\"{}\"", encode_text(val)));
                         }
                     }
 
                     // Handle IS_HIGHLIGHT flag fallback (default yellow highlight if no specific bg color provided)
                     if (format_flags & IS_HIGHLIGHT != 0) && !has_specific_bg_color {
-                        style_decls.push("background-color: #ffff00".to_string());
+                        data_attributes.push_str(" data-bg-color=\"#ffff00\"");
                     }
 
                     let escaped_text = encode_text(text_content);
 
-                    // Open span with consolidated styles if any
-                    let has_styles = !style_decls.is_empty();
-                    if has_styles {
-                        html.push_str(&format!("<span style=\"{}\">", encode_text(&style_decls.join("; "))));
+                    // Open span with data attributes if any
+                    let has_data_attrs = !data_attributes.is_empty();
+                    if has_data_attrs {
+                        html.push_str(&format!("<span{}>", data_attributes));
                     }
 
                     // Open format tags (<b>, <i>, etc.)
@@ -164,7 +169,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                     }
 
                     // Close span if used
-                    if has_styles {
+                    if has_data_attrs {
                         html.push_str("</span>");
                     }
                 }
@@ -543,24 +548,31 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    // let reference_doc_path = app_handle.path()
-    //    .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-    //    .ok();
+    let reference_doc_path = app_handle.path()
+       .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+       .ok();
 
     // if reference_doc_path.is_some() {
     //    warn!("[export_transcript_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
     // }
 
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve docx_styles.lua path: {}", e)))?;
+
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
+        "--lua-filter".to_string(),
+        lua_filter_path.to_string_lossy().to_string(),
     ];
 
-    // if let Some(ref_path) = reference_doc_path {
-    //    pandoc_args.push("--reference-doc".to_string());
-    //    pandoc_args.push(ref_path.to_string_lossy().to_string());
-    // }
+    // Optional: Re-enable reference doc if needed for table layout, but noted it causes Compatibility Mode
+    if let Some(ref_path) = reference_doc_path {
+       pandoc_args.push("--reference-doc".to_string());
+       pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
@@ -1827,24 +1839,31 @@ pub async fn export_document_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    // let reference_doc_path = app_handle.path()
-    //    .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-    //    .ok();
+    let reference_doc_path = app_handle.path()
+       .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+       .ok();
 
     // if reference_doc_path.is_some() {
     //    warn!("[export_document_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
     // }
 
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve docx_styles.lua path: {}", e)))?;
+
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
+        "--lua-filter".to_string(),
+        lua_filter_path.to_string_lossy().to_string(),
     ];
 
-    // if let Some(ref_path) = reference_doc_path {
-    //    pandoc_args.push("--reference-doc".to_string());
-    //    pandoc_args.push(ref_path.to_string_lossy().to_string());
-    // }
+    // Optional: Re-enable reference doc if needed for table layout
+    if let Some(ref_path) = reference_doc_path {
+       pandoc_args.push("--reference-doc".to_string());
+       pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
