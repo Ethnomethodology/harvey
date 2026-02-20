@@ -176,24 +176,20 @@ function create_openxml_run(item, styles)
   end
   if styles.bg_color then
     local c = styles.bg_color:gsub('#', '')
-    -- Try highlighting with w:highlight first if it's a standard color, or fallback to w:shd
-    -- For broad support of custom colors, w:shd is correct, but let's try strict w:highlight for yellow if detected
-    if c:lower() == "ffff00" or c:lower() == "yellow" then
-        xml = xml .. '<w:highlight w:val="yellow"/>'
-    else
-        xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
-    end
+    -- Force w:shd for everything to ensure custom colors work.
+    -- w:highlight is too restrictive (only supports ~15 presets).
+    -- Word renders w:shd as "Character Shading" which looks like highlight.
+    xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
   end
   if styles.font_family then
-    -- Ensure complex script and east asia fonts are also set or nulled to force the custom font
-    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '"/>'
+    -- Set ALL font slots to the target font to force override.
+    -- w:eastAsia is important for some versions of Word/locales.
+    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '"/>'
   end
   if styles.font_size then
     local size_val = styles.font_size:gsub('pt', ''):gsub('px', '')
     local size_num = tonumber(size_val)
     if size_num then
-        -- Correct calculation: OpenXML w:sz is in half-points.
-        -- If input is 12pt, output should be 24.
         local half_points = math.floor(size_num * 2)
         xml = xml .. '<w:sz w:val="' .. half_points .. '"/>'
         xml = xml .. '<w:szCs w:val="' .. half_points .. '"/>'
