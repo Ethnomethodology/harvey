@@ -116,53 +116,56 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    // Parse CSS style for color, background-color, and font-family
-                    let mut text_color: Option<&str> = None;
-                    let mut font_family: Option<&str> = None;
-                    let mut has_highlight_flag = format_flags & IS_HIGHLIGHT != 0;
-                    for decl in style_str.split(';').map(str::trim) {
-                        if let Some(value) = decl.strip_prefix("color:") {
-                            text_color = Some(value.trim());
-                        } else if let Some(value) = decl.strip_prefix("font-family:") {
-                            font_family = Some(value.trim());
-                        } else if let Some(_) = decl.strip_prefix("background-color:") {
-                            has_highlight_flag = true;
+                    // Parse CSS styles: color, background-color, font-family, font-size
+                    let mut style_decls = Vec::new();
+                    let mut has_specific_bg_color = false;
+
+                    for decl in style_str.split(';') {
+                        let decl = decl.trim();
+                        if decl.is_empty() { continue; }
+
+                        if decl.starts_with("color:") {
+                            style_decls.push(decl.to_string());
+                        } else if decl.starts_with("background-color:") {
+                            let val = decl.trim_start_matches("background-color:").trim();
+                            if !val.is_empty() && val != "transparent" {
+                                style_decls.push(decl.to_string());
+                                has_specific_bg_color = true;
+                            }
+                        } else if decl.starts_with("font-family:") {
+                            style_decls.push(decl.to_string());
+                        } else if decl.starts_with("font-size:") {
+                            style_decls.push(decl.to_string());
                         }
+                    }
+
+                    // Handle IS_HIGHLIGHT flag fallback (default yellow highlight if no specific bg color provided)
+                    if (format_flags & IS_HIGHLIGHT != 0) && !has_specific_bg_color {
+                        style_decls.push("background-color: #ffff00".to_string());
                     }
 
                     let escaped_text = encode_text(text_content);
 
-                    // Open highlight tag if needed
-                    if has_highlight_flag {
-                        html.push_str("<mark>");
+                    // Open span with consolidated styles if any
+                    let has_styles = !style_decls.is_empty();
+                    if has_styles {
+                        html.push_str(&format!("<span style=\"{}\">", encode_text(&style_decls.join("; "))));
                     }
-                    // Open font family span if needed
-                    if let Some(family) = font_family {
-                        html.push_str(&format!("<span style=\"font-family: {};\">", encode_text(family)));
-                    }
-                    // Open font color tag if needed
-                    if let Some(color) = text_color {
-                        html.push_str(&format!("<font color=\"{}\">", encode_text(color)));
-                    }
-                    // Open format tags
+
+                    // Open format tags (<b>, <i>, etc.)
                     html.push_str(&format_tags_to_open);
+
                     // Insert the actual text
                     html.push_str(&escaped_text);
+
                     // Close format tags
                     while let Some(tag) = format_tags_to_close.pop() {
                         html.push_str(tag);
                     }
-                    // Close font tag if used
-                    if text_color.is_some() {
-                        html.push_str("</font>");
-                    }
-                    // Close font family span if used
-                    if font_family.is_some() {
+
+                    // Close span if used
+                    if has_styles {
                         html.push_str("</span>");
-                    }
-                    // Close highlight tag if used
-                    if has_highlight_flag {
-                        html.push_str("</mark>");
                     }
                 }
             }
@@ -543,6 +546,10 @@ pub async fn export_transcript_to_docx<R: Runtime>(
     let reference_doc_path = app_handle.path()
         .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
         .ok();
+
+    if reference_doc_path.is_some() {
+        warn!("[export_transcript_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
+    }
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
@@ -1823,6 +1830,10 @@ pub async fn export_document_to_docx<R: Runtime>(
     let reference_doc_path = app_handle.path()
         .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
         .ok();
+
+    if reference_doc_path.is_some() {
+        warn!("[export_document_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
+    }
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
