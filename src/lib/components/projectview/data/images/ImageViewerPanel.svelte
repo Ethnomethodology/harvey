@@ -213,8 +213,7 @@
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
-                    // Polygon does not support text in this version
-                    if (s === 'polygon') continue;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
 
                     const body = annotation.body || [];
                     const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
@@ -488,7 +487,9 @@
 
                                     if (seg.highlight && seg.highlight !== 'transparent') {
                                         ctx.fillStyle = seg.highlight;
-                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.8, seg.width, seg.fontSize);
+                                        // Increase highlight height to match UI appearance (taller than font size)
+                                        // Adjusted to cover more vertical space, reducing apparent line gap
+                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.95, seg.width, seg.fontSize * 1.2);
                                     }
 
                                     ctx.fillStyle = seg.color || baseColor;
