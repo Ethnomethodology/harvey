@@ -90,6 +90,32 @@
         selectedAnnotationId = null;
     }
 
+    function fixHtmlForDisplay(html) {
+        if (!html) return html;
+        if (typeof document === 'undefined') return html; // SSR check
+        try {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            // Find elements with text decoration
+            const underlines = div.querySelectorAll('u, s, strike, del');
+            underlines.forEach(u => {
+                // If the element has a child span with color, inherit that color for decoration
+                const colorSpan = u.querySelector('span[style*="color"]');
+                if (colorSpan) {
+                    const style = colorSpan.getAttribute('style');
+                    const colorMatch = style.match(/color:\s*([^;]+)/);
+                    if (colorMatch) {
+                        u.style.textDecorationColor = colorMatch[1];
+                    }
+                }
+            });
+            return div.innerHTML;
+        } catch (e) {
+            console.error("Error fixing HTML for display:", e);
+            return html;
+        }
+    }
+
     async function handleExportImage(event) {
         const { filePath, includeAnnotations } = event.detail;
         if (!osdViewer || !currentAssetUrl) return;
@@ -183,27 +209,23 @@
                     ctx.putImageData(imageData, safeX, safeY);
                 };
 
+                // Pass 1: Draw Shapes
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
-                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+                    // Polygon does not support text in this version
+                    if (s === 'polygon') continue;
 
                     const body = annotation.body || [];
                     const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
-                    const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
                     const borderColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor');
                     const borderSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize');
-                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
-                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
 
                     const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)';
                     const strokeColor = borderColorBody ? borderColorBody.value : (fillColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : adjustOpacity(fillColor, 1));
                     const strokeWidth = borderSizeBody ? parseFloat(borderSizeBody.value) : 1;
 
-                    // 1. Prepare Path in Pixel Space
                     let path = new Path2D();
-                    
                     const matrix = new DOMMatrix();
                     matrix.a = sx; 
                     matrix.d = sy;
@@ -228,58 +250,62 @@
                         }
                     }
 
-                    // 2. Handle Censored vs Normal
                     if (s === 'censored' || s === 'censored-circle') {
                         if (s === 'censored') {
                             pixelateRegion(shapeData.x * S * sx, shapeData.y * S * sy, shapeData.width * S * sx, shapeData.height * S * sy);
                         } else {
-                            // Circular censorship: Use fallback draw-clip-pixelate method
+                            // Circular censorship
                             const bboxX = (shapeData.cx - shapeData.r) * S * sx;
                             const bboxY = (shapeData.cy - shapeData.r) * S * sy;
                             const bboxW = shapeData.r * 2 * S * sx;
                             const bboxH = shapeData.r * 2 * S * sy;
                             
-                            // Safe bounds
                             const safeX = Math.max(0, bboxX);
                             const safeY = Math.max(0, bboxY);
                             const safeW = Math.min(width - safeX, bboxW - (safeX - bboxX));
                             const safeH = Math.min(height - safeY, bboxH - (safeY - py));
 
                             if (safeW > 0 && safeH > 0) {
-                                // Extract original image data for the bounding box
                                 const tempC = document.createElement('canvas');
                                 tempC.width = safeW; tempC.height = safeH;
                                 const tCtx = tempC.getContext('2d');
                                 tCtx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, safeW, safeH);
-                                
-                                // Pixelate it
-                                // (Reuse logic or draw small)
                                 tCtx.imageSmoothingEnabled = false;
                                 const smallW = Math.max(1, safeW/20);
                                 const smallH = Math.max(1, safeH/20);
                                 tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
-                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH); // scale back up
+                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH);
 
-                                // Draw back to main canvas with clip
                                 ctx.save();
-                                ctx.clip(path); // Use the elliptical path defined earlier
+                                ctx.clip(path);
                                 ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
                                 ctx.restore();
                             }
                         }
                     } else {
-                        // Normal Shape Draw
                         ctx.fillStyle = fillColor;
                         ctx.fill(path);
                         ctx.strokeStyle = strokeColor;
                         ctx.lineWidth = strokeWidth * Math.min(sx, sy); 
                         ctx.stroke(path);
                     }
+                }
 
-                    // 3. Draw Text
+                // Pass 2: Draw Text (Overlay)
+                for (const annotation of annotations) {
+                    const shapeData = annotation.target.selector.value;
+                    const s = shapeData.shape;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+
+                    const body = annotation.body || [];
+                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
+                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
+                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
+
                     if ((textBody && textBody.value) || htmlBody) {
-                        const fontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
-                        const textColor = textColorBody ? textColorBody.value : 'black';
+                        const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
+                        const defaultTextColor = textColorBody ? textColorBody.value : 'black';
                         
                         let tx, ty, tw, th;
                         if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
@@ -288,245 +314,217 @@
                             tw = shapeData.width * S * sx;
                             th = shapeData.height * S * sy;
                         } else {
-                            tx = (shapeData.cx - shapeData.r) * S * sx;
-                            ty = (shapeData.cy - shapeData.r) * S * sy;
-                            tw = shapeData.r * 2 * S * sx;
-                            th = shapeData.r * 2 * S * sy;
+                            // Use inscribed square for text in circles to prevent overflow
+                            const side = shapeData.r * Math.sqrt(2);
+                            tx = (shapeData.cx - side / 2) * S * sx;
+                            ty = (shapeData.cy - side / 2) * S * sy;
+                            tw = side * S * sx;
+                            th = side * S * sy;
                         }
 
-                        // 3. Draw Rich Text via Canvas
-                        if ((textBody && textBody.value) || htmlBody) {
-                            const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
-                            const defaultTextColor = textColorBody ? textColorBody.value : 'black';
+                        // Re-create path for clipping in this second pass
+                        let path = new Path2D();
+                        const matrix = new DOMMatrix();
+                        matrix.a = sx; matrix.d = sy;
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+                            path.rect(tx, ty, tw, th);
+                        } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
+                            path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
+                        } else if (s.startsWith('speech-bubble')) {
+                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
+                        }
+
+                        // Secure Canvas Rich Text Renderer
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html || '', 'text/html');
                             
-                            let tx, ty, tw, th;
-                            if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
-                                tx = shapeData.x * S * sx;
-                                ty = shapeData.y * S * sy;
-                                tw = shapeData.width * S * sx;
-                                th = shapeData.height * S * sy;
-                            } else {
-                                tx = (shapeData.cx - shapeData.r) * S * sx;
-                                ty = (shapeData.cy - shapeData.r) * S * sy;
-                                tw = shapeData.r * 2 * S * sx;
-                                th = shapeData.r * 2 * S * sy;
-                            }
+                            const p = padding * Math.min(sx, sy);
+                            const availableW = width - (p * 2);
+                            const availableH = height - (p * 2);
+                            const startX = x + p;
+                            const startY_box = y + p;
 
-                            // Secure Canvas Rich Text Renderer
-                            const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(html || '', 'text/html');
-                                
-                                const p = padding * Math.min(sx, sy);
-                                const availableW = width - (p * 2);
-                                const availableH = height - (p * 2);
-                                const startX = x + p;
-                                const startY_box = y + p;
+                            if (availableW <= 0 || availableH <= 0) return;
 
-                                if (availableW <= 0 || availableH <= 0) return;
+                            const segments = [];
+                            const walk = (node, styles) => {
+                                if (node.nodeType === Node.TEXT_NODE) {
+                                    if (node.textContent) segments.push({ text: node.textContent, ...styles });
+                                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                    const newStyles = { ...styles };
+                                    const tag = node.tagName.toLowerCase();
+                                    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
 
-                                // Flatten DOM to styled segments
-                                const segments = [];
-                                const walk = (node, styles) => {
-                                    if (node.nodeType === Node.TEXT_NODE) {
-                                        if (node.textContent) segments.push({ text: node.textContent, ...styles });
-                                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                                        const newStyles = { ...styles };
-                                        const tag = node.tagName.toLowerCase();
-                                        const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
+                                    if (tag === 'strong' || tag === 'b') newStyles.bold = true;
+                                    if (tag === 'em' || tag === 'i') newStyles.italic = true;
+                                    if (tag === 'u') newStyles.underline = true;
+                                    if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
 
-                                        if (tag === 'strong' || tag === 'b') newStyles.bold = true;
-                                        if (tag === 'em' || tag === 'i') newStyles.italic = true;
-                                        if (tag === 'u') newStyles.underline = true;
-                                        if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
-                                        
-                                        const styleAttr = node.getAttribute('style') || '';
-                                        const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
-                                        if (textDecMatch) {
-                                            if (textDecMatch[1].includes('underline')) newStyles.underline = true;
-                                            if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
-                                        }
-                                        const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
-                                        if (colorMatch) newStyles.color = colorMatch[1].trim();
-                                        
-                                        const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
-                                        if (bgMatch) newStyles.highlight = bgMatch[1].trim();
+                                    const styleAttr = node.getAttribute('style') || '';
+                                    const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
+                                    if (textDecMatch) {
+                                        if (textDecMatch[1].includes('underline')) newStyles.underline = true;
+                                        if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
+                                    }
+                                    const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
+                                    if (colorMatch) newStyles.color = colorMatch[1].trim();
 
-                                        const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
-                                        if (alignMatch) newStyles.align = alignMatch[1].trim();
+                                    const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
+                                    if (bgMatch) newStyles.highlight = bgMatch[1].trim();
 
-                                        const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-                                        if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
+                                    const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
+                                    if (alignMatch) newStyles.align = alignMatch[1].trim();
 
-                                        const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
-                                        if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
+                                    const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+                                    if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
 
-                                        if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+                                    const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
+                                    if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
 
-                                        node.childNodes.forEach(child => walk(child, newStyles));
-                                        
-                                        if (isBlock) {
-                                            const lastChild = node.lastChild;
-                                            const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
-                                            if (!endsWithBr) {
-                                                segments.push({ text: '\n', ...newStyles });
-                                            }
+                                    if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+
+                                    node.childNodes.forEach(child => walk(child, newStyles));
+
+                                    if (isBlock) {
+                                        const lastChild = node.lastChild;
+                                        const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
+                                        if (!endsWithBr) {
+                                            segments.push({ text: '\n', ...newStyles });
                                         }
                                     }
-                                };
-                                walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
+                                }
+                            };
+                            walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
 
-                                // Word Wrap & Layout
-                                const lines = [[]];
-                                let currentLine = lines[0];
-                                let currentX = 0;
+                            // Word Wrap & Layout
+                            const lines = [[]];
+                            let currentLine = lines[0];
+                            let currentX = 0;
 
-                                // Standard line height multiplier
-                                const LINE_HEIGHT_MULTIPLIER = 1.5;
+                            const LINE_HEIGHT_MULTIPLIER = 1.5;
+                            const effectiveAvailableW = Math.max(1, availableW);
 
-                                // Reduce effective width slightly to ensure wrapping happens slightly earlier than edge to avoid clipping
-                                const effectiveAvailableW = Math.max(1, availableW);
+                            segments.forEach(seg => {
+                                const parts = seg.text.split(/(\n)/);
+                                parts.forEach(part => {
+                                    if (part === '\n') {
+                                        lines.push([]);
+                                        currentLine = lines[lines.length - 1];
+                                        currentX = 0;
+                                    } else if (part) {
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
 
-                                segments.forEach(seg => {
-                                    const parts = seg.text.split(/(\n)/);
-                                    parts.forEach(part => {
-                                        if (part === '\n') {
-                                            lines.push([]);
-                                            currentLine = lines[lines.length - 1];
-                                            currentX = 0;
-                                        } else if (part) {
-                                            const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                            ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                        const words = part.split(/(\s+)/);
+                                        words.forEach(word => {
+                                            let wordWidth = ctx.measureText(word).width;
 
-                                            // Split by space but keep delimiters to measure spaces correctly
-                                            const words = part.split(/(\s+)/);
-                                            words.forEach(word => {
-                                                // Measure with a tiny buffer to account for sub-pixel rendering differences
-                                                let wordWidth = ctx.measureText(word).width;
-
-                                                // Handle very long words (break-word)
-                                                if (wordWidth > effectiveAvailableW && word.trim() !== "") {
-                                                    for (const char of word) {
-                                                        const charWidth = ctx.measureText(char).width;
-                                                        if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
-                                                            lines.push([]);
-                                                            currentLine = lines[lines.length - 1];
-                                                            currentX = 0;
-                                                        }
-                                                        currentLine.push({ ...seg, text: char, width: charWidth });
-                                                        currentX += charWidth;
-                                                    }
-                                                } else {
-                                                    // Wrap if adding this word exceeds width
-                                                    // Special handling for spaces: only wrap if the space ITSELF doesn't fit?
-                                                    // No, standard greedy: if it doesn't fit, wrap.
-                                                    // However, we don't start a new line just for a trailing space usually.
-                                                    // But splitting by (\s+) gives us " " as a word.
-
-                                                    const isSpace = /^\s+$/.test(word);
-
-                                                    if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                            if (wordWidth > effectiveAvailableW && word.trim() !== "") {
+                                                for (const char of word) {
+                                                    const charWidth = ctx.measureText(char).width;
+                                                    if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
                                                         lines.push([]);
                                                         currentLine = lines[lines.length - 1];
                                                         currentX = 0;
                                                     }
-
-                                                    // If it's a space at the start of a new line, we can skip it visually or include it with 0 width?
-                                                    // Standard behavior is to swallow leading space on new line.
-                                                    if (currentX === 0 && isSpace) {
-                                                        // Skip leading space on new line
-                                                    } else {
-                                                        currentLine.push({ ...seg, text: word, width: wordWidth });
-                                                        currentX += wordWidth;
-                                                    }
+                                                    currentLine.push({ ...seg, text: char, width: charWidth });
+                                                    currentX += charWidth;
                                                 }
-                                            });
-                                        }
-                                    });
+                                            } else {
+                                                const isSpace = /^\s+$/.test(word);
+                                                if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                                    lines.push([]);
+                                                    currentLine = lines[lines.length - 1];
+                                                    currentX = 0;
+                                                }
+                                                if (currentX === 0 && isSpace) {
+                                                } else {
+                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                    currentX += wordWidth;
+                                                }
+                                            }
+                                        });
+                                    }
                                 });
+                            });
 
-                                if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+                            if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
 
-                                // Vertical Layout
-                                const lineHeights = lines.map(line => {
-                                    if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
-                                    // Use a simpler approach: line height is determined by the max font size on the line
-                                    // But we clamp it slightly more to match standard browser rendering if needed
-                                    return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
+                            // Vertical Layout
+                            const lineHeights = lines.map(line => {
+                                if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                                return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
+                            });
+                            const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+
+                            let currentY = startY_box + (availableH - totalHeight) / 2;
+
+                            lines.forEach((line, i) => {
+                                const h = lineHeights[i];
+                                const lineAlign = line[0]?.align || 'center';
+
+                                let visibleLine = [...line];
+                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
+                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+
+                                let lineX;
+                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                                else lineX = startX;
+
+                                // Alphabetic baseline
+                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                // Center the visual line content within the line box height (h)
+                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
+                                // Easier approximation for vertical center:
+                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+
+                                line.forEach(seg => {
+                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    ctx.textBaseline = 'alphabetic';
+
+                                    if (seg.highlight && seg.highlight !== 'transparent') {
+                                        ctx.fillStyle = seg.highlight;
+                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.8, seg.width, seg.fontSize);
+                                    }
+
+                                    ctx.fillStyle = seg.color || baseColor;
+                                    ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                    if (seg.underline) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
+
+                                    if (seg.strikethrough) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
+                                    lineX += seg.width;
                                 });
-                                const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+                                currentY += h;
+                            });
+                        };
 
-                                let currentY = startY_box + (availableH - totalHeight) / 2;
-
-                                lines.forEach((line, i) => {
-                                    const h = lineHeights[i];
-                                    const lineAlign = line[0]?.align || 'center';
-                                    
-                                    // For horizontal centering/right-align, ignore trailing whitespace
-                                    let visibleLine = [...line];
-                                    while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
-                                    const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
-                                    
-                                    let lineX;
-                                    if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
-                                    else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
-                                    else lineX = startX;
-
-                                    // Use middle baseline for simpler centering
-                                    const lineCenterY = currentY + (h / 2);
-
-                                    line.forEach(seg => {
-                                        // Use 'sans-serif' to match the UI's default font stack more closely
-                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
-                                        ctx.textBaseline = 'middle';
-                                        
-                                        if (seg.highlight && seg.highlight !== 'transparent') {
-                                            ctx.fillStyle = seg.highlight;
-                                            // Highlight rect centered on lineCenterY
-                                            ctx.fillRect(lineX, lineCenterY - (h / 2), seg.width, h);
-                                        }
-
-                                        ctx.fillStyle = seg.color || baseColor;
-                                        ctx.fillText(seg.text, lineX, lineCenterY);
-
-                                        if (seg.underline) {
-                                            ctx.strokeStyle = ctx.fillStyle;
-                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                            ctx.beginPath();
-                                            // Underline is slightly below baseline. Baseline is roughly lineCenterY + fontSize/3
-                                            // Or relative to middle: middle + fontSize/2
-                                            const yPos = lineCenterY + (seg.fontSize * 0.4);
-                                            ctx.moveTo(lineX, yPos);
-                                            ctx.lineTo(lineX + seg.width, yPos);
-                                            ctx.stroke();
-                                        }
-
-                                        if (seg.strikethrough) {
-                                            ctx.strokeStyle = ctx.fillStyle;
-                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                            ctx.beginPath();
-                                            ctx.moveTo(lineX, lineCenterY);
-                                            ctx.lineTo(lineX + seg.width, lineCenterY);
-                                            ctx.stroke();
-                                        }
-                                        lineX += seg.width;
-                                    });
-                                    currentY += h;
-                                });
-                            };
-
-                            ctx.save();
-                            // Clip to the shape boundary
-                            // Re-create the path for clipping if needed, or use the one we just filled
-                            // 'path' variable holds the current shape path in pixel space
-                            ctx.clip(path);
-
-                            const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
-                            const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
-                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                            ctx.restore();
-                        }
+                        ctx.save();
+                        ctx.clip(path);
+                        const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
+                        const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                        ctx.restore();
                     }
                 }
             }
@@ -1895,7 +1893,7 @@
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
                                 <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
-                                        {@html htmlBody.value}
+                                        {@html fixHtmlForDisplay(htmlBody.value)}
                                     {:else if textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))}
                                         <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
                                     {/if}
@@ -1903,11 +1901,12 @@
                             </div>
                         </foreignObject>
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle' || shapeData.shape === 'text-area-circle'}
-                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
-                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
+                        {@const side = shapeData.r * Math.sqrt(2) * S}
+                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx * S) - (side / 2)} y={(shapeData.cy * S) - (side / 2)} width={side} height={side} class="pointer-events-none">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
                                 <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
-                                        {@html htmlBody.value}
+                                        {@html fixHtmlForDisplay(htmlBody.value)}
                                     {:else if textBody && !textBody.value.startsWith('{"root":')}
                                         <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
                                     {/if}
