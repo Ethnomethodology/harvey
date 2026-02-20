@@ -176,15 +176,23 @@ function create_openxml_run(item, styles)
   end
   if styles.bg_color then
     local c = styles.bg_color:gsub('#', '')
-    -- Force w:shd for everything to ensure custom colors work.
-    -- w:highlight is too restrictive (only supports ~15 presets).
-    -- Word renders w:shd as "Character Shading" which looks like highlight.
+    -- Use w:shd for custom colors
     xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
+    -- ALSO try w:highlight if it looks like a standard color, as a fallback visibility
+    if c:lower() == "ffff00" or c:lower() == "yellow" then
+        xml = xml .. '<w:highlight w:val="yellow"/>'
+    elseif c:lower() == "00ff00" or c:lower() == "lime" then
+        xml = xml .. '<w:highlight w:val="green"/>'
+    elseif c:lower() == "00ffff" or c:lower() == "cyan" then
+        xml = xml .. '<w:highlight w:val="cyan"/>'
+    elseif c:lower() == "ff00ff" or c:lower() == "magenta" then
+        xml = xml .. '<w:highlight w:val="magenta"/>'
+    end
   end
   if styles.font_family then
-    -- Set ALL font slots to the target font to force override.
-    -- w:eastAsia is important for some versions of Word/locales.
-    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '"/>'
+    -- Explicitly clear theme attributes to prevent Word from falling back to the theme font (e.g. Arial/Calibri)
+    -- and enforce the specific font name.
+    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '" w:asciiTheme="" w:hAnsiTheme="" w:cstheme="" w:eastAsiaTheme=""/>'
   end
   if styles.font_size then
     local size_val = styles.font_size:gsub('pt', ''):gsub('px', '')
