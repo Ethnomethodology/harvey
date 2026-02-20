@@ -1,8 +1,5 @@
 function Span(el)
   -- Parse styles from data- attributes which we will populate in Rust
-  -- Or strictly from style attribute if we stick to one approach.
-  -- But standard HTML reader strips many styles.
-  -- We will use data- attributes for reliable parsing.
 
   local color = el.attributes['data-color']
   local bg_color = el.attributes['data-bg-color']
@@ -12,94 +9,6 @@ function Span(el)
   if not (color or bg_color or font_family or font_size) then
     return nil
   end
-
-  -- Start building OpenXML Run Properties
-  local openxml = '<w:rPr>'
-
-  if color then
-    -- Remove # if present
-    color = color:gsub('#', '')
-    openxml = openxml .. '<w:color w:val="' .. color .. '"/>'
-  end
-
-  if bg_color then
-    bg_color = bg_color:gsub('#', '')
-    -- w:shd is more flexible than w:highlight (which is limited to specific colors)
-    openxml = openxml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. bg_color .. '"/>'
-  end
-
-  if font_family then
-    openxml = openxml .. '<w:rFonts w:ascii="' .. font_family .. '" w:hAnsi="' .. font_family .. '"/>'
-  end
-
-  if font_size then
-    -- Convert pts to half-points (1/144 inch)
-    -- Assuming input is like "14pt" or "14"
-    local size_val = font_size:gsub('pt', ''):gsub('px', '') -- simple cleanup
-    local size_num = tonumber(size_val)
-    if size_num then
-        local half_points = math.floor(size_num * 2)
-        openxml = openxml .. '<w:sz w:val="' .. half_points .. '"/>'
-        openxml = openxml .. '<w:szCs w:val="' .. half_points .. '"/>'
-    end
-  end
-
-  openxml = openxml .. '</w:rPr>'
-
-  -- Wrap content in a RawInline with OpenXML
-  -- We need to ensure the inner content is processed by Pandoc first?
-  -- No, injecting Raw OpenXML effectively replaces standard rendering for this span's container.
-  -- But we want to preserve nested formatting (bold, italic) which are standard.
-  --
-  -- Pandoc's docx writer is tricky with RawBlock/RawInline.
-  -- Best approach for modifying properties of an existing run is actually Custom Styles,
-  -- but those are paragraph-level or character styles defined in reference doc.
-  --
-  -- To apply arbitrary inline formatting without defined styles, we must emit Raw OpenXML.
-  -- BUT, if we emit <w:r>, we must also emit the text content inside <w:t>.
-  -- And we must recursively process the children (el.content).
-
-  local inner_xml = ""
-  for _, item in ipairs(el.content) do
-    if item.t == 'Str' then
-      inner_xml = inner_xml .. '<w:t xml:space="preserve">' .. escape_xml(item.text) .. '</w:t>'
-    elseif item.t == 'Space' then
-      inner_xml = inner_xml .. '<w:t xml:space="preserve"> </w:t>'
-    elseif item.t == 'Strong' then
-       -- This gets complicated fast. Nested Bold inside our color span.
-       -- A pure Lua filter outputting RawXML has to handle ALL nesting manually.
-       -- Alternatively, can we just set attributes that Pandoc natively understands?
-       -- No, Pandoc ignores color/font.
-    else
-       -- Fallback for simple text
-       if item.text then
-         inner_xml = inner_xml .. '<w:t>' .. escape_xml(item.text) .. '</w:t>'
-       end
-    end
-  end
-
-  -- Since reimplementing full DOCX serialization for nested nodes (Bold, Italic) in Lua is hard,
-  -- A better strategy:
-  -- Output the <w:rPr> ... </w:rPr> at the start of the run?
-  -- No, in DOCX, properties must be inside the <w:r>.
-
-  -- SIMPLIFIED STRATEGY for this task:
-  -- The user states Bold/Italic/Underline work.
-  -- We are adding Color/Font/Size.
-  -- We can output a RawInline that opens a group with properties? No, DOCX doesn't stack like HTML.
-
-  -- Workaround:
-  -- We will rely on the fact that these are leaf nodes (Text) in our specific Lexical conversion logic.
-  -- In `export_handler.rs`, we handle Bold/Italic/Underline by generating <b>, <i> tags.
-  -- If we generate <span data-color="..."><b>Text</b></span>, Pandoc sees Span > Strong > Str.
-
-  -- If we use a Lua filter, we can walk the tree.
-  -- If we find a Span with data-color, we can traverse its children.
-  -- For every String (Str) inside, we convert it to a RawInline('openxml', ...)
-  -- that contains the <w:r> <w:rPr> [our colors] [bold/italic from context?] <w:t>text</w:t> </w:r>
-
-  -- Detecting Bold/Italic context in Lua filter:
-  -- We can write a recursive function that carries formatting state.
 
   return process_content(el.content, {
     color = color,
@@ -161,24 +70,65 @@ function create_openxml_run(item, styles)
   if item.t == 'Str' then text = item.text
   elseif item.t == 'Space' then text = " " end
 
+  -- Strict OpenXML Order for w:rPr children:
+  -- 1. rFonts
+  -- 2. b
+  -- 3. i
+  -- 4. strike
+  -- 5. color
+  -- 6. sz, szCs
+  -- 7. highlight
+  -- 8. u
+  -- 9. shd
+  -- 10. vertAlign
+
   local xml = '<w:r>'
   xml = xml .. '<w:rPr>'
 
-  if styles.bold then xml = xml .. '<w:b/>' end
-  if styles.italic then xml = xml .. '<w:i/>' end
-  if styles.underline then xml = xml .. '<w:u w:val="single"/>' end
-  if styles.strike then xml = xml .. '<w:strike/>' end
-  if styles.vertAlign then xml = xml .. '<w:vertAlign w:val="' .. styles.vertAlign .. '"/>' end
+  -- 1. rFonts
+  if styles.font_family then
+    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '" w:asciiTheme="" w:hAnsiTheme="" w:cstheme="" w:eastAsiaTheme=""/>'
+  end
 
+  -- 2. b
+  if styles.bold then xml = xml .. '<w:b/>' end
+
+  -- 3. i
+  if styles.italic then xml = xml .. '<w:i/>' end
+
+  -- 4. strike
+  if styles.strike then xml = xml .. '<w:strike/>' end
+
+  -- 5. color
   if styles.color then
     local c = styles.color:gsub('#', '')
     xml = xml .. '<w:color w:val="' .. c .. '"/>'
   end
+
+  -- 6. sz
+  if styles.font_size then
+    local size_val_str = styles.font_size:gsub('pt', '')
+    local is_px = size_val_str:find('px')
+    size_val_str = size_val_str:gsub('px', '')
+
+    local size_num = tonumber(size_val_str)
+    if size_num then
+        local half_points
+        if is_px then
+            -- 1px ~= 0.75pt. 1pt = 2 half-points.
+            -- 1px = 1.5 half-points.
+            half_points = math.floor(size_num * 1.5)
+        else
+            half_points = math.floor(size_num * 2)
+        end
+        xml = xml .. '<w:sz w:val="' .. half_points .. '"/>'
+        xml = xml .. '<w:szCs w:val="' .. half_points .. '"/>'
+    end
+  end
+
+  -- 7. highlight
   if styles.bg_color then
     local c = styles.bg_color:gsub('#', '')
-    -- Use w:shd for custom colors
-    xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
-    -- ALSO try w:highlight if it looks like a standard color, as a fallback visibility
     if c:lower() == "ffff00" or c:lower() == "yellow" then
         xml = xml .. '<w:highlight w:val="yellow"/>'
     elseif c:lower() == "00ff00" or c:lower() == "lime" then
@@ -189,20 +139,18 @@ function create_openxml_run(item, styles)
         xml = xml .. '<w:highlight w:val="magenta"/>'
     end
   end
-  if styles.font_family then
-    -- Explicitly clear theme attributes to prevent Word from falling back to the theme font (e.g. Arial/Calibri)
-    -- and enforce the specific font name.
-    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '" w:asciiTheme="" w:hAnsiTheme="" w:cstheme="" w:eastAsiaTheme=""/>'
+
+  -- 8. u
+  if styles.underline then xml = xml .. '<w:u w:val="single"/>' end
+
+  -- 9. shd
+  if styles.bg_color then
+    local c = styles.bg_color:gsub('#', '')
+    xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
   end
-  if styles.font_size then
-    local size_val = styles.font_size:gsub('pt', ''):gsub('px', '')
-    local size_num = tonumber(size_val)
-    if size_num then
-        local half_points = math.floor(size_num * 2)
-        xml = xml .. '<w:sz w:val="' .. half_points .. '"/>'
-        xml = xml .. '<w:szCs w:val="' .. half_points .. '"/>'
-    end
-  end
+
+  -- 10. vertAlign
+  if styles.vertAlign then xml = xml .. '<w:vertAlign w:val="' .. styles.vertAlign .. '"/>' end
 
   xml = xml .. '</w:rPr>'
   xml = xml .. '<w:t xml:space="preserve">' .. escape_xml(text) .. '</w:t>'
