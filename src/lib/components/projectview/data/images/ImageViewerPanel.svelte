@@ -487,9 +487,27 @@
 
                                     if (seg.highlight && seg.highlight !== 'transparent') {
                                         ctx.fillStyle = seg.highlight;
-                                        // Increase highlight height further to match UI appearance (significantly taller than font size)
-                                        // This effectively doubles the vertical padding around the glyph
-                                        ctx.fillRect(lineX, lineBaseline - seg.fontSize * 1.1, seg.width, seg.fontSize * 1.4);
+
+                                        // Hybrid Approach for Robustness:
+                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+
+                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                        const m = ctx.measureText(seg.text);
+                                        // Use a small safety padding for ink (10% of font size)
+                                        const safetyPadding = seg.fontSize * 0.1;
+
+                                        // 3. Expand if the ink pokes out
+                                        // Note: actualBoundingBoxAscent is distance UP from baseline
+                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+
+                                        const finalTop = Math.min(standardTop, inkTop);
+                                        const finalBottom = Math.max(standardBottom, inkBottom);
+
+                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
                                     }
 
                                     ctx.fillStyle = seg.color || baseColor;
