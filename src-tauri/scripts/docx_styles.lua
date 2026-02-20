@@ -87,7 +87,7 @@ function create_openxml_run(item, styles)
 
   -- 1. rFonts
   if styles.font_family then
-    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '" w:asciiTheme="" w:hAnsiTheme="" w:cstheme="" w:eastAsiaTheme=""/>'
+    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '"/>'
   end
 
   -- 2. b
