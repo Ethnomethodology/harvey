@@ -401,6 +401,7 @@
                             const lines = [[]];
                             let currentLine = lines[0];
                             let currentX = 0;
+                            let isSoftWrap = false; // Track if the current line started due to a soft wrap
 
                             const LINE_HEIGHT_MULTIPLIER = 1.5;
                             const effectiveAvailableW = Math.max(1, availableW);
@@ -412,6 +413,7 @@
                                         lines.push([]);
                                         currentLine = lines[lines.length - 1];
                                         currentX = 0;
+                                        isSoftWrap = false; // Explicit newline, preserve leading spaces
                                     } else if (part) {
                                         const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
                                         ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
@@ -427,6 +429,7 @@
                                                         lines.push([]);
                                                         currentLine = lines[lines.length - 1];
                                                         currentX = 0;
+                                                        isSoftWrap = true;
                                                     }
                                                     currentLine.push({ ...seg, text: char, width: charWidth });
                                                     currentX += charWidth;
@@ -437,8 +440,13 @@
                                                     lines.push([]);
                                                     currentLine = lines[lines.length - 1];
                                                     currentX = 0;
+                                                    isSoftWrap = true;
                                                 }
-                                                if (currentX === 0 && isSpace) {
+
+                                                // Only skip leading spaces if they are a result of a soft wrap.
+                                                // Preserve them if they follow an explicit newline.
+                                                if (currentX === 0 && isSpace && isSoftWrap) {
+                                                    // Skip leading space on wrapped line
                                                 } else {
                                                     currentLine.push({ ...seg, text: word, width: wordWidth });
                                                     currentX += wordWidth;
