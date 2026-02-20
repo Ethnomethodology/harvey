@@ -341,6 +341,11 @@
                                         if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
                                         
                                         const styleAttr = node.getAttribute('style') || '';
+                                        const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
+                                        if (textDecMatch) {
+                                            if (textDecMatch[1].includes('underline')) newStyles.underline = true;
+                                            if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
+                                        }
                                         const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
                                         if (colorMatch) newStyles.color = colorMatch[1].trim();
                                         
@@ -376,11 +381,11 @@
                                 let currentLine = lines[0];
                                 let currentX = 0;
 
-                                // Reduce line height multiplier to reduce spacing
-                                const LINE_HEIGHT_MULTIPLIER = 1.3;
+                                // Standard line height multiplier
+                                const LINE_HEIGHT_MULTIPLIER = 1.5;
 
                                 // Reduce effective width slightly to ensure wrapping happens slightly earlier than edge to avoid clipping
-                                const effectiveAvailableW = Math.max(1, availableW - 2);
+                                const effectiveAvailableW = Math.max(1, availableW);
 
                                 segments.forEach(seg => {
                                     const parts = seg.text.split(/(\n)/);
@@ -390,7 +395,7 @@
                                             currentLine = lines[lines.length - 1];
                                             currentX = 0;
                                         } else if (part) {
-                                            const fontFamily = seg.fontFamily ? `${seg.fontFamily}, Inter, Roboto, Arial, sans-serif` : 'Inter, Roboto, Arial, sans-serif';
+                                            const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
                                             ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
 
                                             // Split by space but keep delimiters to measure spaces correctly
@@ -445,12 +450,13 @@
                                 // Vertical Layout
                                 const lineHeights = lines.map(line => {
                                     if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                                    // Use a simpler approach: line height is determined by the max font size on the line
+                                    // But we clamp it slightly more to match standard browser rendering if needed
                                     return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
                                 });
                                 const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
 
                                 let currentY = startY_box + (availableH - totalHeight) / 2;
-                                ctx.textBaseline = 'alphabetic';
 
                                 lines.forEach((line, i) => {
                                     const h = lineHeights[i];
@@ -466,33 +472,33 @@
                                     else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
                                     else lineX = startX;
 
-                                    const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
-
-                                    // Baseline calculation: center text in line height
-                                    // distance from top of line box to baseline = (h - fontHeight)/2 + ascent
-                                    // approximating ascent as 0.8 * fontSize
-                                    const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + (maxFontSizeInLine * 0.8);
+                                    // Use middle baseline for simpler centering
+                                    const lineCenterY = currentY + (h / 2);
 
                                     line.forEach(seg => {
-                                        // Use user-selected font if available, otherwise fallback to Inter/system
-                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, Inter, Roboto, Arial, sans-serif` : 'Inter, Roboto, Arial, sans-serif';
+                                        // Use 'sans-serif' to match the UI's default font stack more closely
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
                                         ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                        ctx.textBaseline = 'middle';
                                         
                                         if (seg.highlight && seg.highlight !== 'transparent') {
                                             ctx.fillStyle = seg.highlight;
-                                            // Adjust highlight rect to match new line height logic
-                                            ctx.fillRect(lineX, lineBaseline - seg.fontSize * 0.8, seg.width, seg.fontSize * 1.1);
+                                            // Highlight rect centered on lineCenterY
+                                            ctx.fillRect(lineX, lineCenterY - (h / 2), seg.width, h);
                                         }
 
                                         ctx.fillStyle = seg.color || baseColor;
-                                        ctx.fillText(seg.text, lineX, lineBaseline);
+                                        ctx.fillText(seg.text, lineX, lineCenterY);
 
                                         if (seg.underline) {
                                             ctx.strokeStyle = ctx.fillStyle;
                                             ctx.lineWidth = Math.max(1, seg.fontSize / 15);
                                             ctx.beginPath();
-                                            ctx.moveTo(lineX, lineBaseline + seg.fontSize * 0.15);
-                                            ctx.lineTo(lineX + seg.width, lineBaseline + seg.fontSize * 0.15);
+                                            // Underline is slightly below baseline. Baseline is roughly lineCenterY + fontSize/3
+                                            // Or relative to middle: middle + fontSize/2
+                                            const yPos = lineCenterY + (seg.fontSize * 0.4);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
                                             ctx.stroke();
                                         }
 
@@ -500,8 +506,8 @@
                                             ctx.strokeStyle = ctx.fillStyle;
                                             ctx.lineWidth = Math.max(1, seg.fontSize / 15);
                                             ctx.beginPath();
-                                            ctx.moveTo(lineX, lineBaseline - seg.fontSize * 0.3);
-                                            ctx.lineTo(lineX + seg.width, lineBaseline - seg.fontSize * 0.3);
+                                            ctx.moveTo(lineX, lineCenterY);
+                                            ctx.lineTo(lineX + seg.width, lineCenterY);
                                             ctx.stroke();
                                         }
                                         lineX += seg.width;
@@ -510,10 +516,16 @@
                                 });
                             };
 
-                            ctx.textBaseline = 'alphabetic';
+                            ctx.save();
+                            // Clip to the shape boundary
+                            // Re-create the path for clipping if needed, or use the one we just filled
+                            // 'path' variable holds the current shape path in pixel space
+                            ctx.clip(path);
+
                             const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
                             const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
                             renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                            ctx.restore();
                         }
                     }
                 }
@@ -1881,7 +1893,7 @@
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
                         <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
-                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
                                         {@html htmlBody.value}
                                     {:else if textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))}
@@ -1893,7 +1905,7 @@
                     {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle' || shapeData.shape === 'text-area-circle'}
                         <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
-                                <div style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
                                     {#if htmlBody}
                                         {@html htmlBody.value}
                                     {:else if textBody && !textBody.value.startsWith('{"root":')}
@@ -2046,5 +2058,14 @@
 
     button.active {
         @apply bg-blue-500 text-white;
+    }
+
+    /* Fix for underline/strikethrough color in annotation text */
+    :global(.annotation-text u),
+    :global(.annotation-text s),
+    :global(.annotation-text strike),
+    :global(.annotation-text del),
+    :global(.annotation-text span) {
+        text-decoration-color: currentColor;
     }
 </style>
