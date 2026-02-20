@@ -543,13 +543,13 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let reference_doc_path = app_handle.path()
-        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-        .ok();
+    // let reference_doc_path = app_handle.path()
+    //    .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+    //    .ok();
 
-    if reference_doc_path.is_some() {
-        warn!("[export_transcript_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
-    }
+    // if reference_doc_path.is_some() {
+    //    warn!("[export_transcript_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
+    // }
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
@@ -557,10 +557,10 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         "docx".to_string(),
     ];
 
-    if let Some(ref_path) = reference_doc_path {
-        pandoc_args.push("--reference-doc".to_string());
-        pandoc_args.push(ref_path.to_string_lossy().to_string());
-    }
+    // if let Some(ref_path) = reference_doc_path {
+    //    pandoc_args.push("--reference-doc".to_string());
+    //    pandoc_args.push(ref_path.to_string_lossy().to_string());
+    // }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
@@ -1827,13 +1827,13 @@ pub async fn export_document_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let reference_doc_path = app_handle.path()
-        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-        .ok();
+    // let reference_doc_path = app_handle.path()
+    //    .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+    //    .ok();
 
-    if reference_doc_path.is_some() {
-        warn!("[export_document_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
-    }
+    // if reference_doc_path.is_some() {
+    //    warn!("[export_document_to_docx] Using reference DOCX. If the output opens in Compatibility Mode, it may be due to the version of this reference file.");
+    // }
 
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
@@ -1841,10 +1841,10 @@ pub async fn export_document_to_docx<R: Runtime>(
         "docx".to_string(),
     ];
 
-    if let Some(ref_path) = reference_doc_path {
-        pandoc_args.push("--reference-doc".to_string());
-        pandoc_args.push(ref_path.to_string_lossy().to_string());
-    }
+    // if let Some(ref_path) = reference_doc_path {
+    //    pandoc_args.push("--reference-doc".to_string());
+    //    pandoc_args.push(ref_path.to_string_lossy().to_string());
+    // }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
