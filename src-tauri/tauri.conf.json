@@ -53,6 +53,7 @@
     "resources": [
       "third_party_licenses",
       "scripts/*",
+      "assets/*",
       "sidecars",
       "binaries",
       "python"
