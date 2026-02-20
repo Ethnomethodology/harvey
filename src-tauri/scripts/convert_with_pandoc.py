@@ -4,7 +4,7 @@ import sys
 import os
 import argparse
 
-def convert_file(input_file, output_file, to_format, reference_doc=None):
+def convert_file(input_file, output_file, to_format, reference_doc=None, extra_pandoc_args=None):
     """
     Converts a file from one format to another using pypandoc.
     """
@@ -22,6 +22,12 @@ def convert_file(input_file, output_file, to_format, reference_doc=None):
             print(f"Using reference document: {reference_doc}")
             extra_args.append(f"--reference-doc={reference_doc}")
 
+        if extra_pandoc_args:
+            # extra_pandoc_args comes as a list from argparse.REMAINDER
+            # We append them to the existing extra_args list
+            print(f"Appending extra args: {extra_pandoc_args}")
+            extra_args.extend(extra_pandoc_args)
+
         pypandoc.convert_file(input_file, to_format, outputfile=output_file, extra_args=extra_args)
         
         print(f"Successfully converted file and saved to {output_file}")
@@ -36,6 +42,8 @@ if __name__ == "__main__":
     parser.add_argument("output", help="Output file path")
     parser.add_argument("format", help="Target format")
     parser.add_argument("--reference-doc", help="Optional reference DOCX for styling")
+    # Capture all unknown args to pass to pandoc (like --lua-filter)
+    parser.add_argument('extra_args', nargs=argparse.REMAINDER, help="Extra arguments for pandoc")
     
     args = parser.parse_args()
 
@@ -43,4 +51,4 @@ if __name__ == "__main__":
         print(f"Error: Input file not found at {args.input}", file=sys.stderr)
         sys.exit(1)
         
-    convert_file(args.input, args.output, args.format, args.reference_doc)
+    convert_file(args.input, args.output, args.format, args.reference_doc, args.extra_args)
