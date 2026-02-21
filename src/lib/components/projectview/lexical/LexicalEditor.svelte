@@ -80,7 +80,7 @@
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
 
-  import { HorizontalRuleNode, $createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
+  import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
 
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
@@ -902,7 +902,7 @@
                     const focusNode = selection.focus.getNode();
 
                     if (focusNode !== null) {
-                        const horizontalRuleNode = $createHorizontalRuleNode();
+                        const horizontalRuleNode = _createHorizontalRuleNode();
                         _insertNodes([horizontalRuleNode]);
                     }
                 });
