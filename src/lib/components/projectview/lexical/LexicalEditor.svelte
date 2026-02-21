@@ -427,18 +427,23 @@
   function applyFontSize(fontSize) {
     if (!editor || !isReady || !editor.isEditable()) return;
 
-    // If we have a saved selection (from input focus), restore it first
-    if (savedSelection) {
-        editor.update(() => {
+    editor.update(() => {
+        // If we have a saved selection (from input interaction), restore it first within the same update cycle
+        if (savedSelection) {
             _setSelection(savedSelection);
-        });
-    }
+        }
 
-    applyStyle('font-size', fontSize + 'px');
+        const selection = _getSelection();
+        if (_isTableSelection(selection)) {
+            _normalizeSelection(selection);
+        }
+        const normalizedSelection = _getSelection();
+        if (_isRangeSelection(normalizedSelection)) {
+            _patchStyleText(normalizedSelection, { 'font-size': fontSize + 'px' });
+        }
+    });
+
     isFontSizeDropdownOpen = false;
-
-    // Clear saved selection after applying
-    // savedSelection = null; // Optional: depending on if we want to keep applying to same selection while input is focused
   }
 
   function handleFontSizeInput(event) {
@@ -2666,6 +2671,7 @@ $: if (editor && activeLayout) {
               class="w-10 text-xs text-center bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 p-0 h-full appearance-none [-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
               value={selectedFontSize}
               on:pointerdown={saveEditorSelection}
+              on:blur={() => { savedSelection = null; }}
               on:change={handleFontSizeInput}
               on:keydown={handleFontSizeKeydown}
               min="10"
