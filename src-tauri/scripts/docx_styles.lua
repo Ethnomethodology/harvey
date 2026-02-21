@@ -113,6 +113,8 @@ local function map_font_family(font)
     if first == "Comic Sans MS" or first == "Comic Sans" then return "Comic Sans MS" end
     if first == "Arial" or first == "Helvetica" then return "Arial" end
     if first == "Courier New" or first == "Courier" then return "Courier New" end
+    if first == "Courier Prime" then return "Courier Prime" end
+    if first == "Merriweather" then return "Merriweather" end
     -- Consolas is a high-quality modern monospaced font available on Windows and commonly on Mac via Office.
     if first == "Monaco" or first == "Consolas" or first == "Lucida Console" then return "Consolas" end
     
