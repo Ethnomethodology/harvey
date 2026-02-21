@@ -29,6 +29,56 @@ const IS_SUPERSCRIPT: i64 = 1 << 6; // 64
 const IS_HIGHLIGHT: i64 = 1 << 7; // 128
 
 
+fn ensure_hex_color(color: &str) -> Option<String> {
+    let trimmed = color.trim();
+    if trimmed.is_empty() || trimmed == "transparent" {
+        return None;
+    }
+    if trimmed.starts_with('#') {
+        let hex = trimmed.trim_start_matches('#');
+        if hex.len() == 6 {
+            return Some(trimmed.to_uppercase());
+        }
+        if hex.len() == 3 {
+             let r = &hex[0..1];
+             let g = &hex[1..2];
+             let b = &hex[2..3];
+             return Some(format!("#{}{}{}{}{}{}", r, r, g, g, b, b).to_uppercase());
+        }
+    }
+    if let Ok(re) = Regex::new(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)") {
+        if let Some(caps) = re.captures(trimmed) {
+             let r = caps[1].parse::<u8>().unwrap_or(0);
+             let g = caps[2].parse::<u8>().unwrap_or(0);
+             let b = caps[3].parse::<u8>().unwrap_or(0);
+             return Some(format!("#{:02X}{:02X}{:02X}", r, g, b));
+        }
+    }
+    match trimmed.to_lowercase().as_str() {
+        "black" => Some("#000000".to_string()),
+        "white" => Some("#FFFFFF".to_string()),
+        "red" => Some("#FF0000".to_string()),
+        "green" => Some("#00FF00".to_string()),
+        "blue" => Some("#0000FF".to_string()),
+        "yellow" => Some("#FFFF00".to_string()),
+        "magenta" | "fuchsia" => Some("#FF00FF".to_string()),
+        "cyan" | "aqua" => Some("#00FFFF".to_string()),
+        "gray" | "grey" => Some("#808080".to_string()),
+        "orange" => Some("#FFA500".to_string()),
+        "purple" => Some("#800080".to_string()),
+        _ => None,
+    }
+}
+
+fn sanitize_font_family(font: &str) -> Option<String> {
+    let trimmed = font.trim();
+    if trimmed.is_empty() { return None; }
+    let first = trimmed.split(',').next().unwrap_or(trimmed).trim();
+    let sanitized = first.replace("\"", "").replace("'", "");
+    if sanitized.is_empty() { return None; }
+    Some(sanitized)
+}
+
 /// Helper function to generate HTML from a parsed Lexical JSON value.
 fn lexical_value_to_html(value: &Value) -> String {
     let mut html = String::new();
@@ -116,53 +166,65 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    // Parse CSS style for color, background-color, and font-family
-                    let mut text_color: Option<&str> = None;
-                    let mut font_family: Option<&str> = None;
+                    // Parse CSS style for color, background-color, font-family, and font-size
+                    let mut text_color: Option<String> = None;
+                    let mut font_family: Option<String> = None;
+                    let mut font_size: Option<String> = None;
+                    let mut highlight_color: Option<String> = None;
+
                     let mut has_highlight_flag = format_flags & IS_HIGHLIGHT != 0;
+
                     for decl in style_str.split(';').map(str::trim) {
                         if let Some(value) = decl.strip_prefix("color:") {
-                            text_color = Some(value.trim());
+                            text_color = ensure_hex_color(value.trim());
                         } else if let Some(value) = decl.strip_prefix("font-family:") {
-                            font_family = Some(value.trim());
-                        } else if let Some(_) = decl.strip_prefix("background-color:") {
-                            has_highlight_flag = true;
+                            font_family = sanitize_font_family(value.trim());
+                        } else if let Some(value) = decl.strip_prefix("font-size:") {
+                            font_size = Some(value.trim().to_string());
+                        } else if let Some(value) = decl.strip_prefix("background-color:") {
+                            let bg = value.trim();
+                            if !bg.is_empty() && bg != "transparent" {
+                                has_highlight_flag = true;
+                                highlight_color = ensure_hex_color(bg);
+                            }
                         }
                     }
 
-                    let escaped_text = encode_text(text_content);
-
-                    // Open highlight tag if needed
+                    // Prepare data attributes for the Lua filter
+                    let mut span_attrs = String::new();
+                    if let Some(c) = text_color {
+                        span_attrs.push_str(&format!(" data-color=\"{}\"", c));
+                    }
+                    if let Some(f) = font_family {
+                        span_attrs.push_str(&format!(" data-font-family=\"{}\"", encode_text(&f)));
+                    }
+                    if let Some(s) = font_size {
+                        span_attrs.push_str(&format!(" data-font-size=\"{}\"", encode_text(&s)));
+                    }
                     if has_highlight_flag {
-                        html.push_str("<mark>");
+                         let hc = highlight_color.unwrap_or_else(|| "#FFFF00".to_string());
+                         span_attrs.push_str(&format!(" data-highlight=\"{}\"", hc));
                     }
-                    // Open font family span if needed
-                    if let Some(family) = font_family {
-                        html.push_str(&format!("<span style=\"font-family: {};\">", encode_text(family)));
+
+                    // Open wrapper span if attributes exist
+                    if !span_attrs.is_empty() {
+                        html.push_str(&format!("<span{}>", span_attrs));
                     }
-                    // Open font color tag if needed
-                    if let Some(color) = text_color {
-                        html.push_str(&format!("<font color=\"{}\">", encode_text(color)));
-                    }
-                    // Open format tags
+
+                    // Open format tags (B, I, U, S, etc.)
                     html.push_str(&format_tags_to_open);
+
                     // Insert the actual text
-                    html.push_str(&escaped_text);
+                    html.push_str(&encode_text(text_content));
+
                     // Close format tags
                     while let Some(tag) = format_tags_to_close.pop() {
                         html.push_str(tag);
                     }
-                    // Close font tag if used
-                    if text_color.is_some() {
-                        html.push_str("</font>");
-                    }
-                    // Close font family span if used
-                    if font_family.is_some() {
+
+                    // Close wrapper span
+                    if !span_attrs.is_empty() {
                         html.push_str("</span>");
-                    }
-                    // Close highlight tag if used
-                    if has_highlight_flag {
-                        html.push_str("</mark>");
                     }
                 }
             }
@@ -553,6 +615,15 @@ pub async fn export_transcript_to_docx<R: Runtime>(
     if let Some(ref_path) = reference_doc_path {
         pandoc_args.push("--reference-doc".to_string());
         pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
+
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(lua_path) = lua_filter_path {
+        pandoc_args.push("--lua-filter".to_string());
+        pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
@@ -1833,6 +1904,15 @@ pub async fn export_document_to_docx<R: Runtime>(
     if let Some(ref_path) = reference_doc_path {
         pandoc_args.push("--reference-doc".to_string());
         pandoc_args.push(ref_path.to_string_lossy().to_string());
+    }
+
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(lua_path) = lua_filter_path {
+        pandoc_args.push("--lua-filter".to_string());
+        pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
