@@ -352,6 +352,12 @@
         <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z"/>
       </svg>
     ` },
+    { value: 'link', label: 'Link', action: toggleLink, icon: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
+        <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
+        <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
+      </svg>
+    ` },
   ];
 
   const blockTypeIcons = {
@@ -544,7 +550,7 @@
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
-        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
+        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
         table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
@@ -2698,20 +2704,6 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.strikethrough}
         <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough" disabled={!editable}>S</button>
-      {/if}
-      {#if toolbarConfig.link}
-          <button
-            class="mini-toolbar-button"
-            on:click={toggleLink}
-            class:active={isLink}
-            title="Insert/Edit Link ({modLabel}+K)"
-            disabled={!editable}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
-                <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
-                <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
-            </svg>
-          </button>
       {/if}
       {#if toolbarConfig.insertMenu}
         <div class="separator"></div>
