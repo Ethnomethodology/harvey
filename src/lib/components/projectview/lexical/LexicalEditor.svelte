@@ -16,7 +16,8 @@
     $getNearestNodeFromDOMNode as _getNearestNodeFromDOMNode,
     $insertNodes as _insertNodes,
     KEY_TAB_COMMAND,
-    $normalizeSelection__EXPERIMENTAL as _normalizeSelection
+    $normalizeSelection__EXPERIMENTAL as _normalizeSelection,
+    createCommand
   } from 'lexical';
 
   import {
@@ -78,6 +79,8 @@
     $createExtendedTextNode as _createExtendedTextNode,
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
+
+  import { HorizontalRuleNode, $createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
 
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
@@ -164,6 +167,8 @@
   let tableCellMenuPosition = { top: 0, left: 0 };
   let activeTableCellKey = null;
 
+  const INSERT_HORIZONTAL_RULE_COMMAND = createCommand('INSERT_HORIZONTAL_RULE_COMMAND');
+
   let searchUiContainerElement;
   let searchToggleButtonElement;
   let searchInputRef;
@@ -196,7 +201,8 @@
     HeadingNode, QuoteNode, CodeNode,
     ListNode, ListItemNode,
     LinkNode,
-    TableNode, TableRowNode, TableCellNode
+    TableNode, TableRowNode, TableCellNode,
+    HorizontalRuleNode
   ];
 
   function handleShortcut(event) {
@@ -271,6 +277,12 @@
       isInsertDropdownOpen = false;
   }
 
+  function insertHorizontalRule() {
+      if (!editor || !editable) return;
+      editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
+      isInsertDropdownOpen = false;
+  }
+
   function handleInsertTableConfirm(event) {
       if (!editor || !isReady || !editor.isEditable()) return;
       const { rows, columns } = event.detail;
@@ -333,6 +345,11 @@
       { value: 'table', label: 'Table', action: openInsertTableDialog, icon: `
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 bi bi-table" fill="currentColor" viewBox="0 0 16 16">
         <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/>
+      </svg>
+    ` },
+    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, icon: `
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z"/>
       </svg>
     ` },
   ];
@@ -873,7 +890,26 @@
             isFocused = false;
             updateToolbarState();
             return false;
-        }, COMMAND_PRIORITY_LOW)
+        }, COMMAND_PRIORITY_LOW),
+        editor.registerCommand(
+            INSERT_HORIZONTAL_RULE_COMMAND,
+            () => {
+                editor.update(() => {
+                    const selection = _getSelection();
+                    if (!_isRangeSelection(selection)) {
+                        return;
+                    }
+                    const focusNode = selection.focus.getNode();
+
+                    if (focusNode !== null) {
+                        const horizontalRuleNode = $createHorizontalRuleNode();
+                        _insertNodes([horizontalRuleNode]);
+                    }
+                });
+                return true;
+            },
+            COMMAND_PRIORITY_EDITOR
+        )
     );
 
     // Now set the initial state, which will trigger the listener we just registered
