@@ -25,12 +25,43 @@ local function merge_props(current, el)
       if el.attributes['data-color'] then props.color = el.attributes['data-color'] end
       if el.attributes['data-font-family'] then props.font = el.attributes['data-font-family'] end
       if el.attributes['data-font-size'] then props.size = el.attributes['data-font-size'] end
-      if el.attributes['data-highlight'] then props.highlight = el.attributes['data-highlight'] end
+      -- Pandoc might strip 'data-' prefix from 'data-highlight' in some versions or if using specific readers
+      if el.attributes['data-highlight'] then 
+          props.highlight = el.attributes['data-highlight'] 
+      elseif el.attributes['highlight'] then
+          props.highlight = el.attributes['highlight']
+      end
   elseif el.t == 'Mark' then
       props.highlight = "yellow"
   end
 
   return props
+end
+
+-- Helper to map hex colors to Word's limited set of highlight colors
+local function map_highlight_color(hex)
+    if not hex then return nil end
+    hex = hex:lower():gsub("#", "")
+    
+    -- Exact matches for common Harvey colors or defaults
+    if hex == "ffff00" or hex == "yellow" then return "yellow" end
+    if hex == "00ff00" or hex == "green" or hex == "lime" then return "green" end
+    if hex == "00ffff" or hex == "cyan" or hex == "aqua" then return "cyan" end
+    if hex == "ff00ff" or hex == "magenta" or hex == "fuchsia" then return "magenta" end
+    if hex == "0000ff" or hex == "blue" then return "blue" end
+    if hex == "ff0000" or hex == "red" then return "red" end
+    if hex == "000080" or hex == "darkblue" then return "darkBlue" end
+    if hex == "008080" or hex == "darkcyan" or hex == "teal" then return "darkCyan" end
+    if hex == "008000" or hex == "darkgreen" then return "darkGreen" end
+    if hex == "800080" or hex == "darkmagenta" or hex == "purple" then return "darkMagenta" end
+    if hex == "800000" or hex == "darkred" or hex == "maroon" then return "darkRed" end
+    if hex == "808000" or hex == "darkyellow" or hex == "olive" then return "darkYellow" end
+    if hex == "808080" or hex == "gray" or hex == "grey" then return "lightGray" end
+    if hex == "c0c0c0" or hex == "lightgray" then return "lightGray" end
+    if hex == "000000" or hex == "black" then return "black" end
+    
+    -- Fallback to yellow for any highlight if we can't map it
+    return "yellow"
 end
 
 -- Helper to generate the <w:rPr> string based on properties
@@ -73,9 +104,12 @@ local function generate_rpr(props)
      end
   end
 
-  -- 7. Highlight (Simplified: Always Yellow if present)
+  -- 7. Highlight
   if props.highlight then
-     rPr = rPr .. '<w:highlight w:val="yellow"/>'
+     local word_color = map_highlight_color(props.highlight)
+     if word_color then
+        rPr = rPr .. string.format('<w:highlight w:val="%s"/>', word_color)
+     end
   end
 
   -- 8. Underline
@@ -160,7 +194,7 @@ function Span(el)
   local color = el.attributes['data-color']
   local font = el.attributes['data-font-family']
   local size = el.attributes['data-font-size']
-  local highlight = el.attributes['data-highlight']
+  local highlight = el.attributes['data-highlight'] or el.attributes['highlight']
 
   if color or font or size or highlight then
     local props = {
