@@ -1,5 +1,18 @@
 -- src-tauri/scripts/docx_styles.lua
 
+-- Helper to split a string
+function string:split(sep)
+    local sep, fields = sep or ":", {}
+    local pattern = string.format("([^%s]+)", sep)
+    self:gsub(pattern, function(c) fields[#fields+1] = c end)
+    return fields
+end
+
+-- Helper to trim a string
+function string:trim()
+    return self:match("^%s*(.-)%s*$")
+end
+
 -- Helper to escape XML characters
 local function escape_xml(s)
   if s == nil then return "" end
@@ -79,6 +92,31 @@ local function map_highlight_color(hex)
     return "yellow"
 end
 
+-- Helper to map Lexical font stacks to standard Word font names
+local function map_font_family(font)
+    if not font then return nil end
+    -- Remove quotes and take the first font in the stack
+    local first = font:gsub('["\']', ''):split(',')[1]:trim()
+    
+    -- Mapping for Harvey's specific font options
+    if first == "Inter" then return "Inter" end
+    if first == "Roboto" then return "Roboto" end
+    if first == "Montserrat" then return "Montserrat" end
+    -- Comic Neue might not be installed on many systems, Word will default it. 
+    -- Comic Sans MS is the standard Word alternative if Comic Neue is missing.
+    if first == "Comic Neue" then return "Comic Neue" end
+    if first == "Palatino Linotype" or first == "Palatino" or first == "Book Antiqua" then return "Palatino Linotype" end
+    if first == "Times New Roman" or first == "Times" then return "Times New Roman" end
+    if first == "Calibri" or first == "Candara" or first == "Segoe UI" then return "Calibri" end
+    if first == "Comic Sans MS" or first == "Comic Sans" then return "Comic Sans MS" end
+    if first == "Arial" or first == "Helvetica" then return "Arial" end
+    if first == "Courier New" or first == "Courier" then return "Courier New" end
+    -- Consolas is a high-quality modern monospaced font available on Windows and commonly on Mac via Office.
+    if first == "Monaco" or first == "Consolas" or first == "Lucida Console" then return "Consolas" end
+    
+    return first
+end
+
 -- Helper to generate the <w:rPr> string based on properties
 local function generate_rpr(props)
   local rPr = ""
@@ -89,8 +127,11 @@ local function generate_rpr(props)
 
   -- 1. rFonts
   if props.font then
-     local f = escape_xml(props.font)
-     rPr = rPr .. string.format('<w:rFonts w:ascii="%s" w:hAnsi="%s" w:cs="%s"/>', f, f, f)
+     local mapped_font = map_font_family(props.font)
+     if mapped_font then
+        local f = escape_xml(mapped_font)
+        rPr = rPr .. string.format('<w:rFonts w:ascii="%s" w:hAnsi="%s" w:cs="%s"/>', f, f, f)
+     end
   end
 
   -- 2. Bold
