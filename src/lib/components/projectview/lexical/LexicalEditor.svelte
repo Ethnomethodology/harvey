@@ -420,6 +420,30 @@
     isFontSizeDropdownOpen = false;
   }
 
+  function updateFontSize(delta) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    const currentSize = parseInt(selectedFontSize, 10);
+    const currentIndex = fontSizeOptions.findIndex(opt => parseInt(opt, 10) === currentSize);
+
+    let newSize;
+    if (currentIndex !== -1) {
+        // If current size is in our list, step through the list
+        const newIndex = Math.max(0, Math.min(fontSizeOptions.length - 1, currentIndex + delta));
+        newSize = fontSizeOptions[newIndex];
+    } else {
+        // If obscure size, snap to list or increment?
+        // Let's find nearest in list to snap to valid track
+        const nearest = fontSizeOptions.reduce((prev, curr) => {
+            return (Math.abs(curr - currentSize) < Math.abs(prev - currentSize) ? curr : prev);
+        });
+        const nearestIndex = fontSizeOptions.indexOf(nearest);
+        const newIndex = Math.max(0, Math.min(fontSizeOptions.length - 1, nearestIndex + delta));
+        newSize = fontSizeOptions[newIndex];
+    }
+
+    applyFontSize(newSize);
+  }
+
   const colorOptions = [
     { value: '#000000', label: 'Black' }, { value: '#FF0000', label: 'Red' }, { value: '#000080', label: 'Navy' },
     { value: '#228B22', label: 'Forest Green' }, { value: '#FF8C00', label: 'Dark Orange' }, { value: '#800080', label: 'Purple' },
@@ -2582,20 +2606,33 @@ $: if (editor && activeLayout) {
           {/if}
         </div>
 
-        <div class="relative" bind:this={fontSizeDropdownRef}>
+        <div class="relative flex items-center gap-0.5" bind:this={fontSizeDropdownRef}>
           <button
-            class="mini-toolbar-button flex items-center gap-1 min-w-[48px] justify-between"
+            class="mini-toolbar-button !px-1"
+            on:click={() => updateFontSize(-1)}
+            title="Decrease Font Size"
+            disabled={!editable}
+          >
+            -
+          </button>
+          <button
+            class="mini-toolbar-button flex items-center justify-center min-w-[32px] px-1"
             on:click={toggleFontSizeDropdown}
             title="Font Size"
             disabled={!editable}
           >
             <span class="truncate">{selectedFontSize}</span>
-            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+          </button>
+          <button
+            class="mini-toolbar-button !px-1"
+            on:click={() => updateFontSize(1)}
+            title="Increase Font Size"
+            disabled={!editable}
+          >
+            +
           </button>
           {#if isFontSizeDropdownOpen}
-            <div class="absolute mt-1 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute mt-1 top-full left-0 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontSizeOptions as size}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
