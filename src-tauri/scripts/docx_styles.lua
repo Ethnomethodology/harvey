@@ -102,6 +102,8 @@ local function map_font_family(font)
     if first == "Inter" then return "Inter" end
     if first == "Roboto" then return "Roboto" end
     if first == "Montserrat" then return "Montserrat" end
+    if first == "Bangers" then return "Bangers" end
+    if first == "Indie Flower" then return "Indie Flower" end
     -- Comic Neue might not be installed on many systems, Word will default it. 
     -- Comic Sans MS is the standard Word alternative if Comic Neue is missing.
     if first == "Comic Neue" then return "Comic Neue" end

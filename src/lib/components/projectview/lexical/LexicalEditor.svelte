@@ -351,16 +351,23 @@
 
   const fontOptions = [
     { label: 'Inter', value: 'Inter' },
-    { label: 'Roboto', value: 'Roboto' },
-    { label: 'Montserrat', value: 'Montserrat' },
-    { label: 'Comic Neue', value: "'Comic Neue'" },
-    { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
-    { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
-    { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },
-    { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
+    { label: 'Anton', value: 'Anton' },
     { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
-    { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+    { label: 'Bangers', value: 'Bangers' },
+    { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },
+    { label: 'Comic Neue', value: "'Comic Neue'" },
+    { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
     { label: 'Console', value: 'Monaco, Consolas, "Lucida Console", monospace' },
+    { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+    { label: 'Dancing Script', value: "'Dancing Script'" },
+    { label: 'Indie Flower', value: "'Indie Flower'" },
+    { label: 'JetBrains Mono', value: "'JetBrains Mono'" },
+    { label: 'Montserrat', value: 'Montserrat' },
+    { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
+    { label: 'Playfair Display', value: "'Playfair Display'" },
+    { label: 'Roboto', value: 'Roboto' },
+    { label: 'Roboto Slab', value: "'Roboto Slab'" },
+    { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
   ];
 
   const fontSizeOptions = [
