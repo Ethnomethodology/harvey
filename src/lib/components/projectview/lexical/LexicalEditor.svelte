@@ -63,7 +63,7 @@
   } from '@lexical/table';
 
   import {
-    LinkNode, $isLinkNode as _isLinkNode, TOGGLE_LINK_COMMAND, $createLinkNode as _createLinkNode
+    LinkNode, $isLinkNode as _isLinkNode, TOGGLE_LINK_COMMAND, $createLinkNode as _createLinkNode, toggleLink as _toggleLink
   } from '@lexical/link';
   import {
     $setBlocksType as _setBlocksType, $patchStyleText as _patchStyleText,
@@ -864,24 +864,10 @@
             (payload) => {
                 if (!editor) return false;
                 editor.update(() => {
-                  const selection = _getSelection();
-                  if (_isRangeSelection(selection)) {
-                    if (payload === null) {
-                      const linkNodes = new Set();
-                      selection.getNodes().forEach(node => {
-                        let linkParent = _findMatchingParent(node, _isLinkNode);
-                        if (linkParent) linkNodes.add(linkParent);
-                        if (_isLinkNode(node)) linkNodes.add(node);
-                      });
-                      linkNodes.forEach(linkNode => {
-                        const children = linkNode.getChildren();
-                        children.forEach(child => child.selectNext());
-                        linkNode.replace(...children);
-                      });
-                    } else {
-                        _wrapNodes(selection, () => _createLinkNode(payload));
+                    const selection = _getSelection();
+                    if (_isRangeSelection(selection) || _isTableSelection(selection)) {
+                        _toggleLink(payload);
                     }
-                  }
                 });
                 return true;
             },
