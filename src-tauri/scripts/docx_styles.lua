@@ -17,28 +17,6 @@ local function clone(t)
   return new_t
 end
 
--- OpenXML Standard Highlight Colors (Hex to Name Map)
--- We only support these standard values for <w:highlight w:val="..."/>
--- Anything else is treated as a custom color requiring <w:shd>.
-local highlight_map = {
-  ["FFFF00"] = "yellow",
-  ["00FF00"] = "green",
-  ["00FFFF"] = "cyan",
-  ["FF00FF"] = "magenta",
-  ["0000FF"] = "blue",
-  ["FF0000"] = "red",
-  ["000080"] = "darkBlue",
-  ["008080"] = "darkCyan",
-  ["008000"] = "darkGreen",
-  ["800080"] = "darkMagenta",
-  ["800000"] = "darkRed",
-  ["808000"] = "darkYellow",
-  ["808080"] = "darkGray",
-  ["C0C0C0"] = "lightGray",
-  ["000000"] = "black"
-  -- white is not typically a highlight "color" in this sense, usually "none"
-}
-
 -- Helper to generate the <w:rPr> string based on properties
 local function generate_rpr(props)
   local rPr = ""
@@ -84,39 +62,14 @@ local function generate_rpr(props)
      end
   end
 
-  -- 7. Highlight (Standard Colors) OR Shading (Custom Colors)
-  -- Logic: If it's a standard color, use <w:highlight>.
-  -- If custom, use <w:shd>.
-  -- Both allow background coloring, but <w:highlight> is more semantic for "marker pen".
-  -- <w:shd> is generic background shading.
-
-  local highlight_val = nil
-  local shading_fill = nil
-
+  -- 7. Highlight (Simplified: Always Yellow if present)
   if props.highlight then
-     local h = props.highlight:gsub("#", ""):upper()
-
-     if highlight_map[h] then
-         highlight_val = highlight_map[h]
-     else
-         -- Custom color -> Use Shading
-         shading_fill = h
-     end
-  end
-
-  if highlight_val then
-      rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
+     -- User explicitly requested fallback to yellow for ALL highlights
+     rPr = rPr .. '<w:highlight w:val="yellow"/>'
   end
 
   -- 8. Underline
   if props.underline then rPr = rPr .. '<w:u w:val="single"/>' end
-
-  -- 9. Shading (Custom Colors) - After Underline
-  if shading_fill then
-      -- Use w:shd for arbitrary hex colors
-      -- w:val="clear" means solid fill (no pattern), w:fill is the background color
-      rPr = rPr .. string.format('<w:shd w:val="clear" w:color="auto" w:fill="%s"/>', shading_fill)
-  end
 
   return rPr
 end
