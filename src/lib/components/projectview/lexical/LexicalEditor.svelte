@@ -3178,17 +3178,18 @@ $: if (editor && activeLayout) {
     @apply bg-gray-300 dark:bg-gray-500;
   }
 
-  /* Ensure link color applies to text */
-  :global(.link-text) {
+  /* Ensure link color applies to text - targeting anchor tags directly inside editor */
+  :global(.lexical-content a), :global(.link-text) {
       color: #2563eb !important; /* blue-600 */
+      text-decoration: underline;
   }
-  :global(html.dark .link-text) {
+  :global(html.dark .lexical-content a), :global(html.dark .link-text) {
       color: #60a5fa !important; /* blue-400 */
   }
-  :global(.link-text:hover) {
+  :global(.lexical-content a:hover), :global(.link-text:hover) {
       color: #1e40af !important; /* blue-800 */
   }
-  :global(html.dark .link-text:hover) {
+  :global(html.dark .lexical-content a:hover), :global(html.dark .link-text:hover) {
       color: #93c5fd !important; /* blue-300 */
   }
 
