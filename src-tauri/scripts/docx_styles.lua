@@ -19,8 +19,7 @@ end
 
 -- OpenXML Standard Highlight Colors (Hex to Name Map)
 -- We only support these standard values for <w:highlight w:val="..."/>
--- Anything else might fail in Compatibility Mode if we use w:shd.
--- So we map everything to the nearest standard color or just yellow.
+-- Anything else is treated as a custom color requiring <w:shd>.
 local highlight_map = {
   ["FFFF00"] = "yellow",
   ["00FF00"] = "green",
@@ -40,31 +39,6 @@ local highlight_map = {
   -- white is not typically a highlight "color" in this sense, usually "none"
 }
 
--- Simple color distance function to find nearest standard color
--- Returns the name of the nearest color
-local function get_nearest_highlight(hex)
-    local r = tonumber(hex:sub(1, 2), 16) or 0
-    local g = tonumber(hex:sub(3, 4), 16) or 0
-    local b = tonumber(hex:sub(5, 6), 16) or 0
-
-    local min_dist = 999999999
-    local best_match = "yellow" -- Default fallback
-
-    for k, v in pairs(highlight_map) do
-        local kr = tonumber(k:sub(1, 2), 16) or 0
-        local kg = tonumber(k:sub(3, 4), 16) or 0
-        local kb = tonumber(k:sub(5, 6), 16) or 0
-
-        local dist = (r - kr)^2 + (g - kg)^2 + (b - kb)^2
-        if dist < min_dist then
-            min_dist = dist
-            best_match = v
-        end
-    end
-
-    return best_match
-end
-
 -- Helper to generate the <w:rPr> string based on properties
 local function generate_rpr(props)
   local rPr = ""
@@ -76,8 +50,8 @@ local function generate_rpr(props)
   -- 1. rFonts
   if props.font then
      local f = escape_xml(props.font)
-     -- We explicitly clear theme attributes to force the font to apply
-     rPr = rPr .. string.format('<w:rFonts w:ascii="%s" w:hAnsi="%s" w:cs="%s" w:asciiTheme="" w:hAnsiTheme="" w:cstheme=""/>', f, f, f)
+     -- Simplified to just ascii/hAnsi/cs to avoid invalid attributes
+     rPr = rPr .. string.format('<w:rFonts w:ascii="%s" w:hAnsi="%s" w:cs="%s"/>', f, f, f)
   end
 
   -- 2. Bold
@@ -110,26 +84,39 @@ local function generate_rpr(props)
      end
   end
 
-  -- 7. Highlight (Standard Colors ONLY) - Before Underline
+  -- 7. Highlight (Standard Colors) OR Shading (Custom Colors)
+  -- Logic: If it's a standard color, use <w:highlight>.
+  -- If custom, use <w:shd>.
+  -- Both allow background coloring, but <w:highlight> is more semantic for "marker pen".
+  -- <w:shd> is generic background shading.
+
+  local highlight_val = nil
+  local shading_fill = nil
+
   if props.highlight then
      local h = props.highlight:gsub("#", ""):upper()
-     local highlight_val = "yellow" -- Default
 
      if highlight_map[h] then
          highlight_val = highlight_map[h]
      else
-         -- Find nearest standard color
-         highlight_val = get_nearest_highlight(h)
+         -- Custom color -> Use Shading
+         shading_fill = h
      end
+  end
 
-     rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
+  if highlight_val then
+      rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
   end
 
   -- 8. Underline
   if props.underline then rPr = rPr .. '<w:u w:val="single"/>' end
 
-  -- 9. Shading (Removed to fix compatibility issues)
-  -- We rely entirely on <w:highlight> now.
+  -- 9. Shading (Custom Colors) - After Underline
+  if shading_fill then
+      -- Use w:shd for arbitrary hex colors
+      -- w:val="clear" means solid fill (no pattern), w:fill is the background color
+      rPr = rPr .. string.format('<w:shd w:val="clear" w:color="auto" w:fill="%s"/>', shading_fill)
+  end
 
   return rPr
 end

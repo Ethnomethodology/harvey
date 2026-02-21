@@ -602,20 +602,11 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let reference_doc_path = app_handle.path()
-        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-        .ok();
-
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
-
-    if let Some(ref_path) = reference_doc_path {
-        pandoc_args.push("--reference-doc".to_string());
-        pandoc_args.push(ref_path.to_string_lossy().to_string());
-    }
 
     let lua_filter_path = app_handle.path()
         .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
@@ -1891,20 +1882,11 @@ pub async fn export_document_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let reference_doc_path = app_handle.path()
-        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
-        .ok();
-
     let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
-
-    if let Some(ref_path) = reference_doc_path {
-        pandoc_args.push("--reference-doc".to_string());
-        pandoc_args.push(ref_path.to_string_lossy().to_string());
-    }
 
     let lua_filter_path = app_handle.path()
         .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
