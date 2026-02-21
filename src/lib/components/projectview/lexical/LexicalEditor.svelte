@@ -2665,7 +2665,7 @@ $: if (editor && activeLayout) {
               type="number"
               class="w-10 text-xs text-center bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 p-0 h-full appearance-none [-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
               value={selectedFontSize}
-              on:focus={saveEditorSelection}
+              on:pointerdown={saveEditorSelection}
               on:change={handleFontSizeInput}
               on:keydown={handleFontSizeKeydown}
               min="10"
