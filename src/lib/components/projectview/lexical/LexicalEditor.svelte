@@ -414,10 +414,31 @@
     isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
   }
 
+  function saveEditorSelection() {
+      if (!editor) return;
+      editor.getEditorState().read(() => {
+          const selection = _getSelection();
+          if (_isRangeSelection(selection)) {
+              savedSelection = selection.clone();
+          }
+      });
+  }
+
   function applyFontSize(fontSize) {
     if (!editor || !isReady || !editor.isEditable()) return;
+
+    // If we have a saved selection (from input focus), restore it first
+    if (savedSelection) {
+        editor.update(() => {
+            _setSelection(savedSelection);
+        });
+    }
+
     applyStyle('font-size', fontSize + 'px');
     isFontSizeDropdownOpen = false;
+
+    // Clear saved selection after applying
+    // savedSelection = null; // Optional: depending on if we want to keep applying to same selection while input is focused
   }
 
   function handleFontSizeInput(event) {
@@ -434,6 +455,13 @@
       }
 
       applyFontSize(String(val));
+  }
+
+  function handleFontSizeKeydown(event) {
+      if (event.key === 'Enter') {
+          handleFontSizeInput(event);
+          editor.focus(); // Return focus to editor on Enter
+      }
   }
 
   function updateFontSize(delta) {
@@ -2626,6 +2654,7 @@ $: if (editor && activeLayout) {
           <button
             class="mini-toolbar-button !px-1"
             on:click={() => updateFontSize(-1)}
+            on:mousedown|preventDefault
             title="Decrease Font Size"
             disabled={!editable}
           >
@@ -2636,8 +2665,9 @@ $: if (editor && activeLayout) {
               type="number"
               class="w-10 text-xs text-center bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 p-0 h-full appearance-none [-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
               value={selectedFontSize}
+              on:focus={saveEditorSelection}
               on:change={handleFontSizeInput}
-              on:keydown={(e) => { if(e.key === 'Enter') handleFontSizeInput(e); }}
+              on:keydown={handleFontSizeKeydown}
               min="10"
               max="96"
               disabled={!editable}
@@ -2646,6 +2676,7 @@ $: if (editor && activeLayout) {
             <button
               class="flex items-center justify-center px-0.5 h-full hover:bg-gray-100 dark:hover:bg-gray-600 border-l border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400"
               on:click={toggleFontSizeDropdown}
+              on:mousedown|preventDefault
               disabled={!editable}
               tabindex="-1"
             >
@@ -2657,6 +2688,7 @@ $: if (editor && activeLayout) {
           <button
             class="mini-toolbar-button !px-1"
             on:click={() => updateFontSize(1)}
+            on:mousedown|preventDefault
             title="Increase Font Size"
             disabled={!editable}
           >
