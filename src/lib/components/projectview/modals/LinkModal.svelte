@@ -1,5 +1,7 @@
 <script>
   import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { open } from '@tauri-apps/plugin-opener';
+  import { ExternalLink } from 'lucide-svelte';
 
   export let showModal = false;
   export let initialUrl = ''; // URL if editing, empty if adding
@@ -62,6 +64,16 @@
     }
   }
 
+  async function openExternalLink() {
+    if (url && url !== 'https://' && url.trim() !== '') {
+        try {
+            await open(url);
+        } catch (e) {
+            console.error('Failed to open link:', e);
+        }
+    }
+  }
+
   onMount(() => {
     // Component mounted
   });
@@ -95,23 +107,34 @@
         >
           URL
         </label>
-        <input
-          bind:this={inputElement}
-          id="link-url-input"
-          type="text"
-          bind:value={url}
-          class="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          placeholder="https://example.com"
-          on:keydown|stopPropagation={(e) => {
-            // Allow Enter/Escape to bubble up to the main handler,
-            // but stop others like arrow keys if needed inside input
-            if (e.key !== 'Enter' && e.key !== 'Escape') {
-              // e.stopPropagation(); // Optional: Only if arrow keys etc cause issues outside input
-            }
-          }}
-          autocomplete="off"
-          autocorrect="off"
-        />
+        <div class="flex items-center gap-2">
+            <input
+            bind:this={inputElement}
+            id="link-url-input"
+            type="text"
+            bind:value={url}
+            class="flex-grow px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            placeholder="https://example.com"
+            on:keydown|stopPropagation={(e) => {
+                // Allow Enter/Escape to bubble up to the main handler,
+                // but stop others like arrow keys if needed inside input
+                if (e.key !== 'Enter' && e.key !== 'Escape') {
+                // e.stopPropagation(); // Optional: Only if arrow keys etc cause issues outside input
+                }
+            }}
+            autocomplete="off"
+            autocorrect="off"
+            />
+            <button
+                type="button"
+                class="btn-icon p-1.5 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                on:click={openExternalLink}
+                disabled={!url || url === 'https://' || url.trim() === ''}
+                title="Open Link"
+            >
+                <ExternalLink size="16" />
+            </button>
+        </div>
       </div>
 
       <div class="flex justify-end items-center gap-2 mt-5">
