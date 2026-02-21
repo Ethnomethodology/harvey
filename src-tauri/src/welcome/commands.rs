@@ -32,6 +32,35 @@ use crate::welcome::python_env;
 use walkdir::WalkDir;
 
 // --- Structs for Translation Model Download ---
+
+// Helper function to resolve model path
+fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool) {
+    let family = model.family.as_deref().unwrap_or("");
+    let is_faster_whisper = family == "faster-whisper";
+    let is_whisper_cpp = family == "whisper-cpp";
+    let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper && !is_whisper_cpp;
+
+    let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
+        format!("models--{}", model.name.replace('/', "--"))
+    } else {
+        model.name.clone()
+    };
+
+    let sub_dir = if is_faster_whisper {
+        PathBuf::from("transcription").join("faster-whisper")
+    } else if is_translation {
+         let family = model.family.as_deref().unwrap_or("helsinki");
+         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
+         PathBuf::from("translation").join(org_dir)
+    } else {
+         PathBuf::from("transcription").join("whisper-cpp")
+    };
+
+    let path = PathBuf::from(base_location).join(sub_dir).join(&folder_name);
+    // Return path and whether it is expected to be a directory-based model (HF style)
+    (path, is_translation || is_faster_whisper)
+}
+
 #[derive(Clone, serde::Serialize)]
 struct TranslationDownloadProgress {
   model_name: String,
@@ -204,6 +233,191 @@ pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<b
     python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
 }
 
+#[command]
+pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Result<Vec<String>, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    let mut errors = Vec::new();
+    let packages = vec!["faster_whisper", "sounddevice", "ctranslate2"];
+
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    for pkg in packages {
+        if let Some(err) = python_env::get_package_import_error(&shell, &python_path, pkg, &windows_path_env, &env_path).await? {
+            errors.push(format!("{}: {}", pkg, err));
+        }
+    }
+
+    Ok(errors)
+}
+
+#[command]
+pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    let python_path = python_env::get_python_path()?;
+    let env_path = python_env::get_env_path()?;
+    
+    // Prepare Windows PATH once
+    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Check for faster-whisper, sounddevice, and ctranslate2
+    let fw_installed = python_env::check_package_installed(&shell, &python_path, "faster_whisper", &windows_path_env, &env_path).await?;
+    let sd_installed = python_env::check_package_installed(&shell, &python_path, "sounddevice", &windows_path_env, &env_path).await?;
+    let ct2_installed = python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await?;
+    
+    let all_installed = fw_installed && sd_installed && ct2_installed;
+    log::info!("Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}", fw_installed, sd_installed, ct2_installed, all_installed);
+    
+    Ok(all_installed)
+}
+
+#[command]
+pub async fn install_faster_whisper_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+    log::info!("CMD: install_faster_whisper_dependencies_command");
+    python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None).await
+}
+
+// --- Transcription Model Download Command (Faster-Whisper) ---
+#[command]
+pub async fn download_faster_whisper_model_command(
+    app: AppHandle,
+    model_info: ModelInfo,
+    download_location: String,
+) -> Result<(), CommandError> {
+    log::info!("CMD: download_faster_whisper_model: {} -> {}", model_info.name, download_location);
+    let model_name = model_info.name.clone();
+
+    let sub_dir = "faster-whisper";
+    let target_dir = PathBuf::from(&download_location).join("transcription").join(sub_dir);
+    let target_dir_str = target_dir.to_string_lossy().to_string();
+
+    if download_location.trim().is_empty() {
+        return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
+    }
+    if !target_dir.exists() {
+        log::info!("Target directory {:?} does not exist. Creating...", target_dir);
+        fs::create_dir_all(&target_dir)?;
+    } else if !target_dir.is_dir() {
+        return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
+    }
+
+    let window = app.get_webview_window("main").unwrap();
+
+    // 1. Check/Install dependencies
+    let dependencies_installed = is_faster_whisper_dependencies_installed(app.clone()).await.unwrap_or(false);
+    if !dependencies_installed {
+        log::info!("Faster-Whisper dependencies not found. Installing...");
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Faster-Whisper dependencies are missing. Installing them now..." })).unwrap();
+        python_env::install_faster_whisper_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Dependencies installed successfully." })).unwrap();
+    }
+
+    let python_path = python_env::get_python_path()?;
+    let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
+
+    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
+    let token = if token_path.exists() {
+        fs::read_to_string(token_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let (mut rx, _child) = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        .spawn()
+        .map_err(|e| format!("Failed to spawn python script: {}", e))?;
+
+    window.emit("transcription-download-start", &model_name).unwrap();
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::info!("[Python] {}", &line_str);
+                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::error!("[Python] {}", &line_str);
+                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                log::info!("Transcription download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                if payload.code == Some(0) {
+                    success = true;
+                } else {
+                    window.emit("transcription-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if !success {
+        return Err(CommandError::Message("Transcription model download failed.".to_string()));
+    }
+
+    if success {
+        log::info!("Transcription model '{}' downloaded successfully. Updating config.", &model_name);
+        match || -> Result<(), CommandError> {
+            let mut config = read_config()?;
+            let mut downloaded_model_info = model_info.clone();
+            downloaded_model_info.download_location = Some(download_location.clone());
+            downloaded_model_info.family = Some("faster-whisper".to_string());
+
+            if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+                log::info!("Model '{}' already in config. Updating.", &model_name);
+                config.downloaded_models[idx] = downloaded_model_info;
+            } else {
+                log::info!("Adding new model '{}' to config.", &model_name);
+                config.downloaded_models.push(downloaded_model_info);
+            }
+            write_config(&config)?;
+            log::info!("Config updated successfully for '{}'.", &model_name);
+            Ok(())
+        }() {
+            Ok(_) => {
+                // Emit complete event ONLY after config is updated to avoid race conditions
+                window.emit("transcription-download-complete", &model_name).unwrap();
+                Ok(())
+            },
+            Err(e) => {
+                log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
+                Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
+            }
+        }
+    } else {
+        Err(CommandError::Message("Transcription model download failed.".to_string()))
+    }
+}
+
 // --- Translation Model Download Command ---
 #[command]
 pub async fn download_translation_model_command(
@@ -242,7 +456,7 @@ pub async fn download_translation_model_command(
         if !ct2_installed {
             log::info!("CTranslate2 not found. Installing...");
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
-            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log").await?;
+            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log", Some(&model_name)).await?;
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 installed successfully." })).unwrap();
         }
     }
@@ -445,6 +659,21 @@ pub async fn get_platform_info() -> Result<String, CommandError> {
     let os = std::env::consts::OS; // "macos", "windows", "linux"
     let arch = std::env::consts::ARCH; // "x86_64", "aarch64"
     Ok(format!("{}-{}", os, arch))
+}
+
+#[command]
+pub async fn set_selected_transcription_engine(engine: String) -> Result<(), CommandError> {
+    log::info!("CMD: set_selected_transcription_engine: {}", engine);
+    let mut config = read_config()?;
+    config.selected_transcription_engine = Some(engine);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
+pub async fn get_selected_transcription_engine() -> Result<Option<String>, CommandError> {
+    let config = read_config()?;
+    Ok(config.selected_transcription_engine)
 }
 
 #[derive(Deserialize)]
@@ -884,12 +1113,41 @@ fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), Command
 pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
+    let download_location = if !config.download_location.trim().is_empty() {
+        config.download_location.clone()
+    } else {
+        get_default_download_location()?
+    };
     
-    // Automatically clean up paraphrase models if they exist in config
-    config.downloaded_models.retain(|m| !m.name.contains("paraphrase"));
+    // Automatically clean up paraphrase models AND models that don't exist on disk
+    config.downloaded_models.retain(|m| {
+        if m.name.contains("paraphrase") {
+            return false;
+        }
+
+        // Use model-specific download location if available, otherwise use global default
+        let model_base_loc = m.download_location.as_ref()
+            .filter(|l| !l.trim().is_empty())
+            .unwrap_or(&download_location);
+
+        let (path, is_dir_based) = resolve_model_path(model_base_loc, m);
+        if path.exists() {
+            true
+        } else {
+            // For whisper-cpp (file based), check fallback .bin extension
+            if !is_dir_based {
+                let bin_path = path.with_extension("bin");
+                if bin_path.exists() {
+                    return true;
+                }
+            }
+            log::warn!("Model '{}' not found on disk at {:?}. Removing from config.", m.name, path);
+            false
+        }
+    });
     
     if config.downloaded_models.len() < initial_len {
-        log::info!("Cleaned up {} legacy paraphrase model(s) from config.", initial_len - config.downloaded_models.len());
+        log::info!("Cleaned up {} missing/legacy model(s) from config.", initial_len - config.downloaded_models.len());
         write_config(&config)?;
     }
 
@@ -903,37 +1161,24 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
 
-    let base_location = if !config.download_location.trim().is_empty() {
+    let global_location = if !config.download_location.trim().is_empty() {
         config.download_location.clone()
     } else {
-        log::warn!("Config/Delete: Download location is empty, using default.");
         get_default_download_location()?
     };
+
+    // Use model-specific location if available, else global
+    let base_location = model_to_delete.download_location.as_ref()
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or(&global_location);
+
     if base_location.trim().is_empty() {
         return Err(CommandError::from(format!("Cannot determine download location to delete model '{}'.", model_to_delete.name)));
     }
 
-    // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
-    // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-    let is_translation = model_to_delete.name.contains('/') || model_to_delete.family.is_some();
+    let (model_path, is_dir_based) = resolve_model_path(base_location, &model_to_delete);
     
-    let folder_name = if is_translation && model_to_delete.name.contains('/') {
-        let transformed = format!("models--{}", model_to_delete.name.replace('/', "--"));
-        log::info!("Transforming translation model name '{}' to folder name '{}' for deletion.", &model_to_delete.name, &transformed);
-        transformed
-    } else {
-        model_to_delete.name.clone()
-    };
-
-    let sub_dir = if is_translation {
-         let family = model_to_delete.family.as_deref().unwrap_or("helsinki");
-         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
-         PathBuf::from("translation").join(org_dir)
-    } else {
-         PathBuf::from("transcription").join("whisper-cpp")
-    };
-
-    let model_path = PathBuf::from(&base_location).join(sub_dir).join(&folder_name);
+    log::info!("CMD: delete_model: Resolved path: {:?} (is_dir_based: {})", model_path, is_dir_based);
 
     if model_path.exists() {
         log::info!("Deleting model from filesystem at path: {:?}", model_path);
@@ -941,13 +1186,22 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
             fs::remove_dir_all(&model_path)?;
             log::info!("Successfully deleted directory.");
         } else if model_path.is_file() {
-            log::warn!("Expected model path {:?} to be a directory, but it's a file. Deleting file.", model_path);
             fs::remove_file(&model_path)?;
-        } else {
-            log::warn!("Model path {:?} is not a file or directory. Skipping filesystem delete.", model_path);
+            log::info!("Successfully deleted file.");
         }
     } else {
-        log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
+        // Fallback for whisper-cpp: check if .bin extension is needed
+        if !is_dir_based && model_path.extension().and_then(|s| s.to_str()) != Some("bin") {
+             let bin_path = model_path.with_extension("bin");
+             if bin_path.exists() && bin_path.is_file() {
+                log::info!("Found binary file at fallback path: {:?}. Deleting.", bin_path);
+                fs::remove_file(&bin_path)?;
+             } else {
+                 log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, bin_path);
+             }
+        } else {
+             log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
+        }
     }
 
     // Remove from config using the original name
@@ -1016,8 +1270,13 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
 
     for model in &models_in_config {
         // Determine subdirectory based on model type and family
-        let is_translation = model.name.contains('/') || model.family.is_some();
-        let sub_dir = if is_translation {
+        let family = model.family.as_deref().unwrap_or("");
+        let is_faster_whisper = family == "faster-whisper";
+        let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper;
+
+        let sub_dir = if is_faster_whisper {
+            PathBuf::from("transcription").join("faster-whisper")
+        } else if is_translation {
              let family = model.family.as_deref().unwrap_or("helsinki");
              let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
              PathBuf::from("translation").join(org_dir)
@@ -1027,7 +1286,7 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
 
         // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
         // is different from the folder name on disk (e.g., "models--Helsinki-NLP--opus-mt-ja-en").
-        let folder_name = if is_translation && model.name.contains('/') {
+        let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
             format!("models--{}", model.name.replace('/', "--"))
         } else {
             model.name.clone()
@@ -1242,6 +1501,11 @@ async fn download_and_save_bin(
     }
     write_config(&config)?;
     log::info!("Config updated for '{}'.", model_info.name);
+
+    // Emit completion event AFTER config update to avoid race conditions in frontend
+    log::info!("Download success for {}", model_name);
+    app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+
     Ok(())
 }
 #[command] pub async fn cancel_download_command( cancellation_state: State<'_, DownloadCancellationState>, model_name: String, ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: cancel_download: {}", model_name); if let Some(flag_entry)=cancellation_state.0.get(&model_name){let flag=flag_entry.value(); flag.store(true,Ordering::Relaxed); log::info!("Cancel flag set for {}",model_name);} else {log::warn!("No active download token for '{}'.",model_name);} Ok(()) }

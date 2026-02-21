@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/imported_transcripts/TranscriptEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
@@ -17,6 +17,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
 
     import { createHeadlessEditor } from '@lexical/headless';
     import {
@@ -54,8 +55,12 @@
       ExtendedTextNode
     ];
 
+    const dispatch = createEventDispatcher();
+
     export let itemPath = null;
     export let isPrimary = true;
+    export let enableSegmentPlayback = false;
+    export let highlightedRowIndex = -1;
 
     let editorRef;
     let editorJsonState = ''; // Holds the current Lexical JSON string
@@ -365,7 +370,11 @@
                         dataRow.append(timeCell);
 
                         const speakerCell = lexicalCreateTableCellNode();
-                        speakerCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.speaker || 'N/A')));
+                        let speakerName = segment.speaker || 'N/A';
+                        if (speakerName !== 'N/A' && !speakerName.endsWith(':')) {
+                            speakerName += ':';
+                        }
+                        speakerCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(speakerName)));
                         dataRow.append(speakerCell);
 
                         const textCell = lexicalCreateTableCellNode();
@@ -476,6 +485,10 @@
             const newLexicalJson = event.detail.jsonString;
             if (editorJsonState !== newLexicalJson) {
                 editorJsonState = newLexicalJson;
+                
+                const rowCount = getRowCount(newLexicalJson);
+                dispatch('rowcountupdated', { rowCount });
+
                 if (!isLoading && !errorMessage) {
                     if (isPrimary) {
                         setImportedTranscriptEditorContent(itemPath, newLexicalJson);
@@ -489,6 +502,17 @@
             }
         }, 300);
 	}
+
+    function getRowCount(jsonString) {
+        if (!jsonString) return 0;
+        try {
+            const parsed = JSON.parse(jsonString);
+            const table = parsed.root.children.find(c => c.type === 'table');
+            return table?.children?.length || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
 
     // --- MODIFIED Save Handler ---
     async function handleSave() {
@@ -539,10 +563,12 @@
                 if(editorRef && initialLexicalJson != null && isValidLexicalState(initialLexicalJson)) {
                     editorRef.resetEditorState(initialLexicalJson);
                     editorJsonState = initialLexicalJson;
+                    dispatch('rowcountupdated', { rowCount: getRowCount(initialLexicalJson) });
                 } else if(editorRef) {
                     console.warn("[TranscriptEditorPanel Discard] Reverted state is invalid or null, resetting editor to empty.");
                     editorRef.resetEditorState('');
                     editorJsonState = '';
+                    dispatch('rowcountupdated', { rowCount: 0 });
                 }
                  console.log('[TranscriptEditorPanel] Changes discarded.');
             }
@@ -590,10 +616,12 @@
              if (isValidLexicalState(lexicalJsonString)) {
                  editorRef.resetEditorState(lexicalJsonString);
                  editorJsonState = lexicalJsonString || '';
+                 dispatch('rowcountupdated', { rowCount: getRowCount(lexicalJsonString) });
              } else {
                  console.error("[TranscriptEditorPanel resetEditorState] Received invalid JSON string, resetting to empty.");
                  editorRef.resetEditorState('');
                  editorJsonState = '';
+                 dispatch('rowcountupdated', { rowCount: 0 });
              }
         }
     }
@@ -605,14 +633,26 @@
         return editorRef?.getScrollElement();
     }
 
-    const self = { save, discard, resetEditorState, getItemPath, getScrollElement };
+    export function getTopVisibleRowInfo() {
+        return editorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 };
+    }
+
+    export function getCursorRowInfo() {
+        return editorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false };
+    }
+
+    export function scrollToRow(index, offset) {
+        editorRef?.scrollToRow(index, offset);
+    }
+
+    const self = { save, discard, resetEditorState, getItemPath, getScrollElement, getTopVisibleRowInfo, getCursorRowInfo, scrollToRow };
 
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="flex flex-col h-full w-full bg-white dark:bg-surface-2 overflow-hidden imported-transcript-editor-panel">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel">
     {#if isLoading}
-        <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300">Loading transcript...</div>
+        <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">Loading transcript...</div>
     {:else if errorMessage}
          <div class="flex-grow flex flex-col items-center justify-center text-red-500 p-4 text-center">
              <p class="font-semibold">Error Loading Transcript</p>
@@ -620,7 +660,7 @@
              <p class="text-xs mt-2">The original file could not be loaded or converted correctly.</p>
          </div>
     {:else if !itemPath}
-         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300">No transcript selected or loaded.</div>
+         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">No transcript selected or loaded.</div>
     {:else}
         <div class="flex-grow min-h-0 overflow-hidden">
             {#key itemPath}
@@ -629,10 +669,15 @@
                      nodes={LEXICAL_NODES}
                      initialJson={currentLexicalJson}
                      editable={true}
+                     enableTableCellResize={true}
                      placeholder="Transcript content will appear here as a table..."
+                     externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+                     on:playsegment
+                     on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
+                     enableSegmentPlayback={enableSegmentPlayback}
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
@@ -678,7 +723,7 @@
     }
     .imported-transcript-editor-panel :global(.lexical-content th),
     .imported-transcript-editor-panel :global(.lexical-content td) {
-        border: 1px solid #ccc;
+        /* Border handled by Lexical theme classes */
         padding: 0.2rem 5.75pt;
         text-align: left;
         vertical-align: top;
@@ -687,10 +732,7 @@
         line-height: 1.5;
         word-break: break-word;
     }
-    .imported-transcript-editor-panel :global(.lexical-content th) {
-        background-color: #f0f0f0;
-        font-weight: 600;
-    }
+    /* Removed specific th background overrides to let Lexical theme control it */
     .imported-transcript-editor-panel :global(.lexical-content th p),
     .imported-transcript-editor-panel :global(.lexical-content td p) {
         @apply mt-0 mb-0;

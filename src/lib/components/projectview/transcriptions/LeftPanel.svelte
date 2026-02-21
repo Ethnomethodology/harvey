@@ -24,6 +24,10 @@
 		openSection = openSection === sectionName ? null : sectionName;
 	}
 
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
 	// --- File Tree Logic ---
 	$: selectedMediaPath = $transcriptStore.selectedMediaFile?.path;
     // NEW: Get current transcript path for highlighting
@@ -223,7 +227,7 @@
 
 	<!-- Media Files Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary flex-shrink-0"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
 		on:click="{() => toggleSection('files')}"
 		aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
 		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
@@ -260,7 +264,7 @@
 
 	<!-- Shortcuts Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-d-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary flex-shrink-0 {openSection !== 'files' ? '' : 'border-t'}"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {openSection !== 'files' ? '' : 'border-t'}"
 		on:click="{() => toggleSection('shortcuts')}"
 		aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
 		on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"
@@ -275,9 +279,11 @@
 	{#if openSection === 'shortcuts'}
 		<div id="shortcuts-content" class="flex-grow overflow-y-auto min-h-0 p-3 text-xs" role="region" aria-live="polite">
             <ul class="space-y-1.5 text-gray-700 dark:text-gray-300">
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + E</span> <span>Edit Segment</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + S</span> <span>Save Transcript</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">F8</span> <span>Play / Pause</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + E</span> <span>Edit Mode</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + S</span> <span>Save Transcript</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F8</span> <span>Play / Pause</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F7 / F9</span> <span>Rewind / Forward</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + ↑/↓</span> <span>Prev/Next Segment</span> </li>
 			</ul>
 		</div>
 	{/if}

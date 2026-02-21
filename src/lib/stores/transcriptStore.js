@@ -35,6 +35,7 @@ export const initialTranscriptState = {
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
+    selectedModelFamily: 'whisper-cpp',
     selectedLanguage: null,
     speakers: { count: 0, names: [], translatedNames: [] },
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -822,6 +823,10 @@ export function splitTranscriptSegment(index) {
 
 export function setSelectedModel(modelName) {
     transcriptStore.update((ts) => ({ ...ts, selectedModelName: modelName || null }));
+}
+
+export function setSelectedModelFamily(family) {
+    transcriptStore.update((ts) => ({ ...ts, selectedModelFamily: family || 'whisper-cpp' }));
 }
 
 export function setSelectedLanguage(languageCode) {

@@ -69,9 +69,9 @@
 	}
 </script>
 
-<div class="relative bg-white dark:bg-surface-2" bind:this={rootElement}>
+<div class="relative bg-white dark:bg-gray-900" bind:this={rootElement}>
 	<div
-        class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-border rounded-md min-h-[30px] w-full"
+        class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px] w-full"
         on:click={() => isEditable && toggleDropdown()}
         class:cursor-pointer={isEditable}
         class:cursor-not-allowed={!isEditable}
@@ -81,11 +81,11 @@
         on:keydown={(e) => { if (isEditable && (e.key === 'Enter' || e.key === ' ')) toggleDropdown()}}
     >
 		{#if assignedOptions.length === 0}
-			<span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1">{placeholder}</span>
+			<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">{placeholder}</span>
 		{:else}
             {#each assignedOptions as option (option)}
                 <span
-                    class="flex items-center bg-blue-100 dark:bg-accent-primary text-blue-800 dark:text-white text-xs font-medium px-2 py-0.5 rounded-full"
+                    class="flex items-center bg-blue-100 dark:bg-blue-600 text-blue-800 dark:text-white text-xs font-medium px-2 py-0.5 rounded-full"
                 >
                     {option}
                     {#if isEditable}
@@ -103,20 +103,20 @@
             {/each}
         {/if}
         {#if isEditable && assignedOptions.length > 0}
-            <span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1 flex-grow text-left">Add {itemType}...</span>
+            <span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 flex-grow text-left">Add {itemType}...</span>
         {/if}
 	</div>
 
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-surface-2 border border-gray-300 dark:border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
+			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto"
 		>
 			<div class="p-2">
 				<input
 					type="text"
 					bind:value={searchTerm}
 					placeholder="Search or add new..."
-					class="w-full px-2 py-1.5 text-xs bg-white dark:bg-surface-3 text-gray-700 dark:text-text-primary border border-gray-300 dark:border-border rounded-md focus:ring-accent-primary focus:border-accent-primary"
+					class="w-full px-2 py-1.5 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-blue-500 focus:border-blue-500"
 					autocomplete="off"
 					autocorrect="off"
 				/>
@@ -125,7 +125,7 @@
 				{#each filteredAvailableOptions as option (option)}
 					<li
 						on:click={() => addItem(option)}
-						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer text-gray-700 dark:text-text-primary"
+						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
 					>
 						{option}
 					</li>
@@ -134,7 +134,7 @@
                 {#if isEditable && searchTerm && !allOptions.includes(searchTerm)}
                 <li
                     on:click={handleCreateNew}
-                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-accent-primary hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer border-t border-gray-200 dark:border-t-border"
+                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-500 hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer border-t border-gray-200 dark:border-t-border"
                 >
                     + Create new {itemType} "{searchTerm}"
                 </li>

@@ -90,6 +90,32 @@
         selectedAnnotationId = null;
     }
 
+    function fixHtmlForDisplay(html) {
+        if (!html) return html;
+        if (typeof document === 'undefined') return html; // SSR check
+        try {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            // Find elements with text decoration
+            const underlines = div.querySelectorAll('u, s, strike, del');
+            underlines.forEach(u => {
+                // If the element has a child span with color, inherit that color for decoration
+                const colorSpan = u.querySelector('span[style*="color"]');
+                if (colorSpan) {
+                    const style = colorSpan.getAttribute('style');
+                    const colorMatch = style.match(/color:\s*([^;]+)/);
+                    if (colorMatch) {
+                        u.style.textDecorationColor = colorMatch[1];
+                    }
+                }
+            });
+            return div.innerHTML;
+        } catch (e) {
+            console.error("Error fixing HTML for display:", e);
+            return html;
+        }
+    }
+
     async function handleExportImage(event) {
         const { filePath, includeAnnotations } = event.detail;
         if (!osdViewer || !currentAssetUrl) return;
@@ -114,6 +140,7 @@
             const imgUrl = URL.createObjectURL(blobBody);
 
             const img = new Image();
+            img.crossOrigin = 'Anonymous';
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = reject;
@@ -182,6 +209,7 @@
                     ctx.putImageData(imageData, safeX, safeY);
                 };
 
+                // Pass 1: Draw Shapes
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
@@ -189,19 +217,14 @@
 
                     const body = annotation.body || [];
                     const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
                     const borderColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderColor');
                     const borderSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'BorderSize');
-                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
-                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
 
                     const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)';
                     const strokeColor = borderColorBody ? borderColorBody.value : (fillColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : adjustOpacity(fillColor, 1));
                     const strokeWidth = borderSizeBody ? parseFloat(borderSizeBody.value) : 1;
 
-                    // 1. Prepare Path in Pixel Space
                     let path = new Path2D();
-                    
                     const matrix = new DOMMatrix();
                     matrix.a = sx; 
                     matrix.d = sy;
@@ -226,65 +249,63 @@
                         }
                     }
 
-                    // 2. Handle Censored vs Normal
                     if (s === 'censored' || s === 'censored-circle') {
                         if (s === 'censored') {
                             pixelateRegion(shapeData.x * S * sx, shapeData.y * S * sy, shapeData.width * S * sx, shapeData.height * S * sy);
                         } else {
-                            // Circular censorship: Use fallback draw-clip-pixelate method
+                            // Circular censorship
                             const bboxX = (shapeData.cx - shapeData.r) * S * sx;
                             const bboxY = (shapeData.cy - shapeData.r) * S * sy;
                             const bboxW = shapeData.r * 2 * S * sx;
                             const bboxH = shapeData.r * 2 * S * sy;
                             
-                            // Safe bounds
                             const safeX = Math.max(0, bboxX);
                             const safeY = Math.max(0, bboxY);
                             const safeW = Math.min(width - safeX, bboxW - (safeX - bboxX));
                             const safeH = Math.min(height - safeY, bboxH - (safeY - py));
 
                             if (safeW > 0 && safeH > 0) {
-                                // Extract original image data for the bounding box
                                 const tempC = document.createElement('canvas');
                                 tempC.width = safeW; tempC.height = safeH;
                                 const tCtx = tempC.getContext('2d');
                                 tCtx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, safeW, safeH);
-                                
-                                // Pixelate it
-                                // (Reuse logic or draw small)
                                 tCtx.imageSmoothingEnabled = false;
                                 const smallW = Math.max(1, safeW/20);
                                 const smallH = Math.max(1, safeH/20);
                                 tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
-                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH); // scale back up
+                                tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH);
 
-                                // Draw back to main canvas with clip
                                 ctx.save();
-                                ctx.clip(path); // Use the elliptical path defined earlier
+                                ctx.clip(path);
                                 ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
                                 ctx.restore();
                             }
                         }
                     } else {
-                        // Normal Shape Draw
                         ctx.fillStyle = fillColor;
                         ctx.fill(path);
                         ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = strokeWidth; 
+                        ctx.lineWidth = strokeWidth * Math.min(sx, sy); 
                         ctx.stroke(path);
                     }
+                }
 
-                    // 3. Draw Text
-                    if (textBody && textBody.value) {
-                        const text = textBody.value;
-                        const fontSize = fontSizeBody ? fontSizeBody.value : 14;
-                        const textColor = textColorBody ? textColorBody.value : 'black';
+                // Pass 2: Draw Text (Overlay)
+                for (const annotation of annotations) {
+                    const shapeData = annotation.target.selector.value;
+                    const s = shapeData.shape;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+
+                    const body = annotation.body || [];
+                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
+                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
+                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
+
+                    if ((textBody && textBody.value) || htmlBody) {
+                        const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
+                        const defaultTextColor = textColorBody ? textColorBody.value : 'black';
                         
-                        ctx.fillStyle = textColor;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = `600 ${fontSize * Math.min(sx, sy)}px sans-serif`;
-
                         let tx, ty, tw, th;
                         if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
                             tx = shapeData.x * S * sx;
@@ -292,12 +313,245 @@
                             tw = shapeData.width * S * sx;
                             th = shapeData.height * S * sy;
                         } else {
-                            tx = (shapeData.cx - shapeData.r) * S * sx;
-                            ty = (shapeData.cy - shapeData.r) * S * sy;
-                            tw = shapeData.r * 2 * S * sx;
-                            th = shapeData.r * 2 * S * sy;
+                            // Use inscribed square for text in circles to prevent overflow
+                            const side = shapeData.r * Math.sqrt(2);
+                            tx = (shapeData.cx - side / 2) * S * sx;
+                            ty = (shapeData.cy - side / 2) * S * sy;
+                            tw = side * S * sx;
+                            th = side * S * sy;
                         }
-                        ctx.fillText(text, tx + tw/2, ty + th/2);
+
+                        // Re-create path for clipping in this second pass
+                        let path = new Path2D();
+                        const matrix = new DOMMatrix();
+                        matrix.a = sx; matrix.d = sy;
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+                            path.rect(tx, ty, tw, th);
+                        } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
+                            path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
+                        } else if (s.startsWith('speech-bubble')) {
+                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
+                        }
+
+                        // Secure Canvas Rich Text Renderer
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html || '', 'text/html');
+                            
+                            const p = padding * Math.min(sx, sy);
+                            const availableW = width - (p * 2);
+                            const availableH = height - (p * 2);
+                            const startX = x + p;
+                            const startY_box = y + p;
+
+                            if (availableW <= 0 || availableH <= 0) return;
+
+                            const segments = [];
+                            const walk = (node, styles) => {
+                                if (node.nodeType === Node.TEXT_NODE) {
+                                    if (node.textContent) segments.push({ text: node.textContent, ...styles });
+                                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                    const newStyles = { ...styles };
+                                    const tag = node.tagName.toLowerCase();
+                                    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
+
+                                    if (tag === 'strong' || tag === 'b') newStyles.bold = true;
+                                    if (tag === 'em' || tag === 'i') newStyles.italic = true;
+                                    if (tag === 'u') newStyles.underline = true;
+                                    if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
+
+                                    const styleAttr = node.getAttribute('style') || '';
+                                    const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
+                                    if (textDecMatch) {
+                                        if (textDecMatch[1].includes('underline')) newStyles.underline = true;
+                                        if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
+                                    }
+                                    const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
+                                    if (colorMatch) newStyles.color = colorMatch[1].trim();
+
+                                    const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
+                                    if (bgMatch) newStyles.highlight = bgMatch[1].trim();
+
+                                    const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
+                                    if (alignMatch) newStyles.align = alignMatch[1].trim();
+
+                                    const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+                                    if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
+
+                                    const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
+                                    if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
+
+                                    if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+
+                                    node.childNodes.forEach(child => walk(child, newStyles));
+
+                                    if (isBlock) {
+                                        const lastChild = node.lastChild;
+                                        const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
+                                        if (!endsWithBr) {
+                                            segments.push({ text: '\n', ...newStyles });
+                                        }
+                                    }
+                                }
+                            };
+                            walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
+
+                            // Word Wrap & Layout
+                            const lines = [[]];
+                            let currentLine = lines[0];
+                            let currentX = 0;
+                            let isSoftWrap = false; // Track if the current line started due to a soft wrap
+
+                            const LINE_HEIGHT_MULTIPLIER = 1.5;
+                            const effectiveAvailableW = Math.max(1, availableW);
+
+                            segments.forEach(seg => {
+                                const parts = seg.text.split(/(\n)/);
+                                parts.forEach(part => {
+                                    if (part === '\n') {
+                                        lines.push([]);
+                                        currentLine = lines[lines.length - 1];
+                                        currentX = 0;
+                                        isSoftWrap = false; // Explicit newline, preserve leading spaces
+                                    } else if (part) {
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+
+                                        const words = part.split(/(\s+)/);
+                                        words.forEach(word => {
+                                            let wordWidth = ctx.measureText(word).width;
+
+                                            if (wordWidth > effectiveAvailableW && word.trim() !== "") {
+                                                for (const char of word) {
+                                                    const charWidth = ctx.measureText(char).width;
+                                                    if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
+                                                        lines.push([]);
+                                                        currentLine = lines[lines.length - 1];
+                                                        currentX = 0;
+                                                        isSoftWrap = true;
+                                                    }
+                                                    currentLine.push({ ...seg, text: char, width: charWidth });
+                                                    currentX += charWidth;
+                                                }
+                                            } else {
+                                                const isSpace = /^\s+$/.test(word);
+                                                if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                                    lines.push([]);
+                                                    currentLine = lines[lines.length - 1];
+                                                    currentX = 0;
+                                                    isSoftWrap = true;
+                                                }
+
+                                                // Only skip leading spaces if they are a result of a soft wrap.
+                                                // Preserve them if they follow an explicit newline.
+                                                if (currentX === 0 && isSpace && isSoftWrap) {
+                                                    // Skip leading space on wrapped line
+                                                } else {
+                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                    currentX += wordWidth;
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+
+                            if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+
+                            // Vertical Layout
+                            const lineHeights = lines.map(line => {
+                                if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                                return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
+                            });
+                            const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+
+                            let currentY = startY_box + (availableH - totalHeight) / 2;
+
+                            lines.forEach((line, i) => {
+                                const h = lineHeights[i];
+                                const lineAlign = line[0]?.align || 'center';
+
+                                let visibleLine = [...line];
+                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
+                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+
+                                let lineX;
+                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                                else lineX = startX;
+
+                                // Alphabetic baseline
+                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                // Center the visual line content within the line box height (h)
+                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
+                                // Easier approximation for vertical center:
+                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+
+                                line.forEach(seg => {
+                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    ctx.textBaseline = 'alphabetic';
+
+                                    if (seg.highlight && seg.highlight !== 'transparent') {
+                                        ctx.fillStyle = seg.highlight;
+
+                                        // Hybrid Approach for Robustness:
+                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+
+                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                        const m = ctx.measureText(seg.text);
+                                        // Use a small safety padding for ink (10% of font size)
+                                        const safetyPadding = seg.fontSize * 0.1;
+
+                                        // 3. Expand if the ink pokes out
+                                        // Note: actualBoundingBoxAscent is distance UP from baseline
+                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+
+                                        const finalTop = Math.min(standardTop, inkTop);
+                                        const finalBottom = Math.max(standardBottom, inkBottom);
+
+                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                    }
+
+                                    ctx.fillStyle = seg.color || baseColor;
+                                    ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                    if (seg.underline) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
+
+                                    if (seg.strikethrough) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
+                                    lineX += seg.width;
+                                });
+                                currentY += h;
+                            });
+                        };
+
+                        ctx.save();
+                        ctx.clip(path);
+                        const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
+                        const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                        ctx.restore();
                     }
                 }
             }
@@ -616,6 +870,9 @@
         // because the SVG event handlers fire before OSD canvas-press.
         if (!activeDrawingTool && !isDraggingShape && !isDraggingTail && !isDraggingResizeHandle) {
              selectedAnnotationId = null;
+             if (showAnnotationCreationDialog) {
+                 closeAnnotationDialog();
+             }
         }
 
         if (!activeDrawingTool) return;
@@ -923,6 +1180,7 @@
                 // event.position is already relative to the viewer element
                 dialogX = event.position.x;
                 dialogY = event.position.y;
+                selectedAnnotationId = null; // Unselect so user can see their border changes
                 showAnnotationCreationDialog = true;
                 activeDrawingTool = null; // Deactivate tool
             } else {
@@ -951,17 +1209,16 @@
         updateImageAnnotations([...$currentAnnotations, newAnnotation]);
         await saveImageAnnotations();
 
-        annotationBeingEdited = null;
+        annotationBeingEdited = newAnnotation;
         isEditingExisting = false;
+        dialogX = event.position.x;
+        dialogY = event.position.y;
+        showAnnotationCreationDialog = true;
         activeDrawingTool = null; // Deactivate tool
-        // dialogX = event.position.x;
-        // dialogY = event.position.y;
-        // showAnnotationCreationDialog = true;
 
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
         currentPreviewPolygonPoints = [];
-        activeDrawingTool = null;
         startViewportPoint = null;
     }
 
@@ -992,11 +1249,12 @@
         dialogX = annotationRect.left - osdRect.left + annotationRect.width;
         dialogY = annotationRect.top - osdRect.top + annotationRect.height;
 
+        selectedAnnotationId = null; // Unselect so user can see their border changes
         showAnnotationCreationDialog = true;
     }
 
-    async function handleAnnotationDialogSave(event) {
-        const { title, description, color, text, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
+    async function handleAnnotationDialogUpdate(event) {
+        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -1023,17 +1281,15 @@
                 const cy = updatedSelector.y + updatedSelector.height / 2;
                 const r = Math.min(updatedSelector.width, updatedSelector.height) / 2;
                 updatedSelector = { shape: oldShape === 'censored' ? 'censored' : 'circle', cx, cy, r };
-                // Wait, if it was censored it should stay censored shape but maybe user wants circular censored? 
-                // Let's assume if they picked 'circle' in dialog, they want the circle version of current tool
-                if (oldShape === 'censored') updatedSelector.shape = 'censored-circle'; // Need to add this type
-                else if (oldShape === 'text-area') updatedSelector.shape = 'text-area-circle'; // Add this too
+                if (oldShape === 'censored') updatedSelector.shape = 'censored-circle'; 
+                else if (oldShape === 'text-area') updatedSelector.shape = 'text-area-circle';
                 else updatedSelector.shape = 'circle';
             } else if (shape === 'rectangle' && (oldShape === 'circle' || oldShape === 'speech-bubble-circle' || oldShape.endsWith('-circle'))) {
                 // Convert circle to rect
-                const width = updatedSelector.r * 2;
-                const height = updatedSelector.r * 2;
-                const x = updatedSelector.cx - updatedSelector.r;
-                const y = updatedSelector.cy - updatedSelector.r;
+                const width = (updatedSelector.r || 0) * 2;
+                const height = (updatedSelector.r || 0) * 2;
+                const x = (updatedSelector.cx || 0) - (updatedSelector.r || 0);
+                const y = (updatedSelector.cy || 0) - (updatedSelector.r || 0);
                 updatedSelector = { shape: 'rectangle', x, y, width, height };
                 if (oldShape === 'censored-circle' || oldShape === 'censored') updatedSelector.shape = 'censored';
                 else if (oldShape === 'text-area-circle' || oldShape === 'text-area') updatedSelector.shape = 'text-area';
@@ -1049,6 +1305,9 @@
         if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
         if (text !== undefined && text !== null && text !== '') {
             newBody.push({ type: 'TextualBody', value: text, purpose: 'content' });
+        }
+        if (html) {
+            newBody.push({ type: 'HtmlBody', value: html, purpose: 'rendering' });
         }
         if (textColor) newBody.push({ type: 'TextColor', value: textColor, purpose: 'rendering' });
         if (fontSize) newBody.push({ type: 'FontSize', value: fontSize, purpose: 'rendering' });
@@ -1071,10 +1330,10 @@
             a.id === updatedAnnotation.id ? updatedAnnotation : a
         );
 
+        // Update local state reactively
+        annotationBeingEdited = updatedAnnotation;
         updateImageAnnotations(updatedAnnotations);
         await saveImageAnnotations();
-
-        closeAnnotationDialog();
     }
     
     function startTailWidthDrag(event, annotationId) {
@@ -1251,8 +1510,8 @@
     <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
         <div id="image-annotation-toolbar-container" class="flex items-center">
             <!-- Highlights Group -->
             <div class="flex items-center space-x-1 border-r border-gray-300 dark:border-gray-600 pr-2 mr-2">
@@ -1360,9 +1619,9 @@
 
     <div class="flex-grow overflow-hidden min-h-0 relative">
         {#if isLoading && !error}
-            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400 z-10 bg-white/50 dark:bg-d-gray-800/50">Loading image viewer...</div>
+            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600 z-10 bg-white/50 dark:bg-gray-900/50">Loading image viewer...</div>
         {:else if error}
-            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-d-gray-800/80">{error}</div>
+            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-gray-900/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
         </div>
@@ -1647,6 +1906,7 @@
             {#each $currentAnnotations as annotation (annotation.id)}
                 {@const shapeData = annotation.target.selector.value}
                 {@const textBody = annotation.body.find(b => b.purpose === 'content' && b.type === 'TextualBody')}
+                {@const htmlBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody')}
                 {@const textColorBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'TextColor')}
                 {@const fontSizeBody = annotation.body.find(b => b.purpose === 'rendering' && b.type === 'FontSize')}
                 
@@ -1654,21 +1914,30 @@
                 {@const fontSize = fontSizeBody ? `${fontSizeBody.value}px` : '14px'}
                 
                 {@const S = 1000}
-                {#if textBody}
+                {#if textBody || htmlBody}
                     {#if shapeData.shape === 'rectangle' || shapeData.shape === 'speech-bubble-rect' || shapeData.shape === 'text-area'}
                         <foreignObject data-annotation-id={annotation.id} x={shapeData.x * S} y={shapeData.y * S} width={shapeData.width * S} height={shapeData.height * S} class="pointer-events-none">
                             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
-                                    {textBody.value}
-                                </p>
+                                <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                    {#if htmlBody}
+                                        {@html fixHtmlForDisplay(htmlBody.value)}
+                                    {:else if textBody && textBody.value && !(textBody.value.trim().startsWith('{') && textBody.value.includes('"root":'))}
+                                        <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
+                                    {/if}
+                                </div>
                             </div>
                         </foreignObject>
-                    {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle'}
-                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx - shapeData.r) * S} y={(shapeData.cy - shapeData.r) * S} width={(shapeData.r * 2) * S} height={(shapeData.r * 2) * S} class="pointer-events-none">
-                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px; overflow: hidden;">
-                                <p style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-weight: 600; font-size: {fontSize}; line-height: 1.2; word-break: break-word; width: 100%;">
-                                    {textBody.value}
-                                </p>
+                    {:else if shapeData.shape === 'circle' || shapeData.shape === 'speech-bubble-circle' || shapeData.shape === 'text-area-circle'}
+                        {@const side = shapeData.r * Math.sqrt(2) * S}
+                        <foreignObject data-annotation-id={annotation.id} x={(shapeData.cx * S) - (side / 2)} y={(shapeData.cy * S) - (side / 2)} width={side} height={side} class="pointer-events-none">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4px; overflow: hidden;">
+                                <div class="annotation-text" style="margin: 0; padding: 0; text-align: center; color: {textColor}; font-family: sans-serif; font-size: {fontSize}; line-height: 1.5; word-break: break-word; width: 100%; white-space: pre-wrap;">
+                                    {#if htmlBody}
+                                        {@html fixHtmlForDisplay(htmlBody.value)}
+                                    {:else if textBody && !textBody.value.startsWith('{"root":')}
+                                        <p style="margin: 0; padding: 0; font-weight: 600;">{textBody.value}</p>
+                                    {/if}
+                                </div>
                             </div>
                         </foreignObject>
                     {/if}
@@ -1742,6 +2011,7 @@
                     initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || 
                         ((annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area') 
                         ? '' : null)}
+                    initialHtml={annotationBeingEdited?.body?.find(b => b.type === 'HtmlBody' && b.purpose === 'rendering')?.value || null}
                     initialTextColor={annotationBeingEdited?.body?.find(b => b.type === 'TextColor' && b.purpose === 'rendering')?.value || 'black'}
                     initialFontSize={annotationBeingEdited?.body?.find(b => b.type === 'FontSize' && b.purpose === 'rendering')?.value || 14}
                     initialBorderColor={annotationBeingEdited?.body?.find(b => b.type === 'BorderColor' && b.purpose === 'rendering')?.value || null}
@@ -1758,7 +2028,8 @@
                     useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape.startsWith('text-area')}
                     isCensoredMode={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('censored')}
                     panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
-                    on:save={handleAnnotationDialogSave}
+                    on:save={handleAnnotationDialogUpdate}
+                    on:done={closeAnnotationDialog}
                     on:cancel={handleAnnotationDialogCancel}
                     on:delete={handleAnnotationDialogDelete}
                 />
@@ -1782,7 +2053,7 @@
         background-color: theme('colors.gray.300');
     }
     :global(html.dark) .osd-viewer-container {
-        background-color: theme('colors.dark-bg-form-field');
+        background-color: theme('colors.gray.900');
     }
     .opacity-0 { opacity: 0; }
 
@@ -1813,5 +2084,14 @@
 
     button.active {
         @apply bg-blue-500 text-white;
+    }
+
+    /* Fix for underline/strikethrough color in annotation text */
+    :global(.annotation-text u),
+    :global(.annotation-text s),
+    :global(.annotation-text strike),
+    :global(.annotation-text del),
+    :global(.annotation-text span) {
+        text-decoration-color: currentColor;
     }
 </style>

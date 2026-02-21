@@ -142,9 +142,9 @@
   $: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded);
 </script>
 
-<div class="flex h-screen bg-gray-100 dark:bg-surface-1 font-sans text-sm">
+<div class="flex h-screen bg-gray-100 dark:bg-gray-950 font-sans text-sm">
   <!-- Sidebar -->
-  <div class="w-1/4 bg-white dark:bg-surface-2 border-r border-gray-200 dark:border-border p-6 flex flex-col flex-shrink-0">
+  <div class="w-1/4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-6 flex flex-col flex-shrink-0">
     <div class="w-fit mb-8">
       <h1 class="text-2xl font-bold mb-1 text-gray-800 dark:text-gray-100">Harvey</h1>
       <p class="text-xs text-gray-500 dark:text-gray-400 relative left-[3px]">v0.1</p>
@@ -203,8 +203,8 @@
         </button>
       </div>
 
-      <div class="flex-grow overflow-y-auto bg-white dark:bg-surface-2 p-6 rounded-lg border border-gray-200 dark:border-border shadow-inner">
-        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-border pb-2">Recent Projects</h2>
+      <div class="flex-grow overflow-y-auto bg-white dark:bg-gray-900 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-inner">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 pb-2">Recent Projects</h2>
         {#if isLoading}
             <p class="text-center text-gray-500 dark:text-gray-400 py-4">Loading projects...</p>
         {:else if recentProjects.length === 0}

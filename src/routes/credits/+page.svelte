@@ -1,10 +1,10 @@
-<div class="h-screen w-screen bg-gray-100 dark:bg-surface-1 p-8 overflow-y-auto">
+<div class="h-screen w-screen bg-gray-100 dark:bg-gray-950 p-8 overflow-y-auto">
     <div class="flex items-center space-x-4 mb-6">
         <img src="/logo.png" alt="Harvey Logo" class="w-12 h-12 [filter:drop-shadow(0_2px_4px_rgba(0,0,0,0.1))]" />
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Credits</h1>
     </div>
     
-    <div class="mb-8 p-4 bg-white dark:bg-surface-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div class="mb-8 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <p class="text-gray-800 dark:text-gray-200 italic font-medium">
             This application was developed entirely using "vibe coding" tools such as:
             <a href="https://github.com/google-gemini/gemini-cli" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Gemini CLI</a>,

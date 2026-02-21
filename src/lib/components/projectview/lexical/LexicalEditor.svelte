@@ -9,6 +9,7 @@
     FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, INDENT_CONTENT_COMMAND,
     OUTDENT_CONTENT_COMMAND, SELECTION_CHANGE_COMMAND, CLICK_COMMAND,
     UNDO_COMMAND, REDO_COMMAND, KEY_MODIFIER_COMMAND,
+    BLUR_COMMAND, FOCUS_COMMAND,
     COMMAND_PRIORITY_LOW, COMMAND_PRIORITY_NORMAL, COMMAND_PRIORITY_CRITICAL, COMMAND_PRIORITY_HIGH, COMMAND_PRIORITY_EDITOR,
     KEY_ENTER_COMMAND,
     RootNode, ParagraphNode, TextNode, LineBreakNode,
@@ -67,6 +68,7 @@
     $setBlocksType as _setBlocksType, $patchStyleText as _patchStyleText,
     $getSelectionStyleValueForProperty as _getSelectionStyleValueForProperty
   } from '@lexical/selection';
+  import { $generateHtmlFromNodes as _generateHtmlFromNodes } from '@lexical/html';
   import { createEmptyHistoryState, registerHistory } from '@lexical/history';
   import { createEventDispatcher } from 'svelte';
   import { v4 as uuidv4 } from 'uuid';
@@ -81,8 +83,10 @@
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
+  import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
+  import notificationStore from '$lib/stores/notificationStore.js';
 
   export let initialJson = null;
   export let editable = true;
@@ -97,6 +101,7 @@
     underline: true,
     strikethrough: true,
     link: true,
+    fontFamily: true,
     insertMenu: true,
     indent: true,
     outdent: true,
@@ -110,15 +115,19 @@
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
-  export let backgroundClass = 'bg-white dark:bg-surface-2';
+  export let enableSegmentPlayback = false; // New prop
+  export let backgroundClass = 'bg-white dark:bg-gray-900';
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];
+  export let externalHighlightedRowIndex = -1; // Prop to allow external highlighting
 
   let editorWrapper;
   let editorContainer;
   let editor = null;
   let isReady = false;
+  let isFocused = false; // Track focus state
+  let internalCursorRowIndex = -1; // Track local cursor position
   let unregisterListeners = () => {};
   let historyState = createEmptyHistoryState();
   let savedSelection = null;
@@ -135,8 +144,10 @@
   let searchTerm = '';
   let searchResults = [];
   let currentSearchResultIndex = -1;
+  let showFindReplaceModal = false;
+  let showSearchOptionsDropdown = false;
+  let searchOptionsDropdownRef;
 
-  let currentSearchHighlight = null;
   const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)';
   const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';
 
@@ -155,6 +166,7 @@
 
   let searchUiContainerElement;
   let searchToggleButtonElement;
+  let searchInputRef;
 
   let latestScrollTargetKey = null; // New component-level variable
   let areHighlightsReady = false; // Track if highlights have been loaded from backend
@@ -170,6 +182,10 @@
   let modifyToolbarPosition = { top: 0, left: 0 };
   let clickedNodeKey = null;
 
+  let hoveredRowKey = null;
+  let playButtonPosition = { top: 0, left: 0 };
+  let showPlayButton = false;
+
   const MIN_COLUMN_WIDTH = 50;
 
 
@@ -183,58 +199,7 @@
     TableNode, TableRowNode, TableCellNode
   ];
 
-  onMount(() => {
-    function handleClickOutside(event) {
-      if (isBlockDropdownOpen && blockDropdownRef && !blockDropdownRef.contains(event.target)) {
-        isBlockDropdownOpen = false;
-      }
-      if (isAlignDropdownOpen && alignmentDropdownRef && !alignmentDropdownRef.contains(event.target)) {
-        isAlignDropdownOpen = false;
-      }
-      if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
-        isColorDropdownOpen = false;
-      }
-      if (isHighlightDropdownOpen && highlightDropdownRef && !highlightDropdownRef.contains(event.target)) {
-        isHighlightDropdownOpen = false;
-      }
-      if (isInsertDropdownOpen && insertDropdownRef && !insertDropdownRef.contains(event.target)) {
-        isInsertDropdownOpen = false;
-      }
-      const menuElement = document.querySelector('.table-cell-action-menu-container');
-      if (showTableCellMenu && menuElement && !menuElement.contains(event.target)) {
-        closeTableCellMenu(false);
-      }
-    }
-
-    function handleClickOutsideSearch(event) {
-      if (showSearchBox && searchTerm === '') {
-        const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
-        const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
-
-        if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
-          showSearchBox = false;
-        } else {
-        }
-      } else {
-      }
-    }
-
-    document.addEventListener('click', handleClickOutside, true);
-    document.addEventListener('click', handleClickOutsideSearch, true);
-    document.addEventListener('pointermove', handlePointerMove);
-    document.addEventListener('pointerup', handlePointerUp);
-
-    loadHighlights();
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside, true);
-      document.removeEventListener('click', handleClickOutsideSearch, true);
-      document.removeEventListener('pointermove', handlePointerMove);
-      document.removeEventListener('pointerup', handlePointerUp);
-    };
-  });
-  onMount(() => {
-    function handleShortcut(event) {
+  function handleShortcut(event) {
       if (!editable) return;
       const mod = event.metaKey || event.ctrlKey;
 
@@ -249,12 +214,40 @@
             toggleLink();
             return;
         }
+  }
+
+  function handleClickOutside(event) {
+    // Check if click was inside any of the dropdown buttons or their menus
+    const refs = [
+      blockDropdownRef,
+      insertDropdownRef,
+      alignmentDropdownRef,
+      colorDropdownRef,
+      highlightDropdownRef,
+      searchOptionsDropdownRef,
+      fontDropdownRef,
+      fontSizeDropdownRef
+    ];
+
+    let clickedInside = false;
+    for (const ref of refs) {
+      if (ref && ref.contains(event.target)) {
+        clickedInside = true;
+        break;
+      }
     }
-    document.addEventListener('keydown', handleShortcut);
-    return () => {
-      document.removeEventListener('keydown', handleShortcut);
-    };
-  });
+
+    if (!clickedInside) {
+      isBlockDropdownOpen = false;
+      isInsertDropdownOpen = false;
+      isAlignDropdownOpen = false;
+      isColorDropdownOpen = false;
+      isHighlightDropdownOpen = false;
+      showSearchOptionsDropdown = false;
+      isFontDropdownOpen = false;
+      isFontSizeDropdownOpen = false;
+    }
+  }
 
   function toggleBlockDropdown() {
     if (!editable) return;
@@ -297,7 +290,7 @@
           documentPath,
         }
       });
-      if (highlightsJson) {
+      if (highlightsJson && editor) {
         const highlights = JSON.parse(highlightsJson);
         editor.update(() => {
           for (const highlight of highlights) {
@@ -355,6 +348,32 @@
     quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
     code:      `<span class="inline-block w-4 text-xs"></></span>`
   };
+
+  const fontOptions = [
+    { label: 'Inter', value: 'Inter' },
+    { label: 'Anton', value: 'Anton' },
+    { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+    { label: 'Bangers', value: 'Bangers' },
+    { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },
+    { label: 'Comic Neue', value: "'Comic Neue'" },
+    { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
+    { label: 'Console', value: 'Monaco, Consolas, "Lucida Console", monospace' },
+    { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+    { label: 'Dancing Script', value: "'Dancing Script'" },
+    { label: 'Indie Flower', value: "'Indie Flower'" },
+    { label: 'JetBrains Mono', value: "'JetBrains Mono'" },
+    { label: 'Montserrat', value: 'Montserrat' },
+    { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
+    { label: 'Playfair Display', value: "'Playfair Display'" },
+    { label: 'Roboto', value: 'Roboto' },
+    { label: 'Roboto Slab', value: "'Roboto Slab'" },
+    { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
+  ];
+
+  const fontSizeOptions = [
+    '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '24', '26', '28', '30', '32', '36', '40', '48', '64', '72', '96'
+  ];
+
   const alignmentOptions = [ { value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }, { value: 'justify', label: 'Justify' } ];
   const alignmentIcons = {
     left:    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM3 8h10v2H3V8zM3 12h14v2H3v-2zM3 16h10v2H3v-2z" clip-rule="evenodd"/></svg>`,
@@ -368,6 +387,36 @@
   function toggleAlignDropdown() {
     if (!editable) return;
     isAlignDropdownOpen = !isAlignDropdownOpen;
+  }
+
+  let selectedFontFamily = 'Inter';
+  let isFontDropdownOpen = false;
+  let fontDropdownRef;
+
+  function toggleFontDropdown() {
+    if (!editable) return;
+    isFontDropdownOpen = !isFontDropdownOpen;
+  }
+
+  function applyFontFamily(fontFamily) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    applyStyle('font-family', fontFamily);
+    isFontDropdownOpen = false;
+  }
+
+  let selectedFontSize = '15';
+  let isFontSizeDropdownOpen = false;
+  let fontSizeDropdownRef;
+
+  function toggleFontSizeDropdown() {
+    if (!editable) return;
+    isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
+  }
+
+  function applyFontSize(fontSize) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    applyStyle('font-size', fontSize + 'px');
+    isFontSizeDropdownOpen = false;
   }
 
   const colorOptions = [
@@ -408,7 +457,19 @@
                     console.warn(`[LexicalEditor] initialJson prop looks like JSON but lacks root.children. Using default empty state.`);
                   }
               } else {
-                  console.warn(`[LexicalEditor] initialJson prop doesn't look like a JSON object string. Using default empty state.`);
+                  // Support plain text by wrapping it
+                  return JSON.stringify({
+                      root: { 
+                          children: [
+                              { 
+                                  type: 'paragraph', 
+                                  version: 1, 
+                                  children: [{ type: 'text', text: jsonProp, version: 1 }] 
+                              }
+                          ], 
+                          direction: null, format: '', indent: 0, type: 'root', version: 1 
+                      }
+                  });
               }
           } catch(e) {
               console.error(`[LexicalEditor] Error during basic validation of initialJson prop. Using default empty state.`, e);
@@ -421,6 +482,7 @@
 
 
   onMount(() => {
+    console.log('[LexicalEditor] onMount. enableSegmentPlayback:', enableSegmentPlayback);
     const instanceId = Math.random().toString(36).substring(7);
 
     if (!editorContainer) {
@@ -442,12 +504,12 @@
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
-        quote: 'border-l-4 border-gray-300 dark:border-border pl-2 italic my-1',
+        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
         code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 text-sm block whitespace-pre-wrap',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
-        table: 'editor-table w-full border-collapse border dark:border-border my-2 table-fixed',
-        tableCell: 'editor-table-cell border dark:border-border px-2 py-1 align-top min-w-[50px] relative',
-        tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-700 dark:text-gray-200 text-center',
+        table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
+        tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
+        tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
         placeholder: 'lexical-placeholder-theme-class absolute top-0 left-0 text-gray-400 dark:text-gray-500 text-sm select-none pointer-events-none opacity-50 p-2',
@@ -461,22 +523,6 @@
     });
 
 
-    let initialStateString = createInitialEditorState(initialJson);
-    try {
-        const parsedState = editor.parseEditorState(initialStateString);
-        editor.setEditorState(parsedState);
-        areNodesReady = true;
-    } catch (e) {
-        console.error(`[LexicalEditor ${instanceId}] Failed to parse and set initial editor state:`, e);
-        editor.update(() => {
-            const root = _getRoot();
-            root.clear();
-            root.append(_createParagraphNode());
-            areNodesReady = true;
-        });
-    }
-
-
     editor.setRootElement(editorContainer);
 
     editorContainer.addEventListener('click', (e) => {
@@ -485,8 +531,11 @@
     }, true);
 
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
-    editorContainer.addEventListener('pointermove', handlePointerHover);
+    editorWrapper.addEventListener('pointermove', handlePointerHover);
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('mousedown', handleClickOutside, true);
+
+    isReady = true; // Set to true before registering listener and setting state
 
     unregisterListeners = mergeRegister(
         editor.registerUpdateListener(({ editorState }) => {
@@ -497,7 +546,15 @@
                     console.error("Error reading editor state in update listener:", readError);
                 }
                 const jsonString = JSON.stringify(editorState.toJSON());
-                dispatch('change', { jsonString: jsonString });
+                let htmlString = '';
+                try {
+                    editorState.read(() => {
+                        htmlString = _generateHtmlFromNodes(editor);
+                    });
+                } catch (htmlError) {
+                    console.error("Error generating HTML in update listener:", htmlError);
+                }
+                dispatch('change', { jsonString, htmlString });
             }
             if (showTableCellMenu) {
                 try {
@@ -783,12 +840,39 @@
                 return true;
             },
             COMMAND_PRIORITY_HIGH
-        )
+        ),
+        editor.registerCommand(FOCUS_COMMAND, () => {
+            isFocused = true;
+            updateToolbarState();
+            return false;
+        }, COMMAND_PRIORITY_LOW),
+        editor.registerCommand(BLUR_COMMAND, () => {
+            isFocused = false;
+            updateToolbarState();
+            return false;
+        }, COMMAND_PRIORITY_LOW)
     );
+
+    // Now set the initial state, which will trigger the listener we just registered
+    let initialStateString = createInitialEditorState(initialJson);
+    try {
+        const parsedState = editor.parseEditorState(initialStateString);
+        editor.setEditorState(parsedState);
+        areNodesReady = true;
+    } catch (e) {
+        console.error(`[LexicalEditor] Failed to parse and set initial editor state:`, e);
+        editor.update(() => {
+            const root = _getRoot();
+            root.clear();
+            root.append(_createParagraphNode());
+            areNodesReady = true;
+        });
+    }
 
     tick().then(() => {
       if (!editor) return;
-      isReady = true;
+      // loadHighlights is already called via setEditorState if highlights were in the state
+      loadHighlights();
       if (editor.isEditable()) {
         setTimeout(() => { if(editor) editor.focus(); }, 0);
         try {
@@ -801,9 +885,12 @@
 
     return () => {
       unregisterListeners();
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      if (editorWrapper) {
+          editorWrapper.removeEventListener('pointermove', handlePointerHover);
+      }
       if (editorContainer) {
           editorContainer.removeEventListener('pointerdown', handlePointerDownOnContainer);
-          editorContainer.removeEventListener('pointermove', handlePointerHover);
           editorContainer.removeEventListener('contextmenu', handleContextMenu, true);
           editorContainer.removeEventListener('click', (e) => {
               const anchor = e.target.closest('a');
@@ -942,6 +1029,92 @@
       return editorWrapper;
   }
 
+  export function getTopVisibleRowInfo() {
+    if (!editorWrapper || !editor) return { index: -1, offset: 0 };
+    
+    const wrapperRect = editorWrapper.getBoundingClientRect();
+    
+    // Attempt fast path using elementFromPoint
+    // We check a point slightly inside the wrapper to find the row at the top
+    const centerX = wrapperRect.left + (wrapperRect.width / 2);
+    const topY = wrapperRect.top + 5; // 5px down to avoid borders
+    
+    const elAtTop = document.elementFromPoint(centerX, topY);
+    const rowAtTop = elAtTop?.closest('.editor-table-row');
+    
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+    
+    if (rowAtTop) {
+        const index = rows.indexOf(rowAtTop);
+        if (index !== -1) {
+            const rowRect = rowAtTop.getBoundingClientRect();
+            return { index, offset: Math.round(rowRect.top - wrapperRect.top) };
+        }
+    }
+    
+    // Fallback to iteration with a stable threshold
+    for (let i = 0; i < rows.length; i++) {
+        const rowRect = rows[i].getBoundingClientRect();
+        // Use a 2px threshold to ignore tiny slivers that might cause jitter
+        if (rowRect.bottom > wrapperRect.top + 2) { 
+            return { index: i, offset: Math.round(rowRect.top - wrapperRect.top) };
+        }
+    }
+    
+    return { index: -1, offset: 0 };
+  }
+
+  export function getCursorRowInfo() {
+    if (!editorWrapper || !editor) return { index: -1, offset: 0, visible: false };
+    
+    let info = { index: -1, offset: 0, visible: false };
+    
+    editor.getEditorState().read(() => {
+        const selection = _getSelection();
+        if (_isRangeSelection(selection)) {
+            const anchorNode = selection.anchor.getNode();
+            const element = editor.getElementByKey(anchorNode.getKey());
+            const row = element?.closest('.editor-table-row');
+            
+            if (row) {
+                const wrapperRect = editorWrapper.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+                
+                info.index = rows.indexOf(row);
+                info.offset = Math.round(rowRect.top - wrapperRect.top);
+                // Visible if the row is within the viewport
+                info.visible = (rowRect.bottom > wrapperRect.top && rowRect.top < wrapperRect.bottom);
+            }
+        }
+    });
+    
+    return info;
+  }
+
+  export function scrollToRow(index, offset) {
+    if (!editorWrapper || !editor || index < 0) return;
+    
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+    if (index >= rows.length) return;
+    
+    const targetRow = rows[index];
+    if (targetRow) {
+        const wrapperRect = editorWrapper.getBoundingClientRect();
+        const rowRect = targetRow.getBoundingClientRect();
+        
+        const currentOffset = rowRect.top - wrapperRect.top;
+        const targetOffset = offset;
+        
+        const diff = currentOffset - targetOffset;
+        
+        // Only scroll if the difference is significant (more than 1 pixel) to avoid jitter
+        if (Math.abs(diff) >= 1) {
+            editorWrapper.scrollTop = Math.round(editorWrapper.scrollTop + diff);
+        }
+    }
+  }
+
   function updateToolbarState() {
     if (!editor || !isReady) { return; }
     const selection = _getSelection();
@@ -951,6 +1124,8 @@
     selectedAlignment = 'left';
     selectedTextColor = '#000000';
     selectedHighlightColor = 'transparent';
+    selectedFontFamily = 'Inter';
+    selectedFontSize = '15px';
 
     if (_isRangeSelection(selection)) {
       isBold = selection.hasFormat('bold');
@@ -959,6 +1134,10 @@
       isStrikethrough = selection.hasFormat('strikethrough');
       selectedTextColor = _getSelectionStyleValueForProperty(selection, 'color', '#000000') || '#000000';
       selectedHighlightColor = _getSelectionStyleValueForProperty(selection, 'background-color', 'transparent') || 'transparent';
+      selectedFontFamily = _getSelectionStyleValueForProperty(selection, 'font-family', 'Inter') || 'Inter';
+      
+      const rawFontSize = _getSelectionStyleValueForProperty(selection, 'font-size', '15px') || '15px';
+      selectedFontSize = rawFontSize.replace('px', '');
 
       const anchorNode = selection.anchor.getNode();
       if (anchorNode) {
@@ -1010,16 +1189,34 @@
           const parentForLinkCheck = nodeForLinkCheck ? nodeForLinkCheck.getParent() : null;
           isLink = _isLinkNode(nodeForLinkCheck) || _isLinkNode(parentForLinkCheck);
 
-      } else { blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false; }
+          // Track current row index for glowing highlight
+          if (editorWrapper) {
+              const domNode = editor.getElementByKey(anchorNode.getKey());
+              const row = domNode?.closest('.editor-table-row');
+              if (row) {
+                  const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
+                  const newIndex = rows.indexOf(row);
+                  if (newIndex !== internalCursorRowIndex) {
+                      internalCursorRowIndex = newIndex;
+                      dispatch('cursorrowchange', { index: internalCursorRowIndex });
+                  }
+              } else {
+                  internalCursorRowIndex = -1;
+              }
+          }
+
+      } else { blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false; internalCursorRowIndex = -1;}
 
     } else if (_isTableSelection(selection)) {
         blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false;
         isBold = false; isItalic = false; isUnderline = false; isStrikethrough = false;
         selectedTextColor = '#000000'; selectedHighlightColor = 'transparent';
+        internalCursorRowIndex = -1;
     } else {
         isBold = false; isItalic = false; isUnderline = false; isStrikethrough = false;
         isLink = false; blockType = 'paragraph'; selectedAlignment = 'left';
         selectedTextColor = '#000000'; selectedHighlightColor = 'transparent';
+        internalCursorRowIndex = -1;
     }
 
     isBold = isBold; isItalic = isItalic; isUnderline = isUnderline; isStrikethrough = isStrikethrough;
@@ -1027,6 +1224,19 @@
     selectedTextColor = selectedTextColor; selectedHighlightColor = selectedHighlightColor;
     canUndo = historyState.undoStack.length > 0;
     canRedo = historyState.redoStack.length > 0;
+  }
+
+  // Reactive row highlighting logic
+  $: if (editorWrapper && (internalCursorRowIndex !== undefined || externalHighlightedRowIndex !== undefined)) {
+      const rows = editorWrapper.querySelectorAll('.editor-table-row');
+      rows.forEach((row, i) => {
+          const shouldGlow = (i === externalHighlightedRowIndex) || (i === internalCursorRowIndex && isFocused);
+          if (shouldGlow) {
+              row.classList.add('cursor-row-glow');
+          } else {
+              row.classList.remove('cursor-row-glow');
+          }
+      });
   }
 
 
@@ -1064,15 +1274,12 @@
         }
         const normalizedSelection = _getSelection();
         if (_isRangeSelection(normalizedSelection)) {
-            const isDarkMode = document.documentElement.classList.contains('dark');
             const styles = {};
 
             if (colorToApply !== 'transparent') {
                 styles['background-color'] = colorToApply;
-                styles['color'] = isDarkMode ? '#111827' : '#000000';
             } else {
                 styles['background-color'] = null;
-                styles['color'] = null;
             }
 
             _patchStyleText(normalizedSelection, styles);
@@ -1555,7 +1762,78 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
   }
 
   function handlePointerHover(event) {
-      if (!editable || !editorContainer || isResizing) return;
+      if (!editorContainer || !editorWrapper || isResizing || !editor) return;
+      
+      if (enableSegmentPlayback) {
+          const x = event.clientX;
+          const y = event.clientY;
+          const wrapperRect = editorWrapper.getBoundingClientRect();
+          
+          // Check if we are in the gutter (first 60px of the wrapper)
+          const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
+          
+          // If we are in the gutter, scan slightly to the right to find the row at this Y level
+          const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
+          
+          // Use elementsFromPoint to find the row
+          const elements = document.elementsFromPoint(scanX, y);
+          const rowElement = elements.find(el => 
+              el.classList?.contains('editor-table-row') || 
+              el.closest?.('.editor-table-row')
+          );
+          const actualRow = rowElement?.classList?.contains('editor-table-row') ? rowElement : rowElement?.closest?.('.editor-table-row');
+          
+          if (actualRow) {
+              // Skip if this is a header row
+              const isHeaderRow = actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
+              // Also skip if it's the very first row of the table (index 0), as this is invariably the header in our transcript structure
+              // We use actualRow.rowIndex if available (standard HTMLTableRowElement), or fallback to checking siblings
+              const isFirstRow = actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
+
+              if (isHeaderRow || isFirstRow) {
+                  if (showPlayButton) {
+                      showPlayButton = false;
+                      hoveredRowKey = null;
+                  }
+                  // We continue here to allow resize detection even if over header
+              } else {
+                  let rowKey = actualRow.getAttribute('data-lexical-key');
+                  
+                  // Fallback if data-lexical-key is missing from DOM
+                  if (!rowKey) {
+                      editor.read(() => {
+                          const node = _getNearestNodeFromDOMNode(actualRow);
+                          if (node) rowKey = node.getKey();
+                      });
+                  }
+
+                  if (rowKey && rowKey !== hoveredRowKey) {
+                      hoveredRowKey = rowKey;
+                      const rect = actualRow.getBoundingClientRect();
+                      
+                      // Position button in the gutter (left: 20px relative to wrapper)
+                      playButtonPosition = {
+                          top: rect.top - wrapperRect.top + editorWrapper.scrollTop + (rect.height / 2),
+                          left: 20,
+                      };
+                      showPlayButton = true;
+                  }
+              }
+          } else {
+              // If NOT over a row, we hide if we are also NOT over the play button itself
+              // and NOT in the gutter (to prevent flickering)
+              const currentElements = document.elementsFromPoint(x, y);
+              const isOverPlayButton = currentElements.some(el => el.classList?.contains('play-segment-hover-btn'));
+              
+              if (!isOverPlayButton && !isWithinGutterX) {
+                  if (showPlayButton) {
+                      showPlayButton = false;
+                      hoveredRowKey = null;
+                  }
+              }
+          }
+      }
+
       // If table cell resizing is disabled, do nothing
       if (!enableTableCellResize) return;
 
@@ -1566,6 +1844,59 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
           editorContainer.style.cursor = '';
       }
   }
+
+  function parseTimestamp(text) {
+      // Flexible format: (HH:)?MM:SS.mmm - (HH:)?MM:SS.mmm
+      const timePattern = /(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}(?:\.\d{1,3})?)/;
+      const regex = new RegExp(`^${timePattern.source}\\s*-\\s*${timePattern.source}$`);
+      const match = text.match(regex);
+      if (!match) return null;
+      
+      const startTime = timeStringToSeconds(match[1], match[2], match[3]);
+      const endTime = timeStringToSeconds(match[4], match[5], match[6]);
+      return { startTime, endTime };
+  }
+  
+  function timeStringToSeconds(h, m, s) {
+      const hours = parseInt(h || '0', 10);
+      const minutes = parseInt(m || '0', 10);
+      const seconds = parseFloat(s || '0');
+      return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  function handlePlaySegmentClick() {
+      if (!hoveredRowKey || !editor) return;
+      
+      editor.getEditorState().read(() => {
+          const rowNode = _getNodeByKey(hoveredRowKey);
+          if (_isTableRowNode(rowNode)) {
+              const cells = rowNode.getChildren();
+              let timestampText = '';
+              for (const cell of cells) {
+                  if (_isTableCellNode(cell)) {
+                      const text = cell.getTextContent().trim();
+                      // Flexible check for timestamp pattern
+                      if (/(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?\s*-\s*(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?/.test(text)) {
+                          timestampText = text;
+                          break;
+                      }
+                  }
+              }
+
+              if (timestampText) {
+                  const parsed = parseTimestamp(timestampText);
+                  if (parsed) {
+                      dispatch('playsegment', parsed);
+                  } else {
+                      notificationStore.add('Invalid timestamp values. Expected format: MM:SS.mmm or HH:MM:SS.mmm', 'error');
+                  }
+              } else {
+                  notificationStore.add('Could not find a valid timestamp in this row.', 'error');
+              }
+          }
+      });
+  }
+
 
   function handlePointerDownOnContainer(event) {
       if (!editable || !editor || !editorContainer) return;
@@ -1599,6 +1930,9 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
           resizeStartPos = { x: event.clientX, y: event.clientY };
           updateResizerLine(event.clientX, event.clientY);
           document.body.style.cursor = direction === 'col' ? 'col-resize' : 'row-resize';
+
+          window.addEventListener('pointermove', handlePointerMove);
+          window.addEventListener('pointerup', handlePointerUp);
       }
   }
 
@@ -1743,106 +2077,250 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       resizerLineStyle = 'display: none;';
       document.body.style.cursor = 'auto';
       if (editorContainer) editorContainer.style.cursor = 'auto';
+
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
   }
+
+function updateSearchHighlights() {
+  if (typeof CSS === 'undefined' || !CSS.highlights) {
+    return;
+  }
+
+  // Fast path: if no results or search inactive (and replace modal closed), clear everything immediately
+  if ((!showSearchBox && !showFindReplaceModal) || !searchTerm.trim() || searchResults.length === 0) {
+    const prevMatch = CSS.highlights.get('search-match');
+    if (prevMatch) {
+      prevMatch.clear();
+      CSS.highlights.delete('search-match');
+    }
+    
+    const prevActive = CSS.highlights.get('search-match-active');
+    if (prevActive) {
+      prevActive.clear();
+      CSS.highlights.delete('search-match-active');
+    }
+    return;
+  }
+
+  const matchRanges = [];
+  const activeRanges = [];
+
+  searchResults.forEach((result, index) => {
+    // result.nodes is an array of { nodeKey, startOffset, endOffset }
+    result.nodes.forEach(nodeMatch => {
+        const domNode = editor.getElementByKey(nodeMatch.nodeKey);
+        if (!domNode) return;
+
+        let textNode = null;
+        if (domNode.nodeType === Node.TEXT_NODE) {
+          textNode = domNode;
+        } else {
+          const walker = document.createTreeWalker(domNode, NodeFilter.SHOW_TEXT, null);
+          textNode = walker.nextNode();
+        }
+
+        if (textNode) {
+          try {
+            const range = new Range();
+            range.setStart(textNode, nodeMatch.startOffset);
+            range.setEnd(textNode, nodeMatch.endOffset);
+            
+            if (index === currentSearchResultIndex) {
+              activeRanges.push(range);
+            } else {
+              matchRanges.push(range);
+            }
+          } catch (e) {}
+        }
+    });
+  });
+
+  CSS.highlights.set('search-match', new Highlight(...matchRanges));
+  CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
+}
 
 function handleSearchInputKeydown(event) {
   if (event.key === 'Enter') {
-    event.preventDefault(); // Prevent default Enter key action
-    console.log('[handleSearchInputKeydown] Enter key pressed.');
-
-    if (searchTerm.trim() !== '') {
-      executeSearch(searchTerm);
+    event.preventDefault();
+    if (event.shiftKey) {
+        navigateToPreviousResult();
     } else {
-      // If term is empty, Enter probably shouldn't clear results again,
-      // but rather do nothing or allow default (which is now prevented).
-      // For now, let's assume Enter on empty term does nothing further here
-      // beyond preventing default.
-      // Or, if executeSearch handles empty term by clearing, that's fine.
-      // executeSearch already handles empty searchTerm by clearing results.
-      searchResults = [];
-      currentSearchResultIndex = -1;
-      // Dispatch updates if needed, though executeSearch('') would do this.
-      // dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
-      // dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
-      console.log('[handleSearchInputKeydown] Search term is empty, results cleared (if any).');
+        navigateToNextResult();
     }
-
-    // Explicitly refocus the search input field
-    // Use tick to ensure any DOM updates from executeSearch are processed first,
-    // though likely not strictly necessary here if input field itself isn't re-rendered.
-    tick().then(() => {
-      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-      if (inputField) {
-        inputField.focus();
-        console.log('[handleSearchInputKeydown] Refocused search input field.');
-      } else {
-        console.warn('[handleSearchInputKeydown] Could not find search input field to refocus.');
-      }
-    });
   }
 }
 
-function executeSearch(termToSearch) {
+let latestSearchTerm = '';
+function executeSearch(termToSearch, options = {}) {
   if (!editor) return;
-  const term = termToSearch.trim();
-  console.log('[executeSearch] Called with termToSearch:', termToSearch, '(trimmed term:', term + ')');
+  const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+  searchTerm = termToSearch; 
+  const term = termToSearch; 
+  latestSearchTerm = term;
 
   searchResults = [];
   currentSearchResultIndex = -1;
+  updateSearchHighlights();
 
   if (term === '') {
-    console.log('[executeSearch] Term is empty, clearing results and dispatching.');
-    dispatch('searchresultsupdated', { results: searchResults, term: term });
+    dispatch('searchresultsupdated', { results: [], term: '' });
     dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
-  console.log('[executeSearch] Commencing search for term:', term);
   editor.getEditorState().read(() => {
+    if (term !== latestSearchTerm) return;
+
     const root = _getRoot();
-    const nodesToSearch = [root];
+    
+    // 1. Flatten document text and track node offsets
+    let fullText = '';
+    const textNodeOffsets = []; // { nodeKey, start, end }
+
+    const visit = (node) => {
+        if (_isTextNode(node)) {
+            const nodeText = node.getTextContent();
+            textNodeOffsets.push({
+                nodeKey: node.getKey(),
+                start: fullText.length,
+                end: fullText.length + nodeText.length
+            });
+            fullText += nodeText;
+        } else if (_isElementNode(node)) {
+            node.getChildren().forEach(visit);
+            // Add newline for block elements to separate text flow? 
+            // Lexical plain text search usually ignores blocks unless they are paragraphs.
+            // For now, let's keep it simple as continuous flow for finding "partially highlighted words".
+        }
+    };
+    visit(root);
+
     const newResults = [];
-
-    while (nodesToSearch.length > 0) {
-      const node = nodesToSearch.pop();
-
-      if (_isTextNode(node)) {
-        console.log('[executeSearch] Processing TextNode. Key:', node.getKey(), 'Text (first 50 chars):', node.getTextContent().substring(0, 50));
-        const text = node.getTextContent();
-        const termLower = term.toLowerCase();
-        const textLower = text.toLowerCase();
-        let offset = -1;
-        while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
-          const matchDetail = {
-            nodeKey: node.getKey(),
-            offset: offset,
-            length: term.length,
-            text: node.getTextContent().substring(offset, offset + term.length)
-          };
-          console.log('[executeSearch] Match found:', matchDetail);
-          newResults.push(matchDetail);
-        }
-      } else if (node.getChildren) {
-        const children = node.getChildren();
-        for (let i = children.length - 1; i >= 0; i--) {
-            nodesToSearch.push(children[i]);
-        }
-      }
+    let regex;
+    try {
+      let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (isWholeWord) pattern = `\\b${pattern}\\b`;
+      regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
+    } catch (e) {
+      console.warn("Invalid search pattern:", term);
+      return;
     }
+
+    // 2. Search in flattened text
+    let match;
+    while ((match = regex.exec(fullText)) !== null) {
+        const matchStart = match.index;
+        const matchEnd = match.index + match[0].length;
+        
+        // 3. Map match range back to nodes
+        const nodesInMatch = [];
+        for (const tno of textNodeOffsets) {
+            if (tno.end > matchStart && tno.start < matchEnd) {
+                // This node overlaps with match
+                nodesInMatch.push({
+                    nodeKey: tno.nodeKey,
+                    startOffset: Math.max(0, matchStart - tno.start),
+                    endOffset: Math.min(tno.end - tno.start, matchEnd - tno.start)
+                });
+            }
+            if (tno.start >= matchEnd) break;
+        }
+
+        if (nodesInMatch.length > 0) {
+            newResults.push({
+                nodes: nodesInMatch,
+                text: match[0]
+            });
+        }
+        
+        if (match.index === regex.lastIndex) regex.lastIndex++;
+    }
+    
+    if (term !== latestSearchTerm) return;
+
     searchResults = newResults;
-    console.log('[executeSearch] Search complete. Found', searchResults.length, 'results.');
     if (searchResults.length > 0) {
       currentSearchResultIndex = 0;
-      console.log('[executeSearch] currentSearchResultIndex set to 0. First result:', searchResults[0]);
-      navigateToResult(currentSearchResultIndex); // This will also log
     } else {
-      console.log('[executeSearch] No results found for:', term);
-      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null }); // Ensure this is dispatched if no results
+      currentSearchResultIndex = -1;
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     }
+    
+    updateSearchHighlights();
   });
-  const dispatchData = { results: searchResults, term: term };
-  console.log('[executeSearch] Dispatching searchresultsupdated with:', dispatchData);
-  dispatch('searchresultsupdated', dispatchData);
+
+  dispatch('searchresultsupdated', { results: searchResults, term: term });
+}
+
+function toggleSearchOptionsDropdown() {
+  showSearchOptionsDropdown = !showSearchOptionsDropdown;
+}
+
+function openFindReplaceModal() {
+  showSearchOptionsDropdown = false;
+  showFindReplaceModal = true;
+}
+
+function handleReplace(event) {
+  const { find, replace } = event.detail;
+  if (currentSearchResultIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchResultIndex];
+      
+      editor.update(() => {
+          if (result.nodes.length > 0) {
+              const first = result.nodes[0];
+              const last = result.nodes[result.nodes.length - 1];
+              
+              const firstNode = _getNodeByKey(first.nodeKey);
+              const lastNode = _getNodeByKey(last.nodeKey);
+              
+              if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+                  try {
+                      const selection = _getSelection();
+                      if (_isRangeSelection(selection)) {
+                          selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                          selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                          selection.insertText(replace);
+                      }
+                  } catch (e) {
+                      console.error("Replace failed:", e);
+                  }
+              }
+          }
+      }, { tag: 'replace-one' });
+      
+      executeSearch(find);
+  }
+}
+
+function handleReplaceAll(event) {
+  const { find, replace } = event.detail;
+  if (searchResults.length === 0) return;
+
+  editor.update(() => {
+      // Replacement must be done in reverse order to keep offsets valid for preceding matches
+      for (let i = searchResults.length - 1; i >= 0; i--) {
+          const result = searchResults[i];
+          if (result.nodes.length > 0) {
+              const first = result.nodes[0];
+              const last = result.nodes[result.nodes.length - 1];
+              const firstNode = _getNodeByKey(first.nodeKey);
+              const lastNode = _getNodeByKey(last.nodeKey);
+              
+              if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+                  const selection = _getSelection();
+                  if (_isRangeSelection(selection)) {
+                      selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                      selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                      selection.insertText(replace);
+                  }
+              }
+          }
+      }
+  }, { tag: 'replace-all' });
+  
+  executeSearch(find);
 }
 
 function clearSearchTermInput() {
@@ -1850,6 +2328,7 @@ function clearSearchTermInput() {
   searchTerm = '';
   searchResults = [];
   currentSearchResultIndex = -1;
+  updateSearchHighlights();
 
   const updateData = { results: searchResults, term: searchTerm };
   const indexChangeData = { currentIndex: currentSearchResultIndex, currentResult: null };
@@ -1859,105 +2338,85 @@ function clearSearchTermInput() {
   console.log('[clearSearchTermInput] Dispatching searchindexchanged with:', indexChangeData);
   dispatch('searchindexchanged', indexChangeData);
 
-  if (showSearchBox && editorContainer) {
-    const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-    inputField?.focus();
+  if (showSearchBox) {
+    searchInputRef?.focus();
   }
 }
 
-function navigateToResult(index) {
+function navigateToResult(index, shouldFocus = true) {
   if (!editor) return;
   console.log('[navigateToResult] Called with index:', index, 'Total results:', searchResults.length);
 
-  // Removed redundant highlight clearing, selection handles this
-
   if (index < 0 || index >= searchResults.length) {
     currentSearchResultIndex = -1;
-    console.log('[navigateToResult] Index out of bounds. currentSearchResultIndex set to -1.');
-    // Ensure previous highlight is cleared if any
-    // if (currentSearchHighlight) {
-    //   currentSearchHighlight.remove();
-    //   currentSearchHighlight = null;
-    // }
+    updateSearchHighlights();
     dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
   const result = searchResults[index];
   currentSearchResultIndex = index;
-  console.log('[navigateToResult] Navigating to result:', result);
 
-  editor.focus(); // <--- Add this line
-  latestScrollTargetKey = null; // Reset at the beginning of navigation
+  if (shouldFocus) {
+      editor.focus(); 
+  }
+  latestScrollTargetKey = null;
 
   editor.update(() => {
-    const node = _getNodeByKey(result.nodeKey);
-    if (_isTextNode(node)) {
-      const currentNodeTextLength = node.getTextContentSize();
-      const startOffset = result.offset;
-      const endOffset = result.offset + result.length;
+    if (result.nodes.length > 0) {
+        const first = result.nodes[0];
+        const last = result.nodes[result.nodes.length - 1];
+        const firstNode = _getNodeByKey(first.nodeKey);
+        const lastNode = _getNodeByKey(last.nodeKey);
 
-      console.log(`[navigateToResult] Attempting selection for node ${result.nodeKey}. Stored Offset: ${startOffset}, Stored Length: ${result.length}, End Offset: ${endOffset}, Current Node Text Length: ${currentNodeTextLength}`);
-
-      if (startOffset < 0 || startOffset > currentNodeTextLength || endOffset > currentNodeTextLength) {
-        console.warn(`[navigateToResult] Stale or invalid offset for node ${result.nodeKey}. Offset: ${startOffset}, Length: ${result.length}, Node Text Length: ${currentNodeTextLength}. Skipping selection.`);
-        latestScrollTargetKey = null; // Ensure no scroll attempt
-      } else {
-        console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
-        node.select(startOffset, endOffset);
-        latestScrollTargetKey = result.nodeKey; // Set target for scrolling
-      }
-    } else {
-      console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
-      latestScrollTargetKey = null; // Ensure no scroll attempt
+        if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
+            const selection = _getSelection();
+            if (_isRangeSelection(selection)) {
+                selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                selection.focus.set(last.nodeKey, last.endOffset, 'text');
+                latestScrollTargetKey = first.nodeKey;
+            }
+        }
     }
   }, { tag: 'search-navigate' });
 
-  // Scroll logic using the component-level variable, wrapped in tick()
+  tick().then(updateSearchHighlights);
+
   if (latestScrollTargetKey) {
-    const keyToScroll = latestScrollTargetKey; // Capture value for closure
+    const keyToScroll = latestScrollTargetKey;
     tick().then(() => {
-      console.log('[navigateToResult] Tick complete. Attempting to scroll for node key:', keyToScroll);
       try {
         const domElement = editor.getElementByKey(keyToScroll);
         if (domElement) {
-          console.log('[navigateToResult] DOM element found. Attempting to scroll DOM element into view for node key:', keyToScroll);
           domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-          console.warn('[navigateToResult] Tick: Could not find DOM element for node key:', keyToScroll, 'to scroll into view.');
         }
-      } catch (e) {
-        console.error('[navigateToResult] Tick: Error scrolling element into view:', e);
-      }
+      } catch (e) {}
     });
-  } else {
-      console.log('[navigateToResult] Skipping scroll attempt as no valid scrollTargetKey was set for node key:', result.nodeKey);
   }
-  latestScrollTargetKey = null; // Clean up after attempt or skip
+  latestScrollTargetKey = null;
 
   const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
-  console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
   dispatch('searchindexchanged', dispatchData);
 }
 
 function navigateToPreviousResult() {
   console.log('[navigateToPreviousResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
-  if (searchResults.length === 0 || currentSearchResultIndex <= 0) {
-    console.log('[navigateToPreviousResult] No previous results or already at the first result.');
-    return;
-  }
-  currentSearchResultIndex--;
-  navigateToResult(currentSearchResultIndex);
+  if (searchResults.length === 0) return;
+  
+  let newIndex = currentSearchResultIndex - 1;
+  if (newIndex < 0) newIndex = searchResults.length - 1;
+  
+  navigateToResult(newIndex, false);
 }
 
 function navigateToNextResult() {
   console.log('[navigateToNextResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
-  if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) {
-    console.log('[navigateToNextResult] No next results or already at the last result.');
-    return;
-  }
-  currentSearchResultIndex++;
-  navigateToResult(currentSearchResultIndex);
+  if (searchResults.length === 0) return;
+  
+  let newIndex = currentSearchResultIndex + 1;
+  if (newIndex >= searchResults.length) newIndex = 0;
+
+  navigateToResult(newIndex, false);
 }
 
 let previousLayout = null;
@@ -2047,9 +2506,9 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-hidden shadow-sm layout-{activeLayout}">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md z-10">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -2073,7 +2532,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2086,6 +2545,64 @@ $: if (editor && activeLayout) {
                     <span>{option.label}</span>
                   </span>
                   <span class="text-xs text-gray-500">{option.shortcut}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {#if toolbarConfig.fontFamily}
+        <div class="relative" bind:this={fontDropdownRef}>
+          <button
+            class="mini-toolbar-button flex items-center gap-1 min-w-[100px] justify-between"
+            on:click={toggleFontDropdown}
+            title="Font Family"
+            disabled={!editable}
+          >
+            <span class="truncate">{fontOptions.find(f => f.value === selectedFontFamily)?.label ?? selectedFontFamily}</span>
+            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          {#if isFontDropdownOpen}
+            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+              {#each fontOptions as option}
+                <div
+                  class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
+                  on:click={() => applyFontFamily(option.value)}
+                  style="font-family: {option.value}"
+                  role="menuitem"
+                  tabindex="-1"
+                >
+                  {option.label}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="relative" bind:this={fontSizeDropdownRef}>
+          <button
+            class="mini-toolbar-button flex items-center gap-1 min-w-[48px] justify-between"
+            on:click={toggleFontSizeDropdown}
+            title="Font Size"
+            disabled={!editable}
+          >
+            <span class="truncate">{selectedFontSize}</span>
+            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          {#if isFontSizeDropdownOpen}
+            <div class="absolute mt-1 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+              {#each fontSizeOptions as size}
+                <div
+                  class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
+                  on:click={() => applyFontSize(size)}
+                  role="menuitem"
+                  tabindex="-1"
+                >
+                  {size}
                 </div>
               {/each}
             </div>
@@ -2139,7 +2656,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
                 class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2167,7 +2684,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-border shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2272,14 +2789,125 @@ $: if (editor && activeLayout) {
           </svg>
         </button>
       {/if}
-      {#if toolbarConfig.clearFormatting && toolbarConfig.search}
-        <div class="separator"></div>
+
+      {#if toolbarConfig.search}
+        <div class="ml-auto relative flex items-center" bind:this={searchToggleButtonElement}>
+          <button
+            class="mini-toolbar-button"
+            class:active={showSearchBox}
+            on:click={() => {
+                showSearchBox = !showSearchBox;
+                if (showSearchBox) {
+                    tick().then(() => {
+                        const input = searchUiContainerElement?.querySelector('input');
+                        if (input) input.focus();
+                    });
+                } else {
+                    updateSearchHighlights();
+                }
+            }}
+            title="Search"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+            </svg>
+          </button>
+
+          {#if showSearchBox}
+            <div
+              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+              bind:this={searchUiContainerElement}
+            >
+              <div class="relative flex-grow flex items-center">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  class="w-full text-xs border border-gray-300 dark:border-gray-700 pl-2 pr-16 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none search-input-with-count"
+                  bind:value={searchTerm}
+                  bind:this={searchInputRef}
+                  on:input={(e) => executeSearch(e.currentTarget.value)}
+                  on:keydown={handleSearchInputKeydown}
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+                <div class="absolute right-1 flex items-center gap-1 pointer-events-none">
+                  {#if searchTerm}
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {#if searchResults.length > 0}
+                        {currentSearchResultIndex + 1}/{searchResults.length}
+                      {:else}
+                        0/0
+                      {/if}
+                    </span>
+                    <button
+                      class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full pointer-events-auto transition-colors"
+                      on:click|stopPropagation={clearSearchTermInput}
+                      title="Clear Search"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                      </svg>
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              
+              <div class="flex items-center gap-0.5">
+                <button
+                  class="mini-toolbar-button !p-1"
+                  on:click={navigateToPreviousResult}
+                  disabled={searchResults.length === 0}
+                  title="Previous Match"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+                  </svg>
+                </button>
+                <button
+                  class="mini-toolbar-button !p-1"
+                  on:click={navigateToNextResult}
+                  disabled={searchResults.length === 0}
+                  title="Next Match"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+                  </svg>
+                </button>
+
+                <div class="relative" bind:this={searchOptionsDropdownRef}>
+                  <button
+                    class="mini-toolbar-button !p-1"
+                    on:click={toggleSearchOptionsDropdown}
+                    title="Search Options"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                      <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                    </svg>
+                  </button>
+                  {#if showSearchOptionsDropdown}
+                    <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]">
+                      <button
+                        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 whitespace-nowrap"
+                        on:click={openFindReplaceModal}
+                      >
+                        Find & Replace
+                      </button>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 p-2"
+    class="lexical-wrapper flex-grow min-h-0 relative overflow-y-auto"
+    style="{enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}"
     bind:this={editorWrapper}
   >
     <div
@@ -2293,7 +2921,21 @@ $: if (editor && activeLayout) {
     ></div>
 
     <div class="resizer-line" style={resizerLineStyle}></div>
+
+    {#if showPlayButton}
+      <button
+        class="play-segment-hover-btn absolute z-30 w-6 h-6 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md transition-all duration-200 border-2 border-white dark:border-gray-800"
+        style="top: {playButtonPosition.top}px; left: {playButtonPosition.left}px; transform: translateY(-50%);"
+        on:click|stopPropagation={handlePlaySegmentClick}
+        title="Play this segment"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
+          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+        </svg>
+      </button>
+    {/if}
   </div>
+
 
   {#if enableTableCellMenu}
     <TableCellActionMenu
@@ -2316,6 +2958,18 @@ $: if (editor && activeLayout) {
   on:close={() => showLinkModal = false}
 />
 
+<FindReplaceModal
+  bind:showModal={showFindReplaceModal}
+  bind:initialSearchTerm={searchTerm}
+  currentMatchIndex={currentSearchResultIndex}
+  totalMatches={searchResults.length}
+  on:replace={handleReplace}
+  on:replaceall={handleReplaceAll}
+  on:findnext={navigateToNextResult}
+  on:findchange={(e) => executeSearch(e.detail.term, { isCaseSensitive: e.detail.isCaseSensitive, isRegex: e.detail.isRegex, isWholeWord: e.detail.isWholeWord })}
+  on:close={() => showFindReplaceModal = false}
+/>
+
 <InsertTableModal
   bind:showModal={showInsertTableModal}
   on:confirm={handleInsertTableConfirm}
@@ -2327,6 +2981,10 @@ $: if (editor && activeLayout) {
   editor={editor}
   showToolbar={showModifyToolbar}
   toolbarPosition={modifyToolbarPosition}
+  on:close={() => {
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
   onChangeColor={(color) => {
     if (clickedNodeKey) {
       editor.update(() => {
@@ -2389,8 +3047,6 @@ $: if (editor && activeLayout) {
   }}
 />
 {/if}
-
-
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
       @apply p-1.5 rounded inline-flex items-center justify-center
@@ -2413,15 +3069,15 @@ $: if (editor && activeLayout) {
 
   html.dark .toolbar button.mini-toolbar-button,
   html.dark .toolbar select.mini-toolbar-select {
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-border);
+      color: #e5e5e5;
+      border: 1px solid #404040;
       background-color: transparent;
   }
 
   html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
   html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
-      background-color: var(--color-border);
-      border-color: var(--color-border);
+      background-color: #404040;
+      border-color: #404040;
   }
 
   html.dark .toolbar button.mini-toolbar-button.active {
@@ -2430,6 +3086,8 @@ $: if (editor && activeLayout) {
 
   .lexical-content {
       min-width: 150px; /* Prevent it from being too tiny when empty */
+      line-height: 1.5;
+      white-space: pre-wrap;
   }
 
   .editor-table {
@@ -2461,5 +3119,181 @@ $: if (editor && activeLayout) {
   button.active {
     @apply bg-gray-300 dark:bg-gray-500;
   }
+
+  /* Search match highlights using CSS Custom Highlight API */
+  :global(::highlight(search-match)) {
+    background-color: rgba(255, 215, 0, 0.4);
+    color: black;
+  }
+
+  :global(::highlight(search-match-active)) {
+    background-color: rgba(255, 165, 0, 0.7);
+    color: black;
+  }
+
+  :global(html.dark ::highlight(search-match)) {
+    background-color: rgba(255, 215, 0, 0.3);
+    color: white;
+  }
+
+  :global(html.dark ::highlight(search-match-active)) {
+    background-color: rgba(255, 165, 0, 0.6);
+    color: white;
+  }
+
+  /* Glowing row highlight */
+  :global(.editor-table-row.cursor-row-glow) {
+    box-shadow: inset 0 0 4px 1px rgba(59, 130, 246, 0.5), 0 0 4px 1px rgba(59, 130, 246, 0.5);
+    background-color: rgba(59, 130, 246, 0.05);
+    transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    z-index: 5;
+    position: relative;
+  }
+
+  :global(html.dark .editor-table-row.cursor-row-glow) {
+    box-shadow: inset 0 0 6px 1px rgba(96, 165, 250, 0.4), 0 0 6px 1px rgba(96, 165, 250, 0.4);
+    background-color: rgba(96, 165, 250, 0.1);
+  }
+
+  .play-segment-hover-btn {
+      pointer-events: auto;
+      cursor: pointer;
+      opacity: 0.9;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .play-segment-hover-btn:hover {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.1);
+  }
+
+    /* =================================================================== */
+    /* LAYOUT SPECIFIC RENDERING RULES FOR TRANSCRIPT TABLES               */
+    /* =================================================================== */
+
+    /* STYLES FOR LAYOUT 2 (Segment Block) */
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(n+3)) {
+        margin-top: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 3 (Timestamped Paragraph) */
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(n+2)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(n+2)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        margin-top: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 4 (Speaker & Text) */
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(-n+2)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(-n+2)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(n+3)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+
+    /* STYLES FOR LAYOUT 5 (Plain Text) */
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(-n+3)),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(-n+3)) {
+        display: none;
+    }
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+
+    /* COMMON RULE TO COLLAPSE ROWS VERTICALLY */
+    .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr + tr),
+    .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr + tr) {
+        margin-top: -1px;
+    }
 
 </style>

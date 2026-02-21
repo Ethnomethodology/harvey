@@ -48,8 +48,13 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models (those with a family set or containing '/')
-	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.family && !model.name.includes('/')) : [];
+	// Filter out translation models.
+	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper' OR family === 'whisper-cpp'.
+	const transcriptionModels = Array.isArray(models) ? models.filter(model =>
+		(!model.family && !model.name.includes('/')) ||
+		model.family === 'faster-whisper' ||
+		model.family === 'whisper-cpp'
+	) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
@@ -105,6 +110,46 @@ export async function deleteModel(model) {
 	throw new Error(`Failed to delete model: ${error?.message || error}`);
   }
 }
+
+export async function downloadFasterWhisperModel(model, downloadLocation) {
+  if (!model?.name) {
+      console.error('Model name is missing.');
+      throw new Error('Model name is missing.');
+  }
+  if (!downloadLocation || downloadLocation.trim() === '') {
+       const errorMsg = `Download location is not set. Cannot download model.`;
+       console.error(errorMsg);
+       throw new Error(errorMsg);
+  }
+  console.log(`Attempting to download faster-whisper model: ${model.name} to ${downloadLocation}`);
+  try {
+    await invoke('download_faster_whisper_model_command', {
+      modelInfo: model,
+      downloadLocation: downloadLocation
+    });
+    console.log(`Download command invoked for faster-whisper model: ${model.name}`);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking download_faster_whisper_model_command for ${model.name}:`, error);
+    throw new Error(`Failed to start faster-whisper model download: ${error?.message || error}`);
+  }
+}
+
+export async function cancelFasterWhisperModelDownload(modelName) {
+    if (!modelName) {
+        console.error("Cannot cancel download without a model name.");
+        return;
+    }
+    console.log(`Requesting cancellation for faster-whisper model: ${modelName}`);
+    try {
+        await invoke('cancel_download_command', { modelName: modelName });
+        console.log(`Cancellation command invoked for ${modelName}.`);
+    } catch (error) {
+        console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
+        throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+    }
+}
+
 export async function cancelDownload(modelName) {
 	if (!modelName) {
 		console.error("Cannot cancel download without a model name.");
@@ -175,8 +220,20 @@ export async function isCTranslate2Installed() {
 	return await invoke('is_ctranslate2_installed');
 }
 
+export async function isFasterWhisperDependenciesInstalled() {
+	return await invoke('is_faster_whisper_dependencies_installed');
+}
+
+export async function installFasterWhisperDependencies() {
+	return await invoke('install_faster_whisper_dependencies_command');
+}
+
+export async function getDependencyCheckErrors() {
+	return await invoke('get_dependency_check_errors');
+}
 
 export async function setSelectedTranslationFamily(family) {
+
 	try {
 		await invoke('set_selected_translation_family', { family });
 		return true;
@@ -249,6 +306,25 @@ export async function fetchAvailableModels() {
 	}
 }
 
+export async function getSelectedTranscriptionEngine() {
+    try {
+        return await invoke('get_selected_transcription_engine');
+    } catch (error) {
+        console.error("Error invoking get_selected_transcription_engine:", error);
+        return null;
+    }
+}
+
+export async function setSelectedTranscriptionEngine(engine) {
+    try {
+        await invoke('set_selected_transcription_engine', { engine });
+        return true;
+    } catch (error) {
+        console.error("Error invoking set_selected_transcription_engine:", error);
+        return false;
+    }
+}
+
 // --- Export Action ---
 /**
  * Exports the current transcript segments to a specified file path and format.
@@ -258,10 +334,11 @@ export async function fetchAvailableModels() {
  * @param {Array<object>} segments - The array of segment data to export.
  * @param {string} transcriptJsonPath - The path to the transcript JSON file (used for DOCX export).
  * @param {string} [layoutChoice] - Optional. The chosen layout for DOCX export (e.g., 'Layout1', 'Layout2').
+ * @param {boolean} [excludeSpeakerNames] - Optional. If true, speaker names will be omitted in subtitle formats.
  * @returns {Promise<void>} A promise that resolves when export is complete or rejects on error.
  */
-export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice) {
-	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}")`);
+export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice, excludeSpeakerNames) {
+	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}", ExcludeSpeakers: ${excludeSpeakerNames})`);
 
 	if (format !== 'docx' && (!segments || segments.length === 0)) { // Segments not needed upfront for docx if using transcriptJsonPath
 		throw new Error("No transcript segments available to export.");
@@ -301,7 +378,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_srt with payload:', payload);
         const savedPath = await invoke('export_transcript_to_srt', payload);
@@ -318,7 +396,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_vtt with payload:', payload);
         const savedPath = await invoke('export_transcript_to_vtt', payload);
@@ -353,7 +432,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
       try {
         const payload = {
           outputPathStr: filePath,
-          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          excludeSpeakerNames: excludeSpeakerNames || false
           // No layoutChoice needed for ASS
         };
         console.log('[ConfigureActions] Invoking export_transcript_to_ass with payload:', payload);
@@ -441,7 +521,18 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 		for (const segment of segments) {
 			const startTime = formatTimestamp(segment.start_time);
 			const endTime = formatTimestamp(segment.end_time);
-			const speaker = segment.speaker || 'Unknown';
+			let speaker = segment.speaker || 'Unknown';
+			
+			// Ensure speaker name has a trailing colon for consistency with other export formats
+			if (speaker !== 'Unknown') {
+				const trimmedSpk = speaker.trim();
+				if (trimmedSpk.endsWith(':')) {
+					speaker = trimmedSpk;
+				} else {
+					speaker = `${trimmedSpk}:`;
+				}
+			}
+
 			const textData = segment.text || ''; // Can be JSON string or plain text
 
 			const plainText = getPlainText(textData); // Use the robust helper

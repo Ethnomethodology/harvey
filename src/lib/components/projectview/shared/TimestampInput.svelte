@@ -87,9 +87,9 @@
 
 <style>
     .input-field {
-		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-gray-400;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
+		@apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded;
 	}
 </style>

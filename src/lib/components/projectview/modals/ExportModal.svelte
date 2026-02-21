@@ -22,6 +22,7 @@
 	// Initialize with active layout, fallback to the first option in DOCX_LAYOUT_OPTIONS or 'Layout1' if store is undefined initially
 	let selectedDocxLayout;
 	let exportDirectory = '';
+	let excludeSpeakerNames = false; // New state for subtitles
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
 
@@ -100,6 +101,7 @@
 
 		// Reset format to default
 		exportFormat = 'csv';
+		excludeSpeakerNames = false;
 		selectedDocxLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
 
 		console.log('[ExportModal] Modal state initialized.', { exportFileName, exportDirectory, modalTitle });
@@ -171,6 +173,7 @@
 			filePath: fullExportPath, // Pass the string path
 			format: exportFormat,
 			layoutChoice: (exportFormat === 'docx' || exportFormat === 'md') ? selectedDocxLayout : undefined,
+			excludeSpeakerNames: (exportFormat === 'srt' || exportFormat === 'vtt' || exportFormat === 'ass') ? excludeSpeakerNames : false,
 		});
 		closeModal();
 	}
@@ -214,7 +217,7 @@
 		tabindex="-1"
 	>
 		<div
-			class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 			role="document"
 		>
@@ -254,6 +257,21 @@
 						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export provides standard subtitles with styling support (bold, italic, underline, strikethrough, color).</p>
 					 {/if}
 				</div>
+
+				<!-- Subtitle Options (Conditional for SRT, VTT, ASS) -->
+				{#if exportFormat === 'srt' || exportFormat === 'vtt' || exportFormat === 'ass'}
+					<div class="flex items-center space-x-2 pt-1">
+						<input
+							id="exclude-speakers"
+							type="checkbox"
+							bind:checked={excludeSpeakerNames}
+							class="w-4 h-4 text-blue-600 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-600 focus:ring-2"
+						/>
+						<label for="exclude-speakers" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+							Exclude speaker names from subtitles
+						</label>
+					</div>
+				{/if}
 
 				<!-- Layout Options (Conditional for DOCX and MD) -->
 				{#if exportFormat === 'docx' || exportFormat === 'md'}

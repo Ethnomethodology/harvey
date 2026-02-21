@@ -991,7 +991,7 @@
             id="header-name-input"
             type="text"
             bind:value={editingHeader.newName}
-            class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
         />
         <div class="mt-4 flex justify-end space-x-2">
             <button class="px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" on:click={() => showEditHeaderModal = false}>
@@ -1005,8 +1005,8 @@
 </div>
 {/if}
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
         <div class="flex items-center space-x-2">
             <button id="history-undo" class="ui-button-icon" title="Undo">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
@@ -1036,8 +1036,11 @@
                   }
               }}
               placeholder="Search table..."
-              class="text-xs border border-gray-300 dark:border-dark-bg-tertiary px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+              class="text-xs border border-gray-300 dark:border-gray-800 px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
             >
             <button
               title="Previous Match"
@@ -1114,7 +1117,7 @@
          white-space: normal !important;
      }
      :global(.tabulator-header-filter input) {
-         @apply p-1 text-xs border border-gray-300 dark:border-border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
+         @apply p-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
      }
      :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
          background-color: rgba(255, 255, 0, 0.3) !important;

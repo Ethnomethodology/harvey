@@ -210,7 +210,7 @@
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-950 overflow-hidden">
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-64' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
@@ -222,7 +222,7 @@
 		</div>
 
         <!-- Main Content Area (Middle) -->
-        <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-border">
+        <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-gray-700">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -259,7 +259,7 @@
 
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
         {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
-            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border" transition:slide="{{ duration: 300, axis: 'x' }}">
+            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700" transition:slide="{{ duration: 300, axis: 'x' }}">
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}

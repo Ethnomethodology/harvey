@@ -37,7 +37,7 @@
 
 {#if showModal}
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" on:click={closeModal}>
-    <div class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
+    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
         <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">Add Tag</h2>
 
         {#if errorMessage}

@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/documents/DocumentEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
@@ -15,6 +15,11 @@
     import { invoke } from '@tauri-apps/api/core';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
+
+    const dispatch = createEventDispatcher();
+
+    export let highlightedRowIndex = -1;
 
     let editorRef;
     let editorJsonState = '';
@@ -173,12 +178,21 @@
             editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
         }
     }
+    export function getTopVisibleRowInfo() {
+        return editorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 };
+    }
+    export function getCursorRowInfo() {
+        return editorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false };
+    }
+    export function scrollToRow(index, offset) {
+        editorRef?.scrollToRow(index, offset);
+    }
 
-    const self = { save, discard, resetEditorState, updateLiveTranscriptionText };
+    const self = { save, discard, resetEditorState, updateLiveTranscriptionText, getTopVisibleRowInfo, getCursorRowInfo, scrollToRow };
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-50 dark:bg-dark-bg-form-field overflow-hidden exported-transcript">
+<div class="flex flex-col h-full w-full bg-gray-50 dark:bg-gray-900 overflow-hidden exported-transcript">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
     {:else if errorMessage && selectedPath}
@@ -195,9 +209,11 @@
                      placeholder="Start typing your document..."
                      enableTableCellMenu={true}
                      enableTableCellResize={true}
+                     externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+                     on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
                      enableSearch={true}
                      documentPath={selectedPath}
                      initialHighlights={initialHighlights}
@@ -222,16 +238,16 @@
         @apply p-3 m-0;
     }
     :global(html.dark .lexical-wrapper) {
-        background-color: theme('colors.dark-bg-lexical-editor');
+        background-color: theme('colors.gray.900');
     }
      :global(.lexical-wrapper > .lexical-editor-root > *) {
          @apply mt-0 mb-0;
      }
 
     :global(.lexical-wrapper)::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-d-gray-800 rounded-lg; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-d-gray-500 rounded-lg border-2 border-solid border-gray-100 dark:border-d-gray-800; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-d-gray-400; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-900 rounded-lg; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-600; }
 	:global(.lexical-wrapper) { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
 	:root { --scrollbar-thumb: rgba(160, 174, 192, 1); --scrollbar-track: rgba(243, 244, 246, 1); }
 	html.dark { --scrollbar-thumb: rgba(107, 114, 128, 1); --scrollbar-track: rgba(31, 41, 55, 1); }

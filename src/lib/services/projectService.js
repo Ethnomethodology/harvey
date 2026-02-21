@@ -998,7 +998,83 @@ export async function loadTableData(tablePath, hasHeaders) {
 }
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
-export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || !rowNode.children.length || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }
+export function parseLexicalTableToSegments(lexicalTableJsonString) {
+    let parsedFullEditorState;
+    try {
+        parsedFullEditorState = JSON.parse(lexicalTableJsonString);
+        if (!parsedFullEditorState?.root?.children) return [];
+    } catch (error) {
+        return [];
+    }
+    const segmentsArray = [];
+    try {
+        const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table');
+        if (!tableNode?.children) return [];
+        for (let i = 1; i < tableNode.children.length; i++) {
+            const rowNode = tableNode.children[i];
+            if (rowNode.type !== 'tablerow' || !rowNode.children || !rowNode.children.length || rowNode.children.length < 4) continue;
+            try {
+                let startTime = 0,
+                    endTime = 0,
+                    speakerName = "Unknown",
+                    segmentTextJsonString = "{}";
+                const timestampCellNode = rowNode.children[1];
+                if (timestampCellNode.type !== 'tablecell') continue;
+                let timestampFullText = '';
+                if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child));
+                const timeParts = timestampFullText.split(' - ');
+                startTime = parseTimestampStringToSeconds(timeParts[0]);
+                endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
+                const speakerCellNode = rowNode.children[2];
+                if (speakerCellNode.type !== 'tablecell') continue;
+                let tempSpeakerName = '';
+                if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child));
+                speakerName = tempSpeakerName.trim() || "Unknown";
+                if (speakerName.endsWith(':')) {
+                    speakerName = speakerName.slice(0, -1).trim();
+                }
+                const textContentCellNode = rowNode.children[3];
+                if (textContentCellNode.type !== 'tablecell') continue;
+                const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || []));
+                segmentTextJsonString = JSON.stringify({
+                    root: {
+                        type: 'root',
+                        children: deepClonedCellChildren,
+                        direction: null,
+                        format: '',
+                        indent: 0,
+                        version: 1
+                    }
+                });
+                segmentsArray.push({
+                    start_time: startTime,
+                    end_time: endTime,
+                    speaker: speakerName,
+                    text: segmentTextJsonString
+                });
+            } catch (cellProcessingError) {
+                segmentsArray.push({
+                    start_time: 0,
+                    end_time: 0,
+                    speaker: "Error Processing Row",
+                    text: JSON.stringify({
+                        root: {
+                            type: 'root',
+                            children: [],
+                            direction: null,
+                            format: '',
+                            indent: 0,
+                            version: 1
+                        }
+                    })
+                });
+            }
+        }
+    } catch (tableProcessingError) {
+        return [];
+    }
+    return segmentsArray;
+}
 
 export async function getAssetMetadata(assetRelativePath) {
     const currentProject = get(project);
@@ -1077,7 +1153,7 @@ export async function saveTranscriptData() {
     let fullLexicalTableJsonString = "";
     try {
         const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), });
-        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); pSpeaker.append(_createTextNode(segment.speaker || "Unknown")); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
+        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); let speakerName = segment.speaker || "Unknown"; if (speakerName !== "Unknown" && !speakerName.endsWith(':')) { speakerName += ':'; } pSpeaker.append(_createTextNode(speakerName)); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
         fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
 
         // Add validation here
@@ -1098,6 +1174,198 @@ export async function saveTranscriptData() {
         project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to save transcript: ${errorMessage}`);
     }
+}
+
+export async function replaceTranscriptText(segmentIndex, isPrimary, find, replace, offset, length) {
+    const tsStore = get(transcriptStore);
+    const segments = isPrimary ? tsStore.segments : tsStore.secondaryTranscriptSegments;
+    if (!segments[segmentIndex]) return;
+
+    const segment = segments[segmentIndex];
+    const updatedJson = await performReplaceInLexicalJson(segment.text, find, replace, offset, length);
+    
+    const { updateSegment, updateSecondarySegment } = await import('$lib/stores/transcriptStore.js');
+    if (isPrimary) {
+        updateSegment(segmentIndex, { text: updatedJson });
+    } else {
+        updateSecondarySegment(segmentIndex, { text: updatedJson });
+    }
+}
+
+export async function replaceAllTranscriptText(find, replace, options = {}) {
+    const tsStore = get(transcriptStore);
+    const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+    
+    project.update(p => ({ ...p, isLoading: true, statusMessage: 'Replacing all occurrences...' }));
+
+    const processSegments = async (segs, updateFn) => {
+        const newSegs = [];
+        for (let i = 0; i < segs.length; i++) {
+            const updatedJson = await performReplaceAllInLexicalJson(segs[i].text, find, replace, options);
+            if (updatedJson !== segs[i].text) {
+                updateFn(i, { text: updatedJson }, true); // silent update
+            }
+        }
+    };
+
+    const { updateSegment, updateSecondarySegment, pushToUndoStack } = await import('$lib/stores/transcriptStore.js');
+    
+    pushToUndoStack();
+    await processSegments(tsStore.segments, updateSegment);
+    if (tsStore.isDualModeActive) {
+        await processSegments(tsStore.secondaryTranscriptSegments, updateSecondarySegment);
+    }
+
+    project.update(p => ({ ...p, isLoading: false, statusMessage: 'Replace all complete.' }));
+}
+
+async function performReplaceInLexicalJson(json, find, replace, offset, length) {
+    const editor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES });
+    try {
+        editor.setEditorState(editor.parseEditorState(json));
+    } catch (e) { return json; }
+
+    await editor.update(() => {
+        const root = _getRoot();
+        const textNodes = [];
+        const visit = (node) => {
+            if (_isTextNode(node)) textNodes.push(node);
+            else if (_isElementNode(node)) node.getChildren().forEach(visit);
+        };
+        visit(root);
+
+        // 1. Map global offset to nodes
+        let currentOffset = 0;
+        let startNode = null;
+        let startOffsetInNode = 0;
+        let nodesToRemove = [];
+
+        const matchEnd = offset + length;
+
+        for (const node of textNodes) {
+            const nodeLength = node.getTextContentSize();
+            const nodeEnd = currentOffset + nodeLength;
+
+            if (nodeEnd > offset && currentOffset < matchEnd) {
+                // This node is part of match
+                if (!startNode) {
+                    startNode = node;
+                    startOffsetInNode = offset - currentOffset;
+                }
+                nodesToRemove.push(node);
+            }
+            currentOffset += nodeLength;
+            if (currentOffset >= matchEnd) break;
+        }
+
+        // 2. Perform cross-node replacement
+        if (startNode && nodesToRemove.length > 0) {
+            // We'll keep the first node, update its text, and remove the others
+            const firstNode = nodesToRemove[0];
+            const lastNode = nodesToRemove[nodesToRemove.length - 1];
+            
+            const firstNodeText = firstNode.getTextContent();
+            const lastNodeText = lastNode.getTextContent();
+            
+            const endOffsetInLastNode = matchEnd - (currentOffset - lastNode.getTextContentSize());
+
+            if (nodesToRemove.length === 1) {
+                // Single node replacement
+                const newText = firstNodeText.slice(0, startOffsetInNode) + replace + firstNodeText.slice(startOffsetInNode + length);
+                firstNode.setTextContent(newText);
+            } else {
+                // Multi-node replacement
+                // Keep prefix of first node, add replacement, add suffix of last node
+                const prefix = firstNodeText.slice(0, startOffsetInNode);
+                const suffix = lastNodeText.slice(endOffsetInLastNode);
+                firstNode.setTextContent(prefix + replace + suffix);
+                
+                // Remove intermediate nodes
+                for (let i = 1; i < nodesToRemove.length; i++) {
+                    nodesToRemove[i].remove();
+                }
+            }
+        }
+    });
+
+    return JSON.stringify(editor.getEditorState().toJSON());
+}
+
+async function performReplaceAllInLexicalJson(json, find, replace, options) {
+    const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
+    const editor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES });
+    try {
+        editor.setEditorState(editor.parseEditorState(json));
+    } catch (e) { return json; }
+
+    let pattern = isRegex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (isWholeWord) pattern = `\\b${pattern}\\b`;
+    const regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
+
+    await editor.update(() => {
+        const root = _getRoot();
+        
+        // We must re-visit and re-flatten after each match replacement 
+        // OR work backwards. Reverse order is safer for offsets.
+        
+        const textNodes = [];
+        const visit = (node) => {
+            if (_isTextNode(node)) textNodes.push(node);
+            else if (_isElementNode(node)) node.getChildren().forEach(visit);
+        };
+        visit(root);
+
+        let fullText = '';
+        const nodeRanges = [];
+        for (const node of textNodes) {
+            const start = fullText.length;
+            const text = node.getTextContent();
+            fullText += text;
+            nodeRanges.push({ node, start, end: fullText.length });
+        }
+
+        const matches = [];
+        let m;
+        while ((m = regex.exec(fullText)) !== null) {
+            matches.push(m);
+            if (m.index === regex.lastIndex) regex.lastIndex++;
+        }
+
+        // Process matches in reverse order
+        for (let i = matches.length - 1; i >= 0; i--) {
+            const match = matches[i];
+            const matchStart = match.index;
+            const matchEnd = match.index + match[0].length;
+
+            const nodesInMatch = [];
+            for (const range of nodeRanges) {
+                if (range.end > matchStart && range.start < matchEnd) {
+                    nodesInMatch.push({
+                        node: range.node,
+                        startInNode: Math.max(0, matchStart - range.start),
+                        endInNode: Math.min(range.node.getTextContentSize(), matchEnd - range.start)
+                    });
+                }
+            }
+
+            if (nodesInMatch.length > 0) {
+                const first = nodesInMatch[0];
+                const last = nodesInMatch[nodesInMatch.length - 1];
+                
+                const prefix = first.node.getTextContent().slice(0, first.startInNode);
+                const suffix = last.node.getTextContent().slice(last.endInNode);
+                
+                first.node.setTextContent(prefix + replace + suffix);
+                
+                // Remove intermediate and last nodes if multiple nodes involved
+                for (let j = 1; j < nodesInMatch.length; j++) {
+                    nodesInMatch[j].node.remove();
+                }
+            }
+        }
+    });
+
+    return JSON.stringify(editor.getEditorState().toJSON());
 }
 
 export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
@@ -1199,6 +1467,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         speaker_names: currentTs.speakers.names || [],
         translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
         transcription_mode: transcriptionMode,
+        transcription_engine: currentTs.selectedModelFamily,
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.
@@ -2517,7 +2786,11 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                 // Speaker
                 const cellSpeaker = _createTableCellNode();
                 const pSpeaker = _createParagraphNode();
-                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
+                let speakerName = segment.speaker || "Unknown";
+                if (speakerName !== "Unknown" && !speakerName.endsWith(':')) {
+                    speakerName += ':';
+                }
+                pSpeaker.append(_createTextNode(speakerName));
                 cellSpeaker.append(pSpeaker);
                 dataRow.append(cellSpeaker);
                 

@@ -39,7 +39,7 @@
         tabindex="0"
 	>
 		<div
-			class="modal-content bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200"
+			class="modal-content bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200"
 			role="document"
 		>
 			<h2 id="conversion-title" class="text-xl font-semibold mb-4">Confirm Conversion</h2>

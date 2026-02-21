@@ -19,41 +19,59 @@
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
     import DocumentExportModal from '../modals/DocumentExportModal.svelte';
+    import TableExportModal from '../modals/TableExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
 
+    // Determine platform-specific modifier key name
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+
     let isLiveTranscriptionActive = false;
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
     let showTranslateDocumentModal = false;
     let showDocumentExportModal = false;
+    let showTableExportModal = false;
     let isLexicalDocument = false;
     let isImportedTranscript = false;
     let isImage = false;
+    let isTable = false;
     let pathForExportModal = '';
 
     $: {
         const p = $project;
+        // console.log("[DataTopBar] Path:", p.selectedDocumentPath, "Type:", p.selectedDocumentType);
         if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
              isLexicalDocument = true;
              isImportedTranscript = !!p.currentImportedTranscriptPath;
              isImage = false;
+             isTable = false;
         } else if (p.currentImportedTranscriptPath) {
              isLexicalDocument = true;
              isImportedTranscript = true;
              isImage = false;
-        } else if (p.selectedDocumentType === 'images' || (p.selectedDocumentPath && /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath))) {
+             isTable = false;
+        } else if (p.selectedDocumentType === 'images' || p.selectedDocumentType === 'image' || (p.selectedDocumentPath && /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath))) {
              isImage = true;
+             isLexicalDocument = false;
+             isImportedTranscript = false;
+             isTable = false;
+        } else if (p.selectedDocumentType === 'tables' || p.selectedDocumentType === 'table' || (p.selectedDocumentPath && /\.(csv|xlsx)$/i.test(p.selectedDocumentPath))) {
+             isTable = true;
+             isImage = false;
              isLexicalDocument = false;
              isImportedTranscript = false;
         } else {
             isLexicalDocument = false;
             isImportedTranscript = false;
             isImage = false;
+            isTable = false;
         }
+        // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);
     }
 
     function handleDocumentTranslateConfirm(event) {
@@ -352,7 +370,7 @@
         }
     }
     async function handleExportConfirm(event) {
-        const { filePath, format, layoutChoice } = event.detail;
+        const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
         const activeTranscriptPath = pathForExportModal;
 
         if (!activeTranscriptPath) {
@@ -437,7 +455,7 @@
                 return;
             }
 
-            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice);
+            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice, excludeSpeakerNames);
             message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
 
         } catch (error) {
@@ -493,7 +511,7 @@
     }
 
     async function handleLiveTranscribe(event) {
-        const { model, language, saveAudio } = event.detail;
+        const { model, language, saveAudio, family } = event.detail;
         try {
             const projectState = get(project);
             const activePath = projectState.selectedDocumentPath || projectState.selectedMediaNotePath;
@@ -513,7 +531,8 @@
                 saveAudio: saveAudio,
                 activeDocumentPath: activePath,
                 projectUuid: projectState.id,
-                projectBaseDir: projectState.baseDirectory
+                projectBaseDir: projectState.baseDirectory,
+                engine: family
             });
             if (started) {
                 isLiveTranscriptionActive = true;
@@ -533,7 +552,7 @@
   </script>
   
   <div
-    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary relative z-50"
+    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-50"
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <!-- Drag Handle Background -->
@@ -618,13 +637,19 @@
                 <span class="text-xs">Export</span>
             </button>
         {/if}
+        {#if isTable}
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showTableExportModal = true}" title="Export Table" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+                <span class="text-xs">Export</span>
+            </button>
+        {/if}
         {#if isImage}
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => dispatch('requestImageExport')}" title="Export Image" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
             </button>
         {/if}
-        {#if isImportedTranscript}
+        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <button 
                 class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
                 on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}" 
@@ -646,7 +671,7 @@
         {/if}
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs hover-scale-effect"
-            title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
+            title={canSave ? `Save Changes (${modKeyName}+S)` : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
             disabled={!canSave}
             on:click={handleManualSave}
         >
@@ -666,7 +691,7 @@
                 bind:checked={autosaveEnabled}
                 on:change={handleToggleChange}
               >
-              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-border peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
+              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-700 peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
               <span
                 class="absolute top-0 bottom-0 flex items-center text-xs font-medium text-gray-700 dark:text-gray-300 pointer-events-none"
                 class:left-1={autosaveEnabled}
@@ -686,16 +711,16 @@
             {@html themeIconHtml}
          </button> -->
     <div class="flex-shrink-0">
-        {#if $isMediaEditorOpen}
+        {#if $isMediaEditorOpen || isLexicalDocument || $activeMediaFile}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
         </button>
         {/if}
-				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
+				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -723,12 +748,12 @@
         @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
         @apply bg-transparent;
         @apply text-gray-700 dark:text-white;
-        @apply border border-gray-300 dark:border-border;
+        @apply border border-gray-300 dark:border-gray-700;
         @apply hover:bg-blue-100 dark:hover:bg-blue-700;
         @apply hover:text-blue-500 dark:hover:text-blue-400;
         @apply hover:border-blue-500 dark:hover:border-blue-500;
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-border dark:disabled:hover:!bg-transparent;
+        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-700 dark:disabled:hover:!bg-transparent;
     }
   
     .hover-scale-effect {
@@ -746,6 +771,7 @@
 				on:selectLayout="{handleLayoutSelected}"
 				on:close={() => isLayoutSettingsModalOpen = false}
 				hideWaveformOptions={true}
+                hideDualModeOptions={true}
 			/>
 <ExportModal
     bind:showModal={isExportModalOpen}
@@ -772,6 +798,13 @@
     documentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={() => message('Document exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showDocumentExportModal = false}
+/>
+
+<TableExportModal
+    bind:showModal={showTableExportModal}
+    tablePath={isTable ? $project.selectedDocumentPath : null}
+    on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
+    on:close={() => showTableExportModal = false}
 />
 
 <SplitTranscriptModal />

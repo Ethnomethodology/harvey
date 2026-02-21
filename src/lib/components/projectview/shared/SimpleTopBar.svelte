@@ -31,7 +31,7 @@
 </script>
 
 <div
-  class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
+  class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800"
   data-tauri-drag-region
 >
   <div class="flex items-center space-x-1.5 min-w-0">
@@ -48,7 +48,7 @@
 
   <div class="flex items-center space-x-2 flex-shrink-0">
     <div class="flex-shrink-0">
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>

@@ -152,8 +152,8 @@
 		}
 	}
 	async function handleExportConfirm(event) {
-		const { filePath, format, layoutChoice } = event.detail;
-		console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format, layoutChoice });
+		const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
+		console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format, layoutChoice, excludeSpeakerNames });
 		const segmentsToExport = $transcriptStore.segments;
 		if (!segmentsToExport || segmentsToExport.length === 0) {
 			console.error("TopBar: Cannot export, no segments available in store.");
@@ -161,8 +161,8 @@
 			return;
 		}
 		try {
-			await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport, layoutChoice);
-			console.log(`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}) successful.`);
+			await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport, layoutChoice, excludeSpeakerNames);
+			console.log(`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}, ExcludeSpeakers: ${excludeSpeakerNames}) successful.`);
 			message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
 		} catch (error) {
 			console.error(`TopBar: Export failed to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}):`, error);
@@ -297,7 +297,7 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
+	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
@@ -390,14 +390,14 @@
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
-			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>

@@ -78,13 +78,44 @@ pub async fn import_document<R: Runtime>(
     let new_document_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
     info!("[import_document] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, new_document_filename_with_ext);
 
-    let new_document_filename_stem = Path::new(&new_document_filename_with_ext).file_stem()
+    let new_document_filename_stem_truncated = Path::new(&new_document_filename_with_ext).file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from(format!("Could not get stem from truncated filename: {}", new_document_filename_with_ext)))?;
     
+    // Read project_data to check for name conflicts in XML
+    let xml_content = fs::read_to_string(&project_xml_path)?;
+    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+
     // Create per-document folder under Documents, using the truncated stem
     let docs_base = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
-    let doc_folder = docs_base.join(new_document_filename_stem); // Folder name is the truncated stem
+
+    let mut folder_counter = 0;
+    let (doc_folder, new_document_filename_with_ext, new_document_filename_stem) = loop {
+        let current_stem = if folder_counter == 0 {
+            new_document_filename_stem_truncated.to_string()
+        } else {
+            format!("{}_{}", new_document_filename_stem_truncated, folder_counter)
+        };
+
+        let candidate_folder = docs_base.join(&current_stem);
+
+        // Check if this stem is already used in project_data.document_files.files
+        let name_conflict = project_data.document_files.files.iter().any(|f| {
+            f.name == current_stem || f.name.starts_with(&format!("{}.", current_stem))
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
+            let file_name = format!("{}.{}", current_stem, source_path.extension().and_then(|e| e.to_str()).unwrap_or(""));
+            debug!("[import_document] Found unique document folder: {} and filename: {}", candidate_folder.display(), file_name);
+            break (candidate_folder, file_name, current_stem);
+        }
+
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            return Err(CommandError::from(format!("Could not find unique folder for document stem '{}' after 1000 attempts.", new_document_filename_stem_truncated)));
+        }
+    };
+
     fs::create_dir_all(&doc_folder)?;
     
     let source_extension_lower = source_path.extension()
@@ -189,7 +220,7 @@ pub async fn import_document<R: Runtime>(
             let conversion_type = if source_extension_lower == "docx" { "docx" } else { "text/markdown/rtf" };
             info!("[import_document] Handling Pandoc conversion for .{} file ({}) -> HTML", source_extension_lower, conversion_type);
             // Use new_document_filename_stem (truncated) for the temp file name prefix
-            let temp_html_path: PathBuf = get_unique_temp_path_for_conversion(&doc_folder, new_document_filename_stem, "html")?;
+            let temp_html_path: PathBuf = get_unique_temp_path_for_conversion(&doc_folder, &new_document_filename_stem, "html")?;
 
             let source_format_arg = match source_extension_lower.as_str() {
                 "txt" => "plain",

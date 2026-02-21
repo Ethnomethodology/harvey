@@ -297,7 +297,7 @@
 
 {#if isOpen && cellNodeKey}
     <div
-        class="absolute z-40 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-sm"
+        class="absolute z-40 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
         bind:this={menuElement}
         style:top="{position.top}px"
         style:left="{position.left}px"
@@ -307,7 +307,7 @@
     >
         {#each menuStructure as item}
             {#if item.type === 'separator'}
-                <hr class="my-1 border-gray-200 dark:border-border" />
+                <hr class="my-1 border-gray-200 dark:border-gray-700" />
             {:else if item.type === 'submenu'}
               <div class="relative" on:mouseleave={closeSubmenu}>
                 <button
@@ -322,7 +322,7 @@
                 </button>
                 {#if openSubmenuLabel === item.label}
                   <div
-                    class="fixed z-50 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-sm"
+                    class="fixed z-50 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
                     style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
                     role="menu"
                     aria-orientation="vertical"
@@ -330,7 +330,7 @@
                   >
                     {#each item.items as subitem}
                       {#if subitem.type === 'separator'}
-                        <hr class="my-1 border-gray-200 dark:border-border" />
+                        <hr class="my-1 border-gray-200 dark:border-gray-700" />
                       {:else if subitem.type === 'cellColors'}
                         <div class="px-3 py-1">
                           <div class="text-sm text-gray-700 dark:text-gray-200 mb-1">

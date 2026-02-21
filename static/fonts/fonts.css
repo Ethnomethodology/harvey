@@ -6,7 +6,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./inter-v20-latin-400.ttf') format('truetype');
+  src: url('/fonts/inter-v20-latin-400.ttf') format('truetype');
 }
 
 /* Inter Medium */
@@ -15,7 +15,7 @@
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('./inter-v20-latin-500.ttf') format('truetype');
+  src: url('/fonts/inter-v20-latin-500.ttf') format('truetype');
 }
 
 /* Inter Semi-bold */
@@ -24,5 +24,140 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('./inter-v20-latin-600.ttf') format('truetype');
+  src: url('/fonts/inter-v20-latin-600.ttf') format('truetype');
+}
+
+/* Roboto Regular */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/roboto-v30-latin-regular.ttf') format('truetype');
+}
+
+/* Roboto Medium */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/roboto-v30-latin-500.ttf') format('truetype');
+}
+
+/* Roboto Bold */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/roboto-v30-latin-700.ttf') format('truetype');
+}
+
+/* Montserrat Regular */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/montserrat-v26-latin-regular.ttf') format('truetype');
+}
+
+/* Montserrat Medium */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/montserrat-v26-latin-500.ttf') format('truetype');
+}
+
+/* Montserrat Bold */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/montserrat-v26-latin-700.ttf') format('truetype');
+}
+
+/* Comic Neue Regular */
+@font-face {
+  font-family: 'Comic Neue';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/comic-neue-regular.ttf') format('truetype');
+}
+
+/* Comic Neue Bold */
+@font-face {
+  font-family: 'Comic Neue';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/comic-neue-700.ttf') format('truetype');
+}
+
+/* Bangers Regular */
+@font-face {
+  font-family: 'Bangers';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/bangers-regular.ttf') format('truetype');
+}
+
+/* Indie Flower Regular */
+@font-face {
+  font-family: 'Indie Flower';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/indie-flower-regular.ttf') format('truetype');
+}
+
+/* Anton Regular */
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/anton-regular.ttf') format('truetype');
+}
+
+/* Dancing Script Regular */
+@font-face {
+  font-family: 'Dancing Script';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dancing-script-regular.ttf') format('truetype');
+}
+
+/* JetBrains Mono Regular */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-regular.ttf') format('truetype');
+}
+
+/* Playfair Display Regular */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/playfair-display-regular.ttf') format('truetype');
+}
+
+/* Roboto Slab Regular */
+@font-face {
+  font-family: 'Roboto Slab';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/roboto-slab-regular.ttf') format('truetype');
 }

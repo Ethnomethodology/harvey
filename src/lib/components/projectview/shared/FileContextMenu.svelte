@@ -30,33 +30,33 @@
 
 {#if isVisible && item}
   <div
-    class="fixed z-[100] bg-white dark:bg-surface-2 border border-gray-300 dark:border-border rounded-md shadow-xl py-1 text-xs min-w-[180px]"
+    class="fixed z-[100] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[180px]"
     style="left: {x}px; top: {y}px;"
     on:click|stopPropagation
     role="menu"
   >
     <ul>
       <li>
-        <button on:click={() => emitAction('open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Open</button>
+        <button on:click={() => emitAction('open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Open</button>
       </li>
       {#if isMedia(item)}
         <li>
-          <button on:click={() => emitAction('transcribe')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Transcribe</button>
+          <button on:click={() => emitAction('transcribe')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Transcribe</button>
         </li>
       {/if}
       <li>
-        <button on:click={() => emitAction('addToGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Add to Group...</button>
+        <button on:click={() => emitAction('addToGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Add to Group...</button>
       </li>
       <li>
-        <button on:click={() => emitAction('removeFromGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Remove from this Group</button>
+        <button on:click={() => emitAction('removeFromGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Remove from this Group</button>
       </li>
-      <hr class="my-1 border-gray-200 dark:border-border" />
+      <hr class="my-1 border-gray-200 dark:border-gray-700" />
       <li>
-        <button on:click={() => emitAction('reveal')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">{revealLabel}</button>
+        <button on:click={() => emitAction('reveal')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealLabel}</button>
       </li>
-      <hr class="my-1 border-gray-200 dark:border-border" />
+      <hr class="my-1 border-gray-200 dark:border-gray-700" />
       <li>
-        <button on:click={() => emitAction('rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Rename...</button>
+        <button on:click={() => emitAction('rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename...</button>
       </li>
       <li>
         <button on:click={() => emitAction('delete')} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete...</button>

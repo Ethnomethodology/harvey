@@ -19,8 +19,7 @@
     --ui-icon-color:      #000000;
     --ui-text-color:      #000000;
     --ui-select-bg:       #ffffff;
-    --ui-select-border:   #d1d5db;
-    --color-border:       #d1d5db; /* gray-300 */
+    --ui-select-border:   #d1d5db; /* gray-300 */
     --ui-icon-hover-bg:   #e5e7eb;
     --ui-option-text:     #1f2937;
     --ui-option-bg:       #ffffff;
@@ -39,52 +38,29 @@
   }
 
   .dark {
-    /* ---------- New Dark Theme ---------- */
-    /* --- Base and Surface Colors --- */
-    --color-surface-1: #0d0d0d;
-    --color-surface-2: #1a1a1a;
-    --color-surface-3: #242424;
-    --color-border: #333333;
+    /* ---------- New Dark Theme (Standard Tailwind Mappings) ---------- */
+    --app-bg: #0a0a0a; /* neutral-950 */
+    --app-panel-bg: #171717; /* neutral-900 */
 
-    /* --- Text and Content Colors --- */
-    --color-text-primary: #E0E0E0;
-    --color-text-secondary: #A0A0A0;
-    --color-text-disabled: #616161;
-    --color-text-accent: #4A90E2;
+    --ui-icon-color: #e5e5e5; /* neutral-200 */
+    --ui-text-color: #e5e5e5;
+    --ui-select-bg: #0a0a0a;
+    --ui-select-border: #404040; /* neutral-700 */
+    --ui-icon-hover-bg: #404040;
+    --ui-option-text: #e5e5e5;
+    --ui-option-bg: #0a0a0a;
+    --ui-option-hover-bg: rgba(59, 130, 246, 0.1); /* blue-500/10 */
+    --ui-optgroup-text: #a3a3a3; /* neutral-400 */
+    --ui-optgroup-bg: #262626; /* neutral-800 */
+    --ui-separator-text: #a3a3a3;
+    --ui-separator-bg: #262626;
+    --ui-disabled-text: #525252; /* neutral-600 */
+    --ui-disabled-bg: #171717;
 
-    /* --- Interactive & Accent Colors --- */
-    --color-accent-primary: #4A90E2;
-    --color-accent-primary-hover: #63a4ff;
-    --color-accent-background-hover: rgba(74, 144, 226, 0.1);
+    --ui-select-hover-bg: #404040;
+    --ui-select-hover-text: #e5e5e5;
 
-    /* --- Semantic / Status Colors --- */
-    --color-status-success: #66BB6A;
-    --color-status-warning: #FFCA28;
-    --color-status-error: #EF5350;
-
-    /* ---------- Mappings to old variables for compatibility ---------- */
-    --app-bg: var(--color-surface-1);
-    --app-panel-bg: var(--color-surface-2);
-
-    --ui-icon-color: rgba(255, 255, 255);
-    --ui-text-color: rgba(255, 255, 255);
-    --ui-select-bg: var(--color-surface-1);
-    --ui-select-border: var(--color-border);
-    --ui-icon-hover-bg: var(--color-border);
-    --ui-option-text: var(--color-text-primary);
-    --ui-option-bg: var(--color-surface-1);
-    --ui-option-hover-bg: var(--color-accent-background-hover);
-    --ui-optgroup-text: var(--color-text-secondary);
-    --ui-optgroup-bg: var(--color-surface-3);
-    --ui-separator-text: var(--color-text-secondary);
-    --ui-separator-bg: var(--color-surface-3);
-    --ui-disabled-text: var(--color-text-disabled);
-    --ui-disabled-bg: var(--color-surface-2);
-
-    --ui-select-hover-bg: var(--color-border);
-    --ui-select-hover-text: var(--color-text-primary);
-
-    --separator-color:    var(--color-border);
+    --separator-color:    #404040;
   }
 }
 
@@ -107,14 +83,14 @@
     }
 
     .dark &:not(:disabled) {
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-border);
+      color: #e5e5e5;
+      border: 1px solid #404040;
       background-color: transparent;
     }
 
     .dark &:hover:not(:disabled) {
-      background-color: var(--color-border);
-      border-color: var(--color-border);
+      background-color: #404040;
+      border-color: #404040;
     }
 
     &:disabled {
@@ -135,14 +111,14 @@
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
 
     .dark &:not(:disabled) {
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-border);
+      color: #e5e5e5;
+      border: 1px solid #404040;
       background-color: transparent;
     }
 
     .dark &:hover:not(:disabled) {
-      background-color: var(--color-accent-background-hover);
-      border-color: var(--color-accent-primary);
+      background-color: rgba(59, 130, 246, 0.1);
+      border-color: #3b82f6;
     }
 
     &:disabled {
@@ -259,4 +235,9 @@ body {
 }
 .dark .interactive-waveform {
   background-color: var(--app-panel-bg);
+}
+
+/* Fix for strikethrough and underline not appearing together in Lexical/Tailwind */
+.underline.line-through {
+  text-decoration: underline line-through !important;
 }

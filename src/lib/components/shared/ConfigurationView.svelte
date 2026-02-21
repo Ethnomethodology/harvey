@@ -109,7 +109,7 @@
 	}
 </script>
 
-<div class="p-4 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
+<div class="p-4 flex flex-col h-full bg-gray-50 dark:bg-gray-950 dark:text-gray-200">
 	<!-- Tab Navigation -->
 	<div class="mb-6 flex-shrink-0">
 		<nav class="flex flex-wrap gap-2" aria-label="Tabs">

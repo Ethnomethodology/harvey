@@ -24,6 +24,12 @@
     let currentTime = 0;
     let isPlaying = false;
 
+    // Row counts for comparison
+    let primaryRowCount = 0;
+    let secondaryRowCount = 0;
+    let primaryHighlightedRowIndex = -1;
+    let secondaryHighlightedRowIndex = -1;
+
     function handleSyncManager(path, enabled) {
         if (path && enabled) {
             attemptSetupSync();
@@ -36,6 +42,17 @@
 
     function toggleScrollSync() {
         isScrollSyncEnabled = !isScrollSyncEnabled;
+    }
+
+    function handleCursorRowChange(event, panelSource) {
+        const index = event.detail.index;
+        if (panelSource === 'primary') {
+            primaryHighlightedRowIndex = index;
+            secondaryHighlightedRowIndex = index; // Sync to partner
+        } else {
+            secondaryHighlightedRowIndex = index;
+            primaryHighlightedRowIndex = index; // Sync to partner
+        }
     }
 
     function attemptSetupSync() {
@@ -62,30 +79,69 @@
 
     function startSync(el1, el2) {
         let isSyncing = false;
-        const onScroll1 = () => {
-            if (!isSyncing) {
-                isSyncing = true;
-                el2.scrollTop = el1.scrollTop;
-                // el2.scrollLeft = el1.scrollLeft;
-                requestAnimationFrame(() => isSyncing = false);
-            }
-        };
-        const onScroll2 = () => {
-            if (!isSyncing) {
-                isSyncing = true;
-                el1.scrollTop = el2.scrollTop;
-                // el1.scrollLeft = el2.scrollLeft;
-                requestAnimationFrame(() => isSyncing = false);
+        let activeElement = null;
+
+        const handleInteraction = (e) => {
+            activeElement = e.currentTarget;
+            if (isScrollSyncEnabled) {
+                if (e.type === 'click' || e.type === 'keyup') {
+                    syncFollower();
+                }
             }
         };
 
-        el1.addEventListener('scroll', onScroll1);
-        el2.addEventListener('scroll', onScroll2);
+        const syncFollower = () => {
+            if (isSyncing || !primaryPanel || !secondaryPanel) return;
+            isSyncing = true;
+            
+            const leader = activeElement === el1 ? primaryPanel : secondaryPanel;
+            const follower = activeElement === el1 ? secondaryPanel : primaryPanel;
+            
+            // Try cursor row first if visible
+            const cursorRow = leader.getCursorRowInfo();
+            if (cursorRow && cursorRow.index !== -1 && cursorRow.visible) {
+                follower.scrollToRow(cursorRow.index, cursorRow.offset);
+            } else {
+                // Fallback to top visible row
+                const topRow = leader.getTopVisibleRowInfo();
+                if (topRow && topRow.index !== -1) {
+                    follower.scrollToRow(topRow.index, topRow.offset);
+                }
+            }
+            
+            requestAnimationFrame(() => isSyncing = false);
+        };
+
+        const onScroll = () => {
+            if (isScrollSyncEnabled && activeElement) {
+                syncFollower();
+            }
+        };
+
+        el1.addEventListener('scroll', onScroll, { passive: true });
+        el2.addEventListener('scroll', onScroll, { passive: true });
+        
+        el1.addEventListener('pointerover', handleInteraction);
+        el2.addEventListener('pointerover', handleInteraction);
+        el1.addEventListener('wheel', handleInteraction, { passive: true });
+        el2.addEventListener('wheel', handleInteraction, { passive: true });
+        el1.addEventListener('click', handleInteraction);
+        el2.addEventListener('click', handleInteraction);
+        el1.addEventListener('keyup', handleInteraction);
+        el2.addEventListener('keyup', handleInteraction);
 
         cleanupSync = () => {
             console.log('[ImportedTranscriptView] Cleaning up sync listeners.');
-            el1.removeEventListener('scroll', onScroll1);
-            el2.removeEventListener('scroll', onScroll2);
+            el1.removeEventListener('scroll', onScroll);
+            el2.removeEventListener('scroll', onScroll);
+            el1.removeEventListener('pointerover', handleInteraction);
+            el2.removeEventListener('pointerover', handleInteraction);
+            el1.removeEventListener('wheel', handleInteraction);
+            el2.removeEventListener('wheel', handleInteraction);
+            el1.removeEventListener('click', handleInteraction);
+            el2.removeEventListener('click', handleInteraction);
+            el1.removeEventListener('keyup', handleInteraction);
+            el2.removeEventListener('keyup', handleInteraction);
             cleanupSync = () => {};
         };
     }
@@ -157,9 +213,25 @@
         }
     }
 
-    // Reset mediaPath when itemPath changes
+    function handlePlaySegment(event) {
+        if (mediaPlayerRef) {
+            mediaPlayerRef.playSegment(event.detail.startTime, event.detail.endTime);
+        }
+    }
+
+    function handlePrimaryRowCount(event) {
+        primaryRowCount = event.detail.rowCount;
+    }
+
+    function handleSecondaryRowCount(event) {
+        secondaryRowCount = event.detail.rowCount;
+    }
+
+    // Reset mediaPath and counts when itemPath changes
     $: if (itemPath) {
         mediaPath = null;
+        primaryRowCount = 0;
+        secondaryRowCount = 0;
         loadAttachments(itemPath);
     }
 
@@ -171,9 +243,9 @@
 </script>
 
 <!-- Main container for the Imported Transcript View -->
-<div class="h-full flex flex-col w-full bg-white dark:bg-surface-2 overflow-hidden">
+<div class="h-full flex flex-col w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-view">
     {#if mediaPath}
-        <div class="border-b border-gray-200 dark:border-border flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
+        <div class="border-b border-gray-200 dark:border-gray-700 flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
             <MediaPlayer
                 bind:this={mediaPlayerRef}
                 bind:isVideoMinimized={isVideoHidden}
@@ -190,21 +262,39 @@
         </div>
     {/if}
 
+    {#if splitPartnerPath && primaryRowCount > 0 && secondaryRowCount > 0 && primaryRowCount !== secondaryRowCount}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800/50 px-4 py-2 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-xs shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625l6.28-10.875zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+            <span><strong>Row Count Mismatch:</strong> The primary transcript has {primaryRowCount} rows, while the partner transcript has {secondaryRowCount} rows. Scroll sync may be inaccurate.</span>
+        </div>
+    {/if}
+
     <div class="flex-grow min-h-0 overflow-hidden {mediaPath && !isVideoHidden ? 'h-1/2' : 'h-full'}">
         {#if splitPartnerPath}
             <div class="flex h-full w-full divide-gray-300 dark:divide-gray-600 {orientation === 'horizontal' ? 'flex-row divide-x' : 'flex-col divide-y'}">
                 <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
+                    <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8">
                         <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
                     </div>
                     <div class="flex-grow overflow-hidden">
                         {#key itemPath}
-                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                            <TranscriptEditorPanel 
+                                bind:this={primaryPanel} 
+                                itemPath={itemPath} 
+                                isPrimary={true} 
+                                enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={primaryHighlightedRowIndex}
+                                on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handlePrimaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
+                            />
                         {/key}
                     </div>
                 </div>
                 <div class="{orientation === 'horizontal' ? 'w-1/2 h-full' : 'h-1/2 w-full'} overflow-hidden flex flex-col">
-                    <div class="bg-gray-100 dark:bg-surface-3 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
+                    <div class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8">
                         <div class="flex items-center min-w-0 flex-grow">
                             <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
                         </div>
@@ -232,7 +322,16 @@
                     </div>
                     <div class="flex-grow overflow-hidden">
                         {#key splitPartnerPath}
-                            <TranscriptEditorPanel bind:this={secondaryPanel} itemPath={splitPartnerPath} isPrimary={false} />
+                            <TranscriptEditorPanel 
+                                bind:this={secondaryPanel} 
+                                itemPath={splitPartnerPath} 
+                                isPrimary={false} 
+                                enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={secondaryHighlightedRowIndex}
+                                on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handleSecondaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'secondary')}
+                            />
                         {/key}
                     </div>
                 </div>
@@ -242,11 +341,20 @@
                 {#if itemPath}
                     <div class="h-full flex flex-col">
                         <div class="flex-grow overflow-hidden">
-                            <TranscriptEditorPanel bind:this={primaryPanel} itemPath={itemPath} isPrimary={true} />
+                            <TranscriptEditorPanel 
+                                bind:this={primaryPanel} 
+                                itemPath={itemPath} 
+                                isPrimary={true} 
+                                enableSegmentPlayback={!!mediaPath}
+                                highlightedRowIndex={primaryHighlightedRowIndex}
+                                on:playsegment={handlePlaySegment}
+                                on:rowcountupdated={handlePrimaryRowCount}
+                                on:cursorrowchange={(e) => handleCursorRowChange(e, 'primary')}
+                            />
                         </div>
                     </div>
                 {:else}
-                    <div class="h-full bg-gray-200 dark:bg-d-gray-700 flex items-center justify-center text-gray-500">
+                    <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500">
                         <span>No transcript path provided to ImportedTranscriptView.</span>
                     </div>
                 {/if}

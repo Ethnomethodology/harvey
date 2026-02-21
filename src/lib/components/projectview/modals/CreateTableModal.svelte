@@ -59,7 +59,7 @@
                 type="number"
                 bind:value={numFields}
                 min="1"
-                class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 autocomplete="off"
                 autocorrect="off"
             />
@@ -85,7 +85,7 @@
                     <input
                         type="text"
                         bind:value={fields[i]}
-                        class="block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        class="block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         autocomplete="off"
                         autocorrect="off"
                     />

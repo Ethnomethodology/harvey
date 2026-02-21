@@ -47,7 +47,7 @@
 		on:click={handleClose}
 	>
 		<div
-			class="bg-white dark:bg-surface-2 rounded-lg shadow-xl w-full max-w-sm flex flex-col max-h-[90vh]"
+			class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-sm flex flex-col max-h-[90vh]"
 			on:click|stopPropagation
 		>
 			<!-- Header -->
@@ -108,7 +108,7 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-surface-3 rounded-b-lg">
+			<div class="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
 				<button class="btn-secondary" on:click={handleClose}>Cancel</button>
 				<button class="btn-primary" on:click={handleConfirm}>Save Settings</button>
 			</div>

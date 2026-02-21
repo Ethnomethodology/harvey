@@ -29,6 +29,56 @@ const IS_SUPERSCRIPT: i64 = 1 << 6; // 64
 const IS_HIGHLIGHT: i64 = 1 << 7; // 128
 
 
+fn ensure_hex_color(color: &str) -> Option<String> {
+    let trimmed = color.trim();
+    if trimmed.is_empty() || trimmed == "transparent" {
+        return None;
+    }
+    if trimmed.starts_with('#') {
+        let hex = trimmed.trim_start_matches('#');
+        if hex.len() == 6 {
+            return Some(trimmed.to_uppercase());
+        }
+        if hex.len() == 3 {
+             let r = &hex[0..1];
+             let g = &hex[1..2];
+             let b = &hex[2..3];
+             return Some(format!("#{}{}{}{}{}{}", r, r, g, g, b, b).to_uppercase());
+        }
+    }
+    if let Ok(re) = Regex::new(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)") {
+        if let Some(caps) = re.captures(trimmed) {
+             let r = caps[1].parse::<u8>().unwrap_or(0);
+             let g = caps[2].parse::<u8>().unwrap_or(0);
+             let b = caps[3].parse::<u8>().unwrap_or(0);
+             return Some(format!("#{:02X}{:02X}{:02X}", r, g, b));
+        }
+    }
+    match trimmed.to_lowercase().as_str() {
+        "black" => Some("#000000".to_string()),
+        "white" => Some("#FFFFFF".to_string()),
+        "red" => Some("#FF0000".to_string()),
+        "green" => Some("#00FF00".to_string()),
+        "blue" => Some("#0000FF".to_string()),
+        "yellow" => Some("#FFFF00".to_string()),
+        "magenta" | "fuchsia" => Some("#FF00FF".to_string()),
+        "cyan" | "aqua" => Some("#00FFFF".to_string()),
+        "gray" | "grey" => Some("#808080".to_string()),
+        "orange" => Some("#FFA500".to_string()),
+        "purple" => Some("#800080".to_string()),
+        _ => None,
+    }
+}
+
+fn sanitize_font_family(font: &str) -> Option<String> {
+    let trimmed = font.trim();
+    if trimmed.is_empty() { return None; }
+    let first = trimmed.split(',').next().unwrap_or(trimmed).trim();
+    let sanitized = first.replace("\"", "").replace("'", "");
+    if sanitized.is_empty() { return None; }
+    Some(sanitized)
+}
+
 /// Helper function to generate HTML from a parsed Lexical JSON value.
 fn lexical_value_to_html(value: &Value) -> String {
     let mut html = String::new();
@@ -116,42 +166,65 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     let style_str = node.get("style").and_then(|s| s.as_str()).unwrap_or("");
 
-                    // Parse CSS style for color and background-color
-                    let mut text_color: Option<&str> = None;
+                    // Parse CSS style for color, background-color, font-family, and font-size
+                    let mut text_color: Option<String> = None;
+                    let mut font_family: Option<String> = None;
+                    let mut font_size: Option<String> = None;
+                    let mut highlight_color: Option<String> = None;
+
                     let mut has_highlight_flag = format_flags & IS_HIGHLIGHT != 0;
+
                     for decl in style_str.split(';').map(str::trim) {
                         if let Some(value) = decl.strip_prefix("color:") {
-                            text_color = Some(value.trim());
-                        } else if let Some(_) = decl.strip_prefix("background-color:") {
-                            has_highlight_flag = true;
+                            text_color = ensure_hex_color(value.trim());
+                        } else if let Some(value) = decl.strip_prefix("font-family:") {
+                            font_family = sanitize_font_family(value.trim());
+                        } else if let Some(value) = decl.strip_prefix("font-size:") {
+                            font_size = Some(value.trim().to_string());
+                        } else if let Some(value) = decl.strip_prefix("background-color:") {
+                            let bg = value.trim();
+                            if !bg.is_empty() && bg != "transparent" {
+                                has_highlight_flag = true;
+                                highlight_color = ensure_hex_color(bg);
+                            }
                         }
                     }
 
-                    let escaped_text = encode_text(text_content);
-
-                    // Open highlight tag if needed
+                    // Prepare data attributes for the Lua filter
+                    let mut span_attrs = String::new();
+                    if let Some(c) = text_color {
+                        span_attrs.push_str(&format!(" data-color=\"{}\"", c));
+                    }
+                    if let Some(f) = font_family {
+                        span_attrs.push_str(&format!(" data-font-family=\"{}\"", encode_text(&f)));
+                    }
+                    if let Some(s) = font_size {
+                        span_attrs.push_str(&format!(" data-font-size=\"{}\"", encode_text(&s)));
+                    }
                     if has_highlight_flag {
-                        html.push_str("<mark>");
+                         let hc = highlight_color.unwrap_or_else(|| "#FFFF00".to_string());
+                         span_attrs.push_str(&format!(" data-highlight=\"{}\"", hc));
                     }
-                    // Open font color tag if needed
-                    if let Some(color) = text_color {
-                        html.push_str(&format!("<font color=\"{}\">", encode_text(color)));
+
+                    // Open wrapper span if attributes exist
+                    if !span_attrs.is_empty() {
+                        html.push_str(&format!("<span{}>", span_attrs));
                     }
-                    // Open format tags
+
+                    // Open format tags (B, I, U, S, etc.)
                     html.push_str(&format_tags_to_open);
+
                     // Insert the actual text
-                    html.push_str(&escaped_text);
+                    html.push_str(&encode_text(text_content));
+
                     // Close format tags
                     while let Some(tag) = format_tags_to_close.pop() {
                         html.push_str(tag);
                     }
-                    // Close font tag if used
-                    if text_color.is_some() {
-                        html.push_str("</font>");
-                    }
-                    // Close highlight tag if used
-                    if has_highlight_flag {
-                        html.push_str("</mark>");
+
+                    // Close wrapper span
+                    if !span_attrs.is_empty() {
+                        html.push_str("</span>");
                     }
                 }
             }
@@ -291,15 +364,14 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         let children = root.get("children")
             .and_then(|c| c.as_array())
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing root.children"))?;
-        let table_node = children.get(0)
+        let table_node = children.iter().find(|node| node.get("type").and_then(|t| t.as_str()) == Some("table"))
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table node"))?;
-        if table_node.get("type").and_then(|t| t.as_str()) != Some("table") {
-            return Err(CommandError::from("Invalid Lexical JSON: first child is not a table"));
-        }
+        
         let rows = table_node.get("children")
             .and_then(|r| r.as_array())
             .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table children"))?;
-        // Helper to parse timestamp range "mm:ss.mmm - mm:ss.mmm"
+        
+        // Helper to parse timestamp range "mm:ss.mmm - mm:ss.mmm" or "hh:mm:ss.mmm - hh:mm:ss.mmm"
         fn parse_ts_range(range: &str) -> (f64, f64) {
             let parts: Vec<&str> = range.split(" - ").collect();
             fn parse_one(s: &str) -> f64 {
@@ -325,27 +397,41 @@ pub async fn export_transcript_to_docx<R: Runtime>(
                 (0.0, 0.0)
             }
         }
+
         let mut segs = Vec::new();
         for row in rows.iter().skip(1) {
             if let Some(cells) = row.get("children").and_then(|c| c.as_array()) {
-                // Extract cell texts
-                let texts: Vec<String> = cells.iter().map(|cell| {
-                    cell.get("children").and_then(|p| p.as_array())
-                        .and_then(|ps| ps.get(0))
-                        .and_then(|p| p.get("children"))
-                        .and_then(|ts| ts.as_array())
-                        .and_then(|ts| ts.get(0))
-                        .and_then(|t| t.get("text"))
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                }).collect();
-                let (start, end) = parse_ts_range(&texts[1]);
+                // We expect at least 4 cells: #, Timestamp, Speaker, Text
+                if cells.len() < 4 { continue; }
+
+                // Use the defined extract_plain_text_from_lexical_value helper for simple fields
+                let mut timestamp_buffer = String::new();
+                extract_plain_text_from_lexical_value(&cells[1], &mut timestamp_buffer);
+                let (start, end) = parse_ts_range(&timestamp_buffer);
+
+                let mut speaker_buffer = String::new();
+                extract_plain_text_from_lexical_value(&cells[2], &mut speaker_buffer);
+                let speaker = speaker_buffer.trim().to_string();
+
+                // For the Text column, we want to PRESERVE the Lexical structure if possible
+                // So we take the cell's children and wrap them in a pseudo-root.
+                let text_nodes = cells[3].get("children").cloned().unwrap_or(json!([]));
+                let text_json = json!({
+                    "root": {
+                        "type": "root",
+                        "children": text_nodes,
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "version": 1
+                    }
+                }).to_string();
+
                 let seg = json!({
                     "start_time": start,
                     "end_time": end,
-                    "speaker": texts.get(2).cloned().unwrap_or_default(),
-                    "text": texts.get(3).cloned().unwrap_or_default(),
+                    "speaker": speaker,
+                    "text": text_json,
                 });
                 segs.push(seg);
             }
@@ -359,11 +445,14 @@ pub async fn export_transcript_to_docx<R: Runtime>(
     html_output.push_str("<!DOCTYPE html>\n");
     html_output.push_str("<html><head><meta charset=\"utf-8\"/><style>\n");
     html_output.push_str("body { \
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \
+        font-family: 'Inter', Roboto, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \
         'Liberation Mono', 'Courier New', monospace; \
         font-size: 14px; \
         line-height: 1.5; \
-    }\n");
+    }\n\
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }\n\
+    td { vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; }\n\
+    p { margin: 0; padding: 0; text-align: left; }\n");
     html_output.push_str("</style></head><body>\n");
 
     html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n");
@@ -429,21 +518,21 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         }
     };
 
-    for (index, entry) in entries.iter().enumerate() { // Changed _index to index
-        let segment_number = index + 1; // Use index here
+    for (index, entry) in entries.iter().enumerate() {
+        let segment_number = index + 1;
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
         let raw_speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
-        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 {
-            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_to_format = if raw_speaker.ends_with(':') {
+            &raw_speaker[0..raw_speaker.len()-1]
         } else {
-            format!("{}:", raw_speaker)
+            raw_speaker
         };
-        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 {
-            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_display_with_colon = if speaker_to_format.chars().count() > 12 && speaker_to_format != "Unknown" {
+            format!("{}:", speaker_to_format.chars().take(12).collect::<String>() + "...")
         } else {
-            raw_speaker.to_string()
+            format!("{}:", speaker_to_format)
         };
         let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let segment_html_content = convert_lexical_or_plain_text_to_html(raw_text_content);
@@ -451,49 +540,49 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         match current_layout.as_str() {
             "Layout1" => { // | No | Timestamp | Speaker | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout2" => { // | No | Timestamp | then | Speaker | Text | (Default)
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{} {}</td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{} {}</p></td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_with_colon)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout4" => { // | Speaker | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             "Layout5" => { // | Text |
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
             _ => { // Fallback to Layout2 if layout_choice is unknown
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\"><p>{}</p></td>\n", encode_text(&timestamp_str)));
                 html_output.push_str("    </tr>\n");
                 html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
-                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee; font-weight: bold;\"><p>{}</p></td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align: top; text-align: left; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
                 html_output.push_str("    </tr>\n");
             }
         }
@@ -513,11 +602,20 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let pandoc_args = vec![
+    let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
+
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(lua_path) = lua_filter_path {
+        pandoc_args.push("--lua-filter".to_string());
+        pandoc_args.push(lua_path.to_string_lossy().to_string());
+    }
 
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
@@ -702,6 +800,7 @@ pub async fn export_transcript_to_srt(
     _app_handle: AppHandle, // Not directly used but good practice for tauri commands
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_srt] Exporting to SRT: {}", output_path_str);
 
@@ -711,6 +810,8 @@ pub async fn export_transcript_to_srt(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for SRT export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     let mut srt_content = String::new();
     for (index, segment) in segments.iter().enumerate() { // Changed _index to index
@@ -723,10 +824,20 @@ pub async fn export_transcript_to_srt(
 
         let plain_text = get_plain_text_for_srt(&segment.text);
 
-        // Prepend speaker to text if speaker exists and is not empty
-        let text_line = if let Some(speaker_name) = &segment.speaker {
-            if !speaker_name.trim().is_empty() {
-                format!("{}: {}", speaker_name.trim(), plain_text)
+        // Prepend speaker to text if speaker exists and is not empty AND not excluded
+        let text_line = if !exclude_speakers {
+            if let Some(speaker_name) = &segment.speaker {
+                let trimmed_spk = speaker_name.trim();
+                if !trimmed_spk.is_empty() {
+                    let spk_with_colon = if trimmed_spk.ends_with(':') {
+                        trimmed_spk.to_string()
+                    } else {
+                        format!("{}:", trimmed_spk)
+                    };
+                    format!("{} {}", spk_with_colon, plain_text)
+                } else {
+                    plain_text
+                }
             } else {
                 plain_text
             }
@@ -757,17 +868,6 @@ fn format_vtt_timestamp(seconds: f64) -> String {
     let m = total_m % 60;
     let h = total_m / 60;
     format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
-}
-
-// Helper to sanitize color strings for CSS class names
-fn sanitize_color_class(color: &str) -> String {
-    if color.starts_with('#') {
-        format!("c_{}", color.trim_start_matches('#'))
-    } else {
-        // Replace spaces, commas, parens with underscores
-        let safe = color.replace(|c: char| !c.is_alphanumeric(), "_");
-        format!("c_{}", safe)
-    }
 }
 
 // Helper function to ensure a color is in a format VTT/ASS players like (HEX)
@@ -886,7 +986,7 @@ fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String, used_cla
                                 .map(|c| if c.is_alphanumeric() { c } else { '_' })
                                 .collect::<String>();
                             let class_name = format!("c_{}", safe_suffix);
-                            
+
                             prefix_tags.push_str(&format!("<c.{}>", class_name));
                             suffix_tags.insert_str(0, "</c>");
                             used_classes.insert(class_name, color);
@@ -897,8 +997,8 @@ fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String, used_cla
                     if format_flags & IS_ITALIC != 0 { prefix_tags.push_str("<i>"); suffix_tags.insert_str(0, "</i>"); }
                     if format_flags & IS_UNDERLINE != 0 { prefix_tags.push_str("<u>"); suffix_tags.insert_str(0, "</u>"); }
                     if has_strikethrough { 
-                        prefix_tags.push_str("<c.s>"); 
-                        suffix_tags.insert_str(0, "</c>"); 
+                        prefix_tags.push_str("<c.s>");
+                        suffix_tags.insert_str(0, "</c>");
                         used_classes.insert("s".to_string(), "line-through".to_string()); // Value not strictly used for 's' but keeps map consistent
                     }
 
@@ -967,6 +1067,7 @@ pub async fn export_transcript_to_vtt(
     _app_handle: AppHandle,
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_vtt] Exporting to VTT with styling: {}", output_path_str);
 
@@ -976,6 +1077,8 @@ pub async fn export_transcript_to_vtt(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for VTT export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     // Two-pass approach for VTT:
     // 1. Generate cue texts and collect all used classes (strikethrough and colors)
@@ -999,10 +1102,10 @@ pub async fn export_transcript_to_vtt(
 
         for class in sorted_keys {
             if class == "s" {
-                vtt_content.push_str("::cue(c.s) { text-decoration: line-through; }\n");
+                vtt_content.push_str("::cue(.s) { text-decoration: line-through; }\n");
             } else if class.starts_with("c_") {
                 if let Some(css_color) = used_classes.get(class) {
-                    vtt_content.push_str(&format!("::cue(c.{}) {{ color: {}; }}\n", class, css_color));
+                    vtt_content.push_str(&format!("::cue(.{}) {{ color: {}; }}\n", class, css_color));
                 }
             }
         }
@@ -1016,9 +1119,19 @@ pub async fn export_transcript_to_vtt(
 
         let cue_text = &cue_texts[index];
 
-        let text_line = if let Some(speaker_name) = &segment.speaker {
-            if !speaker_name.trim().is_empty() {
-                format!("{}: {}", speaker_name.trim(), cue_text)
+        let text_line = if !exclude_speakers {
+            if let Some(speaker_name) = &segment.speaker {
+                let trimmed_spk = speaker_name.trim();
+                if !trimmed_spk.is_empty() {
+                    let spk_with_colon = if trimmed_spk.ends_with(':') {
+                        trimmed_spk.to_string()
+                    } else {
+                        format!("{}:", trimmed_spk)
+                    };
+                    format!("{} {}", spk_with_colon, cue_text)
+                } else {
+                    cue_text.clone()
+                }
             } else {
                 cue_text.clone()
             }
@@ -1203,15 +1316,16 @@ pub async fn export_transcript_to_markdown(
         let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
         let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");
 
-        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
-            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        let speaker_to_format = if raw_speaker.ends_with(':') {
+            &raw_speaker[0..raw_speaker.len()-1]
         } else {
-            raw_speaker.to_string()
+            raw_speaker
         };
-        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
-            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+
+        let speaker_display_with_colon = if speaker_to_format.chars().count() > 12 && speaker_to_format != "Unknown" {
+            format!("{}:", speaker_to_format.chars().take(12).collect::<String>() + "...")
         } else {
-            format!("{}:", raw_speaker)
+            format!("{}:", speaker_to_format)
         };
 
         let markdown_text = get_markdown_text_from_lexical_string(&segment.text);
@@ -1226,7 +1340,7 @@ pub async fn export_transcript_to_markdown(
                     "| {} | {} | {} | {} |\n",
                     segment_number,
                     encode_text(&timestamp_str),
-                    encode_text(&speaker_display_no_colon),
+                    encode_text(&speaker_display_with_colon),
                     table_cell_text // Already contains Markdown, no further encode_text
                 ));
             }
@@ -1237,14 +1351,14 @@ pub async fn export_transcript_to_markdown(
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
                 if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
-                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_with_colon)));
                 md_content.push_str(&format!("{}\n", markdown_text));
             }
             "Layout4" => { // | Speaker | Text |
                 let table_cell_text = markdown_text.replace("\n", " ");
                  md_content.push_str(&format!(
                     "| {} | {} |\n",
-                    encode_text(&speaker_display_no_colon),
+                    encode_text(&speaker_display_with_colon),
                     table_cell_text
                 ));
             }
@@ -1613,6 +1727,7 @@ pub async fn export_transcript_to_ass(
     _app_handle: AppHandle,
     output_path_str: String,
     segments_json_str: String,
+    exclude_speaker_names: Option<bool>,
 ) -> Result<String, CommandError> {
     info!("[export_transcript_to_ass] Exporting to ASS: {}", output_path_str);
 
@@ -1622,6 +1737,8 @@ pub async fn export_transcript_to_ass(
     if segments.is_empty() {
         return Err(CommandError::from("No segments provided for ASS export."));
     }
+
+    let exclude_speakers = exclude_speaker_names.unwrap_or(false);
 
     let mut ass_content = String::new();
 
@@ -1644,7 +1761,7 @@ pub async fn export_transcript_to_ass(
     ass_content.push_str("Style: Default,Arial,20,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1.5,0,2,10,10,10,1\n");
 
     // Highlight styles removed for simpler export.
-    let styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let _styles_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
 
     // [Events]
@@ -1658,9 +1775,14 @@ pub async fn export_transcript_to_ass(
         let speaker_name = segment.speaker.as_deref().unwrap_or("").trim();
         let dialogue_text_raw = get_ass_dialogue_line_from_lexical_string(&segment.text);
 
-        // Prepend speaker to dialogue text if speaker name is not empty
-        let final_text = if !speaker_name.is_empty() {
-            format!("{}: {}", speaker_name, dialogue_text_raw)
+        // Prepend speaker to dialogue text if speaker name is not empty AND not excluded
+        let final_text = if !exclude_speakers && !speaker_name.is_empty() {
+            let spk_with_colon = if speaker_name.ends_with(':') {
+                speaker_name.to_string()
+            } else {
+                format!("{}:", speaker_name)
+            };
+            format!("{} {}", spk_with_colon, dialogue_text_raw)
         } else {
             dialogue_text_raw
         };
@@ -1698,23 +1820,13 @@ pub async fn export_document_to_docx<R: Runtime>(
         return Err(CommandError::from(msg));
     }
 
-     let base_dir = source_path
+     let _base_dir = source_path
          .parent()
          .and_then(|p| p.parent()) // .../documents/
          .and_then(|p| p.parent()) // .../data/
          .and_then(|p| p.parent()) // .../Harvery_Data/
          .ok_or_else(|| {
-             // Fallback or just assume a standard structure if strict parent navigation fails
-             // But for temp dir generation, we need a valid base.
-             // Let's try to find the project root via known structure.
-             // If source is /path/to/project/files/docs/doc.json, we need /path/to/project
-             let msg = format!("Could not determine project base directory from document path: {}", document_path_str);
-            //  error!("[export_document_to_docx] {}", msg);
-            //  CommandError::from(msg)
-            // Just use the parent of the document for now as base for temp lookup if full tree walk fails?
-            // ensure_base_asset_dirs logic usually expects the root "ProjectName" folder or "files" inside it.
-            // Let's rely on standard path manipulation used in other commands if possible.
-             msg // Propagate error
+             CommandError::from(format!("Could not determine project base directory from document path: {}", document_path_str))
          })?;
     
     // We can just use the document's directory to find the 'files' dir context if needed,
@@ -1740,7 +1852,7 @@ pub async fn export_document_to_docx<R: Runtime>(
     html_output.push_str("<!DOCTYPE html>\n");
     html_output.push_str("<html><head><meta charset=\"utf-8\"/><style>\n");
     html_output.push_str("body { \
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; \
+        font-family: 'Inter', Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; \
         font-size: 11pt; \
         line-height: 1.5; \
     }\n");
@@ -1750,7 +1862,7 @@ pub async fn export_document_to_docx<R: Runtime>(
 
     // Use a simpler base dir for temp file if the elaborate parent traversal is risky.
     // We just need A directory. source_path parent is safe.
-    let safe_base_dir = source_path.parent().unwrap_or(&source_path); 
+    let _safe_base_dir = source_path.parent().unwrap_or(&source_path); 
     // But get_unique_temp_path_for_conversion builds path: base_dir/files/documents/.tmp/...
     // So if safe_base_dir is .../documents, joining files/documents/.tmp will fail.
     // We need the Project Root.
@@ -1770,11 +1882,20 @@ pub async fn export_document_to_docx<R: Runtime>(
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
 
-    let pandoc_args = vec![
+    let mut pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
         output_path_str.clone(),
         "docx".to_string(),
     ];
+
+    let lua_filter_path = app_handle.path()
+        .resolve("scripts/docx_styles.lua", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(lua_path) = lua_filter_path {
+        pandoc_args.push("--lua-filter".to_string());
+        pandoc_args.push(lua_path.to_string_lossy().to_string());
+    }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 

@@ -175,16 +175,49 @@ pub async fn import_word_transcript<R: Runtime>(
 
     // Truncate the original DOCX filename's stem to be used for the transcript's folder and JSON filename base.
     let truncated_transcript_base_name = truncate_filename_stem(&original_docx_filename, MAX_FILENAME_STEM_LENGTH);
-    let transcript_filename_stem = Path::new(&truncated_transcript_base_name).file_stem() // Get stem from "truncated.docx"
+    let transcript_filename_stem_truncated = Path::new(&truncated_transcript_base_name).file_stem() // Get stem from "truncated.docx"
         .and_then(|s| s.to_str())
         .unwrap_or("imported_transcript") // Fallback
         .to_string();
-    info!("[import_word_transcript] Original DOCX: '{}', Truncated base for transcript: '{}'", original_docx_filename, transcript_filename_stem);
+    info!("[import_word_transcript] Original DOCX: '{}', Truncated base for transcript: '{}'", original_docx_filename, transcript_filename_stem_truncated);
+
+    // Read project_data to check for name conflicts in XML
+    let xml_content = fs::read_to_string(&project_xml_path)?;
+    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+
+    let transcripts_root = project_base_dir.join(HARVEY_FILES_DIR).join(TRANSCRIPTS_DIR);
+
+    let mut folder_counter = 0;
+    let (_final_transcript_folder, _final_json_filename, transcript_filename_stem) = loop {
+        let current_stem = if folder_counter == 0 {
+            transcript_filename_stem_truncated.clone()
+        } else {
+            format!("{}_{}", transcript_filename_stem_truncated, folder_counter)
+        };
+
+        let candidate_folder = transcripts_root.join(&current_stem);
+
+        // Check if this stem is already used in project_data.imported_transcript_files.files
+        let name_conflict = project_data.imported_transcript_files.files.iter().any(|f| {
+            f.name == current_stem || f.name.starts_with(&format!("{}.", current_stem))
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
+            let file_name = format!("{}.json", current_stem);
+            debug!("[import_word_transcript] Found unique transcript folder: {} and filename: {}", candidate_folder.display(), file_name);
+            break (candidate_folder, file_name, current_stem);
+        }
+
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            return Err(CommandError::from(format!("Could not find unique folder for transcript stem '{}' after 1000 attempts.", transcript_filename_stem_truncated)));
+        }
+    };
 
     let temp_html_dir = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR).join(TEMP_SUBDIR_DOCS);
     fs::create_dir_all(&temp_html_dir).map_err(|e| CommandError::from(format!("Failed to create temp dir for HTML: {}", e)))?;
     let unique_id = Uuid::new_v4().to_string(); 
-    // Use truncated stem for temp file to keep it shorter as well, though not strictly necessary for temp file.
+    // Use current stem for temp file to keep it shorter as well, though not strictly necessary for temp file.
     let temp_html_filename = format!("temp_transcript_html_{}_{}.html", transcript_filename_stem, unique_id);
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 

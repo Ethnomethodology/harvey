@@ -79,7 +79,7 @@
 
 
   // Base input/select/textarea classes
-  const formElementClasses = "block w-full rounded-md border border-gray-300 dark:border-border focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 bg-white text-gray-900 shadow-sm";
+  const formElementClasses = "block w-full rounded-md border border-gray-300 dark:border-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 bg-white text-gray-900 shadow-sm";
 
 </script>
 
@@ -92,7 +92,7 @@
     aria-labelledby="addFieldModalTitle"
   >
     <div
-      class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-100"
+      class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-100"
       on:click|stopPropagation
     >
       <h2 id="addFieldModalTitle" class="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Add Custom Field Definition</h2>
@@ -125,7 +125,7 @@
           <div class="mt-1 space-y-2">
             <div class="flex items-center">
               <input id="scopeProject" name="scope" type="radio" bind:group={selectedScope} value={"project"}
-                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-border dark:bg-gray-700 dark:focus:ring-blue-600">
+                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:focus:ring-blue-600">
               <label for="scopeProject" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                 Make available across the project
               </label>
@@ -133,7 +133,7 @@
             <div class="flex items-center">
               <input id="scopeSpecific" name="scope" type="radio" bind:group={selectedScope} value={currentItemType}
                      disabled={!currentItemType || currentItemType === 'project'}
-                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-border dark:bg-gray-700 dark:focus:ring-blue-600"
+                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:focus:ring-blue-600"
                      class:cursor-not-allowed={!currentItemType || currentItemType === 'project'}
                      class:opacity-50={!currentItemType || currentItemType === 'project'}>
               <label for="scopeSpecific" class="ml-2 block text-sm text-gray-900 dark:text-gray-300"

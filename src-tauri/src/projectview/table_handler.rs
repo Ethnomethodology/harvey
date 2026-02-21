@@ -90,52 +90,7 @@ pub async fn import_table_file(
         })?;
     debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
-    let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
-    let folder_path = tables_base.join(table_file_stem_truncated);
-    debug!("[import_table_file] Target folder path: {}", folder_path.display());
-
-    if !folder_path.exists() {
-        fs::create_dir_all(&folder_path)
-            .map_err(|e| {
-                error!("[import_table_file] Failed to create directory {}: {}", folder_path.display(), e);
-                CommandError::Io(format!("Failed to create directory {}: {}", folder_path.display(), e))
-            })?;
-        debug!("[import_table_file] Created folder: {}", folder_path.display());
-    }
-
-    let mut counter = 0;
-    let final_table_path = loop {
-        let file_name_to_try = if counter == 0 {
-            truncated_table_filename_with_ext.clone()
-        } else {
-            format!("{}_{}.{}", table_file_stem_truncated, counter, original_source_extension)
-        };
-        let candidate = folder_path.join(&file_name_to_try);
-        if !candidate.exists() {
-            debug!("[import_table_file] Found unique filename: {}", candidate.display());
-            break candidate;
-        }
-        counter += 1;
-        if counter > 1000 {
-            error!("[import_table_file] Could not find unique filename for table base '{}' after {} attempts.", table_file_stem_truncated, counter);
-            return Err(CommandError::from(format!(
-                "Could not find unique filename for table base '{}' (derived from truncated name) after {} attempts.",
-                table_file_stem_truncated, counter
-            )));
-        }
-    };
-
-    let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
-    debug!("[import_table_file] Final table name: {}", final_table_name);
-
-    info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
-    fs::copy(&source_path, &final_table_path).map_err(|e| {
-        error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
-        CommandError::from(format!("Failed to copy table file: {}", e))
-    })?;
-    debug!("File copied to: {}", final_table_path.display());
-
-    info!("[import_table_file] Updating project XML to include table: {}", final_table_name);
+    info!("[import_table_file] Updating project XML to include table: {}", original_source_filename_with_ext);
     let xml_content = fs::read_to_string(&project_xml_path)
         .map_err(|e| {
             error!("[import_table_file] Failed to read project XML for update from {}: {}", project_xml_path.display(), e);
@@ -147,6 +102,59 @@ pub async fn import_table_file(
             CommandError::XmlDeserialization(format!("Failed to parse project XML for update from {}: {}", project_xml_path.display(), e))
         })?;
     debug!("[import_table_file] Project XML parsed for update.");
+
+    let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
+    
+    let mut folder_counter = 0;
+    let (folder_path, final_table_filename) = loop {
+        let folder_name = if folder_counter == 0 {
+            table_file_stem_truncated.to_string()
+        } else {
+            format!("{}_{}", table_file_stem_truncated, folder_counter)
+        };
+        let candidate_folder = tables_base.join(&folder_name);
+        
+        // Check if this stem is already used in project_data.table_files.files
+        // We want to avoid conflict even if the extension is different.
+        let name_conflict = project_data.table_files.files.iter().any(|f| {
+            // Check if f.name matches folder_name exactly or matches folder_name + suffix
+            f.name == folder_name || f.name.starts_with(&format!("{}.", folder_name))
+        });
+
+        if !candidate_folder.exists() && !name_conflict {
+            let file_name = format!("{}.{}", folder_name, original_source_extension);
+            debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
+            break (candidate_folder, file_name);
+        }
+        
+        folder_counter += 1;
+        if folder_counter > 1000 {
+            error!("[import_table_file] Could not find unique folder for table base '{}' after {} attempts.", table_file_stem_truncated, folder_counter);
+            return Err(CommandError::from(format!(
+                "Could not find unique folder for table base '{}' after {} attempts.",
+                table_file_stem_truncated, folder_counter
+            )));
+        }
+    };
+
+    fs::create_dir_all(&folder_path)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to create directory {}: {}", folder_path.display(), e);
+            CommandError::Io(format!("Failed to create directory {}: {}", folder_path.display(), e))
+        })?;
+    debug!("[import_table_file] Created unique folder: {}", folder_path.display());
+
+    let final_table_path = folder_path.join(&final_table_filename);
+
+    let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
+    debug!("[import_table_file] Final table name: {}", final_table_name);
+
+    info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
+    fs::copy(&source_path, &final_table_path).map_err(|e| {
+        error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
+        CommandError::from(format!("Failed to copy table file: {}", e))
+    })?;
+    debug!("File copied to: {}", final_table_path.display());
 
     let relative_path_for_xml = final_table_path
         .strip_prefix(project_base_dir)
@@ -663,13 +671,15 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
     for row_value in data {
         if let Some(row_map) = row_value.as_object() {
             let row: Vec<String> = headers.iter().map(|h| {
-                row_map.get(h).and_then(|v| {
-                    if v.is_string() {
-                        v.as_str().map(|s| s.to_string())
-                    } else {
-                        Some(v.to_string())
+                row_map.get(h).map(|v| {
+                    match v {
+                        Value::String(s) => s.to_string(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Null => "".to_string(),
+                        _ => v.to_string(),
                     }
-                }).unwrap_or("".to_string())
+                }).unwrap_or_else(|| "".to_string())
             }).collect();
             wtr.write_record(&row)?;
         }
@@ -987,4 +997,54 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
 
     info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
     Ok(new_table_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn export_table_to_csv(
+    table_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_table_to_csv] Exporting table from: {} to: {}", table_path_str, output_path_str);
+    
+    // Load current data
+    let loaded_data = load_table_data(table_path_str).await?;
+    let headers_val = loaded_data.get("headers").ok_or_else(|| CommandError::from("Missing 'headers' in table data"))?;
+    let data_val = loaded_data.get("data").ok_or_else(|| CommandError::from("Missing 'data' in table data"))?;
+
+    let headers: Vec<String> = serde_json::from_value(headers_val.clone())?;
+    let data: Vec<Value> = serde_json::from_value(data_val.clone())?;
+
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_csv_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}
+
+#[tauri::command]
+pub async fn export_table_to_xlsx(
+    table_path_str: String,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_table_to_xlsx] Exporting table from: {} to: {}", table_path_str, output_path_str);
+    
+    // Load current data
+    let loaded_data = load_table_data(table_path_str).await?;
+    let headers_val = loaded_data.get("headers").ok_or_else(|| CommandError::from("Missing 'headers' in table data"))?;
+    let data_val = loaded_data.get("data").ok_or_else(|| CommandError::from("Missing 'data' in table data"))?;
+
+    let headers: Vec<String> = serde_json::from_value(headers_val.clone())?;
+    let data: Vec<Value> = serde_json::from_value(data_val.clone())?;
+
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_xlsx_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
 }

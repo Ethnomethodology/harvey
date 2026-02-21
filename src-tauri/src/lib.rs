@@ -320,6 +320,7 @@ pub fn run() {
             welcome::commands::get_local_translation_models,
             welcome::commands::delete_model,
             welcome::commands::download_model_command,
+            welcome::commands::download_faster_whisper_model_command,
             welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
             welcome::commands::fetch_available_models_command,
@@ -329,7 +330,7 @@ pub fn run() {
             welcome::commands::install_python_libraries,
             welcome::python_env::is_ffmpeg_installed,
             welcome::python_env::delete_virtual_env,
-            welcome::python_env::list_venv_lib_contents, // Temp diagnostic command
+            welcome::python_env::list_venv_lib_contents,
             welcome::hf_auth::check_hf_auth_status,
             welcome::hf_auth::save_hf_auth_token,
             welcome::diarization::check_diarization_model_access,
@@ -340,11 +341,12 @@ pub fn run() {
             
             welcome::commands::set_selected_translation_family,
             welcome::commands::get_selected_translation_family,
+            welcome::commands::set_selected_transcription_engine,
+            welcome::commands::get_selected_transcription_engine,
             welcome::commands::is_ctranslate2_installed,
-            welcome::status::check_config_status,
-            welcome::python_env::list_venv_lib_contents,
-            welcome::python_env::delete_virtual_env,
-            welcome::hf_auth::check_hf_auth_status,
+            welcome::commands::is_faster_whisper_dependencies_installed,
+            welcome::commands::install_faster_whisper_dependencies_command,
+            welcome::commands::get_dependency_check_errors,
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
             welcome::commands::get_advanced_translation_config,
@@ -459,6 +461,8 @@ pub fn run() {
             projectview::table_handler::delete_table_column,
             projectview::table_handler::save_table_styles,
             projectview::table_handler::load_table_styles,
+            projectview::table_handler::export_table_to_csv, // Added
+            projectview::table_handler::export_table_to_xlsx, // Added
             projectview::core_commands::save_table_layout_prefs,
             projectview::core_commands::load_table_layout_prefs,
 

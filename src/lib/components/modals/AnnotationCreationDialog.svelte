@@ -1,5 +1,7 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+    import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -9,6 +11,7 @@
     export let initialTitle = '';
     export let initialDescription = '';
     export let initialText = null; // If not null, shows a text content field (for speech bubbles)
+    export let initialHtml = null; // HTML representation for rendering
     export let initialTextColor = 'black';
     export let initialFontSize = 14;
     export let initialBorderColor = null;
@@ -26,12 +29,13 @@
     let title = initialTitle;
     let description = initialDescription;
     let text = initialText || '';
+    let html = initialHtml || '';
     let selectedColor = initialColor;
     let selectedTextColor = initialTextColor;
     let selectedFontSize = initialFontSize;
     let selectedBorderColor = selectedColor === 'url(#censoredPattern)' ? 'black' : (initialBorderColor || (initialColor.includes('255, 255, 255') ? 'rgba(156, 163, 175, 1)' : initialColor.replace(', 0.5', ', 1')));
     let selectedBorderSize = initialBorderSize;
-    let selectedShape = (initialShape && initialShape.includes('circle')) ? 'circle' : 'rectangle';
+    let selectedShape = initialShape;
     let selectedTailStyle = initialTailStyle || 'straight';
     let tailFlipped = initialTailFlipped || false;
     let rounded = initialRounded || false;
@@ -79,12 +83,15 @@
 
     $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
-    function handleSave() {
+    $: notifyChanges(title, description, selectedColor, text, html, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval);
+
+    function notifyChanges() {
         dispatch('save', { 
             title, 
             description, 
             color: selectedColor, 
             text, 
+            html,
             textColor: selectedTextColor, 
             fontSize: selectedFontSize, 
             borderColor: selectedBorderColor, 
@@ -97,6 +104,10 @@
         });
     }
 
+    function handleDone() {
+        dispatch('done');
+    }
+
     function handleCancel() {
         dispatch('cancel');
     }
@@ -105,9 +116,14 @@
         dispatch('delete');
     }
 
+    function handleLexicalChange(event) {
+        text = event.detail.jsonString;
+        html = event.detail.htmlString;
+    }
+
     // Adjust position to keep dialog within viewport (basic implementation)
     let dialogElement;
-    let dialogWidth = 200; // Simplified dialog
+    let dialogWidth = 500; // Increased width for Lexical toolbar
     let dialogHeight = 200;
 
     $: if (dialogElement && panelBounds) {
@@ -134,65 +150,110 @@
         dialogElement.style.left = `${newX}px`;
         dialogElement.style.top = `${newY}px`;
     }
+
+    function handleClickOutside(event) {
+        if (dialogElement && !dialogElement.contains(event.target)) {
+            // Don't close if clicking a dropdown menu or Lexical modal
+            if (event.target.closest('.ui-dropdown-menu') || event.target.closest('.lexical-modal')) return;
+            handleDone();
+        }
+    }
+
+    onMount(() => {
+        setTimeout(() => {
+            window.addEventListener('pointerdown', handleClickOutside, true);
+        }, 100);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener('pointerdown', handleClickOutside, true);
+    });
+
+    const lexicalToolbarConfig = {
+        undo: false,
+        redo: false,
+        blockType: false,
+        bold: true,
+        italic: true,
+        underline: true,
+        strikethrough: true,
+        link: false,
+        fontFamily: true,
+        fontSize: true, // Assuming we want this based on user request
+        insertMenu: false,
+        indent: false,
+        outdent: false,
+        align: false,
+        textColor: true,
+        highlight: true,
+        clearFormatting: true,
+        search: false
+    };
 </script>
 
 <div
     bind:this={dialogElement}
-    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
-    style="left: {x}px; top: {y}px; min-width: 200px;"
+    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
+    style="left: {x}px; top: {y}px; width: {dialogWidth}px;"
+    on:click|stopPropagation
+    on:pointerdown|stopPropagation
 >
     {#if !isCensoredMode}
         {#if initialText !== null}
             <div class="mb-3">
                 <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
-                <textarea
-                    id="annotation-text"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                    bind:value={text}
-                    placeholder="Enter text..."
-                    rows="2"
-                ></textarea>
-            </div>
-
-            <div class="mb-3">
-                <div class="flex space-x-2">
-                    <button
-                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedTailStyle === 'straight'}
-                        class:text-white={selectedTailStyle === 'straight'}
-                        class:bg-gray-100={selectedTailStyle !== 'straight'}
-                        class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
-                        on:click={() => (selectedTailStyle = 'straight')}
-                    >
-                        Straight Tail
-                    </button>
-                    <button
-                        class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedTailStyle === 'curved'}
-                        class:text-white={selectedTailStyle === 'curved'}
-                        class:bg-gray-100={selectedTailStyle !== 'curved'}
-                        class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
-                        on:click={() => (selectedTailStyle = 'curved')}
-                    >
-                        Curved Tail
-                    </button>
+                <div class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-hidden bg-white dark:bg-gray-900">
+                    <LexicalEditor
+                        initialJson={text.startsWith('{') ? text : null}
+                        placeholder={!text.startsWith('{') ? text : "Enter text..."}
+                        editable={true}
+                        toolbarConfig={lexicalToolbarConfig}
+                        on:change={handleLexicalChange}
+                    />
                 </div>
             </div>
 
-            {#if selectedTailStyle === 'curved'}
+            {#if initialShape?.startsWith('speech-bubble')}
                 <div class="mb-3">
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                            bind:checked={tailFlipped}
-                        />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Tail</span>
-                    </label>
+                    <div class="flex space-x-2">
+                        <button
+                            class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                            class:bg-blue-600={selectedTailStyle === 'straight'}
+                            class:text-white={selectedTailStyle === 'straight'}
+                            class:bg-gray-100={selectedTailStyle !== 'straight'}
+                            class:dark:bg-gray-700={selectedTailStyle !== 'straight'}
+                            on:click={() => (selectedTailStyle = 'straight')}
+                        >
+                            Straight Tail
+                        </button>
+                        <button
+                            class="flex-1 flex items-center justify-center py-1.5 text-xs font-medium border rounded transition-colors"
+                            class:bg-blue-600={selectedTailStyle === 'curved'}
+                            class:text-white={selectedTailStyle === 'curved'}
+                            class:bg-gray-100={selectedTailStyle !== 'curved'}
+                            class:dark:bg-gray-700={selectedTailStyle !== 'curved'}
+                            on:click={() => (selectedTailStyle = 'curved')}
+                        >
+                            Curved Tail
+                        </button>
+                    </div>
                 </div>
+
+                {#if selectedTailStyle === 'curved'}
+                    <div class="mb-3">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                                bind:checked={tailFlipped}
+                            />
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Flip Tail</span>
+                        </label>
+                    </div>
+                {/if}
             {/if}
 
-            {#if selectedShape === 'rectangle'}
+            {#if selectedShape === 'rectangle' || initialShape === 'speech-bubble-rect'}
                 <div class="mb-3">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input
@@ -205,7 +266,7 @@
                 </div>
             {/if}
 
-            {#if selectedShape === 'circle'}
+            {#if selectedShape === 'circle' || initialShape === 'speech-bubble-circle'}
                 <div class="mb-3">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input
@@ -223,7 +284,7 @@
                 <input
                     type="text"
                     id="annotation-title"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                     bind:value={title}
                     placeholder="Enter title"
                     autocomplete="off"
@@ -233,7 +294,7 @@
                 <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea
                     id="annotation-description"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                     bind:value={description}
                     placeholder="Enter description"
                     rows="2"
@@ -278,94 +339,41 @@
 
     <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{isCensoredMode ? 'Anonymise Style' : 'Background Color'}</label>
-        <div class="flex items-center space-x-1.5">
-            {#each highlightOptions as option}
-                <button
-                    title={option.label}
-                    class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                    class:ring-2={selectedColor === option.value}
-                    class:ring-blue-500={selectedColor === option.value}
-                    style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : (option.value === 'url(#censoredPattern)' ? 'linear-gradient(to bottom right, #fff 25%, #888 25%, #888 50%, #444 50%, #444 75%, #000 75%)' : option.value.replace(', 0.5', ', 1'))};"
-                    on:click={() => {
-                        selectedColor = option.value;
-                    }}
-                >
-                </button>
-            {/each}
-        </div>
+        <Dropdown
+            containerClasses="w-full"
+            options={highlightOptions}
+            bind:value={selectedColor}
+            on:change={(e) => selectedColor = e.detail}
+            showColorPreview={true}
+            boundaryRect={panelBounds}
+        />
     </div>
 
     {#if initialText !== null}
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Text Color</label>
-            <div class="flex items-center space-x-1.5">
-                {#each textColors as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                        class:ring-2={selectedTextColor === option.value}
-                                            class:ring-blue-500={selectedTextColor === option.value}
-                                            style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : option.value};"
-                                            on:click={() => (selectedTextColor = option.value)}
-                                        >
-                        
-                    </button>
-                {/each}
-            </div>
-        </div>
-
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Font Size</label>
-            <div class="grid grid-cols-5 gap-1">
-                {#each fontSizes as size}
-                    <button
-                        class="px-1 py-1 text-[10px] font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedFontSize === size}
-                        class:text-white={selectedFontSize === size}
-                        class:bg-gray-100={selectedFontSize !== size}
-                        class:dark:bg-gray-700={selectedFontSize !== size}
-                        on:click={() => (selectedFontSize = size)}
-                    >
-                        {size}
-                    </button>
-                {/each}
-            </div>
-        </div>
-
+        <!-- Lexical handles Text Color and Font Size, so we only show them for title/description if needed, but here it's speech bubble/text area -->
+        <!-- User said we can remove them -->
+        
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Border Color</label>
-            <div class="flex items-center space-x-1.5">
-                {#each textColors as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-500 transition-transform hover:scale-110 shadow-sm"
-                        class:ring-2={selectedBorderColor === option.value}
-                                            class:ring-blue-500={selectedBorderColor === option.value}
-                                            style="background: {option.value === 'transparent' ? 'linear-gradient(45deg, rgba(255,255,255,1) 45%, rgba(255,0,0,1) 45%, rgba(255,0,0,1) 55%, rgba(255,255,255,1) 55%)' : option.value};"
-                                            on:click={() => (selectedBorderColor = option.value)}
-                                        >
-                        
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={textColors}
+                bind:value={selectedBorderColor}
+                on:change={(e) => selectedBorderColor = e.detail}
+                showColorPreview={true}
+                boundaryRect={panelBounds}
+            />
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Border Size</label>
-            <div class="flex items-center space-x-2">
-                {#each borderSizes as size}
-                    <button
-                        class="w-8 h-8 flex items-center justify-center text-xs font-medium border rounded transition-colors"
-                        class:bg-blue-600={selectedBorderSize === size}
-                        class:text-white={selectedBorderSize === size}
-                        class:bg-gray-100={selectedBorderSize !== size}
-                        class:dark:bg-gray-700={selectedBorderSize !== size}
-                        on:click={() => (selectedBorderSize = size)}
-                    >
-                        {size}
-                    </button>
-                {/each}
-            </div>
+            <Dropdown
+                containerClasses="w-full"
+                options={borderSizes.map(s => ({ value: s, label: s.toString() }))}
+                bind:value={selectedBorderSize}
+                on:change={(e) => selectedBorderSize = e.detail}
+                boundaryRect={panelBounds}
+            />
         </div>
     {/if}
 
@@ -391,17 +399,60 @@
         {/if}
         <div class="flex space-x-2">
             <button
-                class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                on:click={handleCancel}
-            >
-                Cancel
-            </button>
-            <button
                 class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
-                on:click={handleSave}
+                on:click={handleDone}
             >
-                {isEditing ? 'Update' : 'Add'}
+                Done
             </button>
         </div>
     </div>
 </div>
+
+<style lang="postcss">
+    .lexical-container {
+        height: 200px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    :global(.lexical-container > .lexical-editor-root) {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
+    :global(.lexical-container .toolbar) {
+        @apply p-0.5 gap-0.5;
+        flex-shrink: 0;
+    }
+
+    :global(.lexical-container .lexical-wrapper) {
+        min-height: 0;
+        overflow-y: auto !important;
+        flex-grow: 1;
+    }
+
+    /* Scrollbar styles for the Lexical wrapper within the dialog */
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar {
+        @apply w-[8px];
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-track {
+        @apply bg-gray-100 dark:bg-gray-900 rounded-lg;
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-thumb {
+        @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900;
+    }
+    :global(.lexical-container .lexical-wrapper)::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-500 dark:bg-gray-600;
+    }
+    :global(.lexical-container .lexical-wrapper) {
+        scrollbar-width: thin;
+        scrollbar-color: theme('colors.gray.400') theme('colors.gray.100');
+    }
+    :global(html.dark .lexical-container .lexical-wrapper) {
+        scrollbar-color: theme('colors.gray.700') theme('colors.gray.900');
+    }
+</style>

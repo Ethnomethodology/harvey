@@ -33,6 +33,20 @@
 	let manualSegmentDuration = 60;
 	let manualSpeakerMode = 'unassigned';
 
+    function handleManualSegCountInput(e) {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val > 0 && mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / val));
+        }
+    }
+
+    function handleManualSegDurationInput(e) {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val > 0 && mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / val)));
+        }
+    }
+
 	// Derived state for manual validation
 	$: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
 	// For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
@@ -86,9 +100,13 @@
 	function handleConfirm() {
 		// Start time is now handled by store
 		if (modalTab === 'automatic') {
+            const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel);
+            const family = selectedModelObj?.family || 'whisper-cpp';
+
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
 				selectedModel: modalSelectedModel,
+                selectedModelFamily: family,
 				selectedLanguage: modalSelectedLanguage,
 				enableDiarization: modalEnableDiarization,
 				speakersConfig: modalSpeakersConfig,
@@ -247,7 +265,7 @@
 		on:keydown={handleKeydown}
 	>
 		<div
-			class="bg-white dark:bg-surface-2 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+			class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
 			role="document"
 			tabindex="-1"
 			on:click|stopPropagation
@@ -323,7 +341,7 @@
 								<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
 								<Dropdown
 									containerClasses="w-full"
-									options={downloadedModelsList.map((m) => ({ value: m.name, label: m.name }))}
+									options={downloadedModelsList.map((m) => ({ value: m.name, label: `${m.name} (${m.family || 'whisper.cpp'})` }))}
 									bind:value={modalSelectedModel}
 									placeholder="Select a Model"
 									disabled={downloadedModelsList.length === 0}
@@ -340,7 +358,7 @@
 								/>
 							</div>
 
-							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3">
+							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">
 								<div class="flex justify-between items-center">
 									<div>
 										<strong>Speakers:</strong>
@@ -359,7 +377,7 @@
 								{/if}
 							</div>
 
-							<div class="pt-2 border-t border-gray-200 dark:border-border mt-3">
+							<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
 								{#if $configStatus.diarization_model_downloaded}
 									<div class="flex items-center space-x-2">
 										<input
@@ -430,6 +448,7 @@
 								min="1"
 								max="100"
 								bind:value={manualSegmentCount}
+                                on:input={handleManualSegCountInput}
 								class="ui-input w-full"
 							/>
 						</div>
@@ -444,6 +463,7 @@
 									type="number"
 									min="1"
 									bind:value={manualSegmentDuration}
+                                    on:input={handleManualSegDurationInput}
 									class="ui-input w-full"
 								/>
 								<span class="text-xs text-gray-500 whitespace-nowrap min-w-[4rem]">
@@ -453,7 +473,7 @@
 						</div>
 
 						<div
-							class="mt-2 p-2 bg-gray-50 dark:bg-surface-3 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1"
+							class="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1"
 						>
 							<div class="flex justify-between">
 								<span>Media Duration:</span>
@@ -478,7 +498,7 @@
 							{/if}
 						</div>
 
-						<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-border mt-3 mb-2">
+						<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3 mb-2">
 							<div class="flex justify-between items-center">
 								<div>
 									<strong>Speakers:</strong>
@@ -522,7 +542,7 @@
 						</div>
 					{/if}
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-border">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button
 						class="btn-primary"
