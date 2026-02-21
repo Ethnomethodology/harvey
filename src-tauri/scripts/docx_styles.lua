@@ -1,183 +1,201 @@
-function Span(el)
-  -- Parse styles from data- attributes which we will populate in Rust
+-- src-tauri/scripts/docx_styles.lua
 
-  local color = el.attributes['data-color']
-  local bg_color = el.attributes['data-bg-color']
-  local font_family = el.attributes['data-font-family']
-  local font_size = el.attributes['data-font-size']
-
-  if not (color or bg_color or font_family or font_size) then
-    return nil
-  end
-
-  return process_content(el.content, {
-    color = color,
-    bg_color = bg_color,
-    font_family = font_family,
-    font_size = font_size
-  })
+-- Helper to escape XML characters
+local function escape_xml(s)
+  if s == nil then return "" end
+  return s:gsub("&", "&amp;")
+          :gsub("<", "&lt;")
+          :gsub(">", "&gt;")
+          :gsub('"', "&quot;")
+          :gsub("'", "&apos;")
 end
 
-function process_content(content, style_overrides)
+-- Helper to clone a table (shallow copy)
+local function clone(t)
+  local new_t = {}
+  for k, v in pairs(t) do new_t[k] = v end
+  return new_t
+end
+
+-- OpenXML Highlight Colors Map (Case Insensitive Hex)
+local highlight_map = {
+  ["FFFF00"] = "yellow",
+  ["00FF00"] = "green",
+  ["00FFFF"] = "cyan",
+  ["FF00FF"] = "magenta",
+  ["0000FF"] = "blue",
+  ["FF0000"] = "red",
+  ["000080"] = "darkBlue",
+  ["008080"] = "darkCyan",
+  ["008000"] = "darkGreen",
+  ["800080"] = "darkMagenta",
+  ["800000"] = "darkRed",
+  ["808000"] = "darkYellow",
+  ["808080"] = "darkGray",
+  ["C0C0C0"] = "lightGray",
+  ["000000"] = "black",
+  ["FFFFFF"] = "white"
+}
+
+-- Helper to generate the <w:rPr> string based on properties
+local function generate_rpr(props)
+  local rPr = ""
+
+  -- Order is important in OpenXML ECMA-376 (Strict)
+  -- Reference: http://officeopenxml.com/WPtextFormatting.php
+  -- Order: rFonts, b, i, strike, color, sz, highlight, u, effect, bdr, shd
+
+  -- 1. rFonts
+  if props.font then
+     local f = escape_xml(props.font)
+     -- We explicitly clear theme attributes to force the font to apply
+     rPr = rPr .. string.format('<w:rFonts w:ascii="%s" w:hAnsi="%s" w:cs="%s" w:asciiTheme="" w:hAnsiTheme="" w:cstheme=""/>', f, f, f)
+  end
+
+  -- 2. Bold
+  if props.bold then rPr = rPr .. '<w:b/>' end
+
+  -- 3. Italic
+  if props.italic then rPr = rPr .. '<w:i/>' end
+
+  -- 4. Strike (Must be before color)
+  if props.strike then rPr = rPr .. '<w:strike/>' end
+
+  -- 5. Color
+  if props.color then
+     local c = props.color:gsub("#", "")
+     rPr = rPr .. string.format('<w:color w:val="%s"/>', c)
+  end
+
+  -- 6. Size
+  if props.size then
+     -- Extract number
+     local n_str = props.size:match("[%d%.]+")
+     if n_str then
+         local pt = tonumber(n_str)
+         -- Heuristic: if unit is px, convert to pt (approx 0.75)
+         if props.size:find("px") then
+             pt = pt * 0.75
+         end
+         local half_pts = math.floor(pt * 2)
+         rPr = rPr .. string.format('<w:sz w:val="%d"/><w:szCs w:val="%d"/>', half_pts, half_pts)
+     end
+  end
+
+  -- 7. Highlight (Standard Colors) - Before Underline
+  local highlight_val = nil
+  local shading_fill = nil
+
+  if props.highlight then
+     local h = props.highlight:gsub("#", ""):upper()
+
+     -- Check if color matches a standard highlight color
+     if highlight_map[h] then
+         highlight_val = highlight_map[h]
+     else
+         -- If not standard, use Shading (w:shd) instead
+         shading_fill = h
+     end
+  end
+
+  if highlight_val then
+      rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
+  end
+
+  -- 8. Underline
+  if props.underline then rPr = rPr .. '<w:u w:val="single"/>' end
+
+  -- 9. Shading (Custom Colors) - After Underline
+  if shading_fill then
+      -- Use w:shd for arbitrary hex colors
+      -- w:val="clear" means solid fill (no pattern), w:fill is the background color
+      rPr = rPr .. string.format('<w:shd w:val="clear" w:color="auto" w:fill="%s"/>', shading_fill)
+  end
+
+  return rPr
+end
+
+-- Recursive function to walk inline elements and apply properties
+local function collect_text(inlines, props)
   local result = {}
-  for _, item in ipairs(content) do
-    if item.t == 'Str' or item.t == 'Space' then
-      table.insert(result, create_openxml_run(item, style_overrides))
-    elseif item.t == 'Strong' then
-      local sub_style = shallow_copy(style_overrides)
-      sub_style.bold = true
-      local sub_res = process_content(item.content, sub_style)
-      for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Emph' then
-      local sub_style = shallow_copy(style_overrides)
-      sub_style.italic = true
-      local sub_res = process_content(item.content, sub_style)
-      for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Underline' then
-      local sub_style = shallow_copy(style_overrides)
-      sub_style.underline = true
-      local sub_res = process_content(item.content, sub_style)
-      for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Strikeout' then
-      local sub_style = shallow_copy(style_overrides)
-      sub_style.strike = true
-      local sub_res = process_content(item.content, sub_style)
-      for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Superscript' then
-        local sub_style = shallow_copy(style_overrides)
-        sub_style.vertAlign = "superscript"
-        local sub_res = process_content(item.content, sub_style)
-        for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Subscript' then
-        local sub_style = shallow_copy(style_overrides)
-        sub_style.vertAlign = "subscript"
-        local sub_res = process_content(item.content, sub_style)
-        for _, r in ipairs(sub_res) do table.insert(result, r) end
-    elseif item.t == 'Span' then
-       -- Nested spans? Recurse with merged styles if needed, or just pass through
-       local sub_res = process_content(item.content, style_overrides)
-       for _, r in ipairs(sub_res) do table.insert(result, r) end
+
+  for _, elem in ipairs(inlines) do
+    if elem.t == 'Str' then
+      local text = escape_xml(elem.text)
+      local rPr = generate_rpr(props)
+      -- Wrap text in a Run with explicit properties
+      local xml = string.format('<w:r><w:rPr>%s</w:rPr><w:t xml:space="preserve">%s</w:t></w:r>', rPr, text)
+      table.insert(result, pandoc.RawInline('openxml', xml))
+
+    elseif elem.t == 'Space' then
+       local rPr = generate_rpr(props)
+       local xml = string.format('<w:r><w:rPr>%s</w:rPr><w:t xml:space="preserve"> </w:t></w:r>', rPr)
+       table.insert(result, pandoc.RawInline('openxml', xml))
+
+    elseif elem.t == 'SoftBreak' then
+       local rPr = generate_rpr(props)
+       -- Use w:br inside run
+       local xml = string.format('<w:r><w:rPr>%s</w:rPr><w:br/></w:r>', rPr)
+       table.insert(result, pandoc.RawInline('openxml', xml))
+
+    elseif elem.t == 'LineBreak' then
+       local rPr = generate_rpr(props)
+       local xml = string.format('<w:r><w:rPr>%s</w:rPr><w:br/></w:r>', rPr)
+       table.insert(result, pandoc.RawInline('openxml', xml))
+
+    elseif elem.t == 'Strong' then
+      local sub_props = clone(props)
+      sub_props.bold = true
+      local sub_res = collect_text(elem.content, sub_props)
+      for _, v in ipairs(sub_res) do table.insert(result, v) end
+
+    elseif elem.t == 'Emph' then
+      local sub_props = clone(props)
+      sub_props.italic = true
+      local sub_res = collect_text(elem.content, sub_props)
+      for _, v in ipairs(sub_res) do table.insert(result, v) end
+
+    elseif elem.t == 'Underline' then
+       local sub_props = clone(props)
+       sub_props.underline = true
+       local sub_res = collect_text(elem.content, sub_props)
+       for _, v in ipairs(sub_res) do table.insert(result, v) end
+
+    elseif elem.t == 'Strikeout' then
+       local sub_props = clone(props)
+       sub_props.strike = true
+       local sub_res = collect_text(elem.content, sub_props)
+       for _, v in ipairs(sub_res) do table.insert(result, v) end
+
+    elseif elem.t == 'Subscript' then
+        table.insert(result, elem)
+    elseif elem.t == 'Superscript' then
+        table.insert(result, elem)
+
     else
-      -- Fallback for others
-      table.insert(result, item)
+       -- Fallback for elements we don't want to break
+       table.insert(result, elem)
     end
   end
   return result
 end
 
-function create_openxml_run(item, styles)
-  local text = ""
-  if item.t == 'Str' then text = item.text
-  elseif item.t == 'Space' then text = " " end
+function Span(el)
+  -- Only process Spans that have our target attributes
+  local color = el.attributes['data-color']
+  local font = el.attributes['data-font-family']
+  local size = el.attributes['data-font-size']
+  local highlight = el.attributes['data-highlight']
 
-  -- Strict OpenXML Order for w:rPr children:
-  -- 1. rFonts
-  -- 2. b
-  -- 3. i
-  -- 4. strike
-  -- 5. color
-  -- 6. sz, szCs
-  -- 7. highlight
-  -- 8. u
-  -- 9. shd
-  -- 10. vertAlign
+  if color or font or size or highlight then
+    local props = {
+      color = color,
+      font = font,
+      size = size,
+      highlight = highlight
+    }
 
-  local xml = '<w:r>'
-  xml = xml .. '<w:rPr>'
-
-  -- 1. rFonts
-  if styles.font_family then
-    xml = xml .. '<w:rFonts w:ascii="' .. styles.font_family .. '" w:hAnsi="' .. styles.font_family .. '" w:cs="' .. styles.font_family .. '" w:eastAsia="' .. styles.font_family .. '" w:asciiTheme="" w:hAnsiTheme="" w:cstheme="" w:eastAsiaTheme=""/>'
+    return collect_text(el.content, props)
   end
-
-  -- 2. b
-  if styles.bold then xml = xml .. '<w:b/>' end
-
-  -- 3. i
-  if styles.italic then xml = xml .. '<w:i/>' end
-
-  -- 4. strike
-  if styles.strike then xml = xml .. '<w:strike/>' end
-
-  -- 5. color
-  if styles.color then
-    local c = styles.color:gsub('#', '')
-    xml = xml .. '<w:color w:val="' .. c .. '"/>'
-  end
-
-  -- 6. sz
-  if styles.font_size then
-    local size_val_str = styles.font_size:gsub('pt', '')
-    local is_px = size_val_str:find('px')
-    size_val_str = size_val_str:gsub('px', '')
-
-    local size_num = tonumber(size_val_str)
-    if size_num then
-        local half_points
-        if is_px then
-            -- 1px ~= 0.75pt. 1pt = 2 half-points.
-            -- 1px = 1.5 half-points.
-            half_points = math.floor(size_num * 1.5)
-        else
-            half_points = math.floor(size_num * 2)
-        end
-        xml = xml .. '<w:sz w:val="' .. half_points .. '"/>'
-        xml = xml .. '<w:szCs w:val="' .. half_points .. '"/>'
-    end
-  end
-
-  -- 7. highlight
-  if styles.bg_color then
-    local c = styles.bg_color:gsub('#', '')
-    if c:lower() == "ffff00" or c:lower() == "yellow" then
-        xml = xml .. '<w:highlight w:val="yellow"/>'
-    elseif c:lower() == "00ff00" or c:lower() == "lime" then
-        xml = xml .. '<w:highlight w:val="green"/>'
-    elseif c:lower() == "00ffff" or c:lower() == "cyan" then
-        xml = xml .. '<w:highlight w:val="cyan"/>'
-    elseif c:lower() == "ff00ff" or c:lower() == "magenta" then
-        xml = xml .. '<w:highlight w:val="magenta"/>'
-    end
-  end
-
-  -- 8. u
-  if styles.underline then xml = xml .. '<w:u w:val="single"/>' end
-
-  -- 9. shd
-  if styles.bg_color then
-    local c = styles.bg_color:gsub('#', '')
-    xml = xml .. '<w:shd w:val="clear" w:color="auto" w:fill="' .. c .. '"/>'
-  end
-
-  -- 10. vertAlign
-  if styles.vertAlign then xml = xml .. '<w:vertAlign w:val="' .. styles.vertAlign .. '"/>' end
-
-  xml = xml .. '</w:rPr>'
-  xml = xml .. '<w:t xml:space="preserve">' .. escape_xml(text) .. '</w:t>'
-  xml = xml .. '</w:r>'
-
-  return pandoc.RawInline('openxml', xml)
-end
-
-function shallow_copy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-        copy = {}
-        for orig_key, orig_value in pairs(orig) do
-            copy[orig_key] = orig_value
-        end
-    else -- number, string, boolean, etc
-        copy = orig
-    end
-    return copy
-end
-
-function escape_xml(str)
-  str = string.gsub(str, "&", "&amp;")
-  str = string.gsub(str, "<", "&lt;")
-  str = string.gsub(str, ">", "&gt;")
-  str = string.gsub(str, "\"", "&quot;")
-  str = string.gsub(str, "'", "&apos;")
-  return str
+  -- Return nil to leave other spans untouched
 end
