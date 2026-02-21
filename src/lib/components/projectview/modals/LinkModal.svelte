@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher, onMount, tick } from 'svelte';
-  import { open } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { ExternalLink } from 'lucide-svelte';
 
   export let showModal = false;
@@ -67,7 +67,7 @@
   async function openExternalLink() {
     if (url && url !== 'https://' && url.trim() !== '') {
         try {
-            await open(url);
+            await openUrl(url);
         } catch (e) {
             console.error('Failed to open link:', e);
         }

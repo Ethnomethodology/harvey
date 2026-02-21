@@ -552,7 +552,7 @@
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
-        link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
+        link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
         table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
         tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
         tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700',
@@ -3176,6 +3176,20 @@ $: if (editor && activeLayout) {
 
   button.active {
     @apply bg-gray-300 dark:bg-gray-500;
+  }
+
+  /* Ensure link color applies to text */
+  :global(.link-text) {
+      color: #2563eb !important; /* blue-600 */
+  }
+  :global(html.dark .link-text) {
+      color: #60a5fa !important; /* blue-400 */
+  }
+  :global(.link-text:hover) {
+      color: #1e40af !important; /* blue-800 */
+  }
+  :global(html.dark .link-text:hover) {
+      color: #93c5fd !important; /* blue-300 */
   }
 
   /* Search match highlights using CSS Custom Highlight API */

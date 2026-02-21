@@ -254,3 +254,5 @@ https://svelte.dev/e/export_let_unused
 10:45:48 PM [vite] hmr update /src/routes/test_editor/+page.svelte, /src/app.css
 10:45:48 PM [vite] page reload .svelte-kit/generated/client/nodes/8.js
 10:45:48 PM [vite] page reload .svelte-kit/generated/client/app.js
+11:03:33 PM [vite] hmr update /src/lib/components/projectview/modals/LinkModal.svelte, /src/app.css
+11:03:42 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte, /src/app.css, /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
