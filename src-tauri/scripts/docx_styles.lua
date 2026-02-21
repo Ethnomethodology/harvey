@@ -22,9 +22,24 @@ local function merge_props(current, el)
   local props = clone(current)
 
   if el.t == 'Span' then
-      if el.attributes['data-color'] then props.color = el.attributes['data-color'] end
-      if el.attributes['data-font-family'] then props.font = el.attributes['data-font-family'] end
-      if el.attributes['data-font-size'] then props.size = el.attributes['data-font-size'] end
+      if el.attributes['data-color'] then 
+          props.color = el.attributes['data-color'] 
+      elseif el.attributes['color'] then
+          props.color = el.attributes['color']
+      end
+
+      if el.attributes['data-font-family'] then 
+          props.font = el.attributes['data-font-family'] 
+      elseif el.attributes['font-family'] then
+          props.font = el.attributes['font-family']
+      end
+      
+      if el.attributes['data-font-size'] then 
+          props.size = el.attributes['data-font-size'] 
+      elseif el.attributes['font-size'] then
+          props.size = el.attributes['font-size']
+      end
+
       -- Pandoc might strip 'data-' prefix from 'data-highlight' in some versions or if using specific readers
       if el.attributes['data-highlight'] then 
           props.highlight = el.attributes['data-highlight'] 
@@ -191,9 +206,9 @@ end
 
 function Span(el)
   -- Only process Spans that have our target attributes
-  local color = el.attributes['data-color']
-  local font = el.attributes['data-font-family']
-  local size = el.attributes['data-font-size']
+  local color = el.attributes['data-color'] or el.attributes['color']
+  local font = el.attributes['data-font-family'] or el.attributes['font-family']
+  local size = el.attributes['data-font-size'] or el.attributes['font-size']
   local highlight = el.attributes['data-highlight'] or el.attributes['highlight']
 
   if color or font or size or highlight then
