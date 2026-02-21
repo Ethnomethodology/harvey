@@ -545,7 +545,7 @@
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
-        code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 text-sm block whitespace-pre-wrap overflow-x-auto',
+        code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
         table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
         tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
@@ -3193,6 +3193,7 @@ $: if (editor && activeLayout) {
 
   :global(.editor-code-block) {
       font-family: Monaco, Consolas, "Lucida Console", monospace;
+      line-height: 1.6 !important;
   }
 
   button.active {
