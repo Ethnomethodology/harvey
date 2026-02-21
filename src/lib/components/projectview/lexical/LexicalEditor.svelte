@@ -363,7 +363,7 @@
     ol:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h2v2H3V5zM8 5h8v2H8V5zM3 9h2v2H3V9zM8 9h8v2H8V9zM3 13h2v2H3V13zM8 13h8v2H8V13z"/></svg>`,
     check:     `<span class="inline-block w-4 text-xs">☑</span>`,
     quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
-    code:      `<span class="inline-block w-4 text-xs"></></span>`
+    code:      `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`
   };
 
   const fontOptions = [
@@ -545,7 +545,7 @@
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
-        code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 text-sm block whitespace-pre-wrap',
+        code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 text-sm block whitespace-pre-wrap overflow-x-auto',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
         table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
         tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
@@ -3189,6 +3189,10 @@ $: if (editor && activeLayout) {
 
   .indent-outdent-icon {
       transform: scaleX(-1); /* Flips the icon horizontally */
+  }
+
+  :global(.editor-code-block) {
+      font-family: Monaco, Consolas, "Lucida Console", monospace;
   }
 
   button.active {
