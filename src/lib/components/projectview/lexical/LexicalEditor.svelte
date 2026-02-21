@@ -130,7 +130,7 @@
   let internalCursorRowIndex = -1; // Track local cursor position
   let unregisterListeners = () => {};
   let historyState = createEmptyHistoryState();
-  let savedSelection = null;
+  let savedSelection = null; // Used for Link toggling
   let canUndo = false;
   let canRedo = false;
 
@@ -414,25 +414,10 @@
     isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
   }
 
-  function saveEditorSelection() {
-      if (!editor) return;
-      editor.getEditorState().read(() => {
-          const selection = _getSelection();
-          if (_isRangeSelection(selection)) {
-              savedSelection = selection.clone();
-          }
-      });
-  }
-
   function applyFontSize(fontSize) {
     if (!editor || !isReady || !editor.isEditable()) return;
 
     editor.update(() => {
-        // If we have a saved selection (from input interaction), restore it first within the same update cycle
-        if (savedSelection) {
-            _setSelection(savedSelection);
-        }
-
         const selection = _getSelection();
         if (_isTableSelection(selection)) {
             _normalizeSelection(selection);
@@ -446,51 +431,15 @@
     isFontSizeDropdownOpen = false;
   }
 
-  function handleFontSizeInput(event) {
-      if (!editor || !isReady || !editor.isEditable()) return;
-      let val = parseInt(event.target.value, 10);
-      if (isNaN(val)) return;
-
-      // Clamp value between min (10) and max (96)
-      val = Math.max(10, Math.min(96, val));
-
-      // Update the input value if it was clamped
-      if (val !== parseInt(event.target.value, 10)) {
-          event.target.value = val;
-      }
-
-      applyFontSize(String(val));
-  }
-
-  function handleFontSizeKeydown(event) {
-      if (event.key === 'Enter') {
-          handleFontSizeInput(event);
-          editor.focus(); // Return focus to editor on Enter
-      }
-  }
-
   function updateFontSize(delta) {
     if (!editor || !isReady || !editor.isEditable()) return;
-    const currentSize = parseInt(selectedFontSize, 10);
-    const currentIndex = fontSizeOptions.findIndex(opt => parseInt(opt, 10) === currentSize);
+    const currentSize = parseInt(selectedFontSize, 10) || 15;
+    let newSize = currentSize + delta;
 
-    let newSize;
-    if (currentIndex !== -1) {
-        // If current size is in our list, step through the list
-        const newIndex = Math.max(0, Math.min(fontSizeOptions.length - 1, currentIndex + delta));
-        newSize = fontSizeOptions[newIndex];
-    } else {
-        // If obscure size, snap to list or increment?
-        // Let's find nearest in list to snap to valid track
-        const nearest = fontSizeOptions.reduce((prev, curr) => {
-            return (Math.abs(curr - currentSize) < Math.abs(prev - currentSize) ? curr : prev);
-        });
-        const nearestIndex = fontSizeOptions.indexOf(nearest);
-        const newIndex = Math.max(0, Math.min(fontSizeOptions.length - 1, nearestIndex + delta));
-        newSize = fontSizeOptions[newIndex];
-    }
+    // Clamp between 10 and 96
+    newSize = Math.max(10, Math.min(96, newSize));
 
-    applyFontSize(newSize);
+    applyFontSize(String(newSize));
   }
 
   const colorOptions = [
@@ -2665,32 +2614,15 @@ $: if (editor && activeLayout) {
           >
             -
           </button>
-          <div class="flex items-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 overflow-hidden h-[26px]">
-            <input
-              type="number"
-              class="w-10 text-xs text-center bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 p-0 h-full appearance-none [-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
-              value={selectedFontSize}
-              on:pointerdown={saveEditorSelection}
-              on:blur={() => { savedSelection = null; }}
-              on:change={handleFontSizeInput}
-              on:keydown={handleFontSizeKeydown}
-              min="10"
-              max="96"
-              disabled={!editable}
-              title="Font Size"
-            />
-            <button
-              class="flex items-center justify-center px-0.5 h-full hover:bg-gray-100 dark:hover:bg-gray-600 border-l border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400"
-              on:click={toggleFontSizeDropdown}
-              on:mousedown|preventDefault
-              disabled={!editable}
-              tabindex="-1"
-            >
-              <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          </div>
+          <button
+            class="mini-toolbar-button flex items-center justify-center min-w-[32px] px-1"
+            on:click={toggleFontSizeDropdown}
+            on:mousedown|preventDefault
+            title="Font Size"
+            disabled={!editable}
+          >
+            <span class="truncate">{selectedFontSize}</span>
+          </button>
           <button
             class="mini-toolbar-button !px-1"
             on:click={() => updateFontSize(1)}
@@ -2701,7 +2633,7 @@ $: if (editor && activeLayout) {
             +
           </button>
           {#if isFontSizeDropdownOpen}
-            <div class="absolute mt-1 top-full left-10 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute mt-1 top-full left-0 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontSizeOptions as size}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
