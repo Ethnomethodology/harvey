@@ -17,7 +17,10 @@ local function clone(t)
   return new_t
 end
 
--- OpenXML Highlight Colors Map (Case Insensitive Hex)
+-- OpenXML Standard Highlight Colors (Hex to Name Map)
+-- We only support these standard values for <w:highlight w:val="..."/>
+-- Anything else might fail in Compatibility Mode if we use w:shd.
+-- So we map everything to the nearest standard color or just yellow.
 local highlight_map = {
   ["FFFF00"] = "yellow",
   ["00FF00"] = "green",
@@ -33,9 +36,34 @@ local highlight_map = {
   ["808000"] = "darkYellow",
   ["808080"] = "darkGray",
   ["C0C0C0"] = "lightGray",
-  ["000000"] = "black",
-  ["FFFFFF"] = "white"
+  ["000000"] = "black"
+  -- white is not typically a highlight "color" in this sense, usually "none"
 }
+
+-- Simple color distance function to find nearest standard color
+-- Returns the name of the nearest color
+local function get_nearest_highlight(hex)
+    local r = tonumber(hex:sub(1, 2), 16) or 0
+    local g = tonumber(hex:sub(3, 4), 16) or 0
+    local b = tonumber(hex:sub(5, 6), 16) or 0
+
+    local min_dist = 999999999
+    local best_match = "yellow" -- Default fallback
+
+    for k, v in pairs(highlight_map) do
+        local kr = tonumber(k:sub(1, 2), 16) or 0
+        local kg = tonumber(k:sub(3, 4), 16) or 0
+        local kb = tonumber(k:sub(5, 6), 16) or 0
+
+        local dist = (r - kr)^2 + (g - kg)^2 + (b - kb)^2
+        if dist < min_dist then
+            min_dist = dist
+            best_match = v
+        end
+    end
+
+    return best_match
+end
 
 -- Helper to generate the <w:rPr> string based on properties
 local function generate_rpr(props)
@@ -82,35 +110,26 @@ local function generate_rpr(props)
      end
   end
 
-  -- 7. Highlight (Standard Colors) - Before Underline
-  local highlight_val = nil
-  local shading_fill = nil
-
+  -- 7. Highlight (Standard Colors ONLY) - Before Underline
   if props.highlight then
      local h = props.highlight:gsub("#", ""):upper()
+     local highlight_val = "yellow" -- Default
 
-     -- Check if color matches a standard highlight color
      if highlight_map[h] then
          highlight_val = highlight_map[h]
      else
-         -- If not standard, use Shading (w:shd) instead
-         shading_fill = h
+         -- Find nearest standard color
+         highlight_val = get_nearest_highlight(h)
      end
-  end
 
-  if highlight_val then
-      rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
+     rPr = rPr .. string.format('<w:highlight w:val="%s"/>', highlight_val)
   end
 
   -- 8. Underline
   if props.underline then rPr = rPr .. '<w:u w:val="single"/>' end
 
-  -- 9. Shading (Custom Colors) - After Underline
-  if shading_fill then
-      -- Use w:shd for arbitrary hex colors
-      -- w:val="clear" means solid fill (no pattern), w:fill is the background color
-      rPr = rPr .. string.format('<w:shd w:val="clear" w:color="auto" w:fill="%s"/>', shading_fill)
-  end
+  -- 9. Shading (Removed to fix compatibility issues)
+  -- We rely entirely on <w:highlight> now.
 
   return rPr
 end
