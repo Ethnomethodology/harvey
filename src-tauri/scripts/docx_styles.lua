@@ -395,53 +395,45 @@ end
 
 function Link(el)
     -- Handle top-level links
-    -- Use fldSimple strategy with MERGEFORMAT to enforce styling
     local props = {
         color = "0000FF",
         underline = true,
         is_link = true
     }
 
-    local url = escape_xml(el.target)
+    -- We use the native pandoc.Link but ensure the content has the "Hyperlink" style
+    -- by wrapping the styled runs in a Span with custom-style="Hyperlink".
+    -- This triggers Pandoc's native rStyle mapping.
+
+    -- Get the manually styled runs (OpenXML)
     local sub_res = collect_text(el.content, props)
 
-    local runs_xml = ""
-    for _, inline in ipairs(sub_res) do
-        if inline.t == 'RawInline' then
-            runs_xml = runs_xml .. inline.text
-        end
-    end
+    -- Wrap them in a Span that Pandoc understands as a style trigger
+    local styled_content = pandoc.Span(sub_res, {['custom-style'] = 'Hyperlink'})
 
-    -- \* MERGEFORMAT is critical to preserve the run styling inside the field
-    local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; \\* MERGEFORMAT ">%s</w:fldSimple>', url, runs_xml)
-    return pandoc.RawInline('openxml', xml)
+    return pandoc.Link(styled_content, el.target, el.title, el.attr)
 end
 
 function CodeBlock(el)
     local code = el.text
     local lines = code:split("\n")
-    local result_xml = ""
+    -- Prefix and suffix newlines to ensure block separation in XML
+    local result_xml = "\n"
 
-    -- Using separate Paragraphs instead of Table to avoid potential layout merging issues in older Word versions.
-    -- Each paragraph gets the shading and border to look like a block.
-    -- w:pBdr/w:shd on paragraph level is robust.
     for _, line in ipairs(lines) do
         local safe_line = escape_xml(line)
         local p = string.format(
             '<w:p>' ..
               '<w:pPr>' ..
                 '<w:pStyle w:val="NoSpacing"/>' ..
-                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' .. -- Grey background
-                '<w:pBdr>' .. -- Border around paragraph to prevent bleeding/gaps if spaced
-                   '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' ..
-                '</w:pBdr>' ..
-                '<w:ind w:left="120" w:right="120"/>' .. -- Padding via indent
+                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
+                '<w:ind w:left="120" w:right="120"/>' ..
                 '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
                 '<w:rPr>' ..
                   '<w:rFonts w:ascii="Courier Prime" w:hAnsi="Courier Prime" w:cs="Courier Prime"/>' ..
-                  '<w:sz w:val="19"/>' .. -- ~9.5pt
+                  '<w:sz w:val="19"/>' ..
                   '<w:szCs w:val="19"/>' ..
                 '</w:rPr>' ..
                 '<w:t xml:space="preserve">%s</w:t>' ..
@@ -451,18 +443,15 @@ function CodeBlock(el)
         )
         result_xml = result_xml .. p
     end
-    -- Add an empty paragraph after to separate from next block
-    result_xml = result_xml .. '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>'
+    result_xml = result_xml .. '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>\n'
     return pandoc.RawBlock('openxml', result_xml)
 end
 
 function BlockQuote(el)
-    local result_xml = ""
+    local result_xml = "\n"
 
-    -- Iterate over block content (usually Para)
     for _, block in ipairs(el.content) do
         if block.t == 'Para' or block.t == 'Plain' then
-            -- Collect styled inline runs
             local props = { italic = true }
             local runs = collect_text(block.content, props)
             local runs_xml = ""
@@ -470,21 +459,21 @@ function BlockQuote(el)
                 if run.t == 'RawInline' then runs_xml = runs_xml .. run.text end
             end
 
-            -- Simple styled paragraph: Indent + Quote Style
             local p = string.format(
                 '<w:p>' ..
                   '<w:pPr>' ..
-                    '<w:pStyle w:val="Quote"/>' .. -- Semantic style
-                    '<w:ind w:left="720"/>' .. -- 0.5in indent
+                    '<w:pStyle w:val="Quote"/>' ..
+                    '<w:ind w:left="720"/>' ..
                     '<w:spacing w:after="120"/>' ..
                   '</w:pPr>' ..
-                  '%s' .. -- The runs
+                  '%s' ..
                 '</w:p>',
                 runs_xml
             )
             result_xml = result_xml .. p
         end
     end
+    result_xml = result_xml .. "\n"
     return pandoc.RawBlock('openxml', result_xml)
 end
 
