@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { message } from '@tauri-apps/plugin-dialog';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-    import { getDownloadedModels } from '$lib/services/configureActions';
+    import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions';
     import ManageModelsModal from './ManageModelsModal.svelte';
 
     export let showModal = false;
@@ -17,9 +17,25 @@
 
     async function loadModels() {
         try {
-            models = await getDownloadedModels();
+            const allModels = await getDownloadedModels();
+            const selectedEngine = await getSelectedTranscriptionEngine();
+            const family = selectedEngine || 'whisper-cpp';
+
+            models = allModels.filter(m => {
+                if (family === 'faster-whisper') {
+                    return m.family === 'faster-whisper';
+                } else {
+                    return m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
+                }
+            });
+
             if (models.length > 0) {
-                selectedModel = models[0].name;
+                // Keep selection if still valid, otherwise select first
+                if (!selectedModel || !models.some(m => m.name === selectedModel)) {
+                    selectedModel = models[0].name;
+                }
+            } else {
+                selectedModel = '';
             }
         } catch (error) {
             message(`Error loading models: ${error}`, { title: 'Error', type: 'error' });
