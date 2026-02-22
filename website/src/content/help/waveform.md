@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 38
 ---
 
-### Waveform
-
 The interactive waveform provides a visual representation of your audio and segment timing.
 
 *   **Interactive Handles:** In the vertical waveform view, you can drag the top and bottom handles of any segment block to precisely adjust its timing.

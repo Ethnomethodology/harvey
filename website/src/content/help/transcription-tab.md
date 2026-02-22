@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 31
 ---
 
-### Transcription Tab
-
 This tab is dedicated to media playback and text generation. It features a synchronized environment where the audio/video player, interactive waveform, and transcript editor work in harmony.
 
 *   **Integrated Workflow:** The transcript segments are linked to the media. Selecting a segment jumps the player to that time, and moving the playhead highlights the active segment.

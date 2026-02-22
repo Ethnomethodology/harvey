@@ -5,8 +5,6 @@ sidebarId: tags
 order: 52
 ---
 
-### Highlights
-
 Highlights are the primary way to apply your analytical framework to your data.
 
 *   **Creation:** Select any text in a document or transcript. A floating menu will appear allowing you to select a tag.

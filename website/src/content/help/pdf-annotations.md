@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 63
 ---
 
-### PDF Annotations
-
 PDF documents can be visually annotated using standard tools.
 
 *   **Visual Highlighting:** Select and highlight text directly on the PDF page.

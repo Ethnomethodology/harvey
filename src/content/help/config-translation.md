@@ -5,8 +5,6 @@ sidebarId: configure
 order: 14
 ---
 
-### Translation Engine
-
 Harvey provides two distinct model families for local translation. You can switch between them in the **Configure** tab under the **Translation** section.
 
 > **Note:** Only models belonging to the currently selected model family will be available for translation. If you switch families, you must download at least one compatible model for that family.

@@ -5,8 +5,6 @@ sidebarId: translate-page
 order: 73
 ---
 
-### Translation Models
-
 Harvey uses specialized AI models for offline translation.
 
 *   **Helsinki-NLP:** Highly efficient models for specific language pairs.

@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 21
 ---
 
-### Data Tab
-
 The Data tab provides a structured view of all your project's assets.
 
 *   **Categories:** Assets are automatically grouped by type (Audios, Videos, Documents, etc.).

@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 62
 ---
 
-### Document Annotations
-
 Annotate text-based documents using the integrated rich text editor.
 
 *   **In-line Comments:** Add notes to specific text selections.

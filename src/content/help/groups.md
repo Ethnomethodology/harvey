@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 28
 ---
 
-### Groups
-
 Groups are custom organizational units that allow you to cluster related assets regardless of their file type.
 
 *   **Creating Groups:** Use the "Create New > Group" menu or the context menu in the Data tab.

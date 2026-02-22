@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 36
 ---
 
-### Media Player
-
 The integrated media player is optimized for transcription workflows.
 
 *   **Synchronization:** Clicking any text segment jumps the player to that exact moment in the audio/video.

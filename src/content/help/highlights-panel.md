@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 67
 ---
 
-### Highlights Panel
-
 The centralized hub for reviewing and managing all your project annotations.
 
 *   **Global Review:** See all highlights from across every document, transcript, and media file in one place.

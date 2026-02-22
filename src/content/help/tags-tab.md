@@ -5,8 +5,6 @@ sidebarId: tags
 order: 51
 ---
 
-### Tags Tab
-
 The Tags tab provides a birds-eye view of your qualitative coding schema.
 
 *   **All Tags:** View a flat or grouped list of every tag defined in the project.

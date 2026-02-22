@@ -5,8 +5,6 @@ sidebarId: configure
 order: 12
 ---
 
-### Transcription Engine
-
 Harvey provides two distinct engines for local transcription. You can switch between them in the **Configure** tab under the **Transcription** section.
 
 > **Note:** Only models belonging to the currently selected engine will be available for transcription. If you switch engines, you must download at least one compatible model for that engine.

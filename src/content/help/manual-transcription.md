@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 33
 ---
 
-### Manual Transcription
-
 For high-precision work or difficult audio, you can transcribe manually using Harvey's specialized tools.
 
 *   **Smart Initialization:** When setting up a manual transcript, the **Number of Segments** and **Duration** are bidirectionally linked. Adjusting one automatically calculates the other based on the total media length.

@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 34
 ---
 
-### Diarization
-
 Automatically identify and label different speakers in an audio recording.
 
 *   **Speaker Labels:** AI assigns consistent labels (e.g., Speaker 1, Speaker 2) across the transcript.

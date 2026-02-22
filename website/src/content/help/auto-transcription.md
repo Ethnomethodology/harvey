@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 32
 ---
 
-### Automatic Transcription
-
 Leverage state-of-the-art **Whisper** models to convert speech to text automatically and locally.
 
 *   **System Checks:** Harvey automatically verifies your Python environment and hardware acceleration (like Core ML) before starting to ensure peak performance.

@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 39
 ---
 
-### Layout
-
 Customize the Transcription workspace to suit your preferences.
 
 *   **Two-Row Segments:** The transcript uses a standardized two-row structure (Metadata followed by Text) to provide more horizontal space for long utterances.

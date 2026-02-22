@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 40
 ---
 
-### Shortcuts
-
 Master these platform-aware shortcuts to significantly speed up your workflow.
 
 | Shortcut | Action |

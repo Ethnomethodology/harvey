@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 65
 ---
 
-### Table Annotations
-
 Annotate structured data in CSV or Excel tables.
 
 *   **Cell Tagging:** Apply tags to individual cells or entire rows.

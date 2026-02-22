@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 35
 ---
 
-### Translation
-
 Harvey supports local machine translation using the **Helsinki-NLP** and **NLLB** (No Language Left Behind) models. Translation is optimized using **CTranslate2** for high performance on standard CPUs.
 
 #### Core Features

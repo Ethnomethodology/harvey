@@ -5,8 +5,6 @@ sidebarId: transcribe
 order: 37
 ---
 
-### Editing
-
 Refine your transcripts with powerful, time-aware editing tools.
 
 *   **Edit Mode:** Toggle edit mode using the toolbar button or `Ctrl/Cmd + E`.

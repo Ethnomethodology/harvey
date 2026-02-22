@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 64
 ---
 
-### Image Annotations
-
 Work with visual evidence by annotating image files.
 
 *   **Bounding Boxes:** Draw rectangles around specific areas of interest in an image.

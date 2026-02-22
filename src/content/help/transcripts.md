@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 27
 ---
 
-### Transcripts
-
 Manage transcripts generated outside of Harvey or imported from Word documents.
 
 *   **Word Import:** Convert `.docx` transcripts into Harvey's interactive format.

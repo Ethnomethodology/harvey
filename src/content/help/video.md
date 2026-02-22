@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 23
 ---
 
-### Videos
-
 Video support includes MP4, MOV, and MKV formats.
 
 *   **Visual Context:** Play videos directly within the app. The player remains synchronized with the transcript segments.

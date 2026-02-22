@@ -5,8 +5,6 @@ sidebarId: tags
 order: 53
 ---
 
-### Tag Groups
-
 Organize your tags into thematic categories for more complex analysis.
 
 *   **Hierarchy:** Group related tags (e.g., "Emotions", "Interactional Patterns") to keep your coding schema organized.

@@ -5,8 +5,6 @@ sidebarId: configure
 order: 15
 ---
 
-### Advanced Settings
-
 Tools for troubleshooting and advanced system management.
 
 *   **Developer Logs:** View internal application logs to diagnose issues.

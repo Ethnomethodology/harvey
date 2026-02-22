@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 25
 ---
 
-### Images
-
 Manage visual evidence like photos, diagrams, and video screenshots.
 
 *   **Annotations:** Draw bounding boxes or shapes on images to highlight specific areas.

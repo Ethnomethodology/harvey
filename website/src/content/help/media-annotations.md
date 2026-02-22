@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 61
 ---
 
-### Media Annotations
-
 Annotate audio and video files by creating time-stamped segments and attaching notes or tags to them.
 
 *   **Segment Notes:** Add rich text descriptions to any media segment.

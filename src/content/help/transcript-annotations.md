@@ -5,8 +5,6 @@ sidebarId: annotate-page
 order: 66
 ---
 
-### Transcript Annotations
-
 Interpretation of dialogue and social interaction.
 
 *   **Interactional Tagging:** Apply specialized tags to capture conversational patterns.

@@ -5,8 +5,6 @@ sidebarId: translate-page
 order: 71
 ---
 
-### Translating Transcript
-
 Translate your generated transcripts while preserving all metadata.
 
 *   **Structural Preservation:** Translation maintains exact timestamps and speaker associations.

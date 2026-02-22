@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 26
 ---
 
-### Tables
-
 Import and manage structured data from CSV and Excel files.
 
 *   **Data Grid:** View large datasets in a high-performance grid.

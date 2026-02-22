@@ -5,8 +5,6 @@ sidebarId: manage-data
 order: 24
 ---
 
-### Documents
-
 Work with text-based assets including Lexical JSON, PDF, Markdown, and TXT files.
 
 *   **Rich Text Editor:** Edit documents with standard formatting tools (Bold, Italic, Lists, etc.).
