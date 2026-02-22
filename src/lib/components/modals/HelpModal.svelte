@@ -37,6 +37,7 @@
               label: metadata.label || metadata.title || metadata.id,
               sidebarId: metadata.sidebarId || 'overview',
               order: metadata.order || 999,
+              description: metadata.description || '',
               component: mod.default // The Svelte component for the markdown content
           });
       }
@@ -58,6 +59,14 @@
   $: currentPage = allPages[currentIndex] || allPages[0]; // Fallback to first page
   $: prevPage = currentIndex > 0 ? allPages[currentIndex - 1] : null;
   $: nextPage = currentIndex < allPages.length - 1 ? allPages[currentIndex + 1] : null;
+
+  // --- Logic for Child Cards in App ---
+  // If current page is a Category Root (like 'configure'), find all its children to display as cards
+  // A Category Root usually shares the ID with the sidebarId (e.g. id='configure', sidebarId='configure')
+  $: childPages = allPages.filter(p =>
+      p.sidebarId === currentPage?.id && // Child belongs to this sidebar section
+      p.id !== currentPage?.id // Not the page itself
+  );
 
   function close() {
     dispatch('close');
@@ -255,6 +264,24 @@
                 <!-- Render title manually here since we removed it from MD files -->
                 <h1 class="mb-4">{currentPage.label}</h1>
                 <svelte:component this={currentPage.component} />
+
+                <!-- Child Pages Grid (Sub-categories) -->
+                {#if childPages && childPages.length > 0}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 not-prose">
+                        {#each childPages as child}
+                            <button
+                                on:click={() => navigateTo(child.id)}
+                                class="flex flex-col p-6 text-left border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group bg-gray-50/50 dark:bg-gray-800/30"
+                            >
+                                <span class="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-gray-800 dark:text-gray-100">{child.label}</span>
+                                {#if child.description}
+                                    <p class="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{child.description}</p>
+                                {/if}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+
             {:else}
                 <div class="flex items-center justify-center h-full text-gray-500">
                     <p>Content not found.</p>

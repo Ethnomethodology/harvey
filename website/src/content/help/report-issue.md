@@ -5,7 +5,6 @@ sidebarId: report-issue
 order: 80
 ---
 
-### Report Issue
 
 Encountered a bug or have a feature request? We use **GitHub Issues** to track and manage all feedback. Reporting an issue helps us make Harvey better for everyone.
 

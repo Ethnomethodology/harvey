@@ -24,14 +24,14 @@
                 <div class="relative flex items-center justify-between">
                     <!-- Logo -->
                     <a class="mr-3 flex-none w-[2.0625rem] overflow-hidden md:w-auto text-slate-900 hover:text-emerald-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-3" href="{base}/">
-                        <img src="/logo.png" alt="Harvey Logo" class="h-8 w-8 rounded-lg shadow-sm shadow-emerald-200" />
+                        <img src="/logo.png" alt="Harvey Logo" class="h-8 w-8 rounded-lg border border-emerald-500" />
                         <span class="hidden md:inline">Harvey</span>
                     </a>
 
                     <!-- Desktop Nav -->
                     <div class="hidden lg:flex items-center gap-8 font-medium text-sm">
                         <a href="{base}/about" class="hover:text-emerald-600 transition-colors {$page.url.pathname === base + '/about' ? 'text-emerald-600' : ''}">About</a>
-                        <a href="{base}/help" class="hover:text-emerald-600 transition-colors {$page.url.pathname.startsWith(base + '/help') ? 'text-emerald-600' : ''}">Help Center</a>
+                        <a href="{base}/help" class="hover:text-emerald-600 transition-colors {$page.url.pathname.startsWith(base + '/help') ? 'text-emerald-600' : ''}">Overview</a>
                         <a href="{base}/contribute" class="hover:text-emerald-600 transition-colors {$page.url.pathname === base + '/contribute' ? 'text-emerald-600' : ''}">Contribute</a>
                     </div>
 
@@ -63,7 +63,7 @@
         {#if isMenuOpen}
             <div class="lg:hidden border-b border-slate-900/10 bg-white px-4 pt-2 pb-6 shadow-xl absolute w-full top-full left-0 z-50 flex flex-col gap-4">
                 <a href="{base}/about" class="block text-base font-medium text-slate-700 hover:text-emerald-600">About</a>
-                <a href="{base}/help" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Help Center</a>
+                <a href="{base}/help" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Overview</a>
                 <a href="{base}/contribute" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Contribute</a>
                 <div class="pt-4 mt-2 border-t border-slate-100 flex items-center gap-4">
                      <a href="{base}/#download" class="flex-1 bg-emerald-500 text-center py-2 rounded-lg text-white font-medium">Download</a>
@@ -82,7 +82,7 @@
     <footer class="border-t border-slate-200 bg-slate-50 py-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
             <div class="flex items-center gap-3">
-                <img src="/logo.png" alt="Harvey Logo" class="h-6 w-6 rounded opacity-80 grayscale hover:grayscale-0 transition-all" />
+                <img src="/logo.png" alt="Harvey Logo" class="h-6 w-6 rounded border border-slate-300 opacity-80 grayscale hover:grayscale-0 transition-all" />
                 <span class="text-sm font-semibold text-slate-900">Harvey Project</span>
             </div>
             <p class="text-sm text-slate-500">
