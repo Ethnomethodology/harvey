@@ -93,13 +93,26 @@
     const anchor = event.target.closest('a');
     if (anchor) {
       const href = anchor.getAttribute('href');
+
+      // Handle hash links (legacy support or internal page anchors)
       if (href && href.startsWith('#')) {
         event.preventDefault();
         const targetId = href.substring(1);
-        // Find page with this ID
         const targetPage = allPages.find(p => p.id === targetId);
         if (targetPage) {
             navigateTo(targetId);
+        }
+      }
+      // Handle absolute paths used in website (e.g., /help/config-app)
+      else if (href && href.startsWith('/help/')) {
+        event.preventDefault();
+        const slug = href.replace('/help/', '');
+        // Find page by ID (which usually matches slug)
+        const targetPage = allPages.find(p => p.id === slug);
+        if (targetPage) {
+            navigateTo(slug);
+        } else {
+            console.warn(`[HelpModal] Target page not found for slug: ${slug}`);
         }
       }
     }
@@ -239,6 +252,8 @@
             on:click={handleContentClick}
           >
             {#if currentPage && currentPage.component}
+                <!-- Render title manually here since we removed it from MD files -->
+                <h1 class="mb-4">{currentPage.label}</h1>
                 <svelte:component this={currentPage.component} />
             {:else}
                 <div class="flex items-center justify-center h-full text-gray-500">
@@ -310,9 +325,4 @@
     border-color: #4b5563;
     box-shadow: 0 1px 0 rgba(0,0,0,0.5), inset 0 0 0 1px #444;
   }
-
-  /* Additional override for grid layouts in markdown (e.g. Overview cards) */
-  /* We might need to write custom CSS or component logic if we want those grid cards back exactly as they were. */
-  /* For now, markdown will render them as standard headings/lists/links. */
-  /* To support the grid layout again, we would need custom mdsvex components or a specific layout component. */
 </style>

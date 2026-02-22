@@ -5,7 +5,6 @@ sidebarId: overview
 order: 2
 ---
 
-# About Harvey
 
 Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment:
 

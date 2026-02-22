@@ -4,7 +4,6 @@ description: How to use offline AI models for speech-to-text.
 order: 2
 ---
 
-# Transcription
 
 Harvey uses OpenAI's Whisper models running locally on your machine.
 
