@@ -121,9 +121,9 @@
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for Windows</h3>
                     <p class="text-slate-600 mb-8 max-w-md">Compatible with Windows 10 and 11.</p>
-                    <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
+                    <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64-setup.zip" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
                         <Download class="w-6 h-6" />
-                        Download .msi Installer
+                        Download .exe Installer
                     </a>
                     <p class="text-xs text-slate-400 mt-4">Version 0.1.0 • 64-bit</p>
                 </div>
