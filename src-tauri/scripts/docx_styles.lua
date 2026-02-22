@@ -241,12 +241,33 @@ local function collect_text(inlines, props)
         -- Pass through unsupported elements as-is
         table.insert(result, elem)
 
+    elseif elem.t == 'Link' then
+        -- Handle links by recursing into content with forced blue/underline props
+        local sub_props = clone(props)
+        sub_props.color = "0000FF"
+        sub_props.underline = true
+
+        -- Recurse into link content
+        local sub_res = collect_text(elem.content, sub_props)
+
+        -- Create a new Link element containing the processed OpenXML runs
+        table.insert(result, pandoc.Link(sub_res, elem.target, elem.title, elem.attr))
+
     else
        -- Fallback for other elements
        table.insert(result, elem)
     end
   end
   return result
+end
+
+function Link(el)
+    -- Handle top-level links (not inside a Span)
+    local props = {
+        color = "0000FF",
+        underline = true
+    }
+    return pandoc.Link(collect_text(el.content, props), el.target, el.title, el.attr)
 end
 
 function Span(el)

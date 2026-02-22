@@ -82,7 +82,7 @@ export class ExtendedTextNode extends TextNode {
     const latest = this.getLatest();
     if (latest.__highlightId) dom.setAttribute('data-highlight-id', latest.__highlightId);
 
-    const isBold = (latest.getFormat() & IS_BOLD) !== 0;
+    const isBold = latest.hasFormat('bold');
     const style = getEffectiveStyle(latest.getStyle(), isBold);
 
     if (style) dom.setAttribute('style', style);
@@ -99,8 +99,8 @@ export class ExtendedTextNode extends TextNode {
       changed = true;
     }
 
-    const prevIsBold = (prevNode.getFormat() & IS_BOLD) !== 0;
-    const nextIsBold = (latest.getFormat() & IS_BOLD) !== 0;
+    const prevIsBold = prevNode.hasFormat('bold');
+    const nextIsBold = latest.hasFormat('bold');
 
     const prevStyle = getEffectiveStyle(prevNode.getStyle(), prevIsBold);
     const nextStyle = getEffectiveStyle(latest.getStyle(), nextIsBold);
@@ -123,7 +123,7 @@ export class ExtendedTextNode extends TextNode {
       element.setAttribute('data-highlight-id', latest.__highlightId);
     }
 
-    const isBold = (latest.getFormat() & IS_BOLD) !== 0;
+    const isBold = latest.hasFormat('bold');
     const styleAttribute = getEffectiveStyle(latest.getStyle(), isBold);
 
     if (styleAttribute) {
