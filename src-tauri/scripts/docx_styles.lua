@@ -395,32 +395,41 @@ end
 
 function Link(el)
     -- Handle top-level links
+    -- Use fldSimple strategy with MERGEFORMAT to enforce styling
     local props = {
         color = "0000FF",
         underline = true,
         is_link = true
     }
-    return pandoc.Link(collect_text(el.content, props), el.target, el.title, el.attr)
+
+    local url = escape_xml(el.target)
+    local sub_res = collect_text(el.content, props)
+
+    local runs_xml = ""
+    for _, inline in ipairs(sub_res) do
+        if inline.t == 'RawInline' then
+            runs_xml = runs_xml .. inline.text
+        end
+    end
+
+    -- \* MERGEFORMAT is critical to preserve the run styling inside the field
+    local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; \\* MERGEFORMAT ">%s</w:fldSimple>', url, runs_xml)
+    return pandoc.RawInline('openxml', xml)
 end
 
 function CodeBlock(el)
     local code = el.text
     local lines = code:split("\n")
-    local result_xml = ""
+    local paragraphs_xml = ""
 
     for _, line in ipairs(lines) do
         local safe_line = escape_xml(line)
-        -- Styling: Monospace font, Grey background (shading), preserve space
-        -- w:shd fill="F2F2F2" matches Lexical's bg-gray-100/dark:bg-gray-700 approx (light mode default)
-        -- w:rFonts: Courier Prime or Consolas
+        -- Paragraph for each line inside the table cell
         local p = string.format(
             '<w:p>' ..
               '<w:pPr>' ..
-                '<w:pStyle w:val="NoSpacing"/>' .. -- Reset spacing
-                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' .. -- Tailwind gray-100 hex
-                '<w:ind w:left="120" w:right="120"/>' .. -- Small padding via indent? No, padding isn't direct.
-                '<w:spacing w:before="60" w:after="60"/>' ..
-                '<w:jc w:val="left"/>' ..
+                '<w:pStyle w:val="NoSpacing"/>' ..
+                '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
                 '<w:rPr>' ..
@@ -433,18 +442,40 @@ function CodeBlock(el)
             '</w:p>',
             safe_line
         )
-        result_xml = result_xml .. p
+        paragraphs_xml = paragraphs_xml .. p
     end
-    return pandoc.RawBlock('openxml', result_xml)
+
+    -- Wrap in a 1x1 Table to ensure block isolation and background shading
+    -- w:shd in w:tcPr provides the background color
+    local table_xml = string.format(
+        '<w:tbl>' ..
+          '<w:tblPr>' ..
+            '<w:tblW w:w="5000" w:type="pct"/>' .. -- 100% width
+            '<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders>' ..
+            '<w:tblLayout w:type="fixed"/>' ..
+          '</w:tblPr>' ..
+          '<w:tr>' ..
+            '<w:tc>' ..
+              '<w:tcPr>' ..
+                '<w:tcW w:w="5000" w:type="pct"/>' ..
+                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' .. -- Background color
+                '<w:tcMar><w:top w:w="120" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>' .. -- Padding
+              '</w:tcPr>' ..
+              '%s' .. -- Paragraphs
+            '</w:tc>' ..
+          '</w:tr>' ..
+        '</w:tbl>',
+        paragraphs_xml
+    )
+    return pandoc.RawBlock('openxml', table_xml)
 end
 
 function BlockQuote(el)
-    local result_xml = ""
+    local content_xml = ""
 
     -- Iterate over block content (usually Para)
     for _, block in ipairs(el.content) do
         if block.t == 'Para' or block.t == 'Plain' then
-            -- Collect styled inline runs
             local props = { italic = true }
             local runs = collect_text(block.content, props)
             local runs_xml = ""
@@ -452,26 +483,45 @@ function BlockQuote(el)
                 if run.t == 'RawInline' then runs_xml = runs_xml .. run.text end
             end
 
-            -- Wrap in styled paragraph
-            -- Styling: Left border (thick), Indent, Italic (handled in runs)
+            -- Standard paragraph inside the quote table
             local p = string.format(
                 '<w:p>' ..
                   '<w:pPr>' ..
-                    '<w:pStyle w:val="Quote"/>' .. -- Semantic style
-                    '<w:pBdr>' ..
-                      '<w:left w:val="single" w:sz="24" w:space="12" w:color="D1D5DB"/>' .. -- 3pt border, gray-300
-                    '</w:pBdr>' ..
-                    '<w:ind w:left="720"/>' .. -- 0.5in indent
                     '<w:spacing w:after="120"/>' ..
                   '</w:pPr>' ..
-                  '%s' .. -- The runs
+                  '%s' ..
                 '</w:p>',
                 runs_xml
             )
-            result_xml = result_xml .. p
+            content_xml = content_xml .. p
         end
     end
-    return pandoc.RawBlock('openxml', result_xml)
+
+    -- Wrap in Table to enforce the border
+    local table_xml = string.format(
+        '<w:tbl>' ..
+          '<w:tblPr>' ..
+            '<w:tblW w:w="5000" w:type="pct"/>' ..
+            '<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tblBorders>' ..
+            '<w:tblLayout w:type="fixed"/>' ..
+            '<w:tblInd w:w="200" w:type="dxa"/>' .. -- Indent the whole table
+          '</w:tblPr>' ..
+          '<w:tr>' ..
+            '<w:tc>' ..
+              '<w:tcPr>' ..
+                '<w:tcW w:w="5000" w:type="pct"/>' ..
+                '<w:tcBorders>' ..
+                  '<w:left w:val="single" w:sz="24" w:space="0" w:color="D1D5DB"/>' .. -- The thick left border
+                '</w:tcBorders>' ..
+                '<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="240" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar>' ..
+              '</w:tcPr>' ..
+              '%s' ..
+            '</w:tc>' ..
+          '</w:tr>' ..
+        '</w:tbl>',
+        content_xml
+    )
+    return pandoc.RawBlock('openxml', table_xml)
 end
 
 function Span(el)
