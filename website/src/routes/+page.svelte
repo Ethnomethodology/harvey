@@ -28,14 +28,14 @@
 <!-- Hero -->
 <section class="py-16 lg:py-24 text-center">
     <h1 class="text-4xl lg:text-6xl font-bold tracking-tight text-slate-900 mb-6">
-        Qualitative Research, <span class="text-emerald-500">Reimagined.</span>
+        Qualitative Research, <span class="text-green-500">Reimagined.</span>
     </h1>
     <p class="text-lg lg:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
         An integrated desktop workspace for transcription, translation, and qualitative analysis.
         Built by researchers, for researchers.
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="#download" class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white transition-all bg-emerald-500 rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 gap-2">
+        <a href="#download" class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
             <Download class="w-5 h-5" />
             Download for Free
         </a>
@@ -50,7 +50,7 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <!-- Card 1 -->
         <div class="bg-slate-50 p-8 rounded-2xl border border-slate-100">
-            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500 mb-6">
+            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-500 mb-6">
                 <Lock class="w-6 h-6" />
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-3">Privacy First</h3>
@@ -61,7 +61,7 @@
 
         <!-- Card 2 -->
         <div class="bg-slate-50 p-8 rounded-2xl border border-slate-100">
-            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500 mb-6">
+            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-500 mb-6">
                 <WifiOff class="w-6 h-6" />
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-3">Offline AI</h3>
@@ -72,7 +72,7 @@
 
         <!-- Card 3 -->
         <div class="bg-slate-50 p-8 rounded-2xl border border-slate-100">
-            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500 mb-6">
+            <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-500 mb-6">
                 <Code class="w-6 h-6" />
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-3">Open Source</h3>
@@ -92,19 +92,19 @@
         <!-- Tabs -->
         <div class="flex justify-center mb-8 border-b border-slate-200">
             <button
-                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'windows' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
+                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'windows' ? 'border-green-500 text-green-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
                 on:click={() => setActiveTab('windows')}
             >
                 Windows
             </button>
             <button
-                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'macos' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
+                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'macos' ? 'border-green-500 text-green-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
                 on:click={() => setActiveTab('macos')}
             >
                 macOS
             </button>
             <button
-                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'source' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
+                class="px-6 py-3 font-medium text-sm transition-colors border-b-2 {activeTab === 'source' ? 'border-green-500 text-green-600' : 'border-transparent text-slate-500 hover:text-slate-700'}"
                 on:click={() => setActiveTab('source')}
             >
                 Build from Source
@@ -120,8 +120,8 @@
                         <svg viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.949-1.323L24 0v11.551H10.949V2.126zm-10.949 9.924H9.75v9.451L0 20.551V12.05zm10.949 0H24v11.551l-13.051-2.126V12.05z"/></svg>
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for Windows</h3>
-                    <p class="text-slate-600 mb-8 max-w-md">Compatible with Windows 10 and 11. Includes specialized builds for hardware acceleration.</p>
-                    <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-emerald-500 rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 gap-2">
+                    <p class="text-slate-600 mb-8 max-w-md">Compatible with Windows 10 and 11.</p>
+                    <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
                         <Download class="w-6 h-6" />
                         Download .msi Installer
                     </a>
@@ -139,7 +139,7 @@
                     <div class="flex flex-col sm:flex-row gap-4">
                         <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
-                            Apple Silicon (M1/M2)
+                            Apple Silicon
                         </a>
                         <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
                             <Download class="w-5 h-5" />
@@ -158,7 +158,7 @@
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
                     <p class="text-slate-600 mb-8 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
 
-                    <div class="w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-emerald-400 mb-6 overflow-x-auto">
+                    <div class="w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto">
                         <div class="flex select-none mb-2 text-slate-500">
                             <span class="mr-2">$</span>
                             <span># Clone and install dependencies</span>
