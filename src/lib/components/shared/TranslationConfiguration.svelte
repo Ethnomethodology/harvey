@@ -89,7 +89,7 @@
 			// but we can add it if backend supports it. For now, just status.
 			newData[id] = { status };
 		}
-		newData;
+		modelDisplayData = newData;
 	}
 
 	// Combined list logic
