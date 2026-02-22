@@ -15,13 +15,9 @@
         { id: 'report-issue', label: 'Report Issue', icon: MessageSquare }
     ];
 
-    // Determine active tab based on the current article's sidebarId (if available in page data)
-    // or fallback to checking the URL path if we restructure routes later.
-    // For now, let's assume all articles are flat under /help/[slug]
-    // We need to know which sidebar tab is active for the current article.
-    // The layout load function (below) will pass this data.
     export let data;
 
+    // Active tab logic
     $: activeTabId = $page.data.meta?.sidebarId || 'overview';
 </script>
 

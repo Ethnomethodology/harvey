@@ -23,8 +23,8 @@
             <div class="py-4 border-b border-slate-900/10 lg:px-8 lg:border-0 mx-4 lg:mx-0">
                 <div class="relative flex items-center justify-between">
                     <!-- Logo -->
-                    <a class="mr-3 flex-none w-[2.0625rem] overflow-hidden md:w-auto text-slate-900 hover:text-emerald-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-2" href="{base}/">
-                        <div class="h-8 w-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-emerald-200">H</div>
+                    <a class="mr-3 flex-none w-[2.0625rem] overflow-hidden md:w-auto text-slate-900 hover:text-emerald-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-3" href="{base}/">
+                        <img src="/logo.png" alt="Harvey Logo" class="h-8 w-8 rounded-lg shadow-sm shadow-emerald-200" />
                         <span class="hidden md:inline">Harvey</span>
                     </a>
 
@@ -41,7 +41,7 @@
                             <span class="sr-only">GitHub</span>
                             <Github class="w-5 h-5" />
                         </a>
-                        <a href="https://github.com/Ethnomethodology/harvey/releases" target="_blank" rel="noreferrer" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-emerald-200">
+                        <a href="{base}/#download" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-emerald-200">
                             Download
                         </a>
                     </div>
@@ -66,7 +66,7 @@
                 <a href="{base}/help" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Help Center</a>
                 <a href="{base}/contribute" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Contribute</a>
                 <div class="pt-4 mt-2 border-t border-slate-100 flex items-center gap-4">
-                     <a href="https://github.com/Ethnomethodology/harvey/releases" class="flex-1 bg-emerald-500 text-center py-2 rounded-lg text-white font-medium">Download</a>
+                     <a href="{base}/#download" class="flex-1 bg-emerald-500 text-center py-2 rounded-lg text-white font-medium">Download</a>
                      <a href="https://github.com/Ethnomethodology/harvey" class="p-2 text-slate-500"><Github class="w-6 h-6"/></a>
                 </div>
             </div>
@@ -81,8 +81,8 @@
     <!-- Footer -->
     <footer class="border-t border-slate-200 bg-slate-50 py-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div class="flex items-center gap-2">
-                <div class="h-6 w-6 bg-slate-200 rounded flex items-center justify-center text-slate-500 font-bold text-xs">H</div>
+            <div class="flex items-center gap-3">
+                <img src="/logo.png" alt="Harvey Logo" class="h-6 w-6 rounded opacity-80 grayscale hover:grayscale-0 transition-all" />
                 <span class="text-sm font-semibold text-slate-900">Harvey Project</span>
             </div>
             <p class="text-sm text-slate-500">
