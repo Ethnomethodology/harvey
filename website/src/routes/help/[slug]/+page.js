@@ -1,6 +1,10 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 
 export async function load({ params }) {
+    if (params.slug === 'overview') {
+        throw redirect(301, '/help');
+    }
+
     const modules = import.meta.glob('/src/content/help/*.md');
     const articles = [];
 
