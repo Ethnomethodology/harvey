@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { message } from '@tauri-apps/plugin-dialog';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-    import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions';
+    import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions.js';
     import ManageModelsModal from './ManageModelsModal.svelte';
 
     export let showModal = false;
