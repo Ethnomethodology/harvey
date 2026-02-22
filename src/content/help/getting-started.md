@@ -5,6 +5,10 @@ sidebarId: overview
 order: 4
 ---
 
+<script>
+    import { CirclePlus } from 'lucide-svelte';
+</script>
+
 ### Getting Started
 
 1.  **Initial Configuration**
@@ -14,7 +18,7 @@ order: 4
     Once configured, select "Create Project" from the welcome screen. Choose a folder on your disk where all assets and data for this project will be stored.
 
 3.  **Import Media**
-    Drag and drop or use the Import menu to add Audio or Video files to your project.
+    Use the **Import button** <CirclePlus class="inline-block w-5 h-5 text-green-600 align-text-bottom" /> to add Audio or Video files to your project.
 
 4.  **Transcription**
     Head to the Transcription tab, select your file, and hit "Transcribe" to generate your first text.
