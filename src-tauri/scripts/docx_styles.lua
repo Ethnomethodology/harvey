@@ -127,7 +127,12 @@ local function generate_rpr(props)
 
   -- Order is important in OpenXML ECMA-376 (Strict)
   -- Reference: http://officeopenxml.com/WPtextFormatting.php
-  -- Order: rFonts, b, i, strike, color, sz, highlight, u, effect, bdr, shd
+  -- Order: rStyle, rFonts, b, i, strike, color, sz, highlight, u, effect, bdr, shd
+
+  -- 0. rStyle (Hyperlink)
+  if props.is_link then
+      rPr = rPr .. '<w:rStyle w:val="Hyperlink"/>'
+  end
 
   -- 1. rFonts
   if props.font then
@@ -246,6 +251,7 @@ local function collect_text(inlines, props)
         local sub_props = clone(props)
         sub_props.color = "0000FF"
         sub_props.underline = true
+        sub_props.is_link = true
 
         -- Recurse into link content
         local sub_res = collect_text(elem.content, sub_props)
@@ -385,7 +391,8 @@ function Link(el)
     -- Use fldSimple strategy to force styling without relying on Pandoc's Link rendering
     local props = {
         color = "0000FF",
-        underline = true
+        underline = true,
+        is_link = true
     }
 
     local url = escape_xml(el.target)
