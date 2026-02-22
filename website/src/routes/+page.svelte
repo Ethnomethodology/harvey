@@ -1,6 +1,6 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowRight, WifiOff, FileText, Lock, Download, Github } from 'lucide-svelte';
+    import { ArrowRight, WifiOff, Code, Lock, Download, Github } from 'lucide-svelte';
     import { onMount } from 'svelte';
 
     let activeTab = 'windows';
@@ -73,11 +73,11 @@
         <!-- Card 3 -->
         <div class="bg-slate-50 p-8 rounded-2xl border border-slate-100">
             <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500 mb-6">
-                <FileText class="w-6 h-6" />
+                <Code class="w-6 h-6" />
             </div>
-            <h3 class="text-xl font-bold text-slate-900 mb-3">Rich Editing</h3>
+            <h3 class="text-xl font-bold text-slate-900 mb-3">Open Source</h3>
             <p class="text-slate-600 leading-relaxed">
-                Interactive transcript editor linked to media playback, with annotation tools built-in.
+                Harvey is free and open source. We warmly welcome contributions from researchers and developers to shape the future of qualitative tools.
             </p>
         </div>
     </div>
