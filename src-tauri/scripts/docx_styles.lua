@@ -250,8 +250,127 @@ local function collect_text(inlines, props)
         -- Recurse into link content
         local sub_res = collect_text(elem.content, sub_props)
 
-        -- Create a new Link element containing the processed OpenXML runs
-        table.insert(result, pandoc.Link(sub_res, elem.target, elem.title, elem.attr))
+        -- Instead of returning a pandoc.Link (which lets Pandoc control the OpenXML),
+        -- we manually construct the <w:hyperlink> element to ensure our styles persist.
+        -- This requires a unique ID (r:id) for the relationship, but in a filter we cannot easily register new relationships.
+        -- HOWEVER, Pandoc allows raw OpenXML.
+        -- A robust fallback is to rely on Pandoc's Link handling but force the run properties INSIDE the link text runs.
+        -- The previous attempt failed because Word's "Hyperlink" character style overrides direct formatting if not carefully applied,
+        -- OR Pandoc strips the direct formatting when wrapping in a Link.
+
+        -- Strategy B: Use pandoc.Link but try to inject a RawInline that forces the style?
+        -- No, let's try to wrap the inner runs in a Span that Pandoc might respect?
+        -- No, let's stick to returning the Link with styled content, but we need to ensure collect_text returns RawInlines that Word respects.
+        -- The issue is likely that <w:hyperlink> in Word applies the "Hyperlink" style which is blue/underlined by default in clean templates,
+        -- but if the template differs, it might not be.
+        -- If we want to FORCE it, we must ensure the <w:rPr> inside the hyperlink's <w:r> has <w:color> and <w:u>.
+        -- Our collect_text DOES generate <w:r><w:rPr>... so the issue might be Pandoc wrapping.
+
+        -- Strategy C: Construct a raw OpenXML hyperlink if possible.
+        -- Since we can't easily generate the relationship ID without access to the document relationships part,
+        -- we must rely on Pandoc to generate the relationship.
+        -- But we can try to wrap the content in a way that preserves style.
+
+        -- Let's try returning the Link, but double-check that sub_res are indeed RawInlines.
+        -- They are.
+
+        -- Maybe we need to explicitely set the style of the runs to NOT be "Hyperlink" so they don't get overridden?
+        -- Or conversely, maybe we need to ensure they HAVE the color/underline manually.
+        -- The user says it IS clickable (so it is a link) but NOT blue/underlined.
+        -- This implies the runs inside the hyperlink lack the formatting.
+
+        -- Let's try a different approach: Return the Link, but make sure the props passed to collect_text
+        -- are definitely applied. They are.
+
+        -- Wait, if Pandoc sees RawInlines inside a Link, does it wrap them in ANOTHER run?
+        -- If `sub_res` is a list of RawInline('openxml', ...), Pandoc should just output them inside the hyperlink.
+        -- If so, the XML structure should be <w:hyperlink ...> <w:r>...</w:r> </w:hyperlink>.
+        -- And our <w:r> has <w:rPr><w:color .../><w:u .../></w:rPr>.
+        -- So why does it not show?
+
+        -- Possibility: The default Hyperlink style in Word has precedence or conflicts.
+        -- Or maybe the user's Word settings / template.
+        -- Let's explicitly Add <w:rStyle w:val="Hyperlink"/> AND the direct formatting.
+        -- Actually, if we want to FORCE blue/underline regardless of theme, we are doing the right thing.
+
+        -- Let's try to ensure we are using the correct color format. "0000FF" is correct.
+
+        -- RE-READING: "Link texts are not appearing in blue and underlined... but its clickable".
+        -- This means the <w:hyperlink> tag is there.
+        -- Maybe the runs inside are being stripped?
+
+        -- Let's try one trick: Insert a zero-width space with the style? No.
+
+        -- Let's try to return the Link object but use a specific class/attribute that our filter acts on?
+        -- No, we are IN the filter.
+
+        -- Let's just return the Link with the processed content.
+        -- But let's verify if `collect_text` is actually called for Link.
+        -- Yes, because we added the Link case.
+
+        -- If the previous plan failed, it implies `pandoc.Link` might be ignoring the RawInlines or re-processing them.
+        -- Let's try to modify the top-level Link function to ensure it's catching them.
+        -- It is.
+
+        -- Let's try a different tack: The content of a Link in Pandoc is a list of Inlines.
+        -- `collect_text` returns a list of RawInlines.
+        -- When Pandoc writes this to Docx, it puts the RawXML inside the hyperlink.
+        -- If that RawXML is `<w:r>...</w:r>`, it should work.
+
+        -- Maybe we need to explicitly clear the rStyle? <w:rStyle w:val=""/> isn't valid.
+        -- But we can try to explicitly set the rStyle to something benign or standard?
+
+        -- CRITICAL: `pandoc.Link` in a Lua filter might be converting its content back to standard inlines if not careful?
+        -- No, RawInline should be preserved.
+
+        -- Let's look at `collect_text` again.
+        -- It generates `<w:r><w:rPr>...</w:rPr><w:t>...</w:t></w:r>`.
+        -- If this is inside a `<w:hyperlink>`, it is valid OpenXML.
+
+        -- What if we explicitly add `w:val` to underline? `w:val="single"`. We are doing that.
+
+        -- Let's try to force the styling by wrapping the content in a distinct run property
+        -- that Pandoc *can't* mess with? No, RawInline is the ultimate force.
+
+        -- HYPOTHESIS: Pandoc's docx writer might be wrapping the link content in its OWN run if it detects simple text,
+        -- effectively ignoring our RawInline if it can, or maybe wrapping our RawInline in another run?
+        -- No, RawInline 'openxml' is usually dumped as-is.
+
+        -- Let's try to use `pandoc.utils.stringify` to verify content? No.
+
+        -- Let's assume the previous code WAS working but maybe cached/not applied?
+        -- Or maybe the user's viewer (LibreOffice? Word?) behaves differently.
+
+        -- Let's try to make the Link content purely RawInline.
+        -- We are doing that.
+
+        -- ALTERNATIVE: Don't use `pandoc.Link`. Use `pandoc.RawInline` to write the field code for a hyperlink.
+        -- Word supports fields for hyperlinks: { HYPERLINK "url" }.
+        -- This avoids the Relationship ID issue!
+        -- Syntax: <w:fldSimple w:instr=" HYPERLINK &quot;url&quot; "> ... runs ... </w:fldSimple>
+
+        local url = escape_xml(elem.target)
+        local sub_props = clone(props)
+        sub_props.color = "0000FF"
+        sub_props.underline = true
+
+        -- Recurse into link content to get styled runs
+        local sub_res = collect_text(elem.content, sub_props)
+
+        -- Construct fldSimple XML
+        -- Note: fldSimple is robust and doesn't require rId.
+        local runs_xml = ""
+        for _, inline in ipairs(sub_res) do
+            if inline.t == 'RawInline' then
+                runs_xml = runs_xml .. inline.text
+            else
+                -- Should not happen with collect_text but for safety
+                runs_xml = runs_xml .. pandoc.utils.stringify(inline)
+            end
+        end
+
+        local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; ">%s</w:fldSimple>', url, runs_xml)
+        table.insert(result, pandoc.RawInline('openxml', xml))
 
     else
        -- Fallback for other elements
@@ -263,11 +382,24 @@ end
 
 function Link(el)
     -- Handle top-level links (not inside a Span)
+    -- Use fldSimple strategy to force styling without relying on Pandoc's Link rendering
     local props = {
         color = "0000FF",
         underline = true
     }
-    return pandoc.Link(collect_text(el.content, props), el.target, el.title, el.attr)
+
+    local url = escape_xml(el.target)
+    local sub_res = collect_text(el.content, props)
+
+    local runs_xml = ""
+    for _, inline in ipairs(sub_res) do
+        if inline.t == 'RawInline' then
+            runs_xml = runs_xml .. inline.text
+        end
+    end
+
+    local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; ">%s</w:fldSimple>', url, runs_xml)
+    return pandoc.RawInline('openxml', xml)
 end
 
 function Span(el)
