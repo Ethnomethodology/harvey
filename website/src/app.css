@@ -4,8 +4,9 @@
 
 @layer base {
   body {
-    @apply bg-[radial-gradient(at_top_left,_var(--tw-gradient-stops))] from-emerald-50/60 via-white to-slate-50 min-h-screen text-slate-700;
+      @apply bg-[radial-gradient(at_top_left,_var(--tw-gradient-stops))] from-green-100/80 via-white to-slate-50 min-h-screen text-slate-700;
   }
+  
   h1, h2, h3, h4, h5, h6 {
     @apply text-slate-900 font-bold tracking-tight;
   }

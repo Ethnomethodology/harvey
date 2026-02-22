@@ -2,7 +2,7 @@
     import { base } from '$app/paths';
 </script>
 
-<div class="prose prose-slate prose-lg max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-emerald-600 prose-img:rounded-2xl">
+<div class="prose prose-slate prose-lg max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-green-600 prose-img:rounded-2xl">
     <h1>Contribute to Harvey</h1>
     <p>
         We warmly welcome contributions to Project Harvey from everyone in the open-source community! Whether you're taking your first steps into coding, looking to experiment with AI-assisted development, or a qualitative researcher wanting to shape the tools you use, your input is valuable.

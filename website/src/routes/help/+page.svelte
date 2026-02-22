@@ -23,8 +23,8 @@
 
     <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
         {#each displayedArticles as article}
-            <a href="{base}/help/{article.slug}" class="block p-6 bg-white border border-slate-200 rounded-xl hover:border-emerald-500 hover:shadow-lg transition-all group h-full">
-                <h3 class="text-lg font-bold text-slate-900 group-hover:text-emerald-600 mb-2 transition-colors">
+            <a href="{base}/help/{article.slug}" class="block p-6 bg-white border border-slate-200 rounded-xl hover:border-green-500 hover:shadow-lg transition-all group h-full">
+                <h3 class="text-lg font-bold text-slate-900 group-hover:text-green-600 mb-2 transition-colors">
                     {article.title}
                 </h3>
                 {#if article.description}

@@ -2,7 +2,7 @@
     import { base } from '$app/paths';
 </script>
 
-<div class="prose prose-slate prose-lg max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-emerald-600 prose-img:rounded-2xl">
+<div class="prose prose-slate prose-lg max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-green-600 prose-img:rounded-2xl">
     <h1>About Harvey</h1>
     <p>
         Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment:

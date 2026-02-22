@@ -75,7 +75,7 @@
             <div class="relative search-container">
                 <div class="relative group">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search class="h-4 w-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                        <Search class="h-4 w-4 text-slate-400 group-focus-within:text-green-500 transition-colors" />
                     </div>
                     <input
                         bind:this={searchInput}
@@ -83,7 +83,7 @@
                         bind:value={searchQuery}
                         on:focus={() => isSearchOpen = true}
                         placeholder="Search documentation..."
-                        class="block w-full pl-10 pr-12 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        class="block w-full pl-10 pr-12 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
                     />
                     <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                         <kbd class="hidden sm:inline-flex items-center px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-400">
@@ -102,10 +102,10 @@
                             {#each filteredArticles as article}
                                 <a
                                     href="{base}/help/{article.slug}"
-                                    class="flex flex-col px-4 py-2 hover:bg-emerald-50 transition-colors group"
+                                    class="flex flex-col px-4 py-2 hover:bg-green-50 transition-colors group"
                                     on:click={closeSearch}
                                 >
-                                    <span class="text-sm font-semibold text-slate-700 group-hover:text-emerald-700">
+                                    <span class="text-sm font-semibold text-slate-700 group-hover:text-green-700">
                                         {article.title}
                                     </span>
                                     {#if article.description}
@@ -129,11 +129,11 @@
                 {#each sidebarTabs as tab}
                     <a
                         href="{base}/help/{tab.id}"
-                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTabId === tab.id ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}"
+                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTabId === tab.id ? 'bg-green-50 text-green-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}"
                     >
                         <svelte:component
                             this={tab.icon}
-                            class="flex-shrink-0 -ml-1 mr-3 h-5 w-5 {activeTabId === tab.id ? 'text-emerald-500' : 'text-slate-400 group-hover:text-slate-500'}"
+                            class="flex-shrink-0 -ml-1 mr-3 h-5 w-5 {activeTabId === tab.id ? 'text-green-500' : 'text-slate-400 group-hover:text-slate-500'}"
                         />
                         <span class="truncate">{tab.label}</span>
                     </a>
