@@ -2,7 +2,7 @@
 id: projects
 label: Projects
 sidebarId: overview
-order: 4
+order: 5
 ---
 
 ### Understanding Projects

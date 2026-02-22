@@ -2,7 +2,7 @@
 id: supported-platforms
 label: Supported Platforms
 sidebarId: overview
-order: 5
+order: 6
 ---
 
 ### Supported Platforms

@@ -2,7 +2,7 @@
 id: getting-started
 label: Getting Started
 sidebarId: overview
-order: 3
+order: 4
 ---
 
 ### Getting Started

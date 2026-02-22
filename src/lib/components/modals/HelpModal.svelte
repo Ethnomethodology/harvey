@@ -19,7 +19,6 @@
     { id: 'overview', label: 'Overview' },
     { id: 'configure', label: 'Configure' },
     { id: 'manage-data', label: 'Data' },
-    { id: 'transcribe', label: 'Transcription' },
     { id: 'tags', label: 'Tags' },
     { id: 'annotate-page', label: 'Annotate' },
     { id: 'translate-page', label: 'Translate' },
