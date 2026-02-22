@@ -83,7 +83,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
             <div class="flex items-center gap-3">
                 <img src="/logo.png" alt="Harvey Logo" class="h-6 w-6 rounded border border-slate-300 opacity-80 grayscale hover:grayscale-0 transition-all" />
-                <span class="text-sm font-semibold text-slate-900">Harvey Project</span>
+                <span class="text-sm font-semibold text-slate-900">Project Harvey</span>
             </div>
             <p class="text-sm text-slate-500">
                 &copy; {new Date().getFullYear()} Project Harvey. Open Source (MIT).
