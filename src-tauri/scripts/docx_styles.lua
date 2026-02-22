@@ -420,15 +420,22 @@ end
 function CodeBlock(el)
     local code = el.text
     local lines = code:split("\n")
-    local paragraphs_xml = ""
+    local result_xml = ""
 
+    -- Using separate Paragraphs instead of Table to avoid potential layout merging issues in older Word versions.
+    -- Each paragraph gets the shading and border to look like a block.
+    -- w:pBdr/w:shd on paragraph level is robust.
     for _, line in ipairs(lines) do
         local safe_line = escape_xml(line)
-        -- Paragraph for each line inside the table cell
         local p = string.format(
             '<w:p>' ..
               '<w:pPr>' ..
                 '<w:pStyle w:val="NoSpacing"/>' ..
+                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' .. -- Grey background
+                '<w:pBdr>' .. -- Border around paragraph to prevent bleeding/gaps if spaced
+                   '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' ..
+                '</w:pBdr>' ..
+                '<w:ind w:left="120" w:right="120"/>' .. -- Padding via indent
                 '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
@@ -442,32 +449,11 @@ function CodeBlock(el)
             '</w:p>',
             safe_line
         )
-        paragraphs_xml = paragraphs_xml .. p
+        result_xml = result_xml .. p
     end
-
-    -- Wrap in a 1x1 Table to ensure block isolation and background shading
-    -- w:shd in w:tcPr provides the background color
-    local table_xml = string.format(
-        '<w:tbl>' ..
-          '<w:tblPr>' ..
-            '<w:tblW w:w="5000" w:type="pct"/>' .. -- 100% width
-            '<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders>' ..
-            '<w:tblLayout w:type="fixed"/>' ..
-          '</w:tblPr>' ..
-          '<w:tr>' ..
-            '<w:tc>' ..
-              '<w:tcPr>' ..
-                '<w:tcW w:w="5000" w:type="pct"/>' ..
-                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' .. -- Background color
-                '<w:tcMar><w:top w:w="120" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>' .. -- Padding
-              '</w:tcPr>' ..
-              '%s' .. -- Paragraphs
-            '</w:tc>' ..
-          '</w:tr>' ..
-        '</w:tbl>',
-        paragraphs_xml
-    )
-    return pandoc.RawBlock('openxml', table_xml)
+    -- Add an empty paragraph after to separate from next block
+    result_xml = result_xml .. '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>'
+    return pandoc.RawBlock('openxml', result_xml)
 end
 
 function BlockQuote(el)
