@@ -14,7 +14,7 @@ Download the file ending in `x64-setup.zip`. Extract the content and run the set
 
 ## macOS
 1.  **Download**: Visit the [GitHub Releases](https://github.com/Ethnomethodology/harvey/releases/latest) page.
-    - For **Apple Silicon (M1/M2/M3)**: Download the file with `aarch64` in the name.
+    - For **Apple Silicon (M1, M2, etc.)**: Download the file with `aarch64` in the name.
     - For **Intel Macs**: Download the file with `x64` in the name.
 2.  **Install**: Open the downloaded `.dmg` file and drag `harvey.app` to your `/Applications` folder.
 3.  **Security Bypass**: Because the app is not currently signed, macOS will prevent it from running. To authorize it, open the **Terminal** application and run the following commands:
