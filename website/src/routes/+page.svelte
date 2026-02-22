@@ -66,7 +66,7 @@
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-3">Offline AI</h3>
             <p class="text-slate-600 leading-relaxed">
-                State-of-the-art transcription (Whisper) and translation models running without internet.
+                Download state-of-the-art models once and use them forever. Transcription and translation run completely offline on your local machine.
             </p>
         </div>
 
