@@ -1,6 +1,6 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowRight, Mic, FileText, Lock, Download, Github } from 'lucide-svelte';
+    import { ArrowRight, WifiOff, FileText, Lock, Download, Github } from 'lucide-svelte';
     import { onMount } from 'svelte';
 
     let activeTab = 'windows';
@@ -62,7 +62,7 @@
         <!-- Card 2 -->
         <div class="bg-slate-50 p-8 rounded-2xl border border-slate-100">
             <div class="h-12 w-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500 mb-6">
-                <Mic class="w-6 h-6" />
+                <WifiOff class="w-6 h-6" />
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-3">Offline AI</h3>
             <p class="text-slate-600 leading-relaxed">
