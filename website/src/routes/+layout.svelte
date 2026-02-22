@@ -31,7 +31,7 @@
                     <!-- Desktop Nav -->
                     <div class="hidden lg:flex items-center gap-8 font-medium text-sm">
                         <a href="{base}/about" class="hover:text-emerald-600 transition-colors {$page.url.pathname === base + '/about' ? 'text-emerald-600' : ''}">About</a>
-                        <a href="{base}/help" class="hover:text-emerald-600 transition-colors {$page.url.pathname.startsWith(base + '/help') ? 'text-emerald-600' : ''}">Overview</a>
+                        <a href="{base}/help" class="hover:text-emerald-600 transition-colors {$page.url.pathname.startsWith(base + '/help') ? 'text-emerald-600' : ''}">Help Center</a>
                         <a href="{base}/contribute" class="hover:text-emerald-600 transition-colors {$page.url.pathname === base + '/contribute' ? 'text-emerald-600' : ''}">Contribute</a>
                     </div>
 
@@ -63,7 +63,7 @@
         {#if isMenuOpen}
             <div class="lg:hidden border-b border-slate-900/10 bg-white px-4 pt-2 pb-6 shadow-xl absolute w-full top-full left-0 z-50 flex flex-col gap-4">
                 <a href="{base}/about" class="block text-base font-medium text-slate-700 hover:text-emerald-600">About</a>
-                <a href="{base}/help" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Overview</a>
+                <a href="{base}/help" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Help Center</a>
                 <a href="{base}/contribute" class="block text-base font-medium text-slate-700 hover:text-emerald-600">Contribute</a>
                 <div class="pt-4 mt-2 border-t border-slate-100 flex items-center gap-4">
                      <a href="{base}/#download" class="flex-1 bg-emerald-500 text-center py-2 rounded-lg text-white font-medium">Download</a>
