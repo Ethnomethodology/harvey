@@ -81,7 +81,10 @@ export class ExtendedTextNode extends TextNode {
     const dom = super.createDOM(config, editor); // Pass editor if super expects it
     const latest = this.getLatest();
     if (latest.__highlightId) dom.setAttribute('data-highlight-id', latest.__highlightId);
-    const style = latest.getStyle();
+
+    const isBold = latest.hasFormat('bold');
+    const style = getEffectiveStyle(latest.getStyle(), isBold);
+
     if (style) dom.setAttribute('style', style);
     return dom;
   }
@@ -96,9 +99,14 @@ export class ExtendedTextNode extends TextNode {
       changed = true;
     }
 
-    const latestStyle = latest.getStyle();
-    if (prevNode.getStyle() !== latestStyle) {
-      if (latestStyle) dom.setAttribute('style', latestStyle);
+    const prevIsBold = prevNode.hasFormat('bold');
+    const nextIsBold = latest.hasFormat('bold');
+
+    const prevStyle = getEffectiveStyle(prevNode.getStyle(), prevIsBold);
+    const nextStyle = getEffectiveStyle(latest.getStyle(), nextIsBold);
+
+    if (prevStyle !== nextStyle) {
+      if (nextStyle) dom.setAttribute('style', nextStyle);
       else dom.removeAttribute('style');
       changed = true;
     }
@@ -114,7 +122,10 @@ export class ExtendedTextNode extends TextNode {
     if (latest.__highlightId) {
       element.setAttribute('data-highlight-id', latest.__highlightId);
     }
-    const styleAttribute = latest.getStyle();
+
+    const isBold = latest.hasFormat('bold');
+    const styleAttribute = getEffectiveStyle(latest.getStyle(), isBold);
+
     if (styleAttribute) {
       element.setAttribute('style', styleAttribute);
     }
@@ -323,6 +334,17 @@ export function $createExtendedTextNode(text = '', key) {
 }
 export function $isExtendedTextNode(node) {
   return node instanceof ExtendedTextNode;
+}
+
+function getEffectiveStyle(style, isBold) {
+  if (!style) return '';
+  if (isBold) {
+    // Remove font-weight from inline style if bold formatting is active,
+    // to allow the bold class/tag to take precedence.
+    // Handles 'font-weight: ...;' with potential spaces.
+    return style.replace(/(^|;)\s*font-weight\s*:[^;]+(;|$)/gi, '$1').replace(/^;+/, '').replace(/;+$/, '');
+  }
+  return style;
 }
 
 /**
