@@ -299,3 +299,46 @@ https://svelte.dev/e/css_unused_selector
 11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3161:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button.active"
 https://svelte.dev/e/css_unused_selector
 11:24:21 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2588:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2621:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2666:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2714:14 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2742:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2789:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2820:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:119:13 Component has unused export property 'enableSearch'. If it is for external reference only, please consider using `export const enableSearch`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:124:13 Component has unused export property 'initialHighlights'. If it is for external reference only, please consider using `export const initialHighlights`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:125:13 Component has unused export property 'documentHighlights'. If it is for external reference only, please consider using `export const documentHighlights`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3104:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3116:43 Unused CSS selector ".toolbar select.mini-toolbar-select:focus"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3126:46 Unused CSS selector ".toolbar select.mini-toolbar-select:disabled"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3130:55 Unused CSS selector ".toolbar select.mini-toolbar-select:focus:is(.dark *)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3133:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3143:2 Unused CSS selector ".toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3148:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3149:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3155:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3156:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3161:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button.active"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
