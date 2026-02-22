@@ -120,7 +120,8 @@
                         <svg viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.949-1.323L24 0v11.551H10.949V2.126zm-10.949 9.924H9.75v9.451L0 20.551V12.05zm10.949 0H24v11.551l-13.051-2.126V12.05z"/></svg>
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for Windows</h3>
-                    <p class="text-slate-600 mb-8 max-w-md">Compatible with Windows 10 and 11.</p>
+                    <p class="text-slate-600 mb-4 max-w-md">Compatible with Windows 10 and 11.</p>
+                    <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
                     <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64-setup.zip" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
                         <Download class="w-6 h-6" />
                         Download .exe Installer
@@ -135,7 +136,8 @@
                         <svg viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.21-1.98 1.08-3.11-1.06.05-2.31.71-3.06 1.48-.69.72-1.24 1.87-1.09 2.98 1.18.08 2.36-.67 3.07-1.35"/></svg>
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for macOS</h3>
-                    <p class="text-slate-600 mb-8 max-w-md"> Optimized for Apple Silicon (M1, M2, etc.) and Intel Macs.</p>
+                    <p class="text-slate-600 mb-4 max-w-md"> Optimized for Apple Silicon (M1, M2, etc.) and Intel Macs.</p>
+                    <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
                     <div class="flex flex-col sm:flex-row gap-4">
                         <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_aarch64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
@@ -156,10 +158,8 @@
                         <Github class="w-8 h-8" />
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
-                    <p class="text-slate-600 mb-8 max-w-md text-sm">
-                        Ensure you have <a href="https://www.rust-lang.org/tools/install" target="_blank" class="text-green-600 hover:underline">Rust</a> and 
-                        <a href="https://v2.tauri.app/develop/guides/prerequisites/" target="_blank" class="text-green-600 hover:underline">Tauri prerequisites</a> installed before building.
-                    </p>
+                    <p class="text-slate-600 mb-4 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
+                    <p class="text-sm text-slate-500 mb-8">For detailed build instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
 
                     <div class="w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto">
                         <div class="flex select-none mb-2 text-slate-500">
