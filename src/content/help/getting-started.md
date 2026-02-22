@@ -1,28 +1,17 @@
 ---
-title: Getting Started with Harvey
-description: A quick guide to installing and running your first project.
-order: 1
+id: getting-started
+label: Getting Started
+sidebarId: overview
+order: 3
 ---
 
-# Getting Started
+### Getting Started
 
-Welcome to Harvey! This guide will help you get up and running quickly.
+1.  **Create a Project**
+    Launch the app and select "Create Project". Choose a folder on your disk where all assets will be stored.
 
-## Installation
+2.  **Import Media**
+    Drag and drop or use the Import menu to add Audio or Video files to your project.
 
-Download the latest version from our [Releases page](https://github.com/Ethnomethodology/harvey/releases).
-
-### Windows
-Run the `.msi` installer.
-
-### macOS
-Drag the `.dmg` to Applications.
-
-## Your First Project
-
-1. Open Harvey.
-2. Click **New Project**.
-3. Import an audio or video file.
-4. Wait for processing (first time model download).
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+3.  **Transcription**
+    Head to the Transcription tab, select your file, and hit "Transcribe" to generate your first text.

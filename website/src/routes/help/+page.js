@@ -7,9 +7,10 @@ export async function load() {
         const slug = path.split('/').pop().replace('.md', '');
         articles.push({
             slug,
-            title: module.metadata.title || slug.replace(/-/g, ' '),
+            title: module.metadata.label || module.metadata.title || slug.replace(/-/g, ' '),
             description: module.metadata.description || '',
-            order: module.metadata.order || 999
+            order: module.metadata.order || 999,
+            sidebarId: module.metadata.sidebarId || 'overview'
         });
     }
 

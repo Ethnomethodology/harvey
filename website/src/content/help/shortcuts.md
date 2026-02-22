@@ -1,16 +1,18 @@
 ---
-title: Keyboard Shortcuts
-description: Speed up your workflow with these hotkeys.
-order: 3
+id: shortcuts
+label: Shortcuts
+sidebarId: transcribe
+order: 40
 ---
 
-# Keyboard Shortcuts
+### Shortcuts
 
-| Action | Windows/Linux | macOS |
-| :--- | :--- | :--- |
-| Play/Pause | `Ctrl + Space` | `Cmd + Space` |
-| Rewind 5s | `Ctrl + Left` | `Cmd + Left` |
-| Forward 5s | `Ctrl + Right` | `Cmd + Right` |
-| Save | `Ctrl + S` | `Cmd + S` |
+Master these platform-aware shortcuts to significantly speed up your workflow.
 
-> Tip: You can customize these in settings.
+| Shortcut | Action |
+| :--- | :--- |
+| `Ctrl/Cmd + E` | Toggle Edit Mode |
+| `Ctrl/Cmd + S` | Save Transcript |
+| `F8` | Play / Pause Media |
+| `F7 / F9` | Rewind / Forward 5s |
+| `Ctrl/Cmd + ↑ / ↓` | Previous / Next Segment |
