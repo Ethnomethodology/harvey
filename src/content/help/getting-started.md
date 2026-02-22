@@ -9,8 +9,6 @@ order: 4
     import { CirclePlus } from 'lucide-svelte';
 </script>
 
-### Getting Started
-
 1.  **Initial Configuration**
     Before you begin, head to the **Configure tab**. You will need to install the required libraries and download your preferred AI models to enable all functionalities of the app. See [Configure](/help/configure) for more detail.
 
