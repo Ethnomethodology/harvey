@@ -141,7 +141,7 @@
                             <Download class="w-5 h-5" />
                             Apple Silicon
                         </a>
-                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
+                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
                             Intel Mac
                         </a>
@@ -176,7 +176,7 @@
                         </div>
                          <div>
                             <span class="mr-2 text-slate-500">$</span>
-                            <span class="text-white">npm run tauri dev</span>
+                            <span class="text-white">npm run tauri build</span>
                         </div>
                     </div>
 
