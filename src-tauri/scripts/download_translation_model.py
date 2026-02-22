@@ -15,8 +15,16 @@ def download_model(model_name, cache_dir, token):
     """
     print(f"Downloading model {model_name} to {cache_dir}", flush=True)
     try:
-        if token:
+        # Check if the model is gated (requires authentication)
+        is_gated = False
+        # Known gated models or organizations can be added here
+        # For now, we assume Helsinki-NLP and NLLB (facebook) are public.
+
+        if is_gated and token:
+            print("Model is gated. Logging in with token...", flush=True)
             login(token=token)
+        else:
+            print("Model is public. Skipping authentication.", flush=True)
 
         # Download the full repository snapshot
         # local_dir_use_symlinks=False ensures the files are actually moved into the dir
@@ -25,7 +33,8 @@ def download_model(model_name, cache_dir, token):
             repo_id=model_name,
             cache_dir=cache_dir,
             local_dir_use_symlinks=False,
-            resume_download=True
+            resume_download=True,
+            token=token if is_gated else None # Pass token only if gated
         )
 
         print("Download complete.", flush=True)

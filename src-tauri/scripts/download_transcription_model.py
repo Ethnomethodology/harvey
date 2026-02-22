@@ -26,16 +26,23 @@ def download_model(model_name, target_dir, token):
 
     print(f"Downloading model {model_name} to {final_model_dir}", flush=True)
     try:
-        if token and token.strip():
+        # Check if the model is gated (requires authentication)
+        # Faster-Whisper models (Systran) are generally public.
+        is_gated = False
+
+        if is_gated and token and token.strip():
             print(f"Logging in with token...", flush=True)
             login(token=token)
+        else:
+            print("Model is public. Skipping authentication.", flush=True)
 
         # Download the full repository snapshot to a specific directory (flattened)
         snapshot_download(
             repo_id=model_name,
             local_dir=final_model_dir,
             local_dir_use_symlinks=False,
-            resume_download=True
+            resume_download=True,
+            token=token if is_gated else None
         )
 
         print("Download complete.", flush=True)
