@@ -471,11 +471,12 @@ function CodeBlock(el)
 end
 
 function BlockQuote(el)
-    local content_xml = ""
+    local result_xml = ""
 
     -- Iterate over block content (usually Para)
     for _, block in ipairs(el.content) do
         if block.t == 'Para' or block.t == 'Plain' then
+            -- Collect styled inline runs
             local props = { italic = true }
             local runs = collect_text(block.content, props)
             local runs_xml = ""
@@ -483,45 +484,22 @@ function BlockQuote(el)
                 if run.t == 'RawInline' then runs_xml = runs_xml .. run.text end
             end
 
-            -- Standard paragraph inside the quote table
+            -- Simple styled paragraph: Indent + Quote Style
             local p = string.format(
                 '<w:p>' ..
                   '<w:pPr>' ..
+                    '<w:pStyle w:val="Quote"/>' .. -- Semantic style
+                    '<w:ind w:left="720"/>' .. -- 0.5in indent
                     '<w:spacing w:after="120"/>' ..
                   '</w:pPr>' ..
-                  '%s' ..
+                  '%s' .. -- The runs
                 '</w:p>',
                 runs_xml
             )
-            content_xml = content_xml .. p
+            result_xml = result_xml .. p
         end
     end
-
-    -- Wrap in Table to enforce the border
-    local table_xml = string.format(
-        '<w:tbl>' ..
-          '<w:tblPr>' ..
-            '<w:tblW w:w="5000" w:type="pct"/>' ..
-            '<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tblBorders>' ..
-            '<w:tblLayout w:type="fixed"/>' ..
-            '<w:tblInd w:w="200" w:type="dxa"/>' .. -- Indent the whole table
-          '</w:tblPr>' ..
-          '<w:tr>' ..
-            '<w:tc>' ..
-              '<w:tcPr>' ..
-                '<w:tcW w:w="5000" w:type="pct"/>' ..
-                '<w:tcBorders>' ..
-                  '<w:left w:val="single" w:sz="24" w:space="0" w:color="D1D5DB"/>' .. -- The thick left border
-                '</w:tcBorders>' ..
-                '<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="240" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar>' ..
-              '</w:tcPr>' ..
-              '%s' ..
-            '</w:tc>' ..
-          '</w:tr>' ..
-        '</w:tbl>',
-        content_xml
-    )
-    return pandoc.RawBlock('openxml', table_xml)
+    return pandoc.RawBlock('openxml', result_xml)
 end
 
 function Span(el)
