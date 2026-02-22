@@ -2,9 +2,15 @@
     import { base } from '$app/paths';
     export let data;
 
-    // This page acts as the "Overview" page by default
-    const sidebarId = 'overview';
-    $: articles = data.articles.filter(a => a.sidebarId === sidebarId);
+    // Filter to get only "Section Roots" to display on the main Help page
+    // We want: Download, Configure, Data, Transcription, Tags, Annotate, Translate, Report Issue
+    // These correspond to the sidebarTabs IDs.
+    const rootIds = [
+        'download', 'configure', 'manage-data', 'transcribe',
+        'tags', 'annotate-page', 'translate-page', 'report-issue'
+    ];
+
+    $: articles = data.articles.filter(a => rootIds.includes(a.slug));
 </script>
 
 <div class="prose prose-slate max-w-none">

@@ -16,7 +16,7 @@
 
   let allPages = [];
   let sidebarTabs = [
-    { id: 'overview', label: 'Overview' },
+    { id: 'download', label: 'Download' },
     { id: 'configure', label: 'Configure' },
     { id: 'manage-data', label: 'Data' },
     { id: 'transcribe', label: 'Transcription' },
@@ -35,7 +35,7 @@
           allPages.push({
               id: metadata.id,
               label: metadata.label || metadata.title || metadata.id,
-              sidebarId: metadata.sidebarId || 'overview',
+              sidebarId: metadata.sidebarId || 'download',
               order: metadata.order || 999,
               description: metadata.description || '',
               component: mod.default // The Svelte component for the markdown content
@@ -47,7 +47,7 @@
   allPages.sort((a, b) => a.order - b.order);
 
   // --- Navigation Logic ---
-  let currentPageId = 'overview';
+  let currentPageId = 'download';
   let searchQuery = '';
   let showSearchResults = false;
 

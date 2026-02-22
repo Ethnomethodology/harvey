@@ -1,11 +1,11 @@
 <script>
     import { page } from '$app/stores';
     import { base } from '$app/paths';
-    import { Book, Cog, Database, Mic, Tag, Edit, Languages, MessageSquare } from 'lucide-svelte';
+    import { Download, Cog, Database, Mic, Tag, Edit, Languages, MessageSquare } from 'lucide-svelte';
 
     // Sidebar navigation structure (must match desktop app order)
     const sidebarTabs = [
-        { id: 'overview', label: 'Overview', icon: Book },
+        { id: 'download', label: 'Download', icon: Download },
         { id: 'configure', label: 'Configure', icon: Cog },
         { id: 'manage-data', label: 'Data', icon: Database },
         { id: 'transcribe', label: 'Transcription', icon: Mic },
@@ -18,7 +18,7 @@
     export let data;
 
     // Active tab logic
-    $: activeTabId = $page.data.meta?.sidebarId || 'overview';
+    $: activeTabId = $page.data.meta?.sidebarId || 'download';
 </script>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
