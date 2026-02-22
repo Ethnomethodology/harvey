@@ -16,7 +16,8 @@
     $getNearestNodeFromDOMNode as _getNearestNodeFromDOMNode,
     $insertNodes as _insertNodes,
     KEY_TAB_COMMAND,
-    $normalizeSelection__EXPERIMENTAL as _normalizeSelection
+    $normalizeSelection__EXPERIMENTAL as _normalizeSelection,
+    createCommand
   } from 'lexical';
 
   import {
@@ -62,7 +63,7 @@
   } from '@lexical/table';
 
   import {
-    LinkNode, $isLinkNode as _isLinkNode, TOGGLE_LINK_COMMAND, $createLinkNode as _createLinkNode
+    LinkNode, $isLinkNode as _isLinkNode, TOGGLE_LINK_COMMAND, $createLinkNode as _createLinkNode, toggleLink as _toggleLink
   } from '@lexical/link';
   import {
     $setBlocksType as _setBlocksType, $patchStyleText as _patchStyleText,
@@ -78,6 +79,8 @@
     $createExtendedTextNode as _createExtendedTextNode,
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
+
+  import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
 
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
@@ -130,7 +133,7 @@
   let internalCursorRowIndex = -1; // Track local cursor position
   let unregisterListeners = () => {};
   let historyState = createEmptyHistoryState();
-  let savedSelection = null;
+  let savedSelection = null; // Used for Link toggling
   let canUndo = false;
   let canRedo = false;
 
@@ -164,6 +167,8 @@
   let tableCellMenuPosition = { top: 0, left: 0 };
   let activeTableCellKey = null;
 
+  const INSERT_HORIZONTAL_RULE_COMMAND = createCommand('INSERT_HORIZONTAL_RULE_COMMAND');
+
   let searchUiContainerElement;
   let searchToggleButtonElement;
   let searchInputRef;
@@ -196,7 +201,8 @@
     HeadingNode, QuoteNode, CodeNode,
     ListNode, ListItemNode,
     LinkNode,
-    TableNode, TableRowNode, TableCellNode
+    TableNode, TableRowNode, TableCellNode,
+    HorizontalRuleNode
   ];
 
   function handleShortcut(event) {
@@ -271,6 +277,12 @@
       isInsertDropdownOpen = false;
   }
 
+  function insertHorizontalRule() {
+      if (!editor || !editable) return;
+      editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
+      isInsertDropdownOpen = false;
+  }
+
   function handleInsertTableConfirm(event) {
       if (!editor || !isReady || !editor.isEditable()) return;
       const { rows, columns } = event.detail;
@@ -335,10 +347,21 @@
         <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/>
       </svg>
     ` },
+    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, icon: `
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
+        <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z"/>
+      </svg>
+    ` },
+    { value: 'link', label: 'Link', action: toggleLink, icon: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
+        <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
+        <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
+      </svg>
+    ` },
   ];
 
   const blockTypeIcons = {
-    paragraph: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4h12v2H4V4zM4 8h8v2H4V8zM4 12h12v2H4v-2zM4 16h8v2H4v-2z"/></svg>`,
+    paragraph: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5h6"/><path d="M15 12h6"/><path d="M3 19h18"/><path d="m3 12 3.553-7.724a.5.5 0 0 1 .894 0L11 12"/><path d="M3.92 10h6.16"/></svg>`,
     h1:        `<span class="inline-block w-4 text-xs font-semibold">H1</span>`,
     h2:        `<span class="inline-block w-4 text-xs font-semibold">H2</span>`,
     h3:        `<span class="inline-block w-4 text-xs font-semibold">H3</span>`,
@@ -346,7 +369,7 @@
     ol:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h2v2H3V5zM8 5h8v2H8V5zM3 9h2v2H3V9zM8 9h8v2H8V9zM3 13h2v2H3V13zM8 13h8v2H8V13z"/></svg>`,
     check:     `<span class="inline-block w-4 text-xs">☑</span>`,
     quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
-    code:      `<span class="inline-block w-4 text-xs"></></span>`
+    code:      `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`
   };
 
   const fontOptions = [
@@ -358,12 +381,13 @@
     { label: 'Comic Neue', value: "'Comic Neue'" },
     { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
     { label: 'Console', value: 'Monaco, Consolas, "Lucida Console", monospace' },
-    { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+    { label: 'Courier Prime', value: "'Courier Prime'" },
     { label: 'Dancing Script', value: "'Dancing Script'" },
     { label: 'Indie Flower', value: "'Indie Flower'" },
     { label: 'JetBrains Mono', value: "'JetBrains Mono'" },
+    { label: 'Merriweather', value: "'Merriweather'" },
     { label: 'Montserrat', value: 'Montserrat' },
-    { label: 'Palatino', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
+    { label: 'Palatino Linotype', value: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
     { label: 'Playfair Display', value: "'Playfair Display'" },
     { label: 'Roboto', value: 'Roboto' },
     { label: 'Roboto Slab', value: "'Roboto Slab'" },
@@ -415,8 +439,30 @@
 
   function applyFontSize(fontSize) {
     if (!editor || !isReady || !editor.isEditable()) return;
-    applyStyle('font-size', fontSize + 'px');
+
+    editor.update(() => {
+        const selection = _getSelection();
+        if (_isTableSelection(selection)) {
+            _normalizeSelection(selection);
+        }
+        const normalizedSelection = _getSelection();
+        if (_isRangeSelection(normalizedSelection)) {
+            _patchStyleText(normalizedSelection, { 'font-size': fontSize + 'px' });
+        }
+    });
+
     isFontSizeDropdownOpen = false;
+  }
+
+  function updateFontSize(delta) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    const currentSize = parseInt(selectedFontSize, 10) || 15;
+    let newSize = currentSize + delta;
+
+    // Clamp between 10 and 96
+    newSize = Math.max(10, Math.min(96, newSize));
+
+    applyFontSize(String(newSize));
   }
 
   const colorOptions = [
@@ -504,9 +550,9 @@
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
-        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-2 italic my-1',
-        code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 text-sm block whitespace-pre-wrap',
-        link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
+        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
+        code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
+        link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
         table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
         tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
         tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700',
@@ -818,24 +864,10 @@
             (payload) => {
                 if (!editor) return false;
                 editor.update(() => {
-                  const selection = _getSelection();
-                  if (_isRangeSelection(selection)) {
-                    if (payload === null) {
-                      const linkNodes = new Set();
-                      selection.getNodes().forEach(node => {
-                        let linkParent = _findMatchingParent(node, _isLinkNode);
-                        if (linkParent) linkNodes.add(linkParent);
-                        if (_isLinkNode(node)) linkNodes.add(node);
-                      });
-                      linkNodes.forEach(linkNode => {
-                        const children = linkNode.getChildren();
-                        children.forEach(child => child.selectNext());
-                        linkNode.replace(...children);
-                      });
-                    } else {
-                        _wrapNodes(selection, () => _createLinkNode(payload));
+                    const selection = _getSelection();
+                    if (_isRangeSelection(selection) || _isTableSelection(selection)) {
+                        _toggleLink(payload);
                     }
-                  }
                 });
                 return true;
             },
@@ -850,7 +882,26 @@
             isFocused = false;
             updateToolbarState();
             return false;
-        }, COMMAND_PRIORITY_LOW)
+        }, COMMAND_PRIORITY_LOW),
+        editor.registerCommand(
+            INSERT_HORIZONTAL_RULE_COMMAND,
+            () => {
+                editor.update(() => {
+                    const selection = _getSelection();
+                    if (!_isRangeSelection(selection)) {
+                        return;
+                    }
+                    const focusNode = selection.focus.getNode();
+
+                    if (focusNode !== null) {
+                        const horizontalRuleNode = _createHorizontalRuleNode();
+                        _insertNodes([horizontalRuleNode]);
+                    }
+                });
+                return true;
+            },
+            COMMAND_PRIORITY_EDITOR
+        )
     );
 
     // Now set the initial state, which will trigger the listener we just registered
@@ -2581,20 +2632,36 @@ $: if (editor && activeLayout) {
           {/if}
         </div>
 
-        <div class="relative" bind:this={fontSizeDropdownRef}>
+        <div class="relative flex items-center gap-0.5" bind:this={fontSizeDropdownRef}>
           <button
-            class="mini-toolbar-button flex items-center gap-1 min-w-[48px] justify-between"
+            class="mini-toolbar-button !px-1"
+            on:click={() => updateFontSize(-1)}
+            on:mousedown|preventDefault
+            title="Decrease Font Size"
+            disabled={!editable}
+          >
+            -
+          </button>
+          <button
+            class="mini-toolbar-button flex items-center justify-center min-w-[32px] px-1"
             on:click={toggleFontSizeDropdown}
+            on:mousedown|preventDefault
             title="Font Size"
             disabled={!editable}
           >
             <span class="truncate">{selectedFontSize}</span>
-            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+          </button>
+          <button
+            class="mini-toolbar-button !px-1"
+            on:click={() => updateFontSize(1)}
+            on:mousedown|preventDefault
+            title="Increase Font Size"
+            disabled={!editable}
+          >
+            +
           </button>
           {#if isFontSizeDropdownOpen}
-            <div class="absolute mt-1 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute mt-1 top-full left-0 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontSizeOptions as size}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -2623,20 +2690,6 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.strikethrough}
         <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough" disabled={!editable}>S</button>
-      {/if}
-      {#if toolbarConfig.link}
-          <button
-            class="mini-toolbar-button"
-            on:click={toggleLink}
-            class:active={isLink}
-            title="Insert/Edit Link ({modLabel}+K)"
-            disabled={!editable}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
-                <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
-                <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
-            </svg>
-          </button>
       {/if}
       {#if toolbarConfig.insertMenu}
         <div class="separator"></div>
@@ -3116,8 +3169,33 @@ $: if (editor && activeLayout) {
       transform: scaleX(-1); /* Flips the icon horizontally */
   }
 
+  :global(.editor-code-block) {
+      font-family: Monaco, Consolas, "Lucida Console", monospace;
+      line-height: 1.6 !important;
+  }
+
   button.active {
     @apply bg-gray-300 dark:bg-gray-500;
+  }
+
+  /* Ensure link color applies to text - targeting anchor tags directly inside editor */
+  :global(.lexical-content a), :global(.link-text) {
+      color: #2563eb !important; /* blue-600 */
+      text-decoration: underline !important;
+  }
+  /* Force children (like Lexical's inner spans) to inherit the blue color */
+  :global(.lexical-content a *), :global(.link-text *) {
+      color: inherit !important;
+  }
+
+  :global(html.dark .lexical-content a), :global(html.dark .link-text) {
+      color: #60a5fa !important; /* blue-400 */
+  }
+  :global(.lexical-content a:hover), :global(.link-text:hover) {
+      color: #1e40af !important; /* blue-800 */
+  }
+  :global(html.dark .lexical-content a:hover), :global(html.dark .link-text:hover) {
+      color: #93c5fd !important; /* blue-300 */
   }
 
   /* Search match highlights using CSS Custom Highlight API */

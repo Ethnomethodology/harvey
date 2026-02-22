@@ -1,0 +1,344 @@
+
+> harvey@0.1.0 dev
+> vite dev
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+
+  VITE v5.4.20  ready in 3317 ms
+
+  ➜  Local:   http://localhost:1420/
+Deprecation [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+   ╷
+38 │ @import "../../../node_modules/tabulator-tables/src/scss/tabulator";
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╵
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9  root stylesheet
+
+DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+    ╷
+146 │                 background:darken($headerBackgroundColor, 10%);
+    │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 146:16  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [color-functions]: darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -10.4294478528%)
+color.adjust($color, $lightness: -10%)
+
+More info: https://sass-lang.com/d/color-functions
+
+    ╷
+146 │                 background:darken($headerBackgroundColor, 10%);
+    │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 146:16  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+    ╷
+283 │                         background-color:darken($headerBackgroundColor, 10%);
+    │                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 283:24  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [color-functions]: darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -10.4294478528%)
+color.adjust($color, $lightness: -10%)
+
+More info: https://sass-lang.com/d/color-functions
+
+    ╷
+283 │                         background-color:darken($headerBackgroundColor, 10%);
+    │                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 283:24  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+    ╷
+410 │             background:lighten($headerBackgroundColor, 5%) !important;
+    │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 410:15  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [color-functions]: lighten() is deprecated. Suggestions:
+
+color.scale($color, $lightness: 100%)
+color.adjust($color, $lightness: 5%)
+
+More info: https://sass-lang.com/d/color-functions
+
+    ╷
+410 │             background:lighten($headerBackgroundColor, 5%) !important;
+    │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 410:15  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+    ╷
+418 │                 background:lighten($headerBackgroundColor, 5%) !important;
+    │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 418:16  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [color-functions]: lighten() is deprecated. Suggestions:
+
+color.scale($color, $lightness: 100%)
+color.adjust($color, $lightness: 5%)
+
+More info: https://sass-lang.com/d/color-functions
+
+    ╷
+418 │                 background:lighten($headerBackgroundColor, 5%) !important;
+    │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 418:16  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+    ╷
+487 │                     background:darken($rowAltBackgroundColor, 5%) !important;
+    │                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 487:17  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [color-functions]: darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -5.1%)
+color.adjust($color, $lightness: -5%)
+
+More info: https://sass-lang.com/d/color-functions
+
+    ╷
+487 │                     background:darken($rowAltBackgroundColor, 5%) !important;
+    │                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/node_modules/tabulator-tables/src/scss/tabulator.scss 487:17  @import
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 38:9             root stylesheet
+
+DEPRECATION WARNING [slash-div]: Using / for division outside of calc() is deprecated and will be removed in Dart Sass 2.0.0.
+
+Recommendation: math.div($borderRadius, 2) or calc($borderRadius / 2)
+
+More info and automated migrator: https://sass-lang.com/d/slash-div
+
+   ╷
+70 │         border-radius: $borderRadius / 2;
+   │                        ^^^^^^^^^^^^^^^^^
+   ╵
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 70:24  root stylesheet
+
+DEPRECATION WARNING [slash-div]: Using / for division outside of calc() is deprecated and will be removed in Dart Sass 2.0.0.
+
+Recommendation: math.div($paddingSmall, 2) or calc($paddingSmall / 2)
+
+More info and automated migrator: https://sass-lang.com/d/slash-div
+
+   ╷
+73 │         margin-top: $paddingSmall / 2;
+   │                     ^^^^^^^^^^^^^^^^^
+   ╵
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 73:21  root stylesheet
+
+DEPRECATION WARNING [slash-div]: Using / for division outside of calc() is deprecated and will be removed in Dart Sass 2.0.0.
+
+Recommendation: math.div($borderRadius, 2) or calc($borderRadius / 2)
+
+More info and automated migrator: https://sass-lang.com/d/slash-div
+
+    ╷
+161 │       border-radius: $borderRadius / 2;
+    │                      ^^^^^^^^^^^^^^^^^
+    ╵
+    file:///app/src/lib/styles/tabulator-tailwind-theme.scss 161:22  root stylesheet
+
+WARNING: 4 repetitive deprecation warnings omitted.
+Run in verbose mode to see all warnings.
+
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2588:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2621:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2666:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2714:14 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2742:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2789:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2820:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:119:13 Component has unused export property 'enableSearch'. If it is for external reference only, please consider using `export const enableSearch`
+https://svelte.dev/e/export_let_unused
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:124:13 Component has unused export property 'initialHighlights'. If it is for external reference only, please consider using `export const initialHighlights`
+https://svelte.dev/e/export_let_unused
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:125:13 Component has unused export property 'documentHighlights'. If it is for external reference only, please consider using `export const documentHighlights`
+https://svelte.dev/e/export_let_unused
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3104:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3116:43 Unused CSS selector ".toolbar select.mini-toolbar-select:focus"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3126:46 Unused CSS selector ".toolbar select.mini-toolbar-select:disabled"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3130:55 Unused CSS selector ".toolbar select.mini-toolbar-select:focus:is(.dark *)"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3133:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3143:2 Unused CSS selector ".toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3148:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3149:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3155:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3156:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+10:42:24 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3161:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button.active"
+https://svelte.dev/e/css_unused_selector
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/modals/InsertTableModal.svelte:44:4 Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/modals/InsertTableModal.svelte:44:4 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/modals/InsertTableModal.svelte:45:6 `<div>` with a click or keydown handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/FloatingModifyHighlightToolbar.svelte:45:2 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/FloatingModifyHighlightToolbar.svelte:3:13 Component has unused export property 'editor'. If it is for external reference only, please consider using `export const editor`
+https://svelte.dev/e/export_let_unused
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/TableCellActionMenu.svelte:312:14 `<div>` with a mouseleave handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/TableCellActionMenu.svelte:341:30 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/TableCellActionMenu.svelte:359:30 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/TableCellActionMenu.svelte:377:30 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+10:42:25 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/TableCellActionMenu.svelte:24:15 Component has unused export property 'anchorElement'. If it is for external reference only, please consider using `export const anchorElement`
+https://svelte.dev/e/export_let_unused
+10:45:48 PM [vite] hmr update /src/routes/test_editor/+page.svelte, /src/app.css
+10:45:48 PM [vite] page reload .svelte-kit/generated/client/nodes/8.js
+10:45:48 PM [vite] page reload .svelte-kit/generated/client/app.js
+11:03:33 PM [vite] hmr update /src/lib/components/projectview/modals/LinkModal.svelte, /src/app.css
+11:03:42 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte, /src/app.css, /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2588:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2621:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2666:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2714:14 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2742:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2789:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2820:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:119:13 Component has unused export property 'enableSearch'. If it is for external reference only, please consider using `export const enableSearch`
+https://svelte.dev/e/export_let_unused
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:124:13 Component has unused export property 'initialHighlights'. If it is for external reference only, please consider using `export const initialHighlights`
+https://svelte.dev/e/export_let_unused
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:125:13 Component has unused export property 'documentHighlights'. If it is for external reference only, please consider using `export const documentHighlights`
+https://svelte.dev/e/export_let_unused
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3104:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3116:43 Unused CSS selector ".toolbar select.mini-toolbar-select:focus"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3126:46 Unused CSS selector ".toolbar select.mini-toolbar-select:disabled"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3130:55 Unused CSS selector ".toolbar select.mini-toolbar-select:focus:is(.dark *)"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3133:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3143:2 Unused CSS selector ".toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3148:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3149:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3155:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3156:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3161:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button.active"
+https://svelte.dev/e/css_unused_selector
+11:24:21 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2588:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2621:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2666:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2714:14 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2742:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2789:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:2820:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:119:13 Component has unused export property 'enableSearch'. If it is for external reference only, please consider using `export const enableSearch`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:124:13 Component has unused export property 'initialHighlights'. If it is for external reference only, please consider using `export const initialHighlights`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:125:13 Component has unused export property 'documentHighlights'. If it is for external reference only, please consider using `export const documentHighlights`
+https://svelte.dev/e/export_let_unused
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3104:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3116:43 Unused CSS selector ".toolbar select.mini-toolbar-select:focus"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3126:46 Unused CSS selector ".toolbar select.mini-toolbar-select:disabled"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3130:55 Unused CSS selector ".toolbar select.mini-toolbar-select:focus:is(.dark *)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3133:39 Unused CSS selector ".toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3143:2 Unused CSS selector ".toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3148:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3149:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3155:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3156:2 Unused CSS selector "html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled)"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite-plugin-svelte] src/lib/components/projectview/lexical/LexicalEditor.svelte:3161:2 Unused CSS selector "html.dark .toolbar button.mini-toolbar-button.active"
+https://svelte.dev/e/css_unused_selector
+11:59:28 PM [vite] hmr update /src/lib/components/projectview/lexical/LexicalEditor.svelte?svelte&type=style&lang.css
