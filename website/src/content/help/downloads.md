@@ -10,11 +10,18 @@ Visit the [Latest Releases](https://github.com/Ethnomethodology/harvey/releases/
 ## Windows
 Download the file ending in `x64-setup.zip`. Extract the content and run the setup executable to install Harvey on your system.
 
-## macOS
-- **Apple Silicon**: Download the file ending in `aarch64.dmg`.
-- **Intel Mac**: Download the file ending in `x64.dmg`.
+> **Note on Security Warnings:** As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority. If Windows SmartScreen displays a warning, you can safely proceed by clicking **"More info"** and then **"Run anyway"**.
 
-After downloading, open the `.dmg` file and drag Harvey to your Applications folder. Note that you may need to clear the extended attributes if macOS prevents it from running.
+## macOS
+1.  **Download**: Visit the [GitHub Releases](https://github.com/Ethnomethodology/harvey/releases/latest) page.
+    - For **Apple Silicon (M1/M2/M3)**: Download the file with `aarch64` in the name.
+    - For **Intel Macs**: Download the file with `x64` in the name.
+2.  **Install**: Open the downloaded `.dmg` file and drag `harvey.app` to your `/Applications` folder.
+3.  **Security Bypass**: Because the app is not currently signed, macOS will prevent it from running. To authorize it, open the **Terminal** application and run the following commands:
+    ```bash
+    cd /Applications
+    sudo xattr -dr com.apple.quarantine harvey.app
+    ```
 
 ## Build from Source
 If you are using Linux or prefer to build the application yourself, you can clone the source code from the [main GitHub repository](https://github.com/Ethnomethodology/harvey).
