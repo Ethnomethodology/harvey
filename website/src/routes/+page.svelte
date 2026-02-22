@@ -137,11 +137,11 @@
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for macOS</h3>
                     <p class="text-slate-600 mb-8 max-w-md"> Optimized for Apple Silicon (M1/M2/M3) and Intel Macs.</p>
                     <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
+                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_aarch64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
                             Apple Silicon
                         </a>
-                        <a href="https://github.com/Ethnomethodology/harvey/releases/latest" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
+                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
                             <Download class="w-5 h-5" />
                             Intel Mac
                         </a>
