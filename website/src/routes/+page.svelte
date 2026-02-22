@@ -156,7 +156,10 @@
                         <Github class="w-8 h-8" />
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
-                    <p class="text-slate-600 mb-8 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
+                    <p class="text-slate-600 mb-8 max-w-md text-sm">
+                        Ensure you have <a href="https://www.rust-lang.org/tools/install" target="_blank" class="text-green-600 hover:underline">Rust</a> and 
+                        <a href="https://v2.tauri.app/develop/guides/prerequisites/" target="_blank" class="text-green-600 hover:underline">Tauri prerequisites</a> installed before building.
+                    </p>
 
                     <div class="w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto">
                         <div class="flex select-none mb-2 text-slate-500">
