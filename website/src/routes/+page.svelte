@@ -31,8 +31,7 @@
         Qualitative Research, <span class="text-emerald-500">Reimagined.</span>
     </h1>
     <p class="text-lg lg:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-        Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. 
-        It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment.
+        An integrated desktop workspace for transcription, translation, and qualitative analysis.
         Built by researchers, for researchers.
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
