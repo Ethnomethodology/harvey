@@ -86,7 +86,7 @@
                 <span class="text-sm font-semibold text-slate-900">Project Harvey</span>
             </div>
             <p class="text-sm text-slate-500">
-                &copy; {new Date().getFullYear()} Project Harvey. Open Source (MIT).
+                &copy; {new Date().getFullYear()} Project Harvey. <a href="https://github.com/Ethnomethodology/harvey/blob/main/LICENSE.md" target="_blank" rel="noreferrer" class="hover:text-slate-900">Open Source (MIT)</a>.
             </p>
              <div class="flex gap-4 text-sm text-slate-500">
                 <a href="{base}/about" class="hover:text-slate-900">About</a>
