@@ -123,6 +123,18 @@
             console.warn(`[HelpModal] Target page not found for slug: ${slug}`);
         }
       }
+      // Handle relative paths (e.g., [Configure](configure)) for compatibility
+      else if (href && !href.startsWith('http') && !href.startsWith('/')) {
+         event.preventDefault();
+         // Basic relative link handling: assume it's just the slug
+         const slug = href;
+         const targetPage = allPages.find(p => p.id === slug);
+         if (targetPage) {
+             navigateTo(slug);
+         } else {
+             console.warn(`[HelpModal] Target page not found for relative slug: ${slug}`);
+         }
+      }
     }
   }
 
