@@ -26,9 +26,9 @@
 
     <h2>Get Started</h2>
     <p>
-        To get started, please check out our <a href="https://github.com/Ethnomethodology/harvey/blob/main/Docs/DEVELOPERS_GUIDE.md">Developer's Contribution Guide</a>.
+        To get started, please check out our <a href="https://github.com/Ethnomethodology/harvey/blob/main/Docs/DEVELOPERS_GUIDE.md" target="_blank" rel="noreferrer">Developer's Contribution Guide</a>.
     </p>
     <p>
-        You can also fork the repository on <a href="https://github.com/Ethnomethodology/harvey">GitHub</a>!
+        You can also fork the repository on <a href="https://github.com/Ethnomethodology/harvey" target="_blank" rel="noreferrer">GitHub</a>!
     </p>
 </div>
