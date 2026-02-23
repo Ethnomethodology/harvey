@@ -23,9 +23,9 @@
             <div class="py-4 border-b border-slate-900/10 lg:px-8 lg:border-0 mx-4 lg:mx-0">
                 <div class="relative flex items-center justify-between">
                     <!-- Logo -->
-                    <a class="mr-3 flex-none w-[2.0625rem] overflow-hidden md:w-auto text-slate-900 hover:text-green-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-3" href="{base}/">
+                    <a class="mr-3 flex-none text-slate-900 hover:text-green-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-3" href="{base}/">
                         <img src="{base}/logo.png" alt="Harvey Logo" class="h-8 w-8 rounded-lg border border-green-500" />
-                        <span class="hidden md:inline">Harvey</span>
+                        <span>Harvey</span>
                     </a>
 
                     <!-- Desktop Nav -->
