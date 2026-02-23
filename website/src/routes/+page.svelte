@@ -1,11 +1,25 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowRight, WifiOff, Code, Lock, Download, Github } from 'lucide-svelte';
-    import { onMount } from 'svelte';
+    import { ArrowRight, WifiOff, Code, Lock, Download, Github, ChevronLeft, ChevronRight } from 'lucide-svelte';
+    import { onMount, onDestroy } from 'svelte';
 
     let activeTab = 'windows';
     let isMac = false;
 
+    // Carousel logic
+    let currentSlide = 0;
+    const slides = [
+        { title: 'Transcription', description: 'Convert audio and video to text using local AI models.', color: 'bg-blue-500' },
+        { title: 'Translation', description: 'Translate your transcripts into English instantly.', color: 'bg-purple-500' },
+        { title: 'Model Management', description: 'Download and manage various Whisper and translation models.', color: 'bg-green-500' },
+        { title: 'Rich Text Editor', description: 'Edit transcripts and documents with professional tools.', color: 'bg-amber-500' },
+        { title: 'Image Annotation', description: 'Mark up images and PDFs directly within the app.', color: 'bg-rose-500' },
+        { title: 'Table Management', description: 'View and edit CSV and XLSX files seamlessly.', color: 'bg-emerald-500' },
+        { title: 'Media Sync', description: 'Transcripts stay in sync with media playback automatically.', color: 'bg-indigo-500' },
+        { title: 'Flexible Export', description: 'Export your work to DOCX, CSV, and other formats.', color: 'bg-slate-700' }
+    ];
+
+    let interval;
     onMount(() => {
         if (typeof navigator !== 'undefined') {
             const platform = navigator.platform.toLowerCase();
@@ -18,7 +32,29 @@
                 activeTab = 'windows';
             }
         }
+
+        interval = setInterval(() => {
+            nextSlide();
+        }, 5000);
     });
+
+    onDestroy(() => {
+        clearInterval(interval);
+    });
+
+    function nextSlide() {
+        currentSlide = (currentSlide + 1) % slides.length;
+    }
+
+    function prevSlide() {
+        currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+    }
+
+    function goToSlide(index) {
+        currentSlide = index;
+        clearInterval(interval);
+        interval = setInterval(nextSlide, 5000);
+    }
 
     function setActiveTab(tab) {
         activeTab = tab;
@@ -79,6 +115,71 @@
             <p class="text-slate-600 leading-relaxed">
                 Harvey is free and open source. We warmly welcome contributions from researchers and developers to shape the future of qualitative tools.
             </p>
+        </div>
+    </div>
+</section>
+
+<!-- App Showcase Carousel -->
+<section class="py-24 border-t border-slate-100 overflow-hidden">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 mb-4">Powerful Tools for Qualitative Insight</h2>
+            <p class="text-slate-600">Explore the features that make Harvey the perfect companion for your research.</p>
+        </div>
+
+        <div class="relative group">
+            <!-- Carousel Container -->
+            <div class="relative aspect-[16/10] w-full overflow-hidden rounded-3xl bg-slate-900 shadow-2xl border-8 border-slate-800">
+                {#each slides as slide, i}
+                    <div 
+                        class="absolute inset-0 transition-all duration-700 ease-in-out flex flex-col items-center justify-center p-12 text-center"
+                        style="opacity: {currentSlide === i ? 1 : 0}; transform: translateX({(i - currentSlide) * 20}px); visibility: {currentSlide === i ? 'visible' : 'hidden'}"
+                    >
+                        <!-- Image Placeholder / Real Image -->
+                        {#if i === 0}
+                            <img src="{base}/1_welcome-screen.png" alt="Welcome Screen" class="absolute inset-0 w-full h-full object-cover opacity-40" />
+                        {/if}
+                        
+                        <div class="relative z-10 space-y-4 max-w-md">
+                            <div class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest text-white/80 bg-white/10 backdrop-blur-md mb-2">
+                                Feature Showcase
+                            </div>
+                            <h3 class="text-3xl md:text-4xl font-bold text-white tracking-tight">{slide.title}</h3>
+                            <p class="text-lg text-slate-300 leading-relaxed">{slide.description}</p>
+                        </div>
+
+                        <!-- Gradient Overlay -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent"></div>
+                    </div>
+                {/each}
+            </div>
+
+            <!-- Controls -->
+            <button 
+                on:click={prevSlide}
+                class="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20"
+                aria-label="Previous slide"
+            >
+                <ChevronLeft class="w-6 h-6" />
+            </button>
+            <button 
+                on:click={nextSlide}
+                class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20"
+                aria-label="Next slide"
+            >
+                <ChevronRight class="w-6 h-6" />
+            </button>
+
+            <!-- Indicators -->
+            <div class="flex justify-center gap-2 mt-8">
+                {#each slides as _, i}
+                    <button 
+                        on:click={() => goToSlide(i)}
+                        class="h-1.5 transition-all rounded-full {currentSlide === i ? 'w-8 bg-green-500' : 'w-2 bg-slate-300 hover:bg-slate-400'}"
+                        aria-label="Go to slide {i + 1}"
+                    ></button>
+                {/each}
+            </div>
         </div>
     </div>
 </section>
