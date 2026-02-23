@@ -225,13 +225,13 @@
       <!-- Main Body -->
       <div class="flex flex-grow overflow-hidden">
         <!-- Sidebar -->
-        <div class="w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col flex-shrink-0 overflow-y-auto font-sans">
+        <div class="w-32 md:w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col flex-shrink-0 overflow-y-auto font-sans">
           <nav class="flex flex-col space-y-1">
             {#each sidebarTabs as tab}
               <button
-                class="px-4 py-2 rounded-md text-left transition-all duration-200 {currentPage.sidebarId === tab.id 
+                class="px-2 md:px-4 py-2 rounded-md text-left transition-all duration-200 {currentPage.sidebarId === tab.id
                   ? 'bg-blue-600 text-white font-medium shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'} text-sm"
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'} text-xs md:text-sm truncate"
                 on:click={() => navigateTo(tab.id)}
               >
                 {tab.label}
