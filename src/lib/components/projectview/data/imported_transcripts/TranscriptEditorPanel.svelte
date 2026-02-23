@@ -96,6 +96,7 @@
     let changeDebounceTimeout;
 
     // --- Store Subscription (Updated to only sync if primary and matching path) ---
+    $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
     $: if (isPrimary && $project.currentImportedTranscriptPath === itemPath) {
         if (editorRef && currentLexicalJson !== editorJsonState) {
             console.log("[TranscriptEditorPanel Store Sync] Updating editorRef state from store.");
