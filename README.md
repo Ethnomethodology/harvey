@@ -98,6 +98,7 @@ The Help Center content is maintained in a **Single Source of Truth** architectu
 *   **Source**: All help articles are authored as Markdown files in `website/src/content/help`.
 *   **Synchronization**: A custom script, `scripts/sync-help.js`, automatically copies these files from the website directory to the desktop app's directory (`src/content/help`).
 *   **Automation**: This synchronization script runs automatically before every `dev` and `build` command (via `predev` and `prebuild` scripts in `package.json`), ensuring the desktop app always contains the latest documentation.
+*   **Internal Linking**: To ensure compatibility between the website (SvelteKit) and the desktop app (Custom Modal), use **relative links** for internal navigation (e.g., `[Link](slug)` or `[Link](page-id)`). Do not use absolute paths (e.g., `/help/slug`).
 
 ## Documentation
 
