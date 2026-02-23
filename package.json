@@ -10,7 +10,10 @@
     "check": "svelte-kit sync && svelte-check",
     "check:watch": "svelte-kit sync && svelty-check --watch",
     "test:unit": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "sync:help": "node scripts/sync-help.js",
+    "prebuild": "npm run sync:help",
+    "predev": "npm run sync:help"
   },
   "license": "MIT",
   "dependencies": {
@@ -58,7 +61,7 @@
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.23.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6",
-    "@tailwindcss/typography": "^0.5.16",
+    "@tailwindcss/typography": "^0.5.19",
     "@tauri-apps/cli": "2.9.1",
     "@wdio/cli": "^9.19.0",
     "@wdio/local-runner": "^9.19.0",
@@ -66,6 +69,7 @@
     "@wdio/spec-reporter": "^9.19.0",
     "autoprefixer": "^10.4.21",
     "electron": "^38.0.0",
+    "mdsvex": "^0.12.6",
     "postcss": "^8.5.3",
     "postcss-load-config": "^5.1.0",
     "sass-embedded": "^1.89.2",

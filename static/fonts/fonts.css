@@ -161,3 +161,69 @@
   font-display: swap;
   src: url('/fonts/roboto-slab-regular.ttf') format('truetype');
 }
+
+/* Courier Prime */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700italic.ttf') format('truetype');
+}
+
+/* Merriweather */
+@font-face {
+  font-family: 'Merriweather';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/merriweather-regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/merriweather-italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/merriweather-700.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/merriweather-700italic.ttf') format('truetype');
+}

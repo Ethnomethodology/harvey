@@ -89,7 +89,7 @@
 			// but we can add it if backend supports it. For now, just status.
 			newData[id] = { status };
 		}
-		newData;
+		modelDisplayData = newData;
 	}
 
 	// Combined list logic
@@ -437,7 +437,7 @@
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
-			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Model Family</span>
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Model Family</span>
 			<div class="flex space-x-2">
 				<button 
 					class="px-3 py-1 text-xs rounded-full border transition-all"

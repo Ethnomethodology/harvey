@@ -1,7 +1,8 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { invoke } from '@tauri-apps/api/core';
+	import { invoke } from "@tauri-apps/api/core";
+	import { ask } from "@tauri-apps/plugin-dialog";
 	import { listen } from '@tauri-apps/api/event';
 	import { configStatus, updateConfigStatus, setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
@@ -17,6 +18,8 @@
 	let isDeleting = false;
 
 	async function handleDelete() {
+		const confirmed = await ask("Are you sure you want to delete the local library environment? This will require a full re-installation to use AI features again.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
+		if (!confirmed) return;
 		isDeleting = true;
 		error = '';
 		try {

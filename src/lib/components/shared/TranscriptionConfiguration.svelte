@@ -57,11 +57,20 @@
 	];
 
     const availableFasterWhisperModels = [
-        { name: 'Systran/faster-whisper-large-v3', language: 'Multilingual', size: '3.1 GiB', description: 'Large v3 model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-large-v3' },
-        { name: 'Systran/faster-whisper-medium', language: 'Multilingual', size: '1.5 GiB', description: 'Medium model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-medium' },
-        { name: 'Systran/faster-whisper-small', language: 'Multilingual', size: '484 MiB', description: 'Small model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-small' },
-        { name: 'Systran/faster-whisper-base', language: 'Multilingual', size: '145 MiB', description: 'Base model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-base' },
-        { name: 'Systran/faster-whisper-tiny', language: 'Multilingual', size: '75 MiB', description: 'Tiny model converted for faster-whisper.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-tiny' },
+        { name: 'Systran/faster-whisper-large-v3', language: 'Multilingual', size: '3.1 GiB', description: 'Most accurate multilingual model, optimized for quality.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-large-v3' },
+        { name: 'Systran/faster-whisper-large-v2', language: 'Multilingual', size: '3.1 GiB', description: 'Previous large model generation, stable and high quality.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-large-v2' },
+        { name: 'Systran/faster-whisper-medium', language: 'Multilingual', size: '1.5 GiB', description: 'Balanced multilingual model with good accuracy.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-medium' },
+        { name: 'Systran/faster-whisper-medium.en', language: 'English-only', size: '1.5 GiB', description: 'English-only version, slightly more accurate for English.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-medium.en' },
+        { name: 'Systran/faster-whisper-small', language: 'Multilingual', size: '484 MiB', description: 'Smaller multilingual model, faster but less accurate.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-small' },
+        { name: 'Systran/faster-whisper-small.en', language: 'English-only', size: '484 MiB', description: 'English-only small model, efficient for English audio.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-small.en' },
+        { name: 'Systran/faster-whisper-base', language: 'Multilingual', size: '145 MiB', description: 'Very fast multilingual model for basic transcription.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-base' },
+        { name: 'Systran/faster-whisper-base.en', language: 'English-only', size: '145 MiB', description: 'Very fast English-only model.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-base.en' },
+        { name: 'Systran/faster-whisper-tiny', language: 'Multilingual', size: '75 MiB', description: 'Smallest and fastest multilingual model.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-tiny' },
+        { name: 'Systran/faster-whisper-tiny.en', language: 'English-only', size: '75 MiB', description: 'Smallest and fastest English-only model.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-tiny.en' },
+        { name: 'Systran/faster-whisper-distil-large-v3', language: 'Multilingual', size: '1.6 GiB', description: 'Distilled Large V3, significantly faster with minimal accuracy loss.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-distil-large-v3' },
+        { name: 'Systran/faster-whisper-distil-large-v2', language: 'Multilingual', size: '1.6 GiB', description: 'Distilled Large V2, significantly faster version of V2.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-distil-large-v2' },
+        { name: 'Systran/faster-whisper-distil-medium.en', language: 'English-only', size: '800 MiB', description: 'Distilled Medium English model, extremely fast and accurate.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-distil-medium.en' },
+        { name: 'Systran/faster-whisper-distil-small.en', language: 'English-only', size: '250 MiB', description: 'Distilled Small English model, blazing fast for English.', family: 'faster-whisper', info_url: 'https://huggingface.co/Systran/faster-whisper-distil-small.en' },
     ];
 
 	// --- Marketplace / Search View State ---
@@ -561,7 +570,7 @@
     <!-- Family Toggle -->
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
-			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Model Engine</span>
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Model Engine</span>
 			<div class="flex space-x-2">
 				<button
 					class="px-3 py-1 text-xs rounded-full border transition-all"

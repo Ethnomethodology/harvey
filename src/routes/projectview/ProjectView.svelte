@@ -29,7 +29,7 @@
             createManualTranscript,
             createNewDocument
 	} from '$lib/services/projectService.js';
-	import { getDownloadedModels } from '$lib/services/configureActions.js';
+	import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions.js';
 	import {
 		languageOptions
 	} from '$lib/constants/transcriptionOptions.js';
@@ -109,7 +109,16 @@ async function loadTranscriptionConfigData() {
 		isLoadingTranscriptionConfig = true;
 		try {
 			const localModelsResult = await getDownloadedModels();
-			downloadedModelsList = localModelsResult;
+            const selectedEngine = await getSelectedTranscriptionEngine();
+            const family = selectedEngine || 'whisper-cpp';
+
+            downloadedModelsList = localModelsResult.filter(m => {
+                if (family === 'faster-whisper') {
+                    return m.family === 'faster-whisper';
+                } else {
+                    return m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
+                }
+            });
 		} catch (e) {
 			console.error("[ProjectView] Error during transcription configuration loading for modal:", e);
 			downloadedModelsList = [];
@@ -1029,6 +1038,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
+                on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
+
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'transcriptions'}

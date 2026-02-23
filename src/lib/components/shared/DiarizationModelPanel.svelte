@@ -1,7 +1,8 @@
 <!-- src/lib/components/shared/DiarizationModelPanel.svelte -->
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { invoke } from "@tauri-apps/api/core";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
   import { configStatus, setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
@@ -20,6 +21,8 @@
   let isDeleting = false;
 
   async function handleDeleteModel() {
+    const confirmed = await ask("Are you sure you want to delete the diarization model? This will remove it from your disk.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
+    if (!confirmed) return;
     isDeleting = true;
     error = '';
     try {
