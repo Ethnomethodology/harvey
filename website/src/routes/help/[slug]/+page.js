@@ -1,8 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
+import { base } from '$app/paths';
 
 export async function load({ params, parent }) {
     if (params.slug === 'overview') {
-        throw redirect(301, '/help');
+        throw redirect(301, `${base}/help`);
     }
 
     const { articles } = await parent();

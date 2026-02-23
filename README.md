@@ -11,6 +11,8 @@ Harvey is a desktop application for qualitative researchers and anyone working w
 
 Harvey is named in honor of Sociologist [**Harvey Sacks**](https://en.wikipedia.org/wiki/Harvey_Sacks) (1935-1975), whose foundational work revolutionized social research methods.
 
+Visit the [Harvey Website](https://ethnomethodology.github.io/harvey/).
+
 ### Privacy First
 
 Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run **100% locally** on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.
@@ -88,6 +90,14 @@ Project Harvey is built using Tauri, with a Rust backend and a SvelteKit fronten
     *   **Application Configuration (`config.xml`)**: Stores global settings like API keys and theme preferences.
     *   **Annotations (`harvey_annotations.sqlite`)**: An SQLite database for storing annotations for PDFs and images.
     *   **Project Assets**: Media files, documents, and other assets are stored within the project's dedicated folder.
+
+## Help Center Architecture
+
+The Help Center content is maintained in a **Single Source of Truth** architecture to ensure consistency between the website and the desktop application.
+
+*   **Source**: All help articles are authored as Markdown files in `website/src/content/help`.
+*   **Synchronization**: A custom script, `scripts/sync-help.js`, automatically copies these files from the website directory to the desktop app's directory (`src/content/help`).
+*   **Automation**: This synchronization script runs automatically before every `dev` and `build` command (via `predev` and `prebuild` scripts in `package.json`), ensuring the desktop app always contains the latest documentation.
 
 ## Documentation
 
