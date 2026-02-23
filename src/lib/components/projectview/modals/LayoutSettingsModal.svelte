@@ -77,7 +77,7 @@
 		on:keydown={handleKeydown}
 	>
 		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col text-gray-800 dark:text-gray-200 max-h-[85vh] overflow-y-auto"
 			on:click|stopPropagation
 			role="document"
 		>
