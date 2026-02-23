@@ -790,6 +790,7 @@
     bind:showModal={showTranslateDocumentModal}
     activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
+    on:openConfig={() => dispatch("openConfig")}
     on:closeAndReset={() => showTranslateDocumentModal = false}
 />
 
