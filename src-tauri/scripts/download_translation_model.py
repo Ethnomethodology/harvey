@@ -29,12 +29,15 @@ def download_model(model_name, cache_dir, token):
         # Download the full repository snapshot
         # local_dir_use_symlinks=False ensures the files are actually moved into the dir
         # rather than just being symlinked from the HF cache.
+        # We use local_dir to download directly to the target folder structure
+        # This avoids symlinks which can be problematic on some Windows setups without Developer Mode
+        # Explicitly disable symlinks to avoid WinError 1314
         snapshot_download(
             repo_id=model_name,
-            cache_dir=cache_dir,
+            local_dir=cache_dir, # Use local_dir instead of cache_dir to force extraction
             local_dir_use_symlinks=False,
             resume_download=True,
-            token=token if is_gated else None # Pass token only if gated
+            token=False # Explicitly disable token for public models
         )
 
         print("Download complete.", flush=True)
