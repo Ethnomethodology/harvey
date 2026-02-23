@@ -650,7 +650,7 @@
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel layout-{$activeLayout}">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">Loading transcript...</div>
     {:else if errorMessage}
@@ -739,25 +739,77 @@
     }
 
 
-    .imported-transcript-editor-panel :global(.lexical-content table) {
+    /* Layout 1: Detailed Table */
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table) {
         table-layout: fixed;
         width: 100%;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(1)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(1)) {
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table th:nth-child(1)),
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table td:nth-child(1)) {
         width: 10%;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(2)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(2)) {
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table th:nth-child(2)),
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table td:nth-child(2)) {
         width: 15%;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(3)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(3)) {
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table th:nth-child(3)),
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table td:nth-child(3)) {
         width: 15%;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(4)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(4)) {
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table th:nth-child(4)),
+    .imported-transcript-editor-panel.layout-Layout1 :global(.lexical-content table td:nth-child(4)) {
         width: 60%;
+    }
+
+    /* Layout 2: Segment Block (Simulated via CSS) */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content table),
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content tbody) {
+        display: block;
+        width: 100%;
+        border: none !important;
+    }
+    /* Hide header row */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content tr):first-child {
+        display: none;
+    }
+    /* Style rows as cards */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content tr) {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
+        border: 1px solid #e5e7eb; /* gray-200 */
+        border-radius: 0.5rem;
+        background-color: transparent;
+    }
+    :global(html.dark) .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content tr) {
+        border-color: #374151; /* gray-700 */
+    }
+    /* Hide Index Column (1) */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(1)) {
+        display: none;
+    }
+    /* Time (2) and Speaker (3) as a metadata row */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(2)),
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(3)) {
+        display: inline-block;
+        width: auto !important;
+        padding: 0 0.5rem 0.25rem 0;
+        font-size: 0.85em;
+        color: #6b7280; /* gray-500 */
+        border: none !important;
+    }
+    :global(html.dark) .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(2)),
+    :global(html.dark) .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(3)) {
+        color: #9ca3af; /* gray-400 */
+    }
+    /* Text (4) as main content */
+    .imported-transcript-editor-panel.layout-Layout2 :global(.lexical-content td:nth-child(4)) {
+        display: block;
+        width: 100% !important;
+        padding-top: 0.25rem;
+        border: none !important;
     }
 
     .flex-grow.min-h-0 { min-height: 0; }
