@@ -110,6 +110,8 @@ pub struct AdvancedTranslationConfig {
     pub diarization_device: Option<String>, // "auto", "cpu", "cuda", "mps"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diarization_threads: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantization_preference: Option<String>, // "int8" or "float16"
 }
 
 #[derive(Debug, Serialize)]

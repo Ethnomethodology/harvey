@@ -519,9 +519,23 @@ pub async fn download_translation_model_command(
     let model_path = target_dir.join(&folder_name);
     let output_path = model_path.join("ct2_optimized");
 
+    // Fetch quantization preference
+    let config = read_config()?;
+    let quantization = config.advanced_translation.and_then(|c| c.quantization_preference);
+
+    let mut args = vec![optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()];
+
+    // We need to keep the string alive if we are pushing a reference to it into args
+    let quant_str;
+    if let Some(q) = quantization {
+        log::info!("Using quantization preference: {}", q);
+        quant_str = q; // Move string to outer scope
+        args.push(&quant_str);
+    }
+
     let output = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
+        .args(&args)
         .output()
         .await?;
 

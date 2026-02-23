@@ -12,7 +12,8 @@
         helsinki_batch_size: 8,
         nllb_batch_size: 1,
         num_threads: 4,
-        device_preference: 'auto'
+        device_preference: 'auto',
+        quantization_preference: 'int8' // Default to int8 as per user request for performance option
     };
 
     let platformInfo = null; // Initialize as null to indicate loading
@@ -30,7 +31,16 @@
         { value: 'mps', label: 'Apple Silicon (MPS/Metal)' }
     ];
 
+    const quantizationOptions = [
+        { value: 'int8', label: 'Int8 (Fastest - Recommended)' },
+        { value: 'float16', label: 'Float16 (Higher Precision)' }
+    ];
+
+    let originalQuantization = 'int8'; // To track changes
+
     $: recommendation = getHardwareRecommendation(platformInfo);
+    $: helsinkiAuto = config.helsinki_batch_size === 0;
+    $: nllbAuto = config.nllb_batch_size === 0;
 
     onMount(async () => {
         try {
@@ -42,6 +52,10 @@
                 if (savedConfig.device_preference !== undefined) config.device_preference = savedConfig.device_preference;
                 if (savedConfig.diarization_device !== undefined) config.diarization_device = savedConfig.diarization_device;
                 if (savedConfig.diarization_threads !== undefined) config.diarization_threads = savedConfig.diarization_threads;
+                if (savedConfig.quantization_preference !== undefined && savedConfig.quantization_preference !== null) {
+                     config.quantization_preference = savedConfig.quantization_preference;
+                     originalQuantization = savedConfig.quantization_preference;
+                }
             }
             platformInfo = await invoke('get_platform_info');
             console.log('[AdvancedConfig] Platform Info:', platformInfo);
@@ -64,9 +78,14 @@
                 num_threads: parseInt(config.num_threads),
                 device_preference: config.device_preference,
                 diarization_device: config.diarization_device,
-                diarization_threads: parseInt(config.diarization_threads)
+                diarization_threads: parseInt(config.diarization_threads),
+                quantization_preference: config.quantization_preference
             };
             await invoke('set_advanced_translation_config', { newConfig: payload });
+
+            // Update original to prevent persistent warning
+            originalQuantization = config.quantization_preference;
+
             statusMessage = 'Settings saved successfully.';
             statusType = 'success';
             setTimeout(() => statusMessage = '', 3000);
@@ -91,8 +110,25 @@
         config.nllb_batch_size = 1;
         config.num_threads = 4;
         config.device_preference = 'auto';
+        config.quantization_preference = 'int8';
         statusMessage = 'Translation settings reset (Click Save to apply).';
         statusType = 'info';
+    }
+
+    function toggleHelsinkiAuto(e) {
+        if (e.target.checked) {
+            config.helsinki_batch_size = 0;
+        } else {
+            config.helsinki_batch_size = 8;
+        }
+    }
+
+    function toggleNllbAuto(e) {
+        if (e.target.checked) {
+            config.nllb_batch_size = 0;
+        } else {
+            config.nllb_batch_size = 1;
+        }
     }
 
     function getHardwareRecommendation(info) {
@@ -203,15 +239,42 @@
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
 
+                        <!-- Quantization -->
+                        <div class="space-y-1 md:col-span-2 border-t pt-2 mt-2 dark:border-gray-800">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model Optimization (Quantization)</label>
+                            <Dropdown options={quantizationOptions} bind:value={config.quantization_preference} />
+                            <p class="text-[10px] text-gray-500">
+                                'Int8' is significantly faster on CPU. 'Float16' is higher precision.
+                            </p>
+                            {#if config.quantization_preference !== originalQuantization}
+                                <div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs text-yellow-800 dark:text-yellow-200 flex items-start">
+                                    <AlertTriangle class="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
+                                    <span>Changing quantization requires re-downloading translation models to apply the new optimization format.</span>
+                                </div>
+                            {/if}
+                        </div>
+
                         <!-- Batch Sizes -->
                         <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for NLLB</label>
-                            <input type="number" bind:value={config.nllb_batch_size} min="1" max="32" class="input w-full" />
-                            <p class="text-[10px] text-gray-500">Higher = Faster on GPU/MPS. Lower (1-4) safer for CPU.</p>
+                            <div class="flex justify-between items-center">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for NLLB</label>
+                                <label class="flex items-center space-x-1 cursor-pointer">
+                                    <input type="checkbox" checked={nllbAuto} on:change={toggleNllbAuto} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3 h-3" />
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">Auto</span>
+                                </label>
+                            </div>
+                            <input type="number" bind:value={config.nllb_batch_size} min="0" max="32" class="input w-full" disabled={nllbAuto} />
+                            <p class="text-[10px] text-gray-500">Higher = Faster on GPU. Auto uses safe defaults.</p>
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for Helsinki</label>
-                            <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
+                            <div class="flex justify-between items-center">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Batch Size for Helsinki</label>
+                                <label class="flex items-center space-x-1 cursor-pointer">
+                                    <input type="checkbox" checked={helsinkiAuto} on:change={toggleHelsinkiAuto} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3 h-3" />
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">Auto</span>
+                                </label>
+                            </div>
+                            <input type="number" bind:value={config.helsinki_batch_size} min="0" max="64" class="input w-full" disabled={helsinkiAuto} />
                             <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
                         </div>
                     </div>
