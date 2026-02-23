@@ -7,7 +7,7 @@
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
-    import { transcriptStore } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, toggleTranslateModal } from "$lib/stores/transcriptStore.js";
     import { exportTranscript } from '$lib/services/configureActions.js';
     import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
