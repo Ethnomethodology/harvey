@@ -651,7 +651,7 @@
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel layout-{$activeLayout}">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">Loading transcript...</div>
     {:else if errorMessage}
@@ -690,6 +690,7 @@
                      documentPath={itemPath}
                      initialHighlights={isPrimary ? initialHighlightsFromBackend : localInitialHighlights}
                      documentHighlights={currentHighlights}
+                     activeLayout={$activeLayout}
                  />
             {/key}
         </div>
