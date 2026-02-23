@@ -1286,26 +1286,26 @@
 
                     <!-- Item 2: Main Content Block (structure depends on layout) -->
                     {#if $activeLayout === 'Layout1'}
-                    <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
+                    <div class="flex flex-row items-start gap-x-4 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white min-w-[2rem] w-[2rem]" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
                         {#if showTimestampCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;">
+                        <div class="flex-shrink-0 dark:text-white min-w-[9rem] w-[9rem]">
                             <span class="select-none" title="Start time">{seg.startTime}</span>
-                            <span class="dark:text-white">-</span>
+                            <span class="dark:text-white mx-1">-</span>
                             <span class="select-none" title="End time">{seg.endTime}</span>
                         </div>
                         {/if}
                         {#if showSpeakerCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
-                            {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
+                        <div class="flex-shrink-0 dark:text-white min-w-[8rem] w-[8rem] truncate" title={seg.speaker}>
+                            {seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
                         </div>
                         {/if}
                         {#if showTextCol}
-                        <div class="min-w-0 preview-content-area text-sm py-1" style="flex-basis: 65%; white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                        <div class="min-w-0 preview-content-area text-sm py-1 flex-grow" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
                             {#if seg.isJsonContent}
                                 <div class="speech-rich-text">{@html seg.html}</div>
                             {:else}

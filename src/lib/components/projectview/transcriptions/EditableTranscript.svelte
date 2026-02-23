@@ -569,8 +569,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             </div>
             <!-- Main content area for inputs, unified layout -->
             <div class="flex-grow overflow-y-auto">
-                <div class="flex justify-center">
-                    <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
+                <div class="flex justify-center px-4 w-full">
+                    <div class="{columnContainerClass} w-full max-w-[40rem]" style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
 
                         <!-- Primary Segment Editor -->
                         <div class="primary-segment-editor">
