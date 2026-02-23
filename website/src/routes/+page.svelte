@@ -123,7 +123,7 @@
 <section class="py-24 border-t border-slate-100 overflow-hidden">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-12">
-            <h2 class="text-3xl font-bold text-slate-900 mb-4">Powerful Tools for Qualitative Insight</h2>
+            <h2 class="text-3xl font-bold text-slate-900 mb-4">Powerful Tools for Qualitative Research</h2>
             <p class="text-slate-600">Explore the features that make Harvey the perfect companion for your research.</p>
         </div>
 
