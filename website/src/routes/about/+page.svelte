@@ -25,6 +25,11 @@
         It's an application built <em>by researchers, for researchers</em>.
     </blockquote>
 
+    <h2>Developed with AI</h2>
+    <p>
+        From its inception, Project Harvey has been significantly developed using AI tools, including Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+    </p>
+
     <h2>Open Source</h2>
     <p>
         Harvey is free and open-source software. The code is available on <a href="https://github.com/Ethnomethodology/harvey">GitHub</a>, and we welcome contributions from the community.

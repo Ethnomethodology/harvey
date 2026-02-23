@@ -83,10 +83,10 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
             <div class="flex items-center gap-3">
                 <img src="{base}/logo.png" alt="Harvey Logo" class="h-6 w-6 rounded border border-slate-300 opacity-80 grayscale hover:grayscale-0 transition-all" />
-                <span class="text-sm font-semibold text-slate-900">Project Harvey</span>
+                <span class="text-sm font-semibold text-slate-900">Harvey</span>
             </div>
             <p class="text-sm text-slate-500">
-                &copy; {new Date().getFullYear()} Project Harvey. Open Source (MIT).
+                &copy; {new Date().getFullYear()} <a href="https://github.com/Ethnomethodology/harvey/blob/main/LICENSE.md" target="_blank" rel="noreferrer" class="hover:text-slate-900">The Project Harvey Authors</a>.
             </p>
              <div class="flex gap-4 text-sm text-slate-500">
                 <a href="{base}/about" class="hover:text-slate-900">About</a>
