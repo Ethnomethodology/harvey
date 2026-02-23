@@ -1038,6 +1038,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
+                on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
+
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'transcriptions'}
