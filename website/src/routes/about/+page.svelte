@@ -32,6 +32,6 @@
 
     <h2>Open Source</h2>
     <p>
-        Harvey is free and open-source software. The code is available on <a href="https://github.com/Ethnomethodology/harvey">GitHub</a>, and we welcome contributions from the community.
+        Harvey is free and open-source software. The code is available on <a href="https://github.com/Ethnomethodology/harvey" target="_blank" rel="noreferrer">GitHub</a>, and we welcome contributions from the community.
     </p>
 </div>
