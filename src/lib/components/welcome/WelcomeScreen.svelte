@@ -269,7 +269,7 @@
   on:cancel={onCancelRename}
 />
 
-<HelpModal bind:showModal={showHelpModal} on:close={() => showHelpModal = false} />
+<HelpModal bind:showModal={showHelpModal} isCompact={true} on:close={() => showHelpModal = false} />
 
 <style>
   /* Custom scrollbar for Webkit browsers */
