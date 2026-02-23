@@ -290,11 +290,11 @@
                         />
                     </div>
                     <div class="space-y-1">
-                        {#if localModels.length === 0}
+                        {#if modelOptions.length === 0}
 							<div
 								class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-md text-center space-y-3 my-4"
 							>
-								<p class="text-blue-800 dark:text-blue-300 font-medium">No translation models available.</p>
+								<p class="text-blue-800 dark:text-blue-300 font-medium">No {selectedFamily === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available.</p>
 								<div class="flex items-center justify-center space-x-2">
 									<p class="text-xs text-blue-600 dark:text-blue-400">Please download a model in the</p>
 									<button
