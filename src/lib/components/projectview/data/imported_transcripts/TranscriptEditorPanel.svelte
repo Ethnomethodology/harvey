@@ -745,7 +745,7 @@
     }
     .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(1)),
     .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
+        width: 10%;
     }
     .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(2)),
     .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(2)) {
@@ -757,7 +757,7 @@
     }
     .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(4)),
     .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
+        width: 60%;
     }
 
     .flex-grow.min-h-0 { min-height: 0; }
