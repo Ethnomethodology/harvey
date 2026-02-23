@@ -25,7 +25,7 @@
                     <!-- Logo -->
                     <a class="mr-3 flex-none w-[2.0625rem] overflow-hidden md:w-auto text-slate-900 hover:text-green-600 transition-colors font-bold text-xl tracking-tighter flex items-center gap-3" href="{base}/">
                         <img src="{base}/logo.png" alt="Harvey Logo" class="h-8 w-8 rounded-lg border border-green-500" />
-                        <span class="hidden md:inline">Harvey</span>
+                        <span>Harvey</span>
                     </a>
 
                     <!-- Desktop Nav -->
