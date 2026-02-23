@@ -1288,24 +1288,24 @@
                     {#if $activeLayout === 'Layout1'}
                     <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 dark:text-white min-w-[2rem] w-[2rem] px-0.5" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white w-[10%] min-w-[2.5rem] max-w-[3rem]" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
                         {#if showTimestampCol}
-                        <div class="flex-shrink-0 flex flex-col items-start dark:text-white min-w-[6.5rem] w-[6.5rem] text-xs leading-snug">
+                        <div class="flex-shrink-0 flex flex-col items-start dark:text-white w-[15%] min-w-[5.5rem] leading-snug">
                             <span class="select-none" title="Start time">{seg.startTime}</span>
                             <span class="dark:text-white text-gray-400 pl-0.5">-</span>
                             <span class="select-none" title="End time">{seg.endTime}</span>
                         </div>
                         {/if}
                         {#if showSpeakerCol}
-                        <div class="flex-shrink-0 dark:text-white min-w-[6rem] w-[6rem] max-w-[6rem] truncate" title={seg.speaker}>
+                        <div class="flex-shrink-0 dark:text-white w-[15%] min-w-[5.5rem] truncate" title={seg.speaker}>
                             {seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
                         </div>
                         {/if}
                         {#if showTextCol}
-                        <div class="min-w-0 preview-content-area text-sm py-1 flex-grow" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                        <div class="min-w-0 preview-content-area text-sm py-1 flex-1" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
                             {#if seg.isJsonContent}
                                 <div class="speech-rich-text">{@html seg.html}</div>
                             {:else}
