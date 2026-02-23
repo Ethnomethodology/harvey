@@ -96,6 +96,7 @@
     let changeDebounceTimeout;
 
     // --- Store Subscription (Updated to only sync if primary and matching path) ---
+    $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
     $: if (isPrimary && $project.currentImportedTranscriptPath === itemPath) {
         if (editorRef && currentLexicalJson !== editorJsonState) {
             console.log("[TranscriptEditorPanel Store Sync] Updating editorRef state from store.");
@@ -669,7 +670,7 @@
                      nodes={LEXICAL_NODES}
                      initialJson={currentLexicalJson}
                      editable={true}
-                     enableTableCellResize={true}
+                     enableTableCellResize={false}
                      placeholder="Transcript content will appear here as a table..."
                      externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
@@ -689,6 +690,7 @@
                      documentPath={itemPath}
                      initialHighlights={isPrimary ? initialHighlightsFromBackend : localInitialHighlights}
                      documentHighlights={currentHighlights}
+                     activeLayout={$activeLayout}
                  />
             {/key}
         </div>
@@ -739,25 +741,97 @@
     }
 
 
-    .imported-transcript-editor-panel :global(.lexical-content table) {
-        table-layout: fixed;
-        width: 100%;
+    /* Layout 1: Detailed Table */
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table) {
+        table-layout: fixed !important;
+        width: 100% !important;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(1)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(1)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(1)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(1)) {
+        width: 10% !important;
+        min-width: 2.5rem !important;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(2)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(2)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(2)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(2)) {
+        width: 15% !important;
+        min-width: 5.5rem !important;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(3)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(3)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(3)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(3)) {
+        width: 15% !important;
+        min-width: 5.5rem !important;
     }
-    .imported-transcript-editor-panel :global(.lexical-content table th:nth-child(4)),
-    .imported-transcript-editor-panel :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(4)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(4)),
+    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(4)) {
+        width: 60% !important;
+    }
+
+    /* Layout 2: Segment Block (Simulated via CSS) */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content table),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tbody),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table) {
+        display: block !important;
+        width: 100% !important;
+        border: none !important;
+    }
+    /* Hide header row */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr:first-child) {
+        display: none !important;
+    }
+    /* Style rows as cards */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row) {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        margin-bottom: 1rem !important;
+        padding: 0.5rem !important;
+        border: 1px solid #e5e7eb !important; /* gray-200 */
+        border-radius: 0.5rem !important;
+        background-color: transparent !important;
+    }
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row) {
+        border-color: #374151 !important; /* gray-700 */
+    }
+    /* Hide Index Column (1) */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(1)),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(1)) {
+        display: none !important;
+    }
+    /* Time (2) and Speaker (3) as a metadata row */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(2)),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(3)) {
+        display: inline-block !important;
+        width: auto !important;
+        min-width: 0 !important;
+        padding: 0 0.5rem 0.25rem 0 !important;
+        font-size: 0.85em !important;
+        color: #6b7280 !important; /* gray-500 */
+        border: none !important;
+        background: transparent !important;
+    }
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)),
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)),
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(2)),
+    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(3)) {
+        color: #9ca3af !important; /* gray-400 */
+    }
+    /* Text (4) as main content */
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(4)),
+    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(4)) {
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        padding-top: 0.25rem !important;
+        border: none !important;
     }
 
     .flex-grow.min-h-0 { min-height: 0; }

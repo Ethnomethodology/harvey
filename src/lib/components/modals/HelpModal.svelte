@@ -3,6 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
 
   export let showModal = false;
+  export let isCompact = false; // New prop to control sidebar width
 
   const dispatch = createEventDispatcher();
 
@@ -225,13 +226,13 @@
       <!-- Main Body -->
       <div class="flex flex-grow overflow-hidden">
         <!-- Sidebar -->
-        <div class="w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col flex-shrink-0 overflow-y-auto font-sans">
+        <div class="{isCompact ? 'w-32' : 'w-64'} bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 {isCompact ? 'p-2' : 'p-4'} flex flex-col flex-shrink-0 overflow-y-auto font-sans transition-all duration-300">
           <nav class="flex flex-col space-y-1">
             {#each sidebarTabs as tab}
               <button
-                class="px-4 py-2 rounded-md text-left transition-all duration-200 {currentPage.sidebarId === tab.id 
+                class="{isCompact ? 'px-2 py-1.5 text-xs truncate' : 'px-4 py-2 text-sm'} rounded-md text-left transition-all duration-200 {currentPage.sidebarId === tab.id
                   ? 'bg-blue-600 text-white font-medium shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'} text-sm"
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'}"
                 on:click={() => navigateTo(tab.id)}
               >
                 {tab.label}

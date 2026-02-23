@@ -2,7 +2,7 @@
 import { writable } from 'svelte/store';
 
 const LAYOUT_STORAGE_KEY = 'transcriptLayout'; // Key for local storage
-const DEFAULT_LAYOUT_KEY = 'Layout1'; // Default layout
+const DEFAULT_LAYOUT_KEY = 'Layout2'; // Default layout
 
 // --- Active Layout Store ---
 function loadLayout() {

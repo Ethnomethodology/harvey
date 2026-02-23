@@ -1288,24 +1288,24 @@
                     {#if $activeLayout === 'Layout1'}
                     <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white w-[10%] min-w-[2.5rem] max-w-[3rem]" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
                         {#if showTimestampCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;">
+                        <div class="flex-shrink-0 flex flex-col items-start dark:text-white w-[15%] min-w-[5.5rem] leading-snug">
                             <span class="select-none" title="Start time">{seg.startTime}</span>
-                            <span class="dark:text-white">-</span>
+                            <span class="dark:text-white text-gray-400 pl-0.5">-</span>
                             <span class="select-none" title="End time">{seg.endTime}</span>
                         </div>
                         {/if}
                         {#if showSpeakerCol}
-                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
-                            {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
+                        <div class="flex-shrink-0 dark:text-white w-[15%] min-w-[5.5rem] truncate" title={seg.speaker}>
+                            {seg.speaker}{#if !seg.speaker.endsWith(':')}:{/if}
                         </div>
                         {/if}
                         {#if showTextCol}
-                        <div class="min-w-0 preview-content-area text-sm py-1" style="flex-basis: 65%; white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                        <div class="min-w-0 preview-content-area text-sm py-1 flex-1" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
                             {#if seg.isJsonContent}
                                 <div class="speech-rich-text">{@html seg.html}</div>
                             {:else}
@@ -1347,9 +1347,9 @@
                         {#if ($activeLayout !== 'Layout3' && showSpeakerCol) || showTextCol}
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
                             {#if showSpeakerCol && $activeLayout !== 'Layout3' && $activeLayout !== 'Layout5'}
-                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: 6rem; max-width: 6rem;">
                                 <span class="truncate block w-full" title={seg.speaker}>
-                                    {(seg.speaker.length > ($activeLayout === 'Layout4' ? 10 : 12) ? seg.speaker.slice(0, ($activeLayout === 'Layout4' ? 10 : 12)) + '...' : seg.speaker)}{#if !seg.speaker.endsWith(':')}:{/if}
+                                    {(seg.speaker.length > 10 ? seg.speaker.slice(0, 10) + '...' : seg.speaker)}{#if !seg.speaker.endsWith(':')}:{/if}
                                 </span>
                             </div>
                             {/if}

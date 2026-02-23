@@ -570,7 +570,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             {/if}
 
             <!-- Middle Panel: MediaPlayer and EditableTranscript -->
-            <div class="flex-1 h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700">
+            <div class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700">
                 <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-950 flex flex-col">
                     <MediaPlayer
                         bind:this={mediaPlayerRef}
@@ -634,7 +634,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         {/if}
 
         <!-- Right Panel: RichTextPreview -->
-        <div class="flex-1 h-full bg-white dark:bg-gray-950 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-gray-700">
+        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-gray-950 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-gray-700">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
