@@ -13,7 +13,12 @@ def download_model(model_name, cache_dir, token):
     Downloads a translation model from Hugging Face without loading it into RAM.
     Supports Helsinki-NLP and NLLB models.
     """
-    print(f"Downloading model {model_name} to {cache_dir}", flush=True)
+    # Construct target directory structure manually since we use local_dir
+    # e.g., cache_dir/models--Helsinki-NLP--opus-mt-en-hi
+    folder_name = f"models--{model_name.replace('/', '--')}"
+    final_model_dir = os.path.join(cache_dir, folder_name)
+
+    print(f"Downloading model {model_name} to {final_model_dir}", flush=True)
     try:
         # Check if the model is gated (requires authentication)
         is_gated = False
@@ -34,7 +39,7 @@ def download_model(model_name, cache_dir, token):
         # Explicitly disable symlinks to avoid WinError 1314
         snapshot_download(
             repo_id=model_name,
-            local_dir=cache_dir, # Use local_dir instead of cache_dir to force extraction
+            local_dir=final_model_dir, # Use final_model_dir to match expected structure
             local_dir_use_symlinks=False,
             resume_download=True,
             token=False # Explicitly disable token for public models
