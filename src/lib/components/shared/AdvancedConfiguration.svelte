@@ -13,7 +13,10 @@
         nllb_batch_size: 1,
         num_threads: 4,
         device_preference: 'auto',
-        quantization_preference: 'int8' // Default to int8 as per user request for performance option
+        quantization_preference: 'int8', // Default to int8 as per user request for performance option
+        faster_whisper_compute_type: 'int8',
+        faster_whisper_beam_size: 5,
+        whisper_cpp_threads: 4
     };
 
     let platformInfo = null; // Initialize as null to indicate loading
@@ -23,6 +26,7 @@
     // Collapsible panel states
     let isDiarizationOpen = false;
     let isTranslationOpen = false;
+    let isTranscriptionOpen = false;
 
     const deviceOptions = [
         { value: 'auto', label: 'Auto (Recommended)' },
@@ -36,6 +40,12 @@
         { value: 'float16', label: 'Float16 (Higher Precision)' }
     ];
 
+    const computeTypeOptions = [
+        { value: 'int8', label: 'Int8 (Fastest)' },
+        { value: 'int8_float16', label: 'Int8 + Float16 (Hybrid)' },
+        { value: 'float16', label: 'Float16 (Higher Precision)' }
+    ];
+
     let originalQuantization = 'int8'; // To track changes
 
     $: recommendation = getHardwareRecommendation(platformInfo);
@@ -44,19 +54,29 @@
 
     onMount(async () => {
         try {
-            const savedConfig = await invoke('get_advanced_translation_config');
-            if (savedConfig) {
-                if (savedConfig.helsinki_batch_size !== undefined) config.helsinki_batch_size = savedConfig.helsinki_batch_size;
-                if (savedConfig.nllb_batch_size !== undefined) config.nllb_batch_size = savedConfig.nllb_batch_size;
-                if (savedConfig.num_threads !== undefined) config.num_threads = savedConfig.num_threads;
-                if (savedConfig.device_preference !== undefined) config.device_preference = savedConfig.device_preference;
-                if (savedConfig.diarization_device !== undefined) config.diarization_device = savedConfig.diarization_device;
-                if (savedConfig.diarization_threads !== undefined) config.diarization_threads = savedConfig.diarization_threads;
-                if (savedConfig.quantization_preference !== undefined && savedConfig.quantization_preference !== null) {
-                     config.quantization_preference = savedConfig.quantization_preference;
-                     originalQuantization = savedConfig.quantization_preference;
+            const savedTranslationConfig = await invoke('get_advanced_translation_config');
+            if (savedTranslationConfig) {
+                if (savedTranslationConfig.helsinki_batch_size !== undefined) config.helsinki_batch_size = savedTranslationConfig.helsinki_batch_size;
+                if (savedTranslationConfig.nllb_batch_size !== undefined) config.nllb_batch_size = savedTranslationConfig.nllb_batch_size;
+                if (savedTranslationConfig.num_threads !== undefined) config.num_threads = savedTranslationConfig.num_threads;
+                if (savedTranslationConfig.device_preference !== undefined) config.device_preference = savedTranslationConfig.device_preference;
+                if (savedTranslationConfig.diarization_device !== undefined) config.diarization_device = savedTranslationConfig.diarization_device;
+                if (savedTranslationConfig.diarization_threads !== undefined) config.diarization_threads = savedTranslationConfig.diarization_threads;
+                if (savedTranslationConfig.quantization_preference !== undefined && savedTranslationConfig.quantization_preference !== null) {
+                     config.quantization_preference = savedTranslationConfig.quantization_preference;
+                     originalQuantization = savedTranslationConfig.quantization_preference;
                 }
             }
+
+            const savedTranscriptionConfig = await invoke('get_advanced_transcription_config');
+            if (savedTranscriptionConfig) {
+                if (savedTranscriptionConfig.faster_whisper_compute_type !== undefined && savedTranscriptionConfig.faster_whisper_compute_type !== null) {
+                    config.faster_whisper_compute_type = savedTranscriptionConfig.faster_whisper_compute_type;
+                }
+                if (savedTranscriptionConfig.faster_whisper_beam_size !== undefined) config.faster_whisper_beam_size = savedTranscriptionConfig.faster_whisper_beam_size;
+                if (savedTranscriptionConfig.whisper_cpp_threads !== undefined) config.whisper_cpp_threads = savedTranscriptionConfig.whisper_cpp_threads;
+            }
+
             platformInfo = await invoke('get_platform_info');
             console.log('[AdvancedConfig] Platform Info:', platformInfo);
         } catch (e) {
@@ -71,8 +91,8 @@
         isBusy = true;
         statusMessage = '';
         try {
-            // Ensure numbers are integers
-            const payload = {
+            // Translation Config
+            const translationPayload = {
                 helsinki_batch_size: parseInt(config.helsinki_batch_size),
                 nllb_batch_size: parseInt(config.nllb_batch_size),
                 num_threads: parseInt(config.num_threads),
@@ -81,7 +101,15 @@
                 diarization_threads: parseInt(config.diarization_threads),
                 quantization_preference: config.quantization_preference
             };
-            await invoke('set_advanced_translation_config', { newConfig: payload });
+            await invoke('set_advanced_translation_config', { newConfig: translationPayload });
+
+            // Transcription Config
+            const transcriptionPayload = {
+                faster_whisper_compute_type: config.faster_whisper_compute_type,
+                faster_whisper_beam_size: parseInt(config.faster_whisper_beam_size),
+                whisper_cpp_threads: parseInt(config.whisper_cpp_threads)
+            };
+            await invoke('set_advanced_transcription_config', { newConfig: transcriptionPayload });
 
             // Update original to prevent persistent warning
             originalQuantization = config.quantization_preference;
@@ -112,6 +140,14 @@
         config.device_preference = 'auto';
         config.quantization_preference = 'int8';
         statusMessage = 'Translation settings reset (Click Save to apply).';
+        statusType = 'info';
+    }
+
+    function resetTranscription() {
+        config.faster_whisper_compute_type = 'int8';
+        config.faster_whisper_beam_size = 5;
+        config.whisper_cpp_threads = 4;
+        statusMessage = 'Transcription settings reset (Click Save to apply).';
         statusType = 'info';
     }
 
@@ -202,6 +238,56 @@
                     <!-- Panel Actions -->
                     <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
                         <button class="btn-secondary" on:click={resetDiarization} disabled={isBusy}>Reset Defaults</button>
+                        <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
+                    </div>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Transcription Panel -->
+        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+            <button
+                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                on:click={() => isTranscriptionOpen = !isTranscriptionOpen}
+            >
+                <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
+                {#if isTranscriptionOpen}
+                    <ChevronDown class="w-4 h-4 text-gray-500" />
+                {:else}
+                    <ChevronRight class="w-4 h-4 text-gray-500" />
+                {/if}
+            </button>
+
+            {#if isTranscriptionOpen}
+                <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Faster-Whisper Settings</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Compute Type (Quantization)</label>
+                            <Dropdown options={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
+                            <p class="text-[10px] text-gray-500">Precision of model weights. Int8 is fastest on CPU.</p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Beam Size</label>
+                            <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Number of paths to search. 1 is greedy (fastest), 5 is standard.</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-100 dark:border-gray-800 my-4"></div>
+
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Whisper.cpp Settings</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                            <input type="number" bind:value={config.whisper_cpp_threads} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Threads for inference.</p>
+                        </div>
+                    </div>
+
+                    <!-- Panel Actions -->
+                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
+                        <button class="btn-secondary" on:click={resetTranscription} disabled={isBusy}>Reset Defaults</button>
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>

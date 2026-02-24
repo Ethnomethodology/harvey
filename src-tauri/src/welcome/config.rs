@@ -94,6 +94,9 @@ pub struct Config {
 
     #[serde(rename = "advanced_translation", default, skip_serializing_if = "Option::is_none")]
     pub advanced_translation: Option<AdvancedTranslationConfig>,
+
+    #[serde(rename = "advanced_transcription", default, skip_serializing_if = "Option::is_none")]
+    pub advanced_transcription: Option<AdvancedTranscriptionConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -112,6 +115,16 @@ pub struct AdvancedTranslationConfig {
     pub diarization_threads: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quantization_preference: Option<String>, // "int8" or "float16"
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AdvancedTranscriptionConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faster_whisper_compute_type: Option<String>, // "int8", "float16", "int8_float16"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faster_whisper_beam_size: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub whisper_cpp_threads: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]

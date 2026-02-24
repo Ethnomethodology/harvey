@@ -82,6 +82,21 @@ pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslat
 }
 
 #[command]
+pub async fn get_advanced_transcription_config() -> Result<Option<crate::welcome::config::AdvancedTranscriptionConfig>, CommandError> {
+    let config = read_config()?;
+    Ok(config.advanced_transcription)
+}
+
+#[command]
+pub async fn set_advanced_transcription_config(new_config: crate::welcome::config::AdvancedTranscriptionConfig) -> Result<(), CommandError> {
+    log::info!("CMD: set_advanced_transcription_config: {:?}", new_config);
+    let mut config = read_config()?;
+    config.advanced_transcription = Some(new_config);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
 pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) -> Result<(), CommandError> {
     #[cfg(target_os = "macos")]
     {

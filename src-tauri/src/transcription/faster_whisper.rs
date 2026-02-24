@@ -73,6 +73,8 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
 
         // Read advanced config
         if let Ok(config) = read_config() {
+            // General device/threads settings (reusing from translation config or moving to transcription)
+            // Note: advanced_translation contains general CPU threads and Device prefs which are likely system-wide intent.
             if let Some(adv) = config.advanced_translation {
                 if let Some(threads) = adv.num_threads {
                     python_args.push("--threads".to_string());
@@ -81,6 +83,17 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
                 if let Some(device) = adv.device_preference {
                     python_args.push("--device".to_string());
                     python_args.push(device);
+                }
+            }
+            // Faster-Whisper specific settings
+            if let Some(trans_conf) = config.advanced_transcription {
+                if let Some(compute_type) = trans_conf.faster_whisper_compute_type {
+                    python_args.push("--compute_type".to_string());
+                    python_args.push(compute_type);
+                }
+                if let Some(beam_size) = trans_conf.faster_whisper_beam_size {
+                    python_args.push("--beam_size".to_string());
+                    python_args.push(beam_size.to_string());
                 }
             }
         }
