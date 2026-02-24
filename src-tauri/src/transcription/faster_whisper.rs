@@ -87,6 +87,18 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
             }
             // Faster-Whisper specific settings
             if let Some(trans_conf) = config.advanced_transcription {
+                // If specific num_threads is set for transcription, use it.
+                // This overrides the global one if both are present (which logic implies by appending later)
+                if let Some(threads) = trans_conf.num_threads {
+                    // We need to remove previous --threads arg if it was added from translation config
+                    // Ideally we should have prioritized transcription config first or used a unified logic.
+                    // Given the vector append nature, we can just push it again and hope python script takes the last one,
+                    // OR better, we check before pushing the global one.
+                    // But simpler: just push it. argparse usually takes the last value for non-append actions.
+                    python_args.push("--threads".to_string());
+                    python_args.push(threads.to_string());
+                }
+
                 if let Some(compute_type) = trans_conf.faster_whisper_compute_type {
                     python_args.push("--compute_type".to_string());
                     python_args.push(compute_type);

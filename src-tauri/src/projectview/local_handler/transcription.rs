@@ -492,6 +492,16 @@ async fn run_whisper_cpp_sidecar<R: Runtime>(
         }
     }
 
+    // Read config for threads
+    if let Ok(config) = read_config() {
+        if let Some(trans_conf) = config.advanced_transcription {
+            if let Some(threads) = trans_conf.num_threads {
+                command = command.args(["-t".to_string(), threads.to_string()]);
+                debug!("[Transcription][LocalRun][{}] Added thread count arg: {}", job_id, threads);
+            }
+        }
+    }
+
     let (mut rx, child) = command.spawn()
      .map_err(|e| {
          error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);

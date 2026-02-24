@@ -16,7 +16,7 @@
         quantization_preference: 'int8', // Default to int8 as per user request for performance option
         faster_whisper_compute_type: 'int8',
         faster_whisper_beam_size: 5,
-        whisper_cpp_threads: 4
+        transcription_num_threads: 4 // Renamed for clarity in UI state
     };
 
     let platformInfo = null; // Initialize as null to indicate loading
@@ -74,7 +74,7 @@
                     config.faster_whisper_compute_type = savedTranscriptionConfig.faster_whisper_compute_type;
                 }
                 if (savedTranscriptionConfig.faster_whisper_beam_size !== undefined) config.faster_whisper_beam_size = savedTranscriptionConfig.faster_whisper_beam_size;
-                if (savedTranscriptionConfig.whisper_cpp_threads !== undefined) config.whisper_cpp_threads = savedTranscriptionConfig.whisper_cpp_threads;
+                if (savedTranscriptionConfig.num_threads !== undefined) config.transcription_num_threads = savedTranscriptionConfig.num_threads;
             }
 
             platformInfo = await invoke('get_platform_info');
@@ -107,7 +107,7 @@
             const transcriptionPayload = {
                 faster_whisper_compute_type: config.faster_whisper_compute_type,
                 faster_whisper_beam_size: parseInt(config.faster_whisper_beam_size),
-                whisper_cpp_threads: parseInt(config.whisper_cpp_threads)
+                num_threads: parseInt(config.transcription_num_threads)
             };
             await invoke('set_advanced_transcription_config', { newConfig: transcriptionPayload });
 
@@ -146,7 +146,7 @@
     function resetTranscription() {
         config.faster_whisper_compute_type = 'int8';
         config.faster_whisper_beam_size = 5;
-        config.whisper_cpp_threads = 4;
+        config.transcription_num_threads = 4;
         statusMessage = 'Transcription settings reset (Click Save to apply).';
         statusType = 'info';
     }
@@ -204,46 +204,6 @@
     {/if}
 
     <div class="space-y-6">
-        <!-- Diarization Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <button 
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isDiarizationOpen = !isDiarizationOpen}
-            >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
-                {#if isDiarizationOpen}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
-            
-            {#if isDiarizationOpen}
-                <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Device -->
-                        <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
-                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
-                        </div>
-                        
-                        <!-- Threads -->
-                        <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
-                            <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
-                        </div>
-                    </div>
-                    <!-- Panel Actions -->
-                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
-                        <button class="btn-secondary" on:click={resetDiarization} disabled={isBusy}>Reset Defaults</button>
-                        <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
-                    </div>
-                </div>
-            {/if}
-        </div>
-
         <!-- Transcription Panel -->
         <div class="border dark:border-gray-700 rounded-md overflow-hidden">
             <button
@@ -260,7 +220,18 @@
 
             {#if isTranscriptionOpen}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Faster-Whisper Settings</h4>
+                    <!-- General Settings -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                            <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Threads for inference (Faster-Whisper & Whisper.cpp).</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-100 dark:border-gray-800 my-4"></div>
+
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Faster-Whisper Settings</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Compute Type (Quantization)</label>
@@ -274,20 +245,49 @@
                         </div>
                     </div>
 
-                    <div class="border-t border-gray-100 dark:border-gray-800 my-4"></div>
-
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Whisper.cpp Settings</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.whisper_cpp_threads} min="1" max="32" class="input w-full" />
-                            <p class="text-[10px] text-gray-500">Threads for inference.</p>
-                        </div>
-                    </div>
-
                     <!-- Panel Actions -->
                     <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
                         <button class="btn-secondary" on:click={resetTranscription} disabled={isBusy}>Reset Defaults</button>
+                        <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
+                    </div>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Diarization Panel -->
+        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+            <button
+                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                on:click={() => isDiarizationOpen = !isDiarizationOpen}
+            >
+                <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
+                {#if isDiarizationOpen}
+                    <ChevronDown class="w-4 h-4 text-gray-500" />
+                {:else}
+                    <ChevronRight class="w-4 h-4 text-gray-500" />
+                {/if}
+            </button>
+
+            {#if isDiarizationOpen}
+                <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Device -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                            <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
+                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
+                        </div>
+
+                        <!-- Threads -->
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
+                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
+                            <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
+                        </div>
+                    </div>
+                    <!-- Panel Actions -->
+                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100 dark:border-gray-800 mt-4">
+                        <button class="btn-secondary" on:click={resetDiarization} disabled={isBusy}>Reset Defaults</button>
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
