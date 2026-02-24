@@ -119,8 +119,8 @@ def translate_sliding_window(segments, engine, tokenizer, device, batch_size=8, 
         
         if valid_inputs:
             if use_ct2:
-                # CTranslate2: Use small batches for stability while keeping context
-                batch_size_ct2 = 4
+                # CTranslate2: Use configured batch size
+                batch_size_ct2 = batch_size
                 decoded = []
                 for i in range(0, len(valid_inputs), batch_size_ct2):
                     mini_batch = valid_inputs[i:i + batch_size_ct2]
@@ -204,8 +204,8 @@ def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=
     translated = []
     
     if use_ct2:
-        # CTranslate2: Use small batches for performance and stability
-        batch_size_ct2 = 8
+        # CTranslate2: Use configured batch size
+        batch_size_ct2 = batch_size
         for i in range(0, len(segments), batch_size_ct2):
             batch = segments[i : i + batch_size_ct2]
             batch_clean = [s if s.strip() else " " for s in batch]
@@ -355,18 +355,29 @@ if __name__ == "__main__":
         
         # Determine optimal batch size
         batch_size = 8
-        if is_nllb:
-            if args.batch_size_nllb:
-                batch_size = args.batch_size_nllb
-            else:
+
+        # Helper to decide default based on model and device
+        def get_auto_batch_size(is_nllb, device):
+            if is_nllb:
                 # NLLB is heavy: Keep CPU batch size low (1) to prevent hanging/OOM.
                 # MPS/CUDA: Increase batch size to utilize GPU parallelism effectively.
-                batch_size = 12 if device in ["cuda", "mps"] else 1
+                return 12 if device in ["cuda", "mps"] else 1
+            else:
+                # Helsinki is light
+                return 32 if device in ["cuda", "mps"] else 16
+
+        if is_nllb:
+            if args.batch_size_nllb and args.batch_size_nllb > 0:
+                batch_size = args.batch_size_nllb
+            else:
+                batch_size = get_auto_batch_size(True, device)
         else:
-            if args.batch_size_helsinki:
+            if args.batch_size_helsinki and args.batch_size_helsinki > 0:
                 batch_size = args.batch_size_helsinki
             else:
-                batch_size = 12 # Increased default for Helsinki too since it's light
+                batch_size = get_auto_batch_size(False, device)
+
+        sys.stderr.write(f"[Python Debug] Using Batch Size: {batch_size}\n")
         
         results = []
         # For NLLB in CT2, we need to pass the target language prefix

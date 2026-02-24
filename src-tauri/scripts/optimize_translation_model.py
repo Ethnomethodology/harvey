@@ -4,10 +4,10 @@ import shutil
 import ctranslate2
 import transformers
 
-def optimize_model(model_path, output_path):
+def optimize_model(model_path, output_path, quantization=None):
     """
     Converts a Transformers model to CTranslate2 format.
-    Uses optimal quantization based on model family.
+    Uses optimal quantization based on model family unless overridden.
     """
     print(f"Optimizing model at {model_path} -> {output_path}", flush=True)
     
@@ -23,11 +23,15 @@ def optimize_model(model_path, output_path):
         converter = ctranslate2.converters.TransformersConverter(model_path)
         
         # Determine quantization: 
-        # NLLB models are large and benefit greatly from int8 on CPU.
-        # Helsinki models are small and sensitive, so we use float16.
-        quant = "int8" if is_nllb else "float16"
+        if quantization and quantization in ["int8", "float16", "int8_float16", "int16"]:
+            quant = quantization
+            print(f"Using explicitly requested quantization: {quant}", flush=True)
+        else:
+            # NLLB models are large and benefit greatly from int8 on CPU.
+            # Helsinki models also benefit from int8 for speed on CPU, which is the priority.
+            quant = "int8"
+            print(f"Using default quantization for {'NLLB' if is_nllb else 'Helsinki'}: {quant}", flush=True)
         
-        print(f"Detected {'NLLB' if is_nllb else 'Helsinki'} model. Converting with quantization: {quant}", flush=True)
         converter.convert(
             output_path,
             quantization=quant,
@@ -40,10 +44,12 @@ def optimize_model(model_path, output_path):
         sys.exit(1)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python optimize_translation_model.py <model_path> <output_path>", file=sys.stderr, flush=True)
+    if len(sys.argv) < 3:
+        print("Usage: python optimize_translation_model.py <model_path> <output_path> [quantization]", file=sys.stderr, flush=True)
         sys.exit(1)
 
     model_path = sys.argv[1]
     output_path = sys.argv[2]
-    optimize_model(model_path, output_path)
+    quant_arg = sys.argv[3] if len(sys.argv) > 3 else None
+
+    optimize_model(model_path, output_path, quantization=quant_arg)

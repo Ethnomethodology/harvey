@@ -369,9 +369,22 @@ async fn run_translation_process<R: Runtime>(
         model_base_path
     };
 
-    let refs_path = model_base_path.join("refs/main");
-    let commit_hash = fs::read_to_string(refs_path).map_err(|e| CommandError::from(format!("Failed to read commit hash for model '{}': {}", model_name, e)))?.trim().to_string();
-    let model_path = model_base_path.join("snapshots").join(commit_hash);
+    let refs_path = model_base_path.join("refs").join("main");
+    let model_path;
+
+    if refs_path.exists() {
+        // Legacy/Cache mode with symlinks (HF standard structure)
+        let commit_hash = fs::read_to_string(refs_path).map_err(|e| CommandError::from(format!("Failed to read commit hash for model '{}': {}", model_name, e)))?.trim().to_string();
+        model_path = model_base_path.join("snapshots").join(commit_hash);
+    } else {
+        // Flat mode (downloaded via local_dir)
+        // Check if config.json exists in base path to verify it's a valid model dir
+        if model_base_path.join("config.json").exists() {
+             model_path = model_base_path.clone();
+        } else {
+             return Err(CommandError::from(format!("Model configuration not found in '{}'. Please re-download the model.", model_base_path.display())));
+        }
+    }
 
     info!("[Translate][{}] Using model path: {}", job_id, model_path.display());
 

@@ -24,6 +24,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
+          "$HOME/**",
           "$DOCUMENT/**/harvey_files/**",
           "$APP/harvey_files/**",
           "$APP/**",

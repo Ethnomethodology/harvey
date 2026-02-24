@@ -82,6 +82,21 @@ pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslat
 }
 
 #[command]
+pub async fn get_advanced_transcription_config() -> Result<Option<crate::welcome::config::AdvancedTranscriptionConfig>, CommandError> {
+    let config = read_config()?;
+    Ok(config.advanced_transcription)
+}
+
+#[command]
+pub async fn set_advanced_transcription_config(new_config: crate::welcome::config::AdvancedTranscriptionConfig) -> Result<(), CommandError> {
+    log::info!("CMD: set_advanced_transcription_config: {:?}", new_config);
+    let mut config = read_config()?;
+    config.advanced_transcription = Some(new_config);
+    write_config(&config)?;
+    Ok(())
+}
+
+#[command]
 pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) -> Result<(), CommandError> {
     #[cfg(target_os = "macos")]
     {
@@ -519,9 +534,23 @@ pub async fn download_translation_model_command(
     let model_path = target_dir.join(&folder_name);
     let output_path = model_path.join("ct2_optimized");
 
+    // Fetch quantization preference
+    let config = read_config()?;
+    let quantization = config.advanced_translation.and_then(|c| c.quantization_preference);
+
+    let mut args = vec![optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()];
+
+    // We need to keep the string alive if we are pushing a reference to it into args
+    let quant_str;
+    if let Some(q) = quantization {
+        log::info!("Using quantization preference: {}", q);
+        quant_str = q; // Move string to outer scope
+        args.push(&quant_str);
+    }
+
     let output = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()])
+        .args(&args)
         .output()
         .await?;
 

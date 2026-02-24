@@ -37,12 +37,13 @@ def download_model(model_name, target_dir, token):
             print("Model is public. Skipping authentication.", flush=True)
 
         # Download the full repository snapshot to a specific directory (flattened)
+        # Explicitly disable symlinks to avoid WinError 1314 on Windows without Developer Mode
         snapshot_download(
             repo_id=model_name,
             local_dir=final_model_dir,
             local_dir_use_symlinks=False,
             resume_download=True,
-            token=token if is_gated else None
+            token=False # Explicitly disable token for public models
         )
 
         print("Download complete.", flush=True)

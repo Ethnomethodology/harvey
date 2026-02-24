@@ -1195,8 +1195,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 #[tauri::command]
 pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<FileEntry, CommandError> {
     info!("[Backend Import] Source: '{}', Project XML: '{}'", source_file_path_str, project_xml_path_str);
-    let source_path = PathBuf::from(&source_file_path_str);
-    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let source_path = canonicalize_path(&source_file_path_str).unwrap_or_else(|_| PathBuf::from(&source_file_path_str));
+    let project_xml_path = canonicalize_path(&project_xml_path_str).unwrap_or_else(|_| PathBuf::from(&project_xml_path_str));
 
     if !source_path.exists() || !source_path.is_file() {
         return Err(CommandError::from(format!("Source file not found: {}", source_file_path_str)));
@@ -1469,8 +1469,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 #[tauri::command]
 pub async fn delete_project_item( item_path: String, project_xml_path: String) -> Result<(), CommandError> {
     info!("[Backend Delete] Request for: {} in project_xml: {}", item_path, project_xml_path);
-    let item_path_buf = PathBuf::from(&item_path);
-    let xml_path_buf = PathBuf::from(&project_xml_path);
+    let item_path_buf = canonicalize_path(&item_path).unwrap_or_else(|_| PathBuf::from(&item_path));
+    let xml_path_buf = canonicalize_path(&project_xml_path).unwrap_or_else(|_| PathBuf::from(&project_xml_path));
 
     if !xml_path_buf.exists() || !xml_path_buf.is_file() {
         return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));
@@ -2092,8 +2092,8 @@ fn rename_asset_with_folder(
 #[tauri::command]
 pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<String, CommandError> {
     info!("[Backend Rename] Request: Item='{}', NewNameParam='{}'", item_path, new_name);
-    let item_path_buf = PathBuf::from(&item_path);
-    let xml_path_buf = PathBuf::from(&project_xml_path);
+    let item_path_buf = canonicalize_path(&item_path).unwrap_or_else(|_| PathBuf::from(&item_path));
+    let xml_path_buf = canonicalize_path(&project_xml_path).unwrap_or_else(|_| PathBuf::from(&project_xml_path));
     let new_name_trimmed = new_name.trim();
 
     if !item_path_buf.exists() {

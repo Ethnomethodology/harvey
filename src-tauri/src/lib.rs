@@ -351,6 +351,8 @@ pub fn run() {
             welcome::commands::set_theme_preference,
             welcome::commands::get_advanced_translation_config,
             welcome::commands::set_advanced_translation_config,
+            welcome::commands::get_advanced_transcription_config, // Added
+            welcome::commands::set_advanced_transcription_config, // Added
             welcome::commands::set_menu_context, // Added
 
             // --- Project view CORE commands ---
