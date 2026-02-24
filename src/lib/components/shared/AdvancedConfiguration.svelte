@@ -263,7 +263,11 @@
                                     <span class="text-xs text-gray-600 dark:text-gray-400">Auto</span>
                                 </label>
                             </div>
-                            <input type="number" bind:value={config.nllb_batch_size} min="0" max="32" class="input w-full" disabled={nllbAuto} />
+                            {#if nllbAuto}
+                                <input type="text" value="Dynamic (Hardware Optimized)" class="input w-full italic text-gray-500 bg-gray-100 dark:bg-gray-800" disabled />
+                            {:else}
+                                <input type="number" bind:value={config.nllb_batch_size} min="1" max="32" class="input w-full" />
+                            {/if}
                             <p class="text-[10px] text-gray-500">Higher = Faster on GPU. Auto uses safe defaults.</p>
                         </div>
                         <div class="space-y-1">
@@ -274,7 +278,11 @@
                                     <span class="text-xs text-gray-600 dark:text-gray-400">Auto</span>
                                 </label>
                             </div>
-                            <input type="number" bind:value={config.helsinki_batch_size} min="0" max="64" class="input w-full" disabled={helsinkiAuto} />
+                            {#if helsinkiAuto}
+                                <input type="text" value="Dynamic (Hardware Optimized)" class="input w-full italic text-gray-500 bg-gray-100 dark:bg-gray-800" disabled />
+                            {:else}
+                                <input type="number" bind:value={config.helsinki_batch_size} min="1" max="64" class="input w-full" />
+                            {/if}
                             <p class="text-[10px] text-gray-500">Small models can handle larger batches.</p>
                         </div>
                     </div>
