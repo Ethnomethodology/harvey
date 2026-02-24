@@ -62,6 +62,9 @@
       "allow": [
         {
           "path": "$DOCUMENT/**/.*.metadata.json"
+        },
+        {
+          "path": "$HOME/**"
         }
       ]
     },
