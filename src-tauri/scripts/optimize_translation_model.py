@@ -28,8 +28,8 @@ def optimize_model(model_path, output_path, quantization=None):
             print(f"Using explicitly requested quantization: {quant}", flush=True)
         else:
             # NLLB models are large and benefit greatly from int8 on CPU.
-            # Helsinki models are small and sensitive, so we use float16 by default.
-            quant = "int8" if is_nllb else "float16"
+            # Helsinki models also benefit from int8 for speed on CPU, which is the priority.
+            quant = "int8"
             print(f"Using default quantization for {'NLLB' if is_nllb else 'Helsinki'}: {quant}", flush=True)
         
         converter.convert(
