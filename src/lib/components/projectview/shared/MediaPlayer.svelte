@@ -42,6 +42,12 @@
 				const { peaks } = payload;
 				localAudioBuffer = audioBuffer; // Set local buffer for this component instance
 				localAudioPeaks = peaks ? new Float32Array(peaks) : null;
+
+                // If peaks are ready, notify listeners (e.g. Trim Panel) immediately
+                if (localAudioPeaks) {
+                    dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
+                }
+
 				if (!explicitMediaPath) {
 					// For the main player, we proceed to handle global state and caching.
 					const currentProject = get(project);
@@ -56,6 +62,8 @@
 								const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
 								setAudioBuffer(audioBuffer, cachedPeaks); // Set both buffer and cached peaks
 								localAudioPeaks = cachedPeaks;
+                                // Notify listeners immediately
+                                dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
 								console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
 								return; // Successfully loaded from cache
 							}
@@ -1146,6 +1154,7 @@
         dispatch('requestDataTranscribe', { mediaPath: explicitMediaPath });
     }
     async function handleDataTrimClick() {
+        console.log(`[MediaPlayer] Handle Trim Click. localAudioPeaks present: ${!!localAudioPeaks}, localAudioBuffer present: ${!!localAudioBuffer}`);
         // Dispatch immediately with whatever we have (peaks might be available from cache)
         dispatch('requestDataTrim', {
             mediaPath: explicitMediaPath,

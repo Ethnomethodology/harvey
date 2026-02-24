@@ -211,6 +211,13 @@
         }
     }
 
+    function handleMediaDataPeaksReady(event) {
+        if (showDataTrimUI && event.detail && event.detail.peaks) {
+            console.log('[MediaEditorPanel] Received lazy peaks update.');
+            currentTrimAudioPeaks = event.detail.peaks;
+        }
+    }
+
     function handleWaveformTrimUpdate(event) {
         if (event.detail) {
             dataTrimStartTime = event.detail.startTime;
@@ -291,6 +298,7 @@
                 
                 on:requestDataTrim={handleRequestDataTrim}
                 on:mediaDataTrimBufferReady={handleMediaDataTrimBufferReady}
+                on:mediaDataPeaksReady={handleMediaDataPeaksReady}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
