@@ -155,6 +155,7 @@
 
     let showDataTrimUI = false;
     let currentTrimAudioBuffer = null; // Buffer for the active trim session
+    let currentTrimAudioPeaks = null; // Peaks for the active trim session (for lazy loading)
     let dataTrimStartTime = 0;
     let dataTrimEndTime = 0;
 
@@ -166,6 +167,7 @@
         isMediaEditorOpen.set(true);
         showDataTrimUI = false;
         currentTrimAudioBuffer = null;
+        currentTrimAudioPeaks = null;
     });
 
 	onDestroy(() => {
@@ -181,21 +183,31 @@
         if (showDataTrimUI) {
             showDataTrimUI = false;
             currentTrimAudioBuffer = null;
+            currentTrimAudioPeaks = null;
         } else {
             const duration = event.detail.duration;
             const audioBuffer = event.detail.audioBuffer;
+            const peaks = event.detail.peaks;
             const isReady = event.detail.isReady;
 
-            if (isReady && audioBuffer && duration > 0) {
+            if (isReady && duration > 0) {
                 dataTrimStartTime = 0;
                 dataTrimEndTime = duration;
                 currentTrimAudioBuffer = audioBuffer;
+                currentTrimAudioPeaks = peaks;
                 showDataTrimUI = true;
             } else {
                 showDataTrimUI = false;
                 currentTrimAudioBuffer = null;
+                currentTrimAudioPeaks = null;
                 alert("MediaPlayer reported not ready or essential data was missing from the event. Cannot show trim UI.");
             }
+        }
+    }
+
+    function handleMediaDataTrimBufferReady(event) {
+        if (showDataTrimUI && event.detail && event.detail.audioBuffer) {
+            currentTrimAudioBuffer = event.detail.audioBuffer;
         }
     }
 
@@ -245,6 +257,7 @@
     function handleCancelDataTrim() {
         showDataTrimUI = false;
         currentTrimAudioBuffer = null;
+        currentTrimAudioPeaks = null;
         dataTrimStartTime = 0;
         dataTrimEndTime = 0;
     }
@@ -277,6 +290,7 @@
                 loopEndTime={dataTrimEndTime}
                 
                 on:requestDataTrim={handleRequestDataTrim}
+                on:mediaDataTrimBufferReady={handleMediaDataTrimBufferReady}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
@@ -313,11 +327,12 @@
                         <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
                     </div>
                 </div>
-                {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
+                {#if (currentTrimAudioBuffer || currentTrimAudioPeaks) && dataTrimEndTime > 0}
                     <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <InteractiveWaveform
                             startZoomedOut={true}
                             externalAudioBuffer={currentTrimAudioBuffer}
+                            externalPeaks={currentTrimAudioPeaks}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
                             externalDuration={mediaPlayerInDataRef?.localDuration}
                             externalIsPlaying={dataMediaPlayerIsPlaying}
