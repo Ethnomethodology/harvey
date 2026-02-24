@@ -571,59 +571,81 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             } else if (tabName === 'tags') {
                 panelStateStore.toggleTagsLeftPanel();
             }
-            return;
+            return true; // Return true as we are "on" the tab
         }
 
         let canProceed = true;
-        // Check for unsaved changes in the transcriptions tab before switching away
-        if (selectedTab === 'transcriptions' && get(transcriptStore).transcriptDirty) {
-            project.update(p => ({
-                ...p,
-                showUnsavedChangesModal: true,
-                unsavedItemName: 'current transcript',
-                unsavedItemType: 'transcript',
-                // Set up callbacks for the modal actions
-                onUnsavedSave: async () => {
-                    hideUnsavedChangesPrompt();
-                    project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
-                    try {
-                        await transcriptionsViewRef.handleSaveTranscript();
-                        // After successful save, proceed with tab switch
+
+        // Return a promise that resolves to true/false for complex async modals
+        return new Promise(resolve => {
+            // Check for unsaved changes in the transcriptions tab before switching away
+            if (selectedTab === 'transcriptions' && get(transcriptStore).transcriptDirty) {
+                project.update(p => ({
+                    ...p,
+                    showUnsavedChangesModal: true,
+                    unsavedItemName: 'current transcript',
+                    unsavedItemType: 'transcript',
+                    // Set up callbacks for the modal actions
+                    onUnsavedSave: async () => {
+                        hideUnsavedChangesPrompt();
+                        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
+                        try {
+                            await transcriptionsViewRef.handleSaveTranscript();
+                            // After successful save, proceed with tab switch
+                            await proceedTabSwitch(tabName);
+                            resolve(true);
+                        } catch (e) {
+                            // If save fails, keep user on current tab and show error
+                            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Save failed, tab switch cancelled.' }));
+                            message(`Failed to save transcript: ${e.message || e}`, { title: "Save Error", type: "error" });
+                            resolve(false);
+                        }
+                    },
+                    onUnsavedDiscard: async () => {
+                        hideUnsavedChangesPrompt();
+                        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
+                        // Discard changes and proceed with tab switch
+                        transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
                         await proceedTabSwitch(tabName);
-                    } catch (e) {
-                        // If save fails, keep user on current tab and show error
-                        project.update(p => ({ ...p, isLoading: false, statusMessage: 'Save failed, tab switch cancelled.' }));
-                        message(`Failed to save transcript: ${e.message || e}`, { title: "Save Error", type: "error" });
+                        resolve(true);
+                    },
+                    onUnsavedCancel: () => {
+                        hideUnsavedChangesPrompt();
+                        // Cancel tab switch
+                        project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
+                        resolve(false);
                     }
-                },
-                onUnsavedDiscard: async () => {
-                    hideUnsavedChangesPrompt();
+                }));
+                // Stop here, wait for user interaction with the modal
+                return;
+            }
+            // Existing data tab unsaved changes check (if any)
+            else if (selectedTab === 'data') {
+                // checkUnsavedChangesThenProceed handles its own modals/promises
+                checkUnsavedChangesThenProceed(null, "switching tabs").then(result => {
+                    canProceed = result;
+                    if (!canProceed) {
+                        project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
+                        resolve(false);
+                        return;
+                    }
                     project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
-                    // Discard changes and proceed with tab switch
-                    transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
-                    await proceedTabSwitch(tabName);
-                },
-                onUnsavedCancel: () => {
-                    hideUnsavedChangesPrompt();
-                    // Cancel tab switch
-                    project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
-                }
-            }));
-            return; // Stop here, wait for user interaction with the modal
-        }
-        // Existing data tab unsaved changes check (if any)
-        else if (selectedTab === 'data') {
-            canProceed = await checkUnsavedChangesThenProceed(null, "switching tabs");
-        }
+                    proceedTabSwitch(tabName).then(() => resolve(true));
+                });
+                return;
+            }
 
-        if (!canProceed) {
-            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
-            return;
-        }
+            // Fallback for simple cases (no dirty state)
+            if (!canProceed) {
+                project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
+                resolve(false);
+                return;
+            }
 
-        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
-        // If no unsaved changes or user chose to save/discard, proceed
-        await proceedTabSwitch(tabName);
+            project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
+            // If no unsaved changes or user chose to save/discard, proceed
+            proceedTabSwitch(tabName).then(() => resolve(true));
+        });
     }
 
     async function proceedTabSwitch(tabName) {
@@ -927,7 +949,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         let canProceed = true;
         if (selectedTab === 'data') canProceed = await checkUnsavedChangesThenProceed(null, `importing ${actionType || 'asset'}`);
         else if (selectedTab === 'transcriptions') {
-            if (get(project).transcriptDirty) { // This should probably be get(transcriptStore).transcriptDirty
+            if (get(transcriptStore).transcriptDirty) {
                 const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${actionType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
                 if (!confirmImport) canProceed = false;
                 else { clearTranscriptState(); if (transcriptionsViewRef?.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
@@ -938,15 +960,17 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             if (actionType === 'audio' || actionType === 'video') {
                 const importedPath = await importMediaFile(actionType);
                 if (importedPath) {
-                    await handleTabClick('data');
-                    prepareMediaNoteView(importedPath);
+                    if (await handleTabClick('data')) {
+                        prepareMediaNoteView(importedPath);
+                    }
                 }
             }
             else if (actionType === 'document') {
                 const importedPath = await importDocumentFile();
                 if (importedPath) {
-                    await handleTabClick('data');
-                    prepareDocumentView(importedPath, 'documents');
+                    if (await handleTabClick('data')) {
+                        prepareDocumentView(importedPath, 'documents');
+                    }
                 }
             }
             else if (actionType === 'table') {
@@ -965,8 +989,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             else if (actionType === 'image') {
                 const importedPath = await importImageFile();
                 if (importedPath) {
-                    await handleTabClick('data');
-                    prepareDocumentView(importedPath, 'images');
+                    if (await handleTabClick('data')) {
+                        prepareDocumentView(importedPath, 'images');
+                    }
                 }
             }
             else if (actionType === 'transcript') { 
@@ -985,8 +1010,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             try { 
                 const newTranscriptPath = await importTranscriptFile('msWord');
                 if (newTranscriptPath) {
-                    await handleTabClick('data');
-                    prepareImportedTranscriptView(newTranscriptPath);
+                    if (await handleTabClick('data')) {
+                        prepareImportedTranscriptView(newTranscriptPath);
+                    }
                 }
             } catch (e) { 
                 project.update(p => ({...p, isImportingAsset: false, isLoading: false}));
@@ -1007,8 +1033,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		try {
 			await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
 			await refreshProjectFiles();
-			await handleTabClick('data');
-			prepareDocumentView(tablePath, 'tables', hasHeaders);
+			if (await handleTabClick('data')) {
+			    prepareDocumentView(tablePath, 'tables', hasHeaders);
+            }
 		} catch (error) {
 			console.error(`[ProjectView] Error setting table headers:`, error);
 			await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
@@ -1019,10 +1046,13 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         const { path } = event.detail;
         await refreshProjectFiles();
         if (selectedTab !== 'data') {
-            await handleTabClick('data');
-            await tick();
+            if (await handleTabClick('data')) {
+                await tick();
+                prepareDocumentView(path, 'tables');
+            }
+        } else {
+            prepareDocumentView(path, 'tables');
         }
-        prepareDocumentView(path, 'tables');
     }
 
     $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
