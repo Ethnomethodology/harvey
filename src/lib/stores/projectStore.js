@@ -29,7 +29,7 @@ const createMinimalValidLexicalJson = () => {
     });
 };
 
-const initialState = {
+export const initialState = {
     id: null,
     name: null,
     xmlPath: null,
