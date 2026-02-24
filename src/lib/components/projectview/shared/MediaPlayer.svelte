@@ -636,6 +636,7 @@
             // Reset local state
             localMediaUrl = '';
             localAudioBuffer = null;
+            if (localAudioPeaks) console.log('[MediaPlayer] Clearing localAudioPeaks due to media load/unload.');
             localAudioPeaks = null;
             localDuration = 0;
             localCurrentTime = 0;
@@ -697,6 +698,7 @@
                 localAudioBuffer = null;
             }
             if (localAudioPeaks) {
+                console.log('[MediaPlayer] Clearing localAudioPeaks due to unload.');
                 localAudioPeaks = null;
             }
             if (!explicitMediaPath) {

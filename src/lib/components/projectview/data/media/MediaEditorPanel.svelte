@@ -195,7 +195,8 @@
                 dataTrimStartTime = 0;
                 dataTrimEndTime = duration;
                 currentTrimAudioBuffer = audioBuffer;
-                currentTrimAudioPeaks = peaks;
+                // Use peaks from event, or fall back to what we might have already captured
+                currentTrimAudioPeaks = peaks || currentTrimAudioPeaks;
                 showDataTrimUI = true;
             } else {
                 showDataTrimUI = false;
@@ -213,8 +214,8 @@
     }
 
     function handleMediaDataPeaksReady(event) {
-        if (showDataTrimUI && event.detail && event.detail.peaks) {
-            console.log('[MediaEditorPanel] Received lazy peaks update.');
+        if (event.detail && event.detail.peaks) {
+            console.log('[MediaEditorPanel] Received peaks update (lazy or initial).');
             currentTrimAudioPeaks = event.detail.peaks;
         }
     }
