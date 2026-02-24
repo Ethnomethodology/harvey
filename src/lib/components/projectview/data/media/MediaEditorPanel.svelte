@@ -335,7 +335,10 @@
                     </div>
                 {:else}
                     <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-500">
-                        Audio data not available for waveform.
+                        <div class="flex items-center gap-2">
+                            <div class="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-600"></div>
+                            <span>Loading waveform data...</span>
+                        </div>
                     </div>
                 {/if}
             </div>
