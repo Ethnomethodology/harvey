@@ -632,6 +632,12 @@
 
             try {
                 const assetUrl = await convertFileSrc(path);
+                console.log(`[MediaPlayer] Converted path '${path}' to asset URL: '${assetUrl}'`);
+
+                if (!assetUrl) {
+                    throw new Error(`convertFileSrc returned empty URL for path: ${path}`);
+                }
+
                 loadedPathFromProp = path;
                 localMediaUrl = assetUrl;
 
@@ -897,17 +903,28 @@
         }
     }
 	function onError(event) {
-        console.error('[MediaPlayer] onError event', event?.target?.error);
+        console.error('[MediaPlayer] onError event', event, event?.target?.error);
+
         let errorMsg = 'Unknown video error';
-        if (event.target?.error) {
-            switch (event.target.error.code) {
+        const errorCode = event.target?.error?.code;
+        const errorDetails = event.target?.error?.message || '';
+
+        if (errorCode) {
+            switch (errorCode) {
                 case MediaError.MEDIA_ERR_ABORTED: errorMsg = 'Playback aborted by user.'; break;
-                case MediaError.MEDIA_ERR_NETWORK: errorMsg = 'Network error caused playback failure.'; break;
+                case MediaError.MEDIA_ERR_NETWORK: errorMsg = 'Network error caused playback failure (e.g. 403 Forbidden). Check file permissions.'; break;
                 case MediaError.MEDIA_ERR_DECODE: errorMsg = 'Media decoding error.'; break;
                 case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg = 'Media format not supported.'; break;
-                default: errorMsg = `An unknown error occurred (Code: ${event.target.error.code})`; break;
+                default: errorMsg = `An unknown error occurred (Code: ${errorCode}).`; break;
             }
         }
+
+        if (errorDetails) {
+            errorMsg += ` Details: ${errorDetails}`;
+        }
+
+        console.error(`[MediaPlayer] Playback Error for ${localMediaUrl}: ${errorMsg}`);
+
         if (!explicitMediaPath) { // Global player error
             project.update((p) => ({ ...p, error: `Media Error: ${errorMsg}`, statusMessage: 'Error playing media.' }));
             togglePlayerPlaying(false);

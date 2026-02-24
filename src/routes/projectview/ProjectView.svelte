@@ -944,6 +944,14 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         }, 0);
     }
 
+    // Helper to switch tabs without toggling the panel if already active
+    async function ensureTab(tabName) {
+        if (selectedTab !== tabName) {
+            return await handleTabClick(tabName);
+        }
+        return true;
+    }
+
     async function triggerMediaImport(actionType) {
         project.update(p => ({...p, isLoading: true, statusMessage: `Preparing import...`}));
         let canProceed = true;
@@ -960,7 +968,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             if (actionType === 'audio' || actionType === 'video') {
                 const importedPath = await importMediaFile(actionType);
                 if (importedPath) {
-                    if (await handleTabClick('data')) {
+                    if (await ensureTab('data')) {
                         prepareMediaNoteView(importedPath);
                     }
                 }
@@ -968,7 +976,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             else if (actionType === 'document') {
                 const importedPath = await importDocumentFile();
                 if (importedPath) {
-                    if (await handleTabClick('data')) {
+                    if (await ensureTab('data')) {
                         prepareDocumentView(importedPath, 'documents');
                     }
                 }
@@ -989,7 +997,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             else if (actionType === 'image') {
                 const importedPath = await importImageFile();
                 if (importedPath) {
-                    if (await handleTabClick('data')) {
+                    if (await ensureTab('data')) {
                         prepareDocumentView(importedPath, 'images');
                     }
                 }
@@ -1010,7 +1018,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             try { 
                 const newTranscriptPath = await importTranscriptFile('msWord');
                 if (newTranscriptPath) {
-                    if (await handleTabClick('data')) {
+                    if (await ensureTab('data')) {
                         prepareImportedTranscriptView(newTranscriptPath);
                     }
                 }
@@ -1033,7 +1041,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		try {
 			await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
 			await refreshProjectFiles();
-			if (await handleTabClick('data')) {
+			if (await ensureTab('data')) {
 			    prepareDocumentView(tablePath, 'tables', hasHeaders);
             }
 		} catch (error) {
@@ -1045,12 +1053,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     async function handleTableCreated(event) {
         const { path } = event.detail;
         await refreshProjectFiles();
-        if (selectedTab !== 'data') {
-            if (await handleTabClick('data')) {
-                await tick();
-                prepareDocumentView(path, 'tables');
-            }
-        } else {
+        if (await ensureTab('data')) {
+            await tick();
             prepareDocumentView(path, 'tables');
         }
     }
