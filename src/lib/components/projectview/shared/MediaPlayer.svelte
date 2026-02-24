@@ -842,12 +842,38 @@
         const loadId = currentWaveformLoadId;
         const currentProject = get(project);
         const projectId = currentProject.id;
-        const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+        let assetRelativePath = null;
+        if (explicitMediaPath && currentProject.baseDirectory) {
+            // If explicit path is used (Data tab), we need to derive the relative path
+            // We can try to use the selectedMediaFile if it matches, but it's safer to calculate it
+            // However, loadedPathFromProp is an absolute path (or asset URL)
+            // Wait, loadedPathFromProp is usually the absolute path before conversion? No, it sets it to path passed to loadMedia.
+            // Check usage: loadMedia(mediaPathToLoad) sets loadedPathFromProp = path.
+            // mediaPathToLoad is explicitMediaPath (absolute path).
+
+            const normalizedBase = currentProject.baseDirectory.replace(/\\/g, '/');
+            const normalizedPath = explicitMediaPath.replace(/\\/g, '/');
+
+            if (normalizedPath.startsWith(normalizedBase)) {
+                // Strip base dir
+                let rel = normalizedPath.substring(normalizedBase.length);
+                if (rel.startsWith('/')) rel = rel.substring(1);
+                assetRelativePath = rel;
+            } else {
+                // Fallback: If we can't derive it easily (e.g. symlinks or weird paths), we might miss cache.
+                // But usually explicitMediaPath in Data tab comes from the project structure.
+                console.warn("[MediaPlayer] Could not derive relative path for cache lookup from explicit path:", explicitMediaPath);
+            }
+        } else {
+            // Default behavior for Transcription tab
+            assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+        }
 
         // 1. Check for cached waveform data first
         if (projectId && assetRelativePath) {
             try {
-                console.log('[MediaPlayer] Checking for cached waveform data...');
+                console.log(`[MediaPlayer] Checking for cached waveform data for ${assetRelativePath}...`);
                 const metadata = await getAssetMetadata(assetRelativePath);
                 if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
                     console.log('[MediaPlayer] Cached waveform data found.');
@@ -878,7 +904,7 @@
             const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
             // If no cached data, proceed with generating peaks using the worker
-            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Sending to worker for peak generation.`);
+            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath || 'unknown path'}. Sending to worker for peak generation.`);
             const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
             const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
             waveformWorker.postMessage({
