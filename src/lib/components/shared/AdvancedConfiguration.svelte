@@ -275,7 +275,7 @@
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
                             <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
-                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available (CUDA > MPS > CPU).</p>
+                            <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                         </div>
 
                         <!-- Threads -->
