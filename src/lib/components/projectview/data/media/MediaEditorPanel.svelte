@@ -162,6 +162,7 @@
     // LIVE MediaPlayer properties needed by InteractiveWaveform
     let dataMediaPlayerCurrentTime = 0;
     let dataMediaPlayerIsPlaying = false;
+    let dataMediaPlayerDuration = 0; // Bound to MediaPlayer to get duration reactively
 
     onMount(() => {
         isMediaEditorOpen.set(true);
@@ -285,6 +286,7 @@
             <MediaPlayer
                 bind:this={mediaPlayerInDataRef}
                 bind:localCurrentTime={dataMediaPlayerCurrentTime}
+                bind:localDuration={dataMediaPlayerDuration}
                 bind:localIsPlaying={dataMediaPlayerIsPlaying}
                 bind:isVideoMinimized={isDataPlayerVideoHidden}
                 explicitMediaPath={mediaPath}
@@ -342,7 +344,7 @@
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalPeaks={currentTrimAudioPeaks}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
-                            externalDuration={mediaPlayerInDataRef?.localDuration}
+                            externalDuration={dataMediaPlayerDuration}
                             externalIsPlaying={dataMediaPlayerIsPlaying}
                             externalSegments={[]}
                             externalCurrentSegmentIndex={-1}
