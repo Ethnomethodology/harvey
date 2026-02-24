@@ -2514,7 +2514,7 @@ export async function clearProjectDataStore() {
     const transcriptStoreModule = await import('$lib/stores/transcriptStore.js');
     const tagStoreModule = await import('$lib/stores/tagStore.js');
 
-    projectStoreModule.project.set({ ...projectStoreModule.initialState });
+    projectStoreModule.project.set({ ...projectStoreModule.initialState, isLoading: false });
     projectStoreModule.currentProjectGroupsList.set([]);
 
     transcriptStoreModule.clearTranscriptState();
