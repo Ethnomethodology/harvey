@@ -439,7 +439,8 @@
                                             fontFamily += ', sans-serif';
                                         }
 
-                                        const fontString = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                        const safeFontSize = Math.round(seg.fontSize);
+                                        const fontString = `${seg.italic ? 'italic' : 'normal'} ${seg.bold ? '700' : '400'} ${safeFontSize}px ${fontFamily}`;
                                         ctx.font = fontString;
 
                                         const words = part.split(/(\s+)/);
@@ -526,7 +527,10 @@
                                         fontFamily += ', sans-serif';
                                     }
 
-                                    const fontString = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    // Standard CSS Font String Order: style variant weight size/line-height family
+                                    // Also round font size to avoid float issues on Windows
+                                    const safeFontSize = Math.round(seg.fontSize);
+                                    const fontString = `${seg.italic ? 'italic' : 'normal'} ${seg.bold ? '700' : '400'} ${safeFontSize}px ${fontFamily}`;
                                     ctx.font = fontString;
                                     ctx.textBaseline = 'alphabetic';
 
@@ -557,6 +561,8 @@
                                     }
 
                                     // 2. Draw Text (Foreground)
+                                    // Force source-over to ensure text is drawn on top of any highlights
+                                    ctx.globalCompositeOperation = 'source-over';
                                     ctx.fillStyle = seg.color || baseColor;
                                     ctx.fillText(seg.text, lineX, lineBaseline);
 
