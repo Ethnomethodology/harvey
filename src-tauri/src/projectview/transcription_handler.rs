@@ -541,8 +541,10 @@ pub async fn save_imported_transcript_and_update_xml(
     json_content: String,
 ) -> Result<(), CommandError> {
     info!("[Backend Save Imported Transcript] Target Path: {}", target_path);
-    let target_path_buf = PathBuf::from(&target_path);
-    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+
+    // Canonicalize paths to strip Windows prefixes for consistent comparison
+    let target_path_buf = canonicalize_path(&target_path).unwrap_or_else(|_| PathBuf::from(&target_path));
+    let project_xml_path_buf = canonicalize_path(&project_xml_path).unwrap_or_else(|_| PathBuf::from(&project_xml_path));
 
     if !project_xml_path_buf.exists() {
         return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));

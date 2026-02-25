@@ -2,6 +2,7 @@
 use super::shared_types::*;
 use super::shared_utils::*;
 use super::db_handler::{self, FileMetadataWithCustomFieldsFromDb};
+use crate::utils::canonicalize_path;
 use crate::welcome::config::CommandError;
 use log::{info, warn, error, debug};
 use std::{
@@ -74,8 +75,9 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     info!("[Backend Save Doc] Project XML: {}", project_xml_path);
     info!("[Backend Save Doc] Document Name: {}", document_name);
 
-    let target_path_buf = PathBuf::from(&target_path);
-    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+    // Canonicalize paths to strip Windows prefixes for consistent comparison
+    let target_path_buf = canonicalize_path(&target_path).unwrap_or_else(|_| PathBuf::from(&target_path));
+    let project_xml_path_buf = canonicalize_path(&project_xml_path).unwrap_or_else(|_| PathBuf::from(&project_xml_path));
 
     if !project_xml_path_buf.exists() || !project_xml_path_buf.is_file() {
         return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));
