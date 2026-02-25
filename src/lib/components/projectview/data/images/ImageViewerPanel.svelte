@@ -335,7 +335,19 @@
                         }
 
                         // Secure Canvas Rich Text Renderer
-                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                        const renderRichText = (targetCtx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                            // Offscreen canvas to isolate rendering and fix Windows clipping/rendering issues
+                            const offCanvas = document.createElement('canvas');
+                            offCanvas.width = Math.ceil(width) + 1;
+                            offCanvas.height = Math.ceil(height) + 1;
+                            const ctx = offCanvas.getContext('2d');
+
+                            // Map coordinates to local offscreen rendering (0,0 based)
+                            const originalX = x;
+                            const originalY = y;
+                            x = 0;
+                            y = 0;
+
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html || '', 'text/html');
                             
@@ -571,6 +583,9 @@
                                 });
                                 currentY += h;
                             });
+
+                            // Draw the offscreen canvas onto the main context
+                            targetCtx.drawImage(offCanvas, originalX, originalY);
                         };
 
                         ctx.save();
