@@ -471,11 +471,7 @@
 
                             if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
 
-                            // Command Buffers for rendering
-                            const backgroundOps = [];
-                            const foregroundOps = [];
-
-                            // Layout Calculation Pass
+                            // Vertical Layout
                             const lineHeights = lines.map(line => {
                                 if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
                                 return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
@@ -497,91 +493,83 @@
                                 else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
                                 else lineX = startX;
 
+                                // Alphabetic baseline
                                 const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                // Center the visual line content within the line box height (h)
+                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
+                                // Easier approximation for vertical center:
                                 const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
 
                                 line.forEach(seg => {
-                                    // Collect Background Ops (Highlights)
-                                    if (seg.highlight && seg.highlight !== 'transparent') {
-                                        backgroundOps.push({
-                                            type: 'highlight',
-                                            color: seg.highlight,
-                                            x: lineX,
-                                            width: seg.width,
-                                            fontSize: seg.fontSize,
-                                            text: seg.text,
-                                            font: seg.font, // Use stored font string
-                                            baseline: lineBaseline
-                                        });
+                                    // Set font first for both measuring and drawing text
+                                    // Robust font family construction for Windows
+                                    let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
+                                    if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
+                                    // Ensure multi-word fonts are quoted if not already
+                                    if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
+                                        fontFamily = `'${fontFamily}'`;
+                                    }
+                                    // Always fallback to sans-serif
+                                    if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
+                                        fontFamily += ', sans-serif';
                                     }
 
-                                    // Collect Foreground Ops (Text & Decorations)
-                                    foregroundOps.push({
-                                        type: 'text',
-                                        text: seg.text,
-                                        x: lineX,
-                                        y: lineBaseline,
-                                        color: seg.color || baseColor,
-                                        font: seg.font, // Use stored font string
-                                        underline: seg.underline,
-                                        strikethrough: seg.strikethrough,
-                                        width: seg.width,
-                                        fontSize: seg.fontSize
-                                    });
+                                    const fontString = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    ctx.font = fontString;
+                                    ctx.textBaseline = 'alphabetic';
 
+                                    // 1. Draw Highlight First (Background) - Standard Painter's Algorithm
+                                    if (seg.highlight && seg.highlight !== 'transparent') {
+                                        ctx.fillStyle = seg.highlight;
+
+                                        // Hybrid Approach for Robustness:
+                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+
+                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                        const m = ctx.measureText(seg.text);
+                                        // Use a small safety padding for ink (10% of font size)
+                                        const safetyPadding = seg.fontSize * 0.1;
+
+                                        // 3. Expand if the ink pokes out
+                                        // Note: actualBoundingBoxAscent is distance UP from baseline
+                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+
+                                        const finalTop = Math.min(standardTop, inkTop);
+                                        const finalBottom = Math.max(standardBottom, inkBottom);
+
+                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                    }
+
+                                    // 2. Draw Text (Foreground)
+                                    ctx.fillStyle = seg.color || baseColor;
+                                    ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                    if (seg.underline) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
+
+                                    if (seg.strikethrough) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
                                     lineX += seg.width;
                                 });
                                 currentY += h;
-                            });
-
-                            // Execute Render Ops - Strictly Ordered
-
-                            // 1. Backgrounds
-                            backgroundOps.forEach(op => {
-                                ctx.font = op.font;
-                                ctx.fillStyle = op.color;
-
-                                // Recalculate box dimensions using exact same logic as before
-                                const standardTop = op.baseline - (op.fontSize * 1.1);
-                                const standardBottom = op.baseline + (op.fontSize * 0.3);
-                                const m = ctx.measureText(op.text);
-                                const safetyPadding = op.fontSize * 0.1;
-                                const inkTop = op.baseline - (m.actualBoundingBoxAscent || op.fontSize * 0.8) - safetyPadding;
-                                const inkBottom = op.baseline + (m.actualBoundingBoxDescent || op.fontSize * 0.2) + safetyPadding;
-                                const finalTop = Math.min(standardTop, inkTop);
-                                const finalBottom = Math.max(standardBottom, inkBottom);
-
-                                ctx.fillRect(op.x, finalTop, op.width, finalBottom - finalTop);
-                            });
-
-                            // 2. Foregrounds
-                            ctx.globalCompositeOperation = 'source-over'; // Enforce default blending
-                            ctx.textBaseline = 'alphabetic'; // Enforce baseline
-
-                            foregroundOps.forEach(op => {
-                                ctx.font = op.font;
-                                ctx.fillStyle = op.color;
-                                ctx.fillText(op.text, op.x, op.y);
-
-                                if (op.underline) {
-                                    ctx.strokeStyle = op.color;
-                                    ctx.lineWidth = Math.max(1, op.fontSize / 15);
-                                    ctx.beginPath();
-                                    const yPos = op.y + (op.fontSize * 0.15);
-                                    ctx.moveTo(op.x, yPos);
-                                    ctx.lineTo(op.x + op.width, yPos);
-                                    ctx.stroke();
-                                }
-
-                                if (op.strikethrough) {
-                                    ctx.strokeStyle = op.color;
-                                    ctx.lineWidth = Math.max(1, op.fontSize / 15);
-                                    ctx.beginPath();
-                                    const yPos = op.y - (op.fontSize * 0.25);
-                                    ctx.moveTo(op.x, yPos);
-                                    ctx.lineTo(op.x + op.width, yPos);
-                                    ctx.stroke();
-                                }
                             });
                         };
 
