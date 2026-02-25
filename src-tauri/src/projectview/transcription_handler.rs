@@ -33,45 +33,51 @@ fn time_str_to_seconds(time_str: &str) -> Result<f64, CommandError> {
     Ok(hours * 3600.0 + minutes * 60.0 + seconds)
 }
 
-// Basic HTML tag stripper
+// Robust HTML tag stripper using Regex to handle multi-line tags
 fn strip_html_tags(html: &str) -> String {
-    let mut result = String::new();
-    let mut in_tag = false;
-    for char_code in html.chars() {
-        match char_code {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => result.push(char_code),
-            _ => (),
-        }
-    }
-    result
+    // Regex to match any HTML tag: < ... >
+    // Because . does not match newlines by default in Rust regex, we use (?s) flag to enable dot-matches-newline
+    // or construct a pattern that matches anything including newlines.
+    let re_tags = Regex::new(r"(?s)<[^>]*>").unwrap();
+    let stripped = re_tags.replace_all(html, "");
+
+    stripped
         .replace("&nbsp;", " ")
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
-        .trim()
+        // No trim() here because we want to preserve internal structure before line splitting,
+        // lines will be trimmed individually later.
         .to_string()
 }
 
 fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<TranscriptSegment>, CommandError> {
     let mut segments: Vec<TranscriptSegment> = Vec::new();
     let mut current_segment: Option<TranscriptSegment> = None;
+    let mut pending_start_time: Option<f64> = None;
 
+    // Matches "HH:MM:SS Speaker N" on a single line
     let re_timestamp_speaker = Regex::new(r"^(\d{2}:\d{2}:\d{2})\s+(Speaker\s*\d+):?\s*$")
         .map_err(|e| CommandError::from(format!("Regex compilation for timestamp/speaker failed: {}", e)))?;
+
+    // Matches "HH:MM:SS" on a single line
     let re_timestamp_only = Regex::new(r"^(\d{2}:\d{2}:\d{2})\s*$")
         .map_err(|e| CommandError::from(format!("Regex compilation for timestamp_only failed: {}", e)))?;
+
+    // Matches "Speaker N" on a single line (for split headers)
+    let re_speaker_only = Regex::new(r"^(Speaker\s*\d+):?\s*$")
+        .map_err(|e| CommandError::from(format!("Regex compilation for speaker_only failed: {}", e)))?;
 
     for line in transcript_text_content.lines() {
         let trimmed_line = line.trim();
         debug!("[parse_transcript_block] Processing line: '{}'", trimmed_line);
-        // Allow processing of empty lines if a segment is active, as they might be intentional newlines within text
+
+        // Allow processing of empty lines if a segment is active
         if trimmed_line.is_empty() {
             if let Some(ref mut seg) = current_segment {
-                 if !seg.text.is_empty() && !seg.text.ends_with('\n') { // Avoid multiple newlines if already present
+                 if !seg.text.is_empty() && !seg.text.ends_with('\n') {
                     seg.text.push('\n');
                  }
             }
@@ -79,11 +85,15 @@ fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<Transcrip
         }
 
         if let Some(caps) = re_timestamp_speaker.captures(trimmed_line) {
+            // Case 1: Timestamp and Speaker on the same line
             debug!("[parse_transcript_block] Matched timestamp+speaker line: '{}'", trimmed_line);
             let time_str = caps.get(1).unwrap().as_str();
             let speaker_str_raw = caps.get(2).unwrap().as_str();
             let speaker_str = speaker_str_raw.replace(char::is_whitespace, "-"); 
             let start_time = time_str_to_seconds(time_str)?;
+
+            // If there was a pending timestamp from previous line, discard it as this line starts a fresh segment
+            pending_start_time = None;
 
             if let Some(mut seg) = current_segment.take() {
                 seg.end_time = start_time; 
@@ -100,26 +110,86 @@ fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<Transcrip
                 speaker: speaker_str,
                 text: String::new(),
             });
+
         } else if let Some(caps_time_only) = re_timestamp_only.captures(trimmed_line) {
+            // Case 2: Timestamp only line
             debug!("[parse_transcript_block] Matched timestamp only line: '{}'", trimmed_line);
-            if let Some(mut seg) = current_segment.take() {
-                let end_time_val = time_str_to_seconds(caps_time_only.get(1).unwrap().as_str())?;
-                seg.end_time = end_time_val;
-                seg.text = seg.text.trim().to_string();
-                if !seg.text.is_empty() {
-                     segments.push(seg);
+            let time_val = time_str_to_seconds(caps_time_only.get(1).unwrap().as_str())?;
+
+            // This could be a start time for the next speaker (split header) OR an end time for the current segment.
+            // We store it as pending. If next line is a Speaker, we use it as start time.
+            // If next line is text, we treat this as end time for previous segment (or ignore).
+            pending_start_time = Some(time_val);
+
+        } else if let Some(caps_speaker_only) = re_speaker_only.captures(trimmed_line) {
+            // Case 3: Speaker only line
+            debug!("[parse_transcript_block] Matched speaker only line: '{}'", trimmed_line);
+            let speaker_str_raw = caps_speaker_only.get(1).unwrap().as_str();
+            let speaker_str = speaker_str_raw.replace(char::is_whitespace, "-");
+
+            if let Some(start_time) = pending_start_time.take() {
+                // We have a pending timestamp + this speaker line = New Segment (Split Header)
+                if let Some(mut seg) = current_segment.take() {
+                    seg.end_time = start_time;
+                    seg.text = seg.text.trim().to_string();
+                    if !seg.text.is_empty() {
+                        segments.push(seg);
+                    } else {
+                        warn!("[Transcript Parse] Segment for speaker {} at {:.2}s had no text, discarding.", seg.speaker, seg.start_time);
+                    }
+                }
+                current_segment = Some(TranscriptSegment {
+                    start_time,
+                    end_time: 0.0,
+                    speaker: speaker_str,
+                    text: String::new(),
+                });
+            } else {
+                // Speaker line without a preceding timestamp.
+                // Treat as text content for now, or could imply a speaker change without time?
+                // Given strict requirement, we treat as text or ignore.
+                // But usually this means we missed a timestamp.
+                // Let's append to current segment if exists.
+                if let Some(ref mut seg) = current_segment {
+                    if !seg.text.is_empty() && !seg.text.ends_with('\n') { seg.text.push(' '); }
+                    seg.text.push_str(trimmed_line);
                 } else {
-                    warn!("[Transcript Parse] Segment (ending at {}) had no text, discarding.", end_time_val);
+                    warn!("[Transcript Parse] Speaker line '{}' found without active segment or timestamp. Ignoring.", trimmed_line);
                 }
             }
-        } else if let Some(ref mut seg) = current_segment {
-            debug!("[parse_transcript_block] Appending to segment '{}': '{}'", seg.speaker, trimmed_line);
-            if !seg.text.is_empty() && !seg.text.ends_with('\n') { 
-                seg.text.push(' '); // Add space between consecutive text lines for the same speaker
-            }
-            seg.text.push_str(trimmed_line);
+
         } else {
-            debug!("[Transcript Parse] Ignoring line (no current segment or not recognized format): {}", trimmed_line);
+            // Case 4: Text line
+            // If we had a pending timestamp but next line is text, that timestamp was likely an end-time marker (or just a timestamp in text).
+            if let Some(end_time_val) = pending_start_time.take() {
+                debug!("[parse_transcript_block] Pending timestamp {:.2} followed by text. Treating as end time.", end_time_val);
+                if let Some(mut seg) = current_segment.take() {
+                    seg.end_time = end_time_val;
+                    seg.text = seg.text.trim().to_string();
+                    if !seg.text.is_empty() {
+                         segments.push(seg);
+                    }
+                    // Since we closed the segment, where does this text go?
+                    // If it's a new block of text without a speaker, it's orphan text.
+                    // We can't assign it to the closed segment.
+                    // Ideally, we start a new segment with "Unknown" speaker?
+                    // But usually end-timestamp is at the end of the block.
+                    // Let's assume this text belongs to a new, un-timestamped segment or we drop it.
+                    // For safety in this specific parser, let's log warning and drop, or try to append to closed segment (which is weird).
+                    // Actually, re-reading logic: re_timestamp_only was treating it as end time immediately before.
+                    // So this behavior is consistent with previous logic, just delayed by one line check.
+                }
+            }
+
+            if let Some(ref mut seg) = current_segment {
+                debug!("[parse_transcript_block] Appending to segment '{}': '{}'", seg.speaker, trimmed_line);
+                if !seg.text.is_empty() && !seg.text.ends_with('\n') {
+                    seg.text.push(' ');
+                }
+                seg.text.push_str(trimmed_line);
+            } else {
+                debug!("[Transcript Parse] Ignoring line (no current segment): {}", trimmed_line);
+            }
         }
     }
 
