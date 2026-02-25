@@ -44,6 +44,11 @@
                         <option value="msWord">MS Word Document (.docx)</option>
                         <!-- Other options can be added here later -->
                     </select>
+                    {#if selectedSourceType === 'msWord'}
+                        <p class="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                            Microsoft Word transcript with speakers and timestamps only supported.
+                        </p>
+                    {/if}
                 </div>
             </div>
 
