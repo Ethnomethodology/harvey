@@ -226,9 +226,11 @@ pub async fn import_word_transcript<R: Runtime>(
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 
     let python_path = get_python_path()?;
-    let script_path = app_handle.path()
+    let script_path_raw = app_handle.path()
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+    let script_path = canonicalize_path(&script_path_raw)
+        .unwrap_or(script_path_raw); // Best effort, fallback to raw if fails (e.g. if file doesn't exist yet, though it should)
 
     let pandoc_args = vec![
         source_docx_path.to_string_lossy().to_string(),
@@ -289,7 +291,8 @@ pub async fn import_word_transcript<R: Runtime>(
     let _ = fs::remove_file(&temp_html_path);
 
     let mut transcript_block_text_option: Option<String> = None;
-    let mut in_transcript_section = false;
+    // Default to true to allow documents without explicit "Transcript" heading
+    let mut in_transcript_section = true;
     let mut collected_lines_for_block = Vec::new();
     let transcript_heading_re = Regex::new(r"(?i)^\s*Transcript\s*$").unwrap();
 
@@ -297,7 +300,7 @@ pub async fn import_word_transcript<R: Runtime>(
         let line_stripped_of_tags = strip_html_tags(line_raw);
         
         if transcript_heading_re.is_match(&line_stripped_of_tags) {
-            debug!("[HTML Parse] Found 'Transcript' heading: '{}'", line_stripped_of_tags);
+            debug!("[HTML Parse] Found 'Transcript' heading: '{}'. Clearing previous collected lines.", line_stripped_of_tags);
             in_transcript_section = true;
             collected_lines_for_block.clear(); 
             continue; 
@@ -313,16 +316,17 @@ pub async fn import_word_transcript<R: Runtime>(
             }
         }
     }
-    info!("[import_word_transcript] Collected {} lines under 'Transcript': {:?}", collected_lines_for_block.len(), collected_lines_for_block);
+    info!("[import_word_transcript] Collected {} lines (Transcript header found or implicit): {:?}", collected_lines_for_block.len(), collected_lines_for_block);
     
     if !collected_lines_for_block.is_empty() {
         transcript_block_text_option = Some(collected_lines_for_block.join("\n"));
     } else if in_transcript_section { 
-        warn!("[import_word_transcript] 'Transcript' heading found, but no subsequent content collected.");
+        warn!("[import_word_transcript] 'Transcript' section active (explicit or implicit), but no subsequent content collected.");
         transcript_block_text_option = Some(String::new()); 
     }
     
-    let transcript_text_content = transcript_block_text_option.ok_or_else(|| CommandError::from("Could not find 'Transcript' section in the document. Please ensure a heading named 'Transcript' exists."))?;
+    // Fallback logic handled by in_transcript_section = true, so error only if empty result after parsing attempt
+    let transcript_text_content = transcript_block_text_option.ok_or_else(|| CommandError::from("Could not extract transcript text content from the document."))?;
     info!("[import_word_transcript] Transcript text content:\n{}", transcript_text_content);
     
     let segments = parse_transcript_block(&transcript_text_content)?;
