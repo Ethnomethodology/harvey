@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf}, // Path added back
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
+use crate::utils::canonicalize_path;
 use chrono::Utc; // Added for timestamping metadata
 use tauri::{AppHandle, Runtime};
 use tauri::Manager;
@@ -160,12 +161,15 @@ pub async fn import_word_transcript<R: Runtime>(
     project_xml_path_str: String,
 ) -> Result<String, CommandError> {
     info!("[import_word_transcript] Source DOCX: {}, Project XML: {}", source_docx_path_str, project_xml_path_str);
-    let source_docx_path = PathBuf::from(&source_docx_path_str);
-    let project_xml_path = PathBuf::from(&project_xml_path_str);
 
-    if !source_docx_path.exists() {
+    if !Path::new(&source_docx_path_str).exists() {
         return Err(CommandError::from(format!("Source DOCX not found: {}", source_docx_path_str)));
     }
+
+    let source_docx_path = canonicalize_path(&source_docx_path_str)
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize source DOCX path: {}", e)))?;
+    let project_xml_path = canonicalize_path(&project_xml_path_str)
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize project XML path: {}", e)))?;
     let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base dir from XML"))?;
 
     let original_docx_filename = source_docx_path.file_name()
