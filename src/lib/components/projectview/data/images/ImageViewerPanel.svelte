@@ -466,8 +466,10 @@
                             });
                             const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
 
-                            let currentY = startY_box + (availableH - totalHeight) / 2;
+                            const startY = startY_box + (availableH - totalHeight) / 2;
 
+                            // Pass 1: Render Highlights (Background)
+                            let currentY = startY;
                             lines.forEach((line, i) => {
                                 const h = lineHeights[i];
                                 const lineAlign = line[0]?.align || 'center';
@@ -481,34 +483,23 @@
                                 else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
                                 else lineX = startX;
 
-                                // Alphabetic baseline
                                 const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
-                                // Center the visual line content within the line box height (h)
-                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
-                                // Easier approximation for vertical center:
                                 const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
 
                                 line.forEach(seg => {
-                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
-                                    ctx.textBaseline = 'alphabetic';
-
                                     if (seg.highlight && seg.highlight !== 'transparent') {
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+
                                         ctx.fillStyle = seg.highlight;
 
                                         // Hybrid Approach for Robustness:
-                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
-                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
                                         const standardTop = lineBaseline - (seg.fontSize * 1.1);
                                         const standardBottom = lineBaseline + (seg.fontSize * 0.3);
 
-                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
                                         const m = ctx.measureText(seg.text);
-                                        // Use a small safety padding for ink (10% of font size)
                                         const safetyPadding = seg.fontSize * 0.1;
 
-                                        // 3. Expand if the ink pokes out
-                                        // Note: actualBoundingBoxAscent is distance UP from baseline
                                         const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
                                         const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
 
@@ -517,6 +508,33 @@
 
                                         ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
                                     }
+                                    lineX += seg.width;
+                                });
+                                currentY += h;
+                            });
+
+                            // Pass 2: Render Text & Decorations (Foreground)
+                            currentY = startY;
+                            lines.forEach((line, i) => {
+                                const h = lineHeights[i];
+                                const lineAlign = line[0]?.align || 'center';
+
+                                let visibleLine = [...line];
+                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
+                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+
+                                let lineX;
+                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                                else lineX = startX;
+
+                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+
+                                line.forEach(seg => {
+                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    ctx.textBaseline = 'alphabetic';
 
                                     ctx.fillStyle = seg.color || baseColor;
                                     ctx.fillText(seg.text, lineX, lineBaseline);
