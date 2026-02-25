@@ -62,6 +62,7 @@ export let compactMode = false; // New prop, defaults to false
 	let lastDrawnZoomLevel = -1;
 	let lastDrawnSegmentIndex = -1;
 	let lastDrawnBuffer = null;
+    let lastDrawnPeaks = null; // Track peaks for redraw
 	let lastDrawnActualDuration = -1;
 	let lastDrawnIsEditing = false;
 	let lastDrawnEditStart = -1;
@@ -531,6 +532,7 @@ export let compactMode = false; // New prop, defaults to false
 		lastDrawnZoomLevel = zoomLevel;
 		lastDrawnSegmentIndex = currentActiveIndex;
 		lastDrawnBuffer = buf;
+        lastDrawnPeaks = peaks;
 		lastDrawnActualDuration = dur;
 		lastDrawnIsEditing = isEditingSegment;
 		lastDrawnEditStart = editSegmentStartTime;
@@ -549,6 +551,7 @@ export let compactMode = false; // New prop, defaults to false
 
         let needsDraw = forceNextRedraw ||
             (buf !== lastDrawnBuffer) ||
+            (peaks !== lastDrawnPeaks) ||
             (currentActiveIdx !== lastDrawnSegmentIndex) ||
             (Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) ||
             (Math.abs(scrollOffsetPx - lastDrawnScrollOffset) > 0.5) ||
@@ -569,6 +572,7 @@ export let compactMode = false; // New prop, defaults to false
             lastDrawnZoomLevel = zoomLevel;
             lastDrawnSegmentIndex = currentActiveIdx;
             lastDrawnBuffer = buf;
+            lastDrawnPeaks = peaks;
             lastDrawnActualDuration = dur;
             lastDrawnIsEditing = isEditingSegment;
             lastDrawnEditStart = editSegmentStartTime;
@@ -613,6 +617,7 @@ export let compactMode = false; // New prop, defaults to false
 		lastDrawnSegmentIndex = -1;
         if (clearBuffer) {
             lastDrawnBuffer = null;
+            lastDrawnPeaks = null;
         }
 		lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
@@ -664,7 +669,7 @@ export let compactMode = false; // New prop, defaults to false
 		window.removeEventListener('mousemove', handleEditMouseMove);
 		window.removeEventListener('mouseup', handleEditMouseUp);
 		lastDrawnTime = -1; lastDrawnScrollOffset = -1; lastDrawnZoomLevel = -1; lastDrawnSegmentIndex = -1;
-		lastDrawnBuffer = null; lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
+		lastDrawnBuffer = null; lastDrawnPeaks = null; lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
 	});
 
