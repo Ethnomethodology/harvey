@@ -296,10 +296,11 @@ pub async fn import_word_transcript<R: Runtime>(
     let mut collected_lines_for_block = Vec::new();
     let transcript_heading_re = Regex::new(r"(?i)^\s*Transcript\s*$").unwrap();
 
-    for line_raw in html_content.lines() {
-        let line_stripped_of_tags = strip_html_tags(line_raw);
-        
-        if transcript_heading_re.is_match(&line_stripped_of_tags) {
+    // Strip HTML tags from the ENTIRE content first to handle multi-line tags (e.g. href attributes wrapped to new lines)
+    let full_stripped_text = strip_html_tags(&html_content);
+
+    for line_stripped_of_tags in full_stripped_text.lines() {
+        if transcript_heading_re.is_match(line_stripped_of_tags) {
             debug!("[HTML Parse] Found 'Transcript' heading: '{}'. Clearing previous collected lines.", line_stripped_of_tags);
             in_transcript_section = true;
             collected_lines_for_block.clear(); 
@@ -308,8 +309,10 @@ pub async fn import_word_transcript<R: Runtime>(
 
         if in_transcript_section {
             // Collect all non-empty lines after stripping tags
-            if !line_stripped_of_tags.is_empty() {
-                collected_lines_for_block.push(line_stripped_of_tags);
+            // Trim each line to remove leading/trailing whitespace from HTML formatting
+            let trimmed_line = line_stripped_of_tags.trim();
+            if !trimmed_line.is_empty() {
+                collected_lines_for_block.push(trimmed_line.to_string());
             } else if !collected_lines_for_block.is_empty() { 
                 // If we've already started collecting, an empty line after stripping might be a paragraph break
                 collected_lines_for_block.push(String::new()); // Add an empty string to represent a newline
