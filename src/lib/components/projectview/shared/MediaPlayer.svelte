@@ -41,6 +41,13 @@
 			if (type === 'DECODE_AUDIO_COMPLETE') {
 				const { peaks } = payload;
 				localAudioBuffer = audioBuffer; // Set local buffer for this component instance
+				localAudioPeaks = peaks ? new Float32Array(peaks) : null;
+
+                // If peaks are ready, notify listeners (e.g. Trim Panel) immediately
+                if (localAudioPeaks) {
+                    dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
+                }
+
 				if (!explicitMediaPath) {
 					// For the main player, we proceed to handle global state and caching.
 					const currentProject = get(project);
@@ -54,6 +61,9 @@
 							if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
 								const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
 								setAudioBuffer(audioBuffer, cachedPeaks); // Set both buffer and cached peaks
+								localAudioPeaks = cachedPeaks;
+                                // Notify listeners immediately
+                                dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
 								console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
 								return; // Successfully loaded from cache
 							}
@@ -145,6 +155,7 @@
 	export let localDuration = 0;
 	export let localIsPlaying = false;
 	export let localAudioBuffer = null;
+	export let localAudioPeaks = null;
 	export let isMediaReadyForProcessing = false; // Default to false
 
 	let segmentPlayEndTime = null;
@@ -625,6 +636,8 @@
             // Reset local state
             localMediaUrl = '';
             localAudioBuffer = null;
+            if (localAudioPeaks) console.log('[MediaPlayer] Clearing localAudioPeaks due to media load/unload.');
+            localAudioPeaks = null;
             localDuration = 0;
             localCurrentTime = 0;
             localIsPlaying = false;
@@ -683,6 +696,10 @@
             }
             if (localAudioBuffer) {
                 localAudioBuffer = null;
+            }
+            if (localAudioPeaks) {
+                console.log('[MediaPlayer] Clearing localAudioPeaks due to unload.');
+                localAudioPeaks = null;
             }
             if (!explicitMediaPath) {
                 if ($transcriptStore.audioBuffer) setAudioBuffer(null, null);
@@ -964,6 +981,7 @@
         localDuration = 0;
         localCurrentTime = 0;
         localAudioBuffer = null;
+        localAudioPeaks = null;
         isMediaReadyForProcessing = false; // Ensure it's false on error too
         console.log(`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || 'unknown media'}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`);
     }
@@ -1138,17 +1156,26 @@
         dispatch('requestDataTranscribe', { mediaPath: explicitMediaPath });
     }
     async function handleDataTrimClick() {
-        let buffer = localAudioBuffer;
-        let ready = isMediaReadyForProcessing;
+        console.log(`[MediaPlayer] Handle Trim Click. localAudioPeaks present: ${!!localAudioPeaks}, localAudioBuffer present: ${!!localAudioBuffer}`);
+        // Dispatch immediately with whatever we have (peaks might be available from cache)
+        dispatch('requestDataTrim', {
+            mediaPath: explicitMediaPath,
+            duration: localDuration,
+            audioBuffer: localAudioBuffer,
+            peaks: localAudioPeaks,
+            isReady: isMediaReadyForProcessing
+        });
 
-        if (!buffer) {
+        if (!localAudioBuffer) {
             
             if (!loadedPathFromProp) {
                 dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Cannot process audio for trimming.' });
                 return;
             }
             try {
-                isLoadingMedia = true;
+                // Do NOT set isLoadingMedia to true here, to avoid blocking the video player UI.
+                // isLoadingMedia = true;
+
                 // Post message to worker to decode audio for trimming
                 currentWaveformLoadId++;
                 const loadId = currentWaveformLoadId;
@@ -1190,25 +1217,20 @@
                 });
 
                 localAudioBuffer = workerResponse;
-                buffer = workerResponse;
-                ready = true;
                 isMediaReadyForProcessing = true;
                 
+                // Notify parent that the full buffer is ready
+                dispatch('mediaDataTrimBufferReady', {
+                    audioBuffer: localAudioBuffer
+                });
+
             } catch (error) {
                 console.error(`[MediaPlayer] Lazy decode for trim failed:`, error);
                 dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Failed to decode audio for trimming.' });
-                ready = false;
             } finally {
-                isLoadingMedia = false;
+                // isLoadingMedia = false;
             }
         }
-
-        dispatch('requestDataTrim', {
-            mediaPath: explicitMediaPath,
-            duration: localDuration,
-            audioBuffer: buffer,
-            isReady: ready
-        });
     }
 
     // Determine which player state to display

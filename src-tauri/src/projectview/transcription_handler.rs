@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf}, // Path added back
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
+use crate::utils::canonicalize_path;
 use chrono::Utc; // Added for timestamping metadata
 use tauri::{AppHandle, Runtime};
 use tauri::Manager;
@@ -32,45 +33,51 @@ fn time_str_to_seconds(time_str: &str) -> Result<f64, CommandError> {
     Ok(hours * 3600.0 + minutes * 60.0 + seconds)
 }
 
-// Basic HTML tag stripper
+// Robust HTML tag stripper using Regex to handle multi-line tags
 fn strip_html_tags(html: &str) -> String {
-    let mut result = String::new();
-    let mut in_tag = false;
-    for char_code in html.chars() {
-        match char_code {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => result.push(char_code),
-            _ => (),
-        }
-    }
-    result
+    // Regex to match any HTML tag: < ... >
+    // Because . does not match newlines by default in Rust regex, we use (?s) flag to enable dot-matches-newline
+    // or construct a pattern that matches anything including newlines.
+    let re_tags = Regex::new(r"(?s)<[^>]*>").unwrap();
+    let stripped = re_tags.replace_all(html, "");
+
+    stripped
         .replace("&nbsp;", " ")
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
-        .trim()
+        // No trim() here because we want to preserve internal structure before line splitting,
+        // lines will be trimmed individually later.
         .to_string()
 }
 
 fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<TranscriptSegment>, CommandError> {
     let mut segments: Vec<TranscriptSegment> = Vec::new();
     let mut current_segment: Option<TranscriptSegment> = None;
+    let mut pending_start_time: Option<f64> = None;
 
+    // Matches "HH:MM:SS Speaker N" on a single line
     let re_timestamp_speaker = Regex::new(r"^(\d{2}:\d{2}:\d{2})\s+(Speaker\s*\d+):?\s*$")
         .map_err(|e| CommandError::from(format!("Regex compilation for timestamp/speaker failed: {}", e)))?;
+
+    // Matches "HH:MM:SS" on a single line
     let re_timestamp_only = Regex::new(r"^(\d{2}:\d{2}:\d{2})\s*$")
         .map_err(|e| CommandError::from(format!("Regex compilation for timestamp_only failed: {}", e)))?;
+
+    // Matches "Speaker N" on a single line (for split headers)
+    let re_speaker_only = Regex::new(r"^(Speaker\s*\d+):?\s*$")
+        .map_err(|e| CommandError::from(format!("Regex compilation for speaker_only failed: {}", e)))?;
 
     for line in transcript_text_content.lines() {
         let trimmed_line = line.trim();
         debug!("[parse_transcript_block] Processing line: '{}'", trimmed_line);
-        // Allow processing of empty lines if a segment is active, as they might be intentional newlines within text
+
+        // Allow processing of empty lines if a segment is active
         if trimmed_line.is_empty() {
             if let Some(ref mut seg) = current_segment {
-                 if !seg.text.is_empty() && !seg.text.ends_with('\n') { // Avoid multiple newlines if already present
+                 if !seg.text.is_empty() && !seg.text.ends_with('\n') {
                     seg.text.push('\n');
                  }
             }
@@ -78,11 +85,15 @@ fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<Transcrip
         }
 
         if let Some(caps) = re_timestamp_speaker.captures(trimmed_line) {
+            // Case 1: Timestamp and Speaker on the same line
             debug!("[parse_transcript_block] Matched timestamp+speaker line: '{}'", trimmed_line);
             let time_str = caps.get(1).unwrap().as_str();
             let speaker_str_raw = caps.get(2).unwrap().as_str();
             let speaker_str = speaker_str_raw.replace(char::is_whitespace, "-"); 
             let start_time = time_str_to_seconds(time_str)?;
+
+            // If there was a pending timestamp from previous line, discard it as this line starts a fresh segment
+            pending_start_time = None;
 
             if let Some(mut seg) = current_segment.take() {
                 seg.end_time = start_time; 
@@ -99,26 +110,86 @@ fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<Transcrip
                 speaker: speaker_str,
                 text: String::new(),
             });
+
         } else if let Some(caps_time_only) = re_timestamp_only.captures(trimmed_line) {
+            // Case 2: Timestamp only line
             debug!("[parse_transcript_block] Matched timestamp only line: '{}'", trimmed_line);
-            if let Some(mut seg) = current_segment.take() {
-                let end_time_val = time_str_to_seconds(caps_time_only.get(1).unwrap().as_str())?;
-                seg.end_time = end_time_val;
-                seg.text = seg.text.trim().to_string();
-                if !seg.text.is_empty() {
-                     segments.push(seg);
+            let time_val = time_str_to_seconds(caps_time_only.get(1).unwrap().as_str())?;
+
+            // This could be a start time for the next speaker (split header) OR an end time for the current segment.
+            // We store it as pending. If next line is a Speaker, we use it as start time.
+            // If next line is text, we treat this as end time for previous segment (or ignore).
+            pending_start_time = Some(time_val);
+
+        } else if let Some(caps_speaker_only) = re_speaker_only.captures(trimmed_line) {
+            // Case 3: Speaker only line
+            debug!("[parse_transcript_block] Matched speaker only line: '{}'", trimmed_line);
+            let speaker_str_raw = caps_speaker_only.get(1).unwrap().as_str();
+            let speaker_str = speaker_str_raw.replace(char::is_whitespace, "-");
+
+            if let Some(start_time) = pending_start_time.take() {
+                // We have a pending timestamp + this speaker line = New Segment (Split Header)
+                if let Some(mut seg) = current_segment.take() {
+                    seg.end_time = start_time;
+                    seg.text = seg.text.trim().to_string();
+                    if !seg.text.is_empty() {
+                        segments.push(seg);
+                    } else {
+                        warn!("[Transcript Parse] Segment for speaker {} at {:.2}s had no text, discarding.", seg.speaker, seg.start_time);
+                    }
+                }
+                current_segment = Some(TranscriptSegment {
+                    start_time,
+                    end_time: 0.0,
+                    speaker: speaker_str,
+                    text: String::new(),
+                });
+            } else {
+                // Speaker line without a preceding timestamp.
+                // Treat as text content for now, or could imply a speaker change without time?
+                // Given strict requirement, we treat as text or ignore.
+                // But usually this means we missed a timestamp.
+                // Let's append to current segment if exists.
+                if let Some(ref mut seg) = current_segment {
+                    if !seg.text.is_empty() && !seg.text.ends_with('\n') { seg.text.push(' '); }
+                    seg.text.push_str(trimmed_line);
                 } else {
-                    warn!("[Transcript Parse] Segment (ending at {}) had no text, discarding.", end_time_val);
+                    warn!("[Transcript Parse] Speaker line '{}' found without active segment or timestamp. Ignoring.", trimmed_line);
                 }
             }
-        } else if let Some(ref mut seg) = current_segment {
-            debug!("[parse_transcript_block] Appending to segment '{}': '{}'", seg.speaker, trimmed_line);
-            if !seg.text.is_empty() && !seg.text.ends_with('\n') { 
-                seg.text.push(' '); // Add space between consecutive text lines for the same speaker
-            }
-            seg.text.push_str(trimmed_line);
+
         } else {
-            debug!("[Transcript Parse] Ignoring line (no current segment or not recognized format): {}", trimmed_line);
+            // Case 4: Text line
+            // If we had a pending timestamp but next line is text, that timestamp was likely an end-time marker (or just a timestamp in text).
+            if let Some(end_time_val) = pending_start_time.take() {
+                debug!("[parse_transcript_block] Pending timestamp {:.2} followed by text. Treating as end time.", end_time_val);
+                if let Some(mut seg) = current_segment.take() {
+                    seg.end_time = end_time_val;
+                    seg.text = seg.text.trim().to_string();
+                    if !seg.text.is_empty() {
+                         segments.push(seg);
+                    }
+                    // Since we closed the segment, where does this text go?
+                    // If it's a new block of text without a speaker, it's orphan text.
+                    // We can't assign it to the closed segment.
+                    // Ideally, we start a new segment with "Unknown" speaker?
+                    // But usually end-timestamp is at the end of the block.
+                    // Let's assume this text belongs to a new, un-timestamped segment or we drop it.
+                    // For safety in this specific parser, let's log warning and drop, or try to append to closed segment (which is weird).
+                    // Actually, re-reading logic: re_timestamp_only was treating it as end time immediately before.
+                    // So this behavior is consistent with previous logic, just delayed by one line check.
+                }
+            }
+
+            if let Some(ref mut seg) = current_segment {
+                debug!("[parse_transcript_block] Appending to segment '{}': '{}'", seg.speaker, trimmed_line);
+                if !seg.text.is_empty() && !seg.text.ends_with('\n') {
+                    seg.text.push(' ');
+                }
+                seg.text.push_str(trimmed_line);
+            } else {
+                debug!("[Transcript Parse] Ignoring line (no current segment): {}", trimmed_line);
+            }
         }
     }
 
@@ -160,12 +231,15 @@ pub async fn import_word_transcript<R: Runtime>(
     project_xml_path_str: String,
 ) -> Result<String, CommandError> {
     info!("[import_word_transcript] Source DOCX: {}, Project XML: {}", source_docx_path_str, project_xml_path_str);
-    let source_docx_path = PathBuf::from(&source_docx_path_str);
-    let project_xml_path = PathBuf::from(&project_xml_path_str);
 
-    if !source_docx_path.exists() {
+    if !Path::new(&source_docx_path_str).exists() {
         return Err(CommandError::from(format!("Source DOCX not found: {}", source_docx_path_str)));
     }
+
+    let source_docx_path = canonicalize_path(&source_docx_path_str)
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize source DOCX path: {}", e)))?;
+    let project_xml_path = canonicalize_path(&project_xml_path_str)
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize project XML path: {}", e)))?;
     let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base dir from XML"))?;
 
     let original_docx_filename = source_docx_path.file_name()
@@ -222,9 +296,11 @@ pub async fn import_word_transcript<R: Runtime>(
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 
     let python_path = get_python_path()?;
-    let script_path = app_handle.path()
+    let script_path_raw = app_handle.path()
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+    let script_path = canonicalize_path(&script_path_raw)
+        .unwrap_or(script_path_raw); // Best effort, fallback to raw if fails (e.g. if file doesn't exist yet, though it should)
 
     let pandoc_args = vec![
         source_docx_path.to_string_lossy().to_string(),
@@ -285,15 +361,17 @@ pub async fn import_word_transcript<R: Runtime>(
     let _ = fs::remove_file(&temp_html_path);
 
     let mut transcript_block_text_option: Option<String> = None;
-    let mut in_transcript_section = false;
+    // Default to true to allow documents without explicit "Transcript" heading
+    let mut in_transcript_section = true;
     let mut collected_lines_for_block = Vec::new();
     let transcript_heading_re = Regex::new(r"(?i)^\s*Transcript\s*$").unwrap();
 
-    for line_raw in html_content.lines() {
-        let line_stripped_of_tags = strip_html_tags(line_raw);
-        
-        if transcript_heading_re.is_match(&line_stripped_of_tags) {
-            debug!("[HTML Parse] Found 'Transcript' heading: '{}'", line_stripped_of_tags);
+    // Strip HTML tags from the ENTIRE content first to handle multi-line tags (e.g. href attributes wrapped to new lines)
+    let full_stripped_text = strip_html_tags(&html_content);
+
+    for line_stripped_of_tags in full_stripped_text.lines() {
+        if transcript_heading_re.is_match(line_stripped_of_tags) {
+            debug!("[HTML Parse] Found 'Transcript' heading: '{}'. Clearing previous collected lines.", line_stripped_of_tags);
             in_transcript_section = true;
             collected_lines_for_block.clear(); 
             continue; 
@@ -301,24 +379,27 @@ pub async fn import_word_transcript<R: Runtime>(
 
         if in_transcript_section {
             // Collect all non-empty lines after stripping tags
-            if !line_stripped_of_tags.is_empty() {
-                collected_lines_for_block.push(line_stripped_of_tags);
+            // Trim each line to remove leading/trailing whitespace from HTML formatting
+            let trimmed_line = line_stripped_of_tags.trim();
+            if !trimmed_line.is_empty() {
+                collected_lines_for_block.push(trimmed_line.to_string());
             } else if !collected_lines_for_block.is_empty() { 
                 // If we've already started collecting, an empty line after stripping might be a paragraph break
                 collected_lines_for_block.push(String::new()); // Add an empty string to represent a newline
             }
         }
     }
-    info!("[import_word_transcript] Collected {} lines under 'Transcript': {:?}", collected_lines_for_block.len(), collected_lines_for_block);
+    info!("[import_word_transcript] Collected {} lines (Transcript header found or implicit): {:?}", collected_lines_for_block.len(), collected_lines_for_block);
     
     if !collected_lines_for_block.is_empty() {
         transcript_block_text_option = Some(collected_lines_for_block.join("\n"));
     } else if in_transcript_section { 
-        warn!("[import_word_transcript] 'Transcript' heading found, but no subsequent content collected.");
+        warn!("[import_word_transcript] 'Transcript' section active (explicit or implicit), but no subsequent content collected.");
         transcript_block_text_option = Some(String::new()); 
     }
     
-    let transcript_text_content = transcript_block_text_option.ok_or_else(|| CommandError::from("Could not find 'Transcript' section in the document. Please ensure a heading named 'Transcript' exists."))?;
+    // Fallback logic handled by in_transcript_section = true, so error only if empty result after parsing attempt
+    let transcript_text_content = transcript_block_text_option.ok_or_else(|| CommandError::from("Could not extract transcript text content from the document."))?;
     info!("[import_word_transcript] Transcript text content:\n{}", transcript_text_content);
     
     let segments = parse_transcript_block(&transcript_text_content)?;
@@ -460,8 +541,10 @@ pub async fn save_imported_transcript_and_update_xml(
     json_content: String,
 ) -> Result<(), CommandError> {
     info!("[Backend Save Imported Transcript] Target Path: {}", target_path);
-    let target_path_buf = PathBuf::from(&target_path);
-    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+
+    // Canonicalize paths to strip Windows prefixes for consistent comparison
+    let target_path_buf = canonicalize_path(&target_path).unwrap_or_else(|_| PathBuf::from(&target_path));
+    let project_xml_path_buf = canonicalize_path(&project_xml_path).unwrap_or_else(|_| PathBuf::from(&project_xml_path));
 
     if !project_xml_path_buf.exists() {
         return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));
