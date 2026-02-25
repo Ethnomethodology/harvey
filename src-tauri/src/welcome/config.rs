@@ -64,6 +64,10 @@ pub struct VerificationStatus {
     pub diarization_model_verified: bool,
     #[serde(default)]
     pub hf_token_verified: bool,
+    #[serde(default)]
+    pub ctranslate2_verified: bool,
+    #[serde(default)]
+    pub faster_whisper_dependencies_verified: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

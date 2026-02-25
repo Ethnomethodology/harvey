@@ -35,13 +35,18 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     let mut diarization_model_downloaded = config.verification_status.diarization_model_verified;
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
     let mut hf_token_present = config.verification_status.hf_token_verified;
-    let mut ct2_installed = false;
-    let mut fw_deps_installed = false;
+    let mut ct2_installed = config.verification_status.ctranslate2_verified;
+    let mut fw_deps_installed = config.verification_status.faster_whisper_dependencies_verified;
 
     // --- Lightweight Checks ---
     if python_libs_installed && !python_env::get_env_path()?.exists() {
         python_libs_installed = false;
         config.verification_status.python_libraries_verified = false;
+        // Also reset dependent checks if python env is missing
+        ct2_installed = false;
+        config.verification_status.ctranslate2_verified = false;
+        fw_deps_installed = false;
+        config.verification_status.faster_whisper_dependencies_verified = false;
         config_changed = true;
     }
 
@@ -97,10 +102,34 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config_changed = true;
     }
 
-    // CTranslate2 check
+    // CTranslate2 check (Lazy Load)
     if python_libs_installed {
-        ct2_installed = is_ctranslate2_installed(app_handle.clone()).await.unwrap_or(false);
-        fw_deps_installed = super::commands::is_faster_whisper_dependencies_installed(app_handle.clone()).await.unwrap_or(false);
+        if !ct2_installed {
+            ct2_installed = is_ctranslate2_installed(app_handle.clone()).await.unwrap_or(false);
+            if ct2_installed {
+                config.verification_status.ctranslate2_verified = true;
+                config_changed = true;
+            }
+        }
+        if !fw_deps_installed {
+            fw_deps_installed = super::commands::is_faster_whisper_dependencies_installed(app_handle.clone()).await.unwrap_or(false);
+            if fw_deps_installed {
+                config.verification_status.faster_whisper_dependencies_verified = true;
+                config_changed = true;
+            }
+        }
+    } else {
+        // If python libs are not installed (or failed check), ensure these are false
+        if ct2_installed {
+            ct2_installed = false;
+            config.verification_status.ctranslate2_verified = false;
+            config_changed = true;
+        }
+        if fw_deps_installed {
+            fw_deps_installed = false;
+            config.verification_status.faster_whisper_dependencies_verified = false;
+            config_changed = true;
+        }
     }
 
     let current_hf_token_status = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
