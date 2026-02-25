@@ -415,8 +415,20 @@
                                         currentX = 0;
                                         isSoftWrap = false; // Explicit newline, preserve leading spaces
                                     } else if (part) {
-                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                        // Robust font family construction for Windows
+                                        let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
+                                        if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
+                                        // Ensure multi-word fonts are quoted if not already
+                                        if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
+                                            fontFamily = `'${fontFamily}'`;
+                                        }
+                                        // Always fallback to sans-serif
+                                        if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
+                                            fontFamily += ', sans-serif';
+                                        }
+
+                                        const fontString = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                        ctx.font = fontString;
 
                                         const words = part.split(/(\s+)/);
                                         words.forEach(word => {
@@ -431,7 +443,7 @@
                                                         currentX = 0;
                                                         isSoftWrap = true;
                                                     }
-                                                    currentLine.push({ ...seg, text: char, width: charWidth });
+                                                    currentLine.push({ ...seg, text: char, width: charWidth, font: fontString });
                                                     currentX += charWidth;
                                                 }
                                             } else {
@@ -448,7 +460,7 @@
                                                 if (currentX === 0 && isSpace && isSoftWrap) {
                                                     // Skip leading space on wrapped line
                                                 } else {
-                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                    currentLine.push({ ...seg, text: word, width: wordWidth, font: fontString });
                                                     currentX += wordWidth;
                                                 }
                                             }
@@ -459,17 +471,19 @@
 
                             if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
 
-                            // Vertical Layout
+                            // Command Buffers for rendering
+                            const backgroundOps = [];
+                            const foregroundOps = [];
+
+                            // Layout Calculation Pass
                             const lineHeights = lines.map(line => {
                                 if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
                                 return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
                             });
                             const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
 
-                            const startY = startY_box + (availableH - totalHeight) / 2;
+                            let currentY = startY_box + (availableH - totalHeight) / 2;
 
-                            // Pass 1: Render Highlights (Background)
-                            let currentY = startY;
                             lines.forEach((line, i) => {
                                 const h = lineHeights[i];
                                 const lineAlign = line[0]?.align || 'center';
@@ -487,80 +501,87 @@
                                 const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
 
                                 line.forEach(seg => {
+                                    // Collect Background Ops (Highlights)
                                     if (seg.highlight && seg.highlight !== 'transparent') {
-                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
-
-                                        ctx.fillStyle = seg.highlight;
-
-                                        // Hybrid Approach for Robustness:
-                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
-
-                                        const m = ctx.measureText(seg.text);
-                                        const safetyPadding = seg.fontSize * 0.1;
-
-                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
-
-                                        const finalTop = Math.min(standardTop, inkTop);
-                                        const finalBottom = Math.max(standardBottom, inkBottom);
-
-                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                        backgroundOps.push({
+                                            type: 'highlight',
+                                            color: seg.highlight,
+                                            x: lineX,
+                                            width: seg.width,
+                                            fontSize: seg.fontSize,
+                                            text: seg.text,
+                                            font: seg.font, // Use stored font string
+                                            baseline: lineBaseline
+                                        });
                                     }
+
+                                    // Collect Foreground Ops (Text & Decorations)
+                                    foregroundOps.push({
+                                        type: 'text',
+                                        text: seg.text,
+                                        x: lineX,
+                                        y: lineBaseline,
+                                        color: seg.color || baseColor,
+                                        font: seg.font, // Use stored font string
+                                        underline: seg.underline,
+                                        strikethrough: seg.strikethrough,
+                                        width: seg.width,
+                                        fontSize: seg.fontSize
+                                    });
+
                                     lineX += seg.width;
                                 });
                                 currentY += h;
                             });
 
-                            // Pass 2: Render Text & Decorations (Foreground)
-                            currentY = startY;
-                            lines.forEach((line, i) => {
-                                const h = lineHeights[i];
-                                const lineAlign = line[0]?.align || 'center';
+                            // Execute Render Ops - Strictly Ordered
 
-                                let visibleLine = [...line];
-                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
-                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+                            // 1. Backgrounds
+                            backgroundOps.forEach(op => {
+                                ctx.font = op.font;
+                                ctx.fillStyle = op.color;
 
-                                let lineX;
-                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
-                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
-                                else lineX = startX;
+                                // Recalculate box dimensions using exact same logic as before
+                                const standardTop = op.baseline - (op.fontSize * 1.1);
+                                const standardBottom = op.baseline + (op.fontSize * 0.3);
+                                const m = ctx.measureText(op.text);
+                                const safetyPadding = op.fontSize * 0.1;
+                                const inkTop = op.baseline - (m.actualBoundingBoxAscent || op.fontSize * 0.8) - safetyPadding;
+                                const inkBottom = op.baseline + (m.actualBoundingBoxDescent || op.fontSize * 0.2) + safetyPadding;
+                                const finalTop = Math.min(standardTop, inkTop);
+                                const finalBottom = Math.max(standardBottom, inkBottom);
 
-                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
-                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+                                ctx.fillRect(op.x, finalTop, op.width, finalBottom - finalTop);
+                            });
 
-                                line.forEach(seg => {
-                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
-                                    ctx.textBaseline = 'alphabetic';
+                            // 2. Foregrounds
+                            ctx.globalCompositeOperation = 'source-over'; // Enforce default blending
+                            ctx.textBaseline = 'alphabetic'; // Enforce baseline
 
-                                    ctx.fillStyle = seg.color || baseColor;
-                                    ctx.fillText(seg.text, lineX, lineBaseline);
+                            foregroundOps.forEach(op => {
+                                ctx.font = op.font;
+                                ctx.fillStyle = op.color;
+                                ctx.fillText(op.text, op.x, op.y);
 
-                                    if (seg.underline) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
-                                    }
+                                if (op.underline) {
+                                    ctx.strokeStyle = op.color;
+                                    ctx.lineWidth = Math.max(1, op.fontSize / 15);
+                                    ctx.beginPath();
+                                    const yPos = op.y + (op.fontSize * 0.15);
+                                    ctx.moveTo(op.x, yPos);
+                                    ctx.lineTo(op.x + op.width, yPos);
+                                    ctx.stroke();
+                                }
 
-                                    if (seg.strikethrough) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
-                                    }
-                                    lineX += seg.width;
-                                });
-                                currentY += h;
+                                if (op.strikethrough) {
+                                    ctx.strokeStyle = op.color;
+                                    ctx.lineWidth = Math.max(1, op.fontSize / 15);
+                                    ctx.beginPath();
+                                    const yPos = op.y - (op.fontSize * 0.25);
+                                    ctx.moveTo(op.x, yPos);
+                                    ctx.lineTo(op.x + op.width, yPos);
+                                    ctx.stroke();
+                                }
                             });
                         };
 
