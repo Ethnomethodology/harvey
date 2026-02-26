@@ -550,8 +550,9 @@
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
 
                         if (s.startsWith('speech-bubble')) {
-                            // Offscreen Canvas Strategy with source-in masking
-                            // This avoids ctx.clip() which fails to render fillRect() highlights on Windows WebView2.
+                            // Double Offscreen Canvas Strategy (Content + Mask)
+                            // This guarantees that text and highlights are rendered correctly relative to each other
+                            // before being masked by the bubble shape, bypassing Windows WebView2 clipping bugs.
                             const margin = 2;
                             const offX = Math.floor(tx) - margin;
                             const offY = Math.floor(ty) - margin;
@@ -559,24 +560,31 @@
                             const offH = Math.ceil(th) + (margin * 2);
 
                             if (offW > 0 && offH > 0) {
-                                const offCanvas = document.createElement('canvas');
-                                offCanvas.width = offW;
-                                offCanvas.height = offH;
-                                const offCtx = offCanvas.getContext('2d');
+                                // 1. Render Content (Text + Highlights) to a clean canvas
+                                const contentCanvas = document.createElement('canvas');
+                                contentCanvas.width = offW;
+                                contentCanvas.height = offH;
+                                const contentCtx = contentCanvas.getContext('2d');
+                                contentCtx.translate(-offX, -offY);
+                                renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
 
-                                // Translate context to match main canvas coordinates relative to offscreen origin
-                                offCtx.translate(-offX, -offY);
+                                // 2. Render Mask (Bubble Shape) to a separate canvas
+                                const maskCanvas = document.createElement('canvas');
+                                maskCanvas.width = offW;
+                                maskCanvas.height = offH;
+                                const maskCtx = maskCanvas.getContext('2d');
+                                maskCtx.translate(-offX, -offY);
+                                maskCtx.fillStyle = 'black'; // Color irrelevant, alpha matters
+                                maskCtx.fill(path);
 
-                                // 1. Draw Mask (The Bubble Shape)
-                                offCtx.fillStyle = 'black'; // Color doesn't matter, only alpha
-                                offCtx.fill(path);
+                                // 3. Composite Content INTO Mask (Source-In)
+                                // This keeps Content pixels only where Mask pixels exist
+                                maskCtx.globalCompositeOperation = 'source-in';
+                                maskCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for image draw
+                                maskCtx.drawImage(contentCanvas, 0, 0);
 
-                                // 2. Draw Content (Text & Highlights) clipped to Mask
-                                offCtx.globalCompositeOperation = 'source-in';
-                                renderRichText(offCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-
-                                // 3. Draw Result to Main Canvas
-                                ctx.drawImage(offCanvas, offX, offY);
+                                // 4. Draw Result to Main Canvas
+                                ctx.drawImage(maskCanvas, offX, offY);
                             }
                         } else {
                             // Standard clipping for other shapes
