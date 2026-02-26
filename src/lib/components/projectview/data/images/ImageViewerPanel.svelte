@@ -337,10 +337,10 @@
                         // Secure Canvas Rich Text Renderer
                         const renderRichText = (targetCtx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
                             // Offscreen canvas to isolate rendering and fix Windows clipping/rendering issues
-                            // Adding extra padding (+4) to prevent sub-pixel clipping on Windows high-DPI
+                            // Adding extra padding (+10) to prevent sub-pixel clipping on Windows high-DPI
                             const offCanvas = document.createElement('canvas');
-                            offCanvas.width = Math.ceil(width) + 4;
-                            offCanvas.height = Math.ceil(height) + 4;
+                            offCanvas.width = Math.ceil(width) + 10;
+                            offCanvas.height = Math.ceil(height) + 10;
                             const ctx = offCanvas.getContext('2d');
 
                             // Map coordinates to local offscreen rendering (0,0 based)
@@ -441,7 +441,9 @@
                                         }
 
                                         const safeFontSize = Math.round(seg.fontSize);
-                                        const fontString = `${seg.italic ? 'italic' : 'normal'} ${seg.bold ? '700' : '400'} ${safeFontSize}px ${fontFamily}`;
+                                        const fontStyle = seg.italic ? 'italic' : '';
+                                        const fontWeight = seg.bold ? 'bold' : '';
+                                        const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
                                         ctx.font = fontString;
 
                                         const words = part.split(/(\s+)/);
@@ -530,8 +532,11 @@
 
                                     // Standard CSS Font String Order: style variant weight size/line-height family
                                     // Also round font size to avoid float issues on Windows
+                                    // Simplified: removed 'normal' default, used 'bold' keyword
                                     const safeFontSize = Math.round(seg.fontSize);
-                                    const fontString = `${seg.italic ? 'italic' : 'normal'} ${seg.bold ? '700' : '400'} ${safeFontSize}px ${fontFamily}`;
+                                    const fontStyle = seg.italic ? 'italic' : '';
+                                    const fontWeight = seg.bold ? 'bold' : '';
+                                    const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
                                     ctx.font = fontString;
                                     ctx.textBaseline = 'alphabetic';
 
@@ -585,7 +590,10 @@
                                     ctx.fillStyle = seg.color || baseColor;
 
                                     // Explicit opacity check - ensure full opacity if not specified
-                                    if (!ctx.fillStyle) ctx.fillStyle = 'rgba(0,0,0,1)';
+                                    // Hard fallback to black if the style is somehow invalid or transparent
+                                    if (!ctx.fillStyle || ctx.fillStyle === 'transparent' || ctx.fillStyle === 'rgba(0, 0, 0, 0)') {
+                                        ctx.fillStyle = 'rgba(0,0,0,1)';
+                                    }
 
                                     ctx.fillText(seg.text, iLineX, iLineBaseline);
 
@@ -621,7 +629,8 @@
                             });
 
                             // Draw the offscreen canvas onto the main context
-                            targetCtx.drawImage(offCanvas, originalX, originalY);
+                            // CRITICAL: Round coordinates to integers to prevent sub-pixel rendering issues on Windows (150% scaling)
+                            targetCtx.drawImage(offCanvas, Math.round(originalX), Math.round(originalY));
                         };
 
                         ctx.save();
