@@ -595,12 +595,12 @@
                             }
 
                             // 2. Draw Text (On Main Canvas + Clipping)
-                            // Use rectangular clipping instead of complex path clipping to prevent rendering issues on Windows WebView2.
-                            // Highlights (above) are still masked to the complex shape.
+                            // Use rectangular clipping via Path2D to match the working 'text-area' logic.
+                            // Direct context clipping (ctx.rect -> ctx.clip) failed on Windows, but Path2D clipping works.
                             ctx.save();
-                            ctx.beginPath();
-                            ctx.rect(tx, ty, tw, th);
-                            ctx.clip();
+                            const textClipPath = new Path2D();
+                            textClipPath.rect(tx, ty, tw, th);
+                            ctx.clip(textClipPath);
                             renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
                             ctx.restore();
 
