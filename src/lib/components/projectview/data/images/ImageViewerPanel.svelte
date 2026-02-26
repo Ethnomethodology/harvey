@@ -157,6 +157,259 @@
                 const sx = scale;
                 const sy = scale;
 
+                // Secure Canvas Rich Text Renderer (Helper Function)
+                // Defined before use to ensure scope availability and proper hoisting
+                const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html || '', 'text/html');
+
+                    const p = padding;
+                    const availableW = width - (p * 2);
+                    const availableH = height - (p * 2);
+                    const startX = x + p;
+                    const startY_box = y + p;
+
+                    if (availableW <= 0 || availableH <= 0) return;
+
+                    const segments = [];
+                    const walk = (node, styles) => {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            if (node.textContent) segments.push({ text: node.textContent, ...styles });
+                        } else if (node.nodeType === Node.ELEMENT_NODE) {
+                            const newStyles = { ...styles };
+                            const tag = node.tagName.toLowerCase();
+                            const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
+
+                            if (tag === 'strong' || tag === 'b') newStyles.bold = true;
+                            if (tag === 'em' || tag === 'i') newStyles.italic = true;
+                            if (tag === 'u') newStyles.underline = true;
+                            if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
+
+                            const styleAttr = node.getAttribute('style') || '';
+                            const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
+                            if (textDecMatch) {
+                                if (textDecMatch[1].includes('underline')) newStyles.underline = true;
+                                if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
+                            }
+                            const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
+                            if (colorMatch) newStyles.color = colorMatch[1].trim();
+
+                            const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
+                            if (bgMatch) newStyles.highlight = bgMatch[1].trim();
+
+                            const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
+                            if (alignMatch) newStyles.align = alignMatch[1].trim();
+
+                            const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+                            if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
+
+                            const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
+                            if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
+
+                            if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+
+                            node.childNodes.forEach(child => walk(child, newStyles));
+
+                            if (isBlock) {
+                                const lastChild = node.lastChild;
+                                const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
+                                if (!endsWithBr) {
+                                    segments.push({ text: '\n', ...newStyles });
+                                }
+                            }
+                        }
+                    };
+                    walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
+
+                    // Word Wrap & Layout
+                    const lines = [[]];
+                    let currentLine = lines[0];
+                    let currentX = 0;
+                    let isSoftWrap = false; // Track if the current line started due to a soft wrap
+
+                    const LINE_HEIGHT_MULTIPLIER = 1.5;
+                    const effectiveAvailableW = Math.max(1, availableW);
+
+                    segments.forEach(seg => {
+                        const parts = seg.text.split(/(\n)/);
+                        parts.forEach(part => {
+                            if (part === '\n') {
+                                lines.push([]);
+                                currentLine = lines[lines.length - 1];
+                                currentX = 0;
+                                isSoftWrap = false; // Explicit newline, preserve leading spaces
+                            } else if (part) {
+                                // Robust font family construction for Windows
+                                let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
+                                if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
+                                // Ensure multi-word fonts are quoted if not already
+                                if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
+                                    fontFamily = `'${fontFamily}'`;
+                                }
+                                // Always fallback to sans-serif
+                                if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
+                                    fontFamily += ', sans-serif';
+                                }
+
+                                const safeFontSize = Math.round(seg.fontSize);
+                                const fontStyle = seg.italic ? 'italic' : '';
+                                const fontWeight = seg.bold ? 'bold' : '';
+                                const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
+                                ctx.font = fontString;
+
+                                const words = part.split(/(\s+)/);
+                                words.forEach(word => {
+                                    let wordWidth = ctx.measureText(word).width;
+
+                                    if (wordWidth > effectiveAvailableW && word.trim() !== "") {
+                                        for (const char of word) {
+                                            const charWidth = ctx.measureText(char).width;
+                                            if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
+                                                lines.push([]);
+                                                currentLine = lines[lines.length - 1];
+                                                currentX = 0;
+                                                isSoftWrap = true;
+                                            }
+                                            currentLine.push({ ...seg, text: char, width: charWidth, font: fontString });
+                                            currentX += charWidth;
+                                        }
+                                    } else {
+                                        const isSpace = /^\s+$/.test(word);
+                                        if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                            lines.push([]);
+                                            currentLine = lines[lines.length - 1];
+                                            currentX = 0;
+                                            isSoftWrap = true;
+                                        }
+
+                                        // Only skip leading spaces if they are a result of a soft wrap.
+                                        // Preserve them if they follow an explicit newline.
+                                        if (currentX === 0 && isSpace && isSoftWrap) {
+                                            // Skip leading space on wrapped line
+                                        } else {
+                                            currentLine.push({ ...seg, text: word, width: wordWidth, font: fontString });
+                                            currentX += wordWidth;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    });
+
+                    if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+
+                    // Vertical Layout
+                    const lineHeights = lines.map(line => {
+                        if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                        return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
+                    });
+                    const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+
+                    let currentY = startY_box + (availableH - totalHeight) / 2;
+
+                    lines.forEach((line, i) => {
+                        const h = lineHeights[i];
+                        const lineAlign = line[0]?.align || 'center';
+
+                        let visibleLine = [...line];
+                        while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
+                        const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+
+                        let lineX;
+                        if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                        else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                        else lineX = startX;
+
+                        // Alphabetic baseline
+                        const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                        // Easier approximation for vertical center:
+                        const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+
+                        line.forEach(seg => {
+                            // Set font first for both measuring and drawing text
+                            // Robust font family construction for Windows
+                            let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
+                            if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
+                            if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
+                                fontFamily = `'${fontFamily}'`;
+                            }
+                            if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
+                                fontFamily += ', sans-serif';
+                            }
+
+                            // Standard CSS Font String Order: style variant weight size/line-height family
+                            const safeFontSize = Math.round(seg.fontSize);
+                            const fontStyle = seg.italic ? 'italic' : '';
+                            const fontWeight = seg.bold ? 'bold' : '';
+                            const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
+                            ctx.font = fontString;
+                            ctx.textBaseline = 'alphabetic';
+
+                            // Force integer coordinates for drawing
+                            const iLineX = Math.round(lineX);
+                            const iLineBaseline = Math.round(lineBaseline);
+
+                            // 1. Draw Highlight
+                            if (seg.highlight && seg.highlight !== 'transparent') {
+                                ctx.save();
+                                ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
+                                ctx.fillStyle = seg.highlight;
+
+                                // Hybrid padding logic
+                                const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+                                const m = ctx.measureText(seg.text);
+                                const safetyPadding = seg.fontSize * 0.1;
+                                const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+                                const finalTop = Math.min(standardTop, inkTop);
+                                const finalBottom = Math.max(standardBottom, inkBottom);
+
+                                ctx.fillRect(iLineX, Math.round(finalTop), Math.ceil(seg.width), Math.ceil(finalBottom - finalTop));
+                                ctx.restore();
+                            }
+
+                            // 2. Draw Text
+                            ctx.save();
+                            ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
+                            ctx.globalCompositeOperation = 'source-over';
+                            ctx.fillStyle = seg.color || baseColor;
+                            if (!ctx.fillStyle || ctx.fillStyle === 'transparent' || ctx.fillStyle === 'rgba(0, 0, 0, 0)') {
+                                ctx.fillStyle = 'rgba(0,0,0,1)';
+                            }
+
+                            ctx.fillText(seg.text, iLineX, iLineBaseline);
+
+                            if (seg.underline) {
+                                ctx.strokeStyle = ctx.fillStyle;
+                                ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                ctx.beginPath();
+                                const yPos = iLineBaseline + (seg.fontSize * 0.15);
+                                ctx.moveTo(iLineX, yPos);
+                                ctx.lineTo(iLineX + seg.width, yPos);
+                                ctx.stroke();
+                            }
+                            ctx.restore();
+
+                            if (seg.strikethrough) {
+                                ctx.save();
+                                ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
+                                ctx.globalCompositeOperation = 'source-over';
+                                ctx.strokeStyle = ctx.fillStyle;
+                                ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                ctx.beginPath();
+                                const yPos = iLineBaseline - (seg.fontSize * 0.25);
+                                ctx.moveTo(iLineX, yPos);
+                                ctx.lineTo(iLineX + seg.width, yPos);
+                                ctx.stroke();
+                                ctx.restore();
+                            }
+                            lineX += seg.width;
+                        });
+                        currentY += h;
+                    });
+                };
+
                 // Helper for manual pixelation
                 const pixelateRegion = (px, py, pw, ph) => {
                     // Clamp to canvas
@@ -285,27 +538,11 @@
 
                     // 4. Draw Shape on Stamp
                     if (s === 'censored' || s === 'censored-circle') {
-                        // Pixelation Logic adapted for Stamp...
-                        // Since pixelation reads from the SOURCE image, we need to handle it carefully.
-                        // Ideally, we copy the source region to the stamp, pixelate it, then clip.
-                        // Or just pixelate on main and don't use stamp?
-                        // Let's stick to the main canvas for pixelation as it involves reading the base image.
-                        // Re-implement simplified direct drawing for censored to avoid complexity,
-                        // assuming censored regions don't have text we need to render specially.
-
                         // Just use the main context for censored regions for now, as they don't have the text issue.
-                        // Or better: Draw the source image onto the stamp first?
-                        // "censored" usually means NO text overlay.
-                        // Let's revert to direct drawing on main canvas for censored types ONLY.
 
                         if (s === 'censored') {
                             pixelateRegion(shapeData.x * S * sx, shapeData.y * S * sy, shapeData.width * S * sx, shapeData.height * S * sy);
                         } else {
-                            // Circular censorship manual implementation
-                            // ... existing logic but adapted ...
-                            // For safety, let's just use a simple fill for now or skip if too complex for this refactor.
-                            // The user issue is about TEXT.
-                            // Let's copy the pixelate logic back here for main canvas.
                              const bboxX_c = (shapeData.cx - shapeData.r) * S * sx;
                              const bboxY_c = (shapeData.cy - shapeData.r) * S * sy;
                              const bboxW_c = shapeData.r * 2 * S * sx;
@@ -314,7 +551,7 @@
                              const safeX = Math.max(0, bboxX_c);
                              const safeY = Math.max(0, bboxY_c);
                              const safeW = Math.min(width - safeX, bboxW_c - (safeX - bboxX_c));
-                             const safeH = Math.min(height - safeY, bboxH_c - (safeY - py)); // py is undefined here, reuse safeY
+                             const safeH = Math.min(height - safeY, bboxH_c - (safeY - bboxY_c));
 
                              if (safeW > 0 && safeH > 0) { // Simple check
                                  const tempC = document.createElement('canvas');
@@ -340,7 +577,7 @@
                     stampCtx.save();
                     stampCtx.clip(path);
                     stampCtx.fillStyle = fillColor;
-                    stampCtx.fill();
+                    stampCtx.fill(path);
 
                     stampCtx.strokeStyle = strokeColor;
                     stampCtx.lineWidth = strokeWidth * Math.min(sx, sy);
@@ -363,7 +600,7 @@
                         }
 
                         const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
-                        const textPadding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+                        const textPadding = ((s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8) * Math.min(sx, sy);
 
                         // renderRichText writes to stampCtx. coordinates are absolute, but stampCtx is translated.
                         renderRichText(stampCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, textPadding);
@@ -372,269 +609,6 @@
 
                     // 6. Composite Stamp to Main Canvas
                     ctx.drawImage(stampCanvas, pixelX, pixelY);
-                }
-
-                // Secure Canvas Rich Text Renderer (Helper Function)
-                const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(html || '', 'text/html');
-                            
-                            // Scale padding roughly but keep it simple since we are in a transformed context
-                            // Wait, in "Stamp Strategy", ctx is already unscaled (pixel space).
-                            // But `width`, `height`, `baseFontSize` are passed as pixel values?
-                            // Yes, in the new strategy they will be.
-                            // However, we need to respect the legacy parameters if possible.
-
-                            const p = padding;
-                            const availableW = width - (p * 2);
-                            const availableH = height - (p * 2);
-                            const startX = x + p;
-                            const startY_box = y + p;
-
-                            if (availableW <= 0 || availableH <= 0) return;
-
-                            const segments = [];
-                            const walk = (node, styles) => {
-                                if (node.nodeType === Node.TEXT_NODE) {
-                                    if (node.textContent) segments.push({ text: node.textContent, ...styles });
-                                } else if (node.nodeType === Node.ELEMENT_NODE) {
-                                    const newStyles = { ...styles };
-                                    const tag = node.tagName.toLowerCase();
-                                    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
-
-                                    if (tag === 'strong' || tag === 'b') newStyles.bold = true;
-                                    if (tag === 'em' || tag === 'i') newStyles.italic = true;
-                                    if (tag === 'u') newStyles.underline = true;
-                                    if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
-
-                                    const styleAttr = node.getAttribute('style') || '';
-                                    const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
-                                    if (textDecMatch) {
-                                        if (textDecMatch[1].includes('underline')) newStyles.underline = true;
-                                        if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
-                                    }
-                                    const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
-                                    if (colorMatch) newStyles.color = colorMatch[1].trim();
-
-                                    const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
-                                    if (bgMatch) newStyles.highlight = bgMatch[1].trim();
-
-                                    const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
-                                    if (alignMatch) newStyles.align = alignMatch[1].trim();
-
-                                    const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-                                    if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
-
-                                    const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
-                                    if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
-
-                                    if (tag === 'br') segments.push({ text: '\n', ...newStyles });
-
-                                    node.childNodes.forEach(child => walk(child, newStyles));
-
-                                    if (isBlock) {
-                                        const lastChild = node.lastChild;
-                                        const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
-                                        if (!endsWithBr) {
-                                            segments.push({ text: '\n', ...newStyles });
-                                        }
-                                    }
-                                }
-                            };
-                            walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
-
-                            // Word Wrap & Layout
-                            const lines = [[]];
-                            let currentLine = lines[0];
-                            let currentX = 0;
-                            let isSoftWrap = false; // Track if the current line started due to a soft wrap
-
-                            const LINE_HEIGHT_MULTIPLIER = 1.5;
-                            const effectiveAvailableW = Math.max(1, availableW);
-
-                            segments.forEach(seg => {
-                                const parts = seg.text.split(/(\n)/);
-                                parts.forEach(part => {
-                                    if (part === '\n') {
-                                        lines.push([]);
-                                        currentLine = lines[lines.length - 1];
-                                        currentX = 0;
-                                        isSoftWrap = false; // Explicit newline, preserve leading spaces
-                                    } else if (part) {
-                                        // Robust font family construction for Windows
-                                        let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
-                                        if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
-                                        // Ensure multi-word fonts are quoted if not already
-                                        if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
-                                            fontFamily = `'${fontFamily}'`;
-                                        }
-                                        // Always fallback to sans-serif
-                                        if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
-                                            fontFamily += ', sans-serif';
-                                        }
-
-                                        const safeFontSize = Math.round(seg.fontSize);
-                                        const fontStyle = seg.italic ? 'italic' : '';
-                                        const fontWeight = seg.bold ? 'bold' : '';
-                                        const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
-                                        ctx.font = fontString;
-
-                                        const words = part.split(/(\s+)/);
-                                        words.forEach(word => {
-                                            let wordWidth = ctx.measureText(word).width;
-
-                                            if (wordWidth > effectiveAvailableW && word.trim() !== "") {
-                                                for (const char of word) {
-                                                    const charWidth = ctx.measureText(char).width;
-                                                    if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
-                                                        lines.push([]);
-                                                        currentLine = lines[lines.length - 1];
-                                                        currentX = 0;
-                                                        isSoftWrap = true;
-                                                    }
-                                                    currentLine.push({ ...seg, text: char, width: charWidth, font: fontString });
-                                                    currentX += charWidth;
-                                                }
-                                            } else {
-                                                const isSpace = /^\s+$/.test(word);
-                                                if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
-                                                    lines.push([]);
-                                                    currentLine = lines[lines.length - 1];
-                                                    currentX = 0;
-                                                    isSoftWrap = true;
-                                                }
-
-                                                // Only skip leading spaces if they are a result of a soft wrap.
-                                                // Preserve them if they follow an explicit newline.
-                                                if (currentX === 0 && isSpace && isSoftWrap) {
-                                                    // Skip leading space on wrapped line
-                                                } else {
-                                                    currentLine.push({ ...seg, text: word, width: wordWidth, font: fontString });
-                                                    currentX += wordWidth;
-                                                }
-                                            }
-                                        });
-                                    }
-                                });
-                            });
-
-                            if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
-
-                            // Vertical Layout
-                            const lineHeights = lines.map(line => {
-                                if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
-                                return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
-                            });
-                            const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
-
-                            let currentY = startY_box + (availableH - totalHeight) / 2;
-
-                            lines.forEach((line, i) => {
-                                const h = lineHeights[i];
-                                const lineAlign = line[0]?.align || 'center';
-
-                                let visibleLine = [...line];
-                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
-                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
-
-                                let lineX;
-                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
-                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
-                                else lineX = startX;
-
-                                // Alphabetic baseline
-                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
-                                // Center the visual line content within the line box height (h)
-                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
-                                // Easier approximation for vertical center:
-                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
-
-                                line.forEach(seg => {
-                                    // Set font first for both measuring and drawing text
-                                    // Robust font family construction for Windows
-                                    let fontFamily = seg.fontFamily ? seg.fontFamily.trim() : 'sans-serif';
-                                    if (!fontFamily || fontFamily === '') fontFamily = 'sans-serif';
-                                    if (fontFamily.includes(' ') && !fontFamily.includes("'") && !fontFamily.includes('"')) {
-                                        fontFamily = `'${fontFamily}'`;
-                                    }
-                                    if (!fontFamily.toLowerCase().includes('sans-serif') && !fontFamily.toLowerCase().includes('serif') && !fontFamily.toLowerCase().includes('monospace')) {
-                                        fontFamily += ', sans-serif';
-                                    }
-
-                                    // Standard CSS Font String Order: style variant weight size/line-height family
-                                    const safeFontSize = Math.round(seg.fontSize);
-                                    const fontStyle = seg.italic ? 'italic' : '';
-                                    const fontWeight = seg.bold ? 'bold' : '';
-                                    const fontString = `${fontStyle} ${fontWeight} ${safeFontSize}px ${fontFamily}`.trim();
-                                    ctx.font = fontString;
-                                    ctx.textBaseline = 'alphabetic';
-
-                                    // Force integer coordinates for drawing
-                                    const iLineX = Math.round(lineX);
-                                    const iLineBaseline = Math.round(lineBaseline);
-
-                                    // 1. Draw Highlight
-                                    if (seg.highlight && seg.highlight !== 'transparent') {
-                                        ctx.save();
-                                        ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
-                                        ctx.fillStyle = seg.highlight;
-
-                                        // Hybrid padding logic
-                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
-                                        const m = ctx.measureText(seg.text);
-                                        const safetyPadding = seg.fontSize * 0.1;
-                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
-                                        const finalTop = Math.min(standardTop, inkTop);
-                                        const finalBottom = Math.max(standardBottom, inkBottom);
-
-                                        ctx.fillRect(iLineX, Math.round(finalTop), Math.ceil(seg.width), Math.ceil(finalBottom - finalTop));
-                                        ctx.restore();
-                                    }
-
-                                    // 2. Draw Text
-                                    ctx.save();
-                                    ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
-                                    ctx.globalCompositeOperation = 'source-over';
-                                    ctx.fillStyle = seg.color || baseColor;
-                                    if (!ctx.fillStyle || ctx.fillStyle === 'transparent' || ctx.fillStyle === 'rgba(0, 0, 0, 0)') {
-                                        ctx.fillStyle = 'rgba(0,0,0,1)';
-                                    }
-
-                                    ctx.fillText(seg.text, iLineX, iLineBaseline);
-
-                                    if (seg.underline) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = iLineBaseline + (seg.fontSize * 0.15);
-                                        ctx.moveTo(iLineX, yPos);
-                                        ctx.lineTo(iLineX + seg.width, yPos);
-                                        ctx.stroke();
-                                    }
-                                    ctx.restore();
-
-                                    if (seg.strikethrough) {
-                                        ctx.save();
-                                        ctx.shadowBlur = 0; ctx.filter = 'none'; ctx.globalAlpha = 1.0;
-                                        ctx.globalCompositeOperation = 'source-over';
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = iLineBaseline - (seg.fontSize * 0.25);
-                                        ctx.moveTo(iLineX, yPos);
-                                        ctx.lineTo(iLineX + seg.width, yPos);
-                                        ctx.stroke();
-                                        ctx.restore();
-                                    }
-                                    lineX += seg.width;
-                                });
-                                currentY += h;
-                            });
-                        };
-
-                    }
                 }
             }
 
