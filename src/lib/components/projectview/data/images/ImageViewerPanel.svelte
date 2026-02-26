@@ -337,9 +337,10 @@
                         // Secure Canvas Rich Text Renderer
                         const renderRichText = (targetCtx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
                             // Offscreen canvas to isolate rendering and fix Windows clipping/rendering issues
+                            // Adding extra padding (+4) to prevent sub-pixel clipping on Windows high-DPI
                             const offCanvas = document.createElement('canvas');
-                            offCanvas.width = Math.ceil(width) + 1;
-                            offCanvas.height = Math.ceil(height) + 1;
+                            offCanvas.width = Math.ceil(width) + 4;
+                            offCanvas.height = Math.ceil(height) + 4;
                             const ctx = offCanvas.getContext('2d');
 
                             // Map coordinates to local offscreen rendering (0,0 based)
@@ -534,6 +535,10 @@
                                     ctx.font = fontString;
                                     ctx.textBaseline = 'alphabetic';
 
+                                    // Force integer coordinates for drawing to avoid subpixel rendering issues on Windows
+                                    const iLineX = Math.round(lineX);
+                                    const iLineBaseline = Math.round(lineBaseline);
+
                                     // 1. Draw Highlight First (Background) - Standard Painter's Algorithm
                                     if (seg.highlight && seg.highlight !== 'transparent') {
                                         ctx.fillStyle = seg.highlight;
@@ -557,22 +562,27 @@
                                         const finalTop = Math.min(standardTop, inkTop);
                                         const finalBottom = Math.max(standardBottom, inkBottom);
 
-                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                        // Use integer coordinates for fillRect too
+                                        ctx.fillRect(iLineX, Math.round(finalTop), Math.ceil(seg.width), Math.ceil(finalBottom - finalTop));
                                     }
 
                                     // 2. Draw Text (Foreground)
                                     // Force source-over to ensure text is drawn on top of any highlights
                                     ctx.globalCompositeOperation = 'source-over';
                                     ctx.fillStyle = seg.color || baseColor;
-                                    ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                    // Explicit opacity check - ensure full opacity if not specified
+                                    if (!ctx.fillStyle) ctx.fillStyle = 'rgba(0,0,0,1)';
+
+                                    ctx.fillText(seg.text, iLineX, iLineBaseline);
 
                                     if (seg.underline) {
                                         ctx.strokeStyle = ctx.fillStyle;
                                         ctx.lineWidth = Math.max(1, seg.fontSize / 15);
                                         ctx.beginPath();
-                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        const yPos = iLineBaseline + (seg.fontSize * 0.15);
+                                        ctx.moveTo(iLineX, yPos);
+                                        ctx.lineTo(iLineX + seg.width, yPos);
                                         ctx.stroke();
                                     }
 
@@ -580,9 +590,9 @@
                                         ctx.strokeStyle = ctx.fillStyle;
                                         ctx.lineWidth = Math.max(1, seg.fontSize / 15);
                                         ctx.beginPath();
-                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        const yPos = iLineBaseline - (seg.fontSize * 0.25);
+                                        ctx.moveTo(iLineX, yPos);
+                                        ctx.lineTo(iLineX + seg.width, yPos);
                                         ctx.stroke();
                                     }
                                     lineX += seg.width;
