@@ -335,7 +335,7 @@
                         }
 
                         // Secure Canvas Rich Text Renderer
-                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all') => {
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html || '', 'text/html');
                             
@@ -493,52 +493,56 @@
                                     ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
                                     ctx.textBaseline = 'alphabetic';
 
-                                    if (seg.highlight && seg.highlight !== 'transparent') {
-                                        ctx.fillStyle = seg.highlight;
+                                    if (renderMode !== 'text') {
+                                        if (seg.highlight && seg.highlight !== 'transparent') {
+                                            ctx.fillStyle = seg.highlight;
 
-                                        // Hybrid Approach for Robustness:
-                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
-                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
-                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+                                            // Hybrid Approach for Robustness:
+                                            // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                            //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                            const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                            const standardBottom = lineBaseline + (seg.fontSize * 0.3);
 
-                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
-                                        const m = ctx.measureText(seg.text);
-                                        // Use a small safety padding for ink (10% of font size)
-                                        const safetyPadding = seg.fontSize * 0.1;
+                                            // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                            const m = ctx.measureText(seg.text);
+                                            // Use a small safety padding for ink (10% of font size)
+                                            const safetyPadding = seg.fontSize * 0.1;
 
-                                        // 3. Expand if the ink pokes out
-                                        // Note: actualBoundingBoxAscent is distance UP from baseline
-                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+                                            // 3. Expand if the ink pokes out
+                                            // Note: actualBoundingBoxAscent is distance UP from baseline
+                                            const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                            const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
 
-                                        const finalTop = Math.min(standardTop, inkTop);
-                                        const finalBottom = Math.max(standardBottom, inkBottom);
+                                            const finalTop = Math.min(standardTop, inkTop);
+                                            const finalBottom = Math.max(standardBottom, inkBottom);
 
-                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                            ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                        }
                                     }
 
-                                    ctx.fillStyle = seg.color || baseColor;
-                                    ctx.fillText(seg.text, lineX, lineBaseline);
+                                    if (renderMode !== 'highlights') {
+                                        ctx.fillStyle = seg.color || baseColor;
+                                        ctx.fillText(seg.text, lineX, lineBaseline);
 
-                                    if (seg.underline) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
-                                    }
+                                        if (seg.underline) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
 
-                                    if (seg.strikethrough) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
+                                        if (seg.strikethrough) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
                                     }
                                     lineX += seg.width;
                                 });
@@ -550,9 +554,11 @@
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
 
                         if (s.startsWith('speech-bubble')) {
-                            // Double Offscreen Canvas Strategy (Content + Mask)
-                            // This guarantees that text and highlights are rendered correctly relative to each other
-                            // before being masked by the bubble shape, bypassing Windows WebView2 clipping bugs.
+                            // Decoupled Rendering Strategy for Windows WebView2 Bug
+                            // Bug: ctx.clip() + ctx.fillRect() causes highlights to vanish.
+                            // Fix: Render highlights offscreen (masked), render text onscreen (clipped).
+
+                            // 1. Draw Highlights (Offscreen + Masking)
                             const margin = 2;
                             const offX = Math.floor(tx) - margin;
                             const offY = Math.floor(ty) - margin;
@@ -560,43 +566,41 @@
                             const offH = Math.ceil(th) + (margin * 2);
 
                             if (offW > 0 && offH > 0) {
-                                // 1. Render Content (Text + Highlights) to a clean canvas
-                                // We attach the canvas to the DOM temporarily to ensure font rendering works correctly in all environments (WebView2 fix).
+                                // Content Canvas (Highlights Only)
                                 const contentCanvas = document.createElement('canvas');
                                 contentCanvas.width = offW;
                                 contentCanvas.height = offH;
-                                contentCanvas.style.visibility = 'hidden';
-                                contentCanvas.style.position = 'absolute';
-                                contentCanvas.style.top = '-9999px';
-                                contentCanvas.style.left = '-9999px';
-                                document.body.appendChild(contentCanvas);
+                                const contentCtx = contentCanvas.getContext('2d');
+                                contentCtx.translate(-offX, -offY);
 
-                                try {
-                                    const contentCtx = contentCanvas.getContext('2d');
-                                    contentCtx.translate(-offX, -offY);
-                                    renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                                } finally {
-                                    document.body.removeChild(contentCanvas);
-                                }
+                                // Render only highlights
+                                renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights');
 
-                                // 2. Render Mask (Bubble Shape) to a separate canvas
+                                // Mask Canvas
                                 const maskCanvas = document.createElement('canvas');
                                 maskCanvas.width = offW;
                                 maskCanvas.height = offH;
                                 const maskCtx = maskCanvas.getContext('2d');
                                 maskCtx.translate(-offX, -offY);
-                                maskCtx.fillStyle = 'black'; // Color irrelevant, alpha matters
+                                maskCtx.fillStyle = 'black';
                                 maskCtx.fill(path);
 
-                                // 3. Composite Content INTO Mask (Source-In)
-                                // This keeps Content pixels only where Mask pixels exist
+                                // Composite Highlights into Mask
                                 maskCtx.globalCompositeOperation = 'source-in';
-                                maskCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for image draw
+                                maskCtx.setTransform(1, 0, 0, 1, 0, 0);
                                 maskCtx.drawImage(contentCanvas, 0, 0);
 
-                                // 4. Draw Result to Main Canvas
+                                // Draw masked highlights to main canvas
                                 ctx.drawImage(maskCanvas, offX, offY);
                             }
+
+                            // 2. Draw Text (On Main Canvas + Clipping)
+                            // We assume clip() + fillText() works fine (based on text-area success).
+                            ctx.save();
+                            ctx.clip(path);
+                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
+                            ctx.restore();
+
                         } else {
                             // Standard clipping for other shapes
                             ctx.save();
