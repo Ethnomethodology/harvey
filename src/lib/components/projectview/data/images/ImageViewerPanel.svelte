@@ -209,14 +209,11 @@
                     ctx.putImageData(imageData, safeX, safeY);
                 };
 
-                // Helper to check if annotation should be rendered via SVG snapshot
-                const isSvgSnapshotAnnotation = (s) => s.startsWith('speech-bubble');
-
-                // Pass 1: Draw Shapes (Canvas - Excluding SVG Snapshot types)
+                // Pass 1: Draw Shapes
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
-                    if (s === 'rectangle' || s === 'circle' || s === 'polygon' || isSvgSnapshotAnnotation(s)) continue;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
 
                     const body = annotation.body || [];
                     const colorBody = body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
@@ -293,11 +290,11 @@
                     }
                 }
 
-                // Pass 2: Draw Text (Overlay - Canvas - Excluding SVG Snapshot types)
+                // Pass 2: Draw Text (Overlay)
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
-                    if (s === 'rectangle' || s === 'circle' || s === 'polygon' || isSvgSnapshotAnnotation(s)) continue;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
 
                     const body = annotation.body || [];
                     const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
@@ -326,14 +323,16 @@
 
                         // Re-create path for clipping in this second pass
                         let path = new Path2D();
-                        // matrix not needed here as we filtered out speech bubbles
-
+                        const matrix = new DOMMatrix();
+                        matrix.a = sx; matrix.d = sy;
                         if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
                             path.rect(tx, ty, tw, th);
                         } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
                             path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
+                        } else if (s.startsWith('speech-bubble')) {
+                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
                         }
-                        // speech-bubble logic removed from canvas path as it's handled via SVG snapshot
 
                         // Secure Canvas Rich Text Renderer
                         const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
@@ -547,72 +546,46 @@
                             });
                         };
 
-                        ctx.save();
-                        ctx.clip(path);
                         const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
-                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                        ctx.restore();
-                    }
-                }
 
-                // Pass 3: Draw Complex Shapes (SVG Snapshot - Speech Bubbles)
-                if (svgOverlay) {
-                    const svgClone = svgOverlay.cloneNode(true);
+                        if (s.startsWith('speech-bubble')) {
+                            // Offscreen Canvas Strategy with source-in masking
+                            // This avoids ctx.clip() which fails to render fillRect() highlights on Windows WebView2.
+                            const margin = 2;
+                            const offX = Math.floor(tx) - margin;
+                            const offY = Math.floor(ty) - margin;
+                            const offW = Math.ceil(tw) + (margin * 2);
+                            const offH = Math.ceil(th) + (margin * 2);
 
-                    // Set explicit dimensions to match canvas (ensures viewBox scales correctly)
-                    svgClone.setAttribute('width', width);
-                    svgClone.setAttribute('height', height);
+                            if (offW > 0 && offH > 0) {
+                                const offCanvas = document.createElement('canvas');
+                                offCanvas.width = offW;
+                                offCanvas.height = offH;
+                                const offCtx = offCanvas.getContext('2d');
 
-                    // Filter: Remove elements that are NOT speech bubbles
-                    // We identify speech bubbles by cross-referencing with annotation data
-                    const children = Array.from(svgClone.children);
-                    children.forEach(child => {
-                        // Keep defs
-                        if (child.tagName.toLowerCase() === 'defs') return;
+                                // Translate context to match main canvas coordinates relative to offscreen origin
+                                offCtx.translate(-offX, -offY);
 
-                        // Check data-annotation-id
-                        const annotationId = child.getAttribute('data-annotation-id');
-                        if (annotationId) {
-                            const annotation = annotations.find(a => a.id === annotationId);
-                            if (annotation) {
-                                const s = annotation.target.selector.value.shape;
-                                if (isSvgSnapshotAnnotation(s)) {
-                                    return; // Keep it
-                                }
+                                // 1. Draw Mask (The Bubble Shape)
+                                offCtx.fillStyle = 'black'; // Color doesn't matter, only alpha
+                                offCtx.fill(path);
+
+                                // 2. Draw Content (Text & Highlights) clipped to Mask
+                                offCtx.globalCompositeOperation = 'source-in';
+                                renderRichText(offCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+
+                                // 3. Draw Result to Main Canvas
+                                ctx.drawImage(offCanvas, offX, offY);
                             }
+                        } else {
+                            // Standard clipping for other shapes
+                            ctx.save();
+                            ctx.clip(path);
+                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                            ctx.restore();
                         }
-                        // Remove if not matched or not a speech bubble
-                        child.remove();
-                    });
-
-                    // Inject styles needed for text rendering
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .annotation-text { font-family: sans-serif; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
-                        .annotation-text p { margin: 0; padding: 0; font-weight: 600; }
-                        .annotation-text u, .annotation-text s, .annotation-text strike, .annotation-text del, .annotation-text span { text-decoration-color: currentColor; }
-                    `;
-                    svgClone.insertBefore(style, svgClone.firstChild);
-
-                    // Serialize
-                    const serializer = new XMLSerializer();
-                    const svgString = serializer.serializeToString(svgClone);
-
-                    // Draw
-                    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                    const svgUrl = URL.createObjectURL(svgBlob);
-
-                    const svgImg = new Image();
-                    svgImg.crossOrigin = 'Anonymous';
-                    await new Promise((resolve, reject) => {
-                        svgImg.onload = resolve;
-                        svgImg.onerror = reject;
-                        svgImg.src = svgUrl;
-                    });
-
-                    ctx.drawImage(svgImg, 0, 0, width, height);
-                    URL.revokeObjectURL(svgUrl);
+                    }
                 }
             }
 
