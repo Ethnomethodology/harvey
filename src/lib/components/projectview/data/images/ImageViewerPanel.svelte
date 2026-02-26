@@ -541,6 +541,12 @@
 
                                     // 1. Draw Highlight First (Background) - Standard Painter's Algorithm
                                     if (seg.highlight && seg.highlight !== 'transparent') {
+                                        ctx.save(); // Save state before highlight
+                                        // Reset potential interfering effects
+                                        ctx.shadowBlur = 0;
+                                        ctx.filter = 'none';
+                                        ctx.globalAlpha = 1.0;
+
                                         ctx.fillStyle = seg.highlight;
 
                                         // Hybrid Approach for Robustness:
@@ -564,9 +570,16 @@
 
                                         // Use integer coordinates for fillRect too
                                         ctx.fillRect(iLineX, Math.round(finalTop), Math.ceil(seg.width), Math.ceil(finalBottom - finalTop));
+                                        ctx.restore(); // Restore after highlight
                                     }
 
                                     // 2. Draw Text (Foreground)
+                                    ctx.save(); // Save state before text
+                                    // Reset potential interfering effects for text
+                                    ctx.shadowBlur = 0;
+                                    ctx.filter = 'none';
+                                    ctx.globalAlpha = 1.0;
+
                                     // Force source-over to ensure text is drawn on top of any highlights
                                     ctx.globalCompositeOperation = 'source-over';
                                     ctx.fillStyle = seg.color || baseColor;
@@ -585,8 +598,14 @@
                                         ctx.lineTo(iLineX + seg.width, yPos);
                                         ctx.stroke();
                                     }
+                                    ctx.restore(); // Restore after text
 
                                     if (seg.strikethrough) {
+                                        ctx.save();
+                                        ctx.shadowBlur = 0;
+                                        ctx.filter = 'none';
+                                        ctx.globalAlpha = 1.0;
+                                        ctx.globalCompositeOperation = 'source-over';
                                         ctx.strokeStyle = ctx.fillStyle;
                                         ctx.lineWidth = Math.max(1, seg.fontSize / 15);
                                         ctx.beginPath();
@@ -594,6 +613,7 @@
                                         ctx.moveTo(iLineX, yPos);
                                         ctx.lineTo(iLineX + seg.width, yPos);
                                         ctx.stroke();
+                                        ctx.restore();
                                     }
                                     lineX += seg.width;
                                 });
