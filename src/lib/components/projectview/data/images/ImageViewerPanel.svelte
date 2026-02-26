@@ -554,52 +554,17 @@
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
 
                         if (s.startsWith('speech-bubble')) {
-                            // Decoupled Rendering Strategy for Windows WebView2 Bug
-                            // Bug: ctx.clip() + ctx.fillRect() causes highlights to vanish.
-                            // Fix: Render highlights offscreen (masked), render text onscreen (clipped).
-
-                            // 1. Draw Highlights (Offscreen + Masking)
-                            const margin = 2;
-                            const offX = Math.floor(tx) - margin;
-                            const offY = Math.floor(ty) - margin;
-                            const offW = Math.ceil(tw) + (margin * 2);
-                            const offH = Math.ceil(th) + (margin * 2);
-
-                            if (offW > 0 && offH > 0) {
-                                // Content Canvas (Highlights Only)
-                                const contentCanvas = document.createElement('canvas');
-                                contentCanvas.width = offW;
-                                contentCanvas.height = offH;
-                                const contentCtx = contentCanvas.getContext('2d');
-                                contentCtx.translate(-offX, -offY);
-
-                                // Render only highlights
-                                renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights');
-
-                                // Mask Canvas
-                                const maskCanvas = document.createElement('canvas');
-                                maskCanvas.width = offW;
-                                maskCanvas.height = offH;
-                                const maskCtx = maskCanvas.getContext('2d');
-                                maskCtx.translate(-offX, -offY);
-                                maskCtx.fillStyle = 'black';
-                                maskCtx.fill(path);
-
-                                // Composite Highlights into Mask
-                                maskCtx.globalCompositeOperation = 'source-in';
-                                maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-                                maskCtx.drawImage(contentCanvas, 0, 0);
-
-                                // Draw masked highlights to main canvas
-                                ctx.drawImage(maskCanvas, offX, offY);
-                            }
-
-                            // 2. Draw Text (On Main Canvas - Unclipped)
-                            // We remove clipping entirely for the text phase to guarantee visibility on Windows WebView2.
-                            // Previous attempts to clip (Complex Path, Rect, Offscreen) caused text to vanish when combined with the highlight draw.
-                            // Text is already layout-constrained to the bounding box by renderRichText, so strict shape clipping is a secondary concern to visibility.
-                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
-
+                            // Simplified Rendering Strategy for Windows WebView2 Robustness
+                            // Complex path clipping causes rendering failures (missing text/highlights) on Windows.
+                            // We revert to rectangular clipping (identical to 'text-area' logic) which is confirmed to work.
+                            // This means highlights will be rectangular and not shaped to the bubble tail/curves,
+                            // but guarantees that both text and highlights remain visible and correctly layered.
+                            ctx.save();
+                            const textClipPath = new Path2D();
+                            textClipPath.rect(tx, ty, tw, th);
+                            ctx.clip(textClipPath);
+                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'all');
+                            ctx.restore();
                         } else {
                             // Standard clipping for other shapes
                             ctx.save();
