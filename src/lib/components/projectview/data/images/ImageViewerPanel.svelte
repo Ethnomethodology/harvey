@@ -561,12 +561,23 @@
 
                             if (offW > 0 && offH > 0) {
                                 // 1. Render Content (Text + Highlights) to a clean canvas
+                                // We attach the canvas to the DOM temporarily to ensure font rendering works correctly in all environments (WebView2 fix).
                                 const contentCanvas = document.createElement('canvas');
                                 contentCanvas.width = offW;
                                 contentCanvas.height = offH;
-                                const contentCtx = contentCanvas.getContext('2d');
-                                contentCtx.translate(-offX, -offY);
-                                renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                                contentCanvas.style.visibility = 'hidden';
+                                contentCanvas.style.position = 'absolute';
+                                contentCanvas.style.top = '-9999px';
+                                contentCanvas.style.left = '-9999px';
+                                document.body.appendChild(contentCanvas);
+
+                                try {
+                                    const contentCtx = contentCanvas.getContext('2d');
+                                    contentCtx.translate(-offX, -offY);
+                                    renderRichText(contentCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                                } finally {
+                                    document.body.removeChild(contentCanvas);
+                                }
 
                                 // 2. Render Mask (Bubble Shape) to a separate canvas
                                 const maskCanvas = document.createElement('canvas');
