@@ -594,15 +594,11 @@
                                 ctx.drawImage(maskCanvas, offX, offY);
                             }
 
-                            // 2. Draw Text (On Main Canvas + Clipping)
-                            // Use rectangular clipping via Path2D to match the working 'text-area' logic.
-                            // Direct context clipping (ctx.rect -> ctx.clip) failed on Windows, but Path2D clipping works.
-                            ctx.save();
-                            const textClipPath = new Path2D();
-                            textClipPath.rect(tx, ty, tw, th);
-                            ctx.clip(textClipPath);
+                            // 2. Draw Text (On Main Canvas - Unclipped)
+                            // We remove clipping entirely for the text phase to guarantee visibility on Windows WebView2.
+                            // Previous attempts to clip (Complex Path, Rect, Offscreen) caused text to vanish when combined with the highlight draw.
+                            // Text is already layout-constrained to the bounding box by renderRichText, so strict shape clipping is a secondary concern to visibility.
                             renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
-                            ctx.restore();
 
                         } else {
                             // Standard clipping for other shapes
