@@ -555,65 +555,65 @@
                         ctx.restore();
                     }
                 }
-            }
 
-            // Pass 3: Draw Complex Shapes (SVG Snapshot - Speech Bubbles)
-            if (svgOverlay) {
-                const svgClone = svgOverlay.cloneNode(true);
+                // Pass 3: Draw Complex Shapes (SVG Snapshot - Speech Bubbles)
+                if (svgOverlay) {
+                    const svgClone = svgOverlay.cloneNode(true);
 
-                // Set explicit dimensions to match canvas (ensures viewBox scales correctly)
-                svgClone.setAttribute('width', width);
-                svgClone.setAttribute('height', height);
+                    // Set explicit dimensions to match canvas (ensures viewBox scales correctly)
+                    svgClone.setAttribute('width', width);
+                    svgClone.setAttribute('height', height);
 
-                // Filter: Remove elements that are NOT speech bubbles
-                // We identify speech bubbles by cross-referencing with annotation data
-                const children = Array.from(svgClone.children);
-                children.forEach(child => {
-                    // Keep defs
-                    if (child.tagName.toLowerCase() === 'defs') return;
+                    // Filter: Remove elements that are NOT speech bubbles
+                    // We identify speech bubbles by cross-referencing with annotation data
+                    const children = Array.from(svgClone.children);
+                    children.forEach(child => {
+                        // Keep defs
+                        if (child.tagName.toLowerCase() === 'defs') return;
 
-                    // Check data-annotation-id
-                    const annotationId = child.getAttribute('data-annotation-id');
-                    if (annotationId) {
-                        const annotation = annotations.find(a => a.id === annotationId);
-                        if (annotation) {
-                            const s = annotation.target.selector.value.shape;
-                            if (isSvgSnapshotAnnotation(s)) {
-                                return; // Keep it
+                        // Check data-annotation-id
+                        const annotationId = child.getAttribute('data-annotation-id');
+                        if (annotationId) {
+                            const annotation = annotations.find(a => a.id === annotationId);
+                            if (annotation) {
+                                const s = annotation.target.selector.value.shape;
+                                if (isSvgSnapshotAnnotation(s)) {
+                                    return; // Keep it
+                                }
                             }
                         }
-                    }
-                    // Remove if not matched or not a speech bubble
-                    child.remove();
-                });
+                        // Remove if not matched or not a speech bubble
+                        child.remove();
+                    });
 
-                // Inject styles needed for text rendering
-                const style = document.createElement('style');
-                style.textContent = `
-                    .annotation-text { font-family: sans-serif; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
-                    .annotation-text p { margin: 0; padding: 0; font-weight: 600; }
-                    .annotation-text u, .annotation-text s, .annotation-text strike, .annotation-text del, .annotation-text span { text-decoration-color: currentColor; }
-                `;
-                svgClone.insertBefore(style, svgClone.firstChild);
+                    // Inject styles needed for text rendering
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .annotation-text { font-family: sans-serif; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+                        .annotation-text p { margin: 0; padding: 0; font-weight: 600; }
+                        .annotation-text u, .annotation-text s, .annotation-text strike, .annotation-text del, .annotation-text span { text-decoration-color: currentColor; }
+                    `;
+                    svgClone.insertBefore(style, svgClone.firstChild);
 
-                // Serialize
-                const serializer = new XMLSerializer();
-                const svgString = serializer.serializeToString(svgClone);
+                    // Serialize
+                    const serializer = new XMLSerializer();
+                    const svgString = serializer.serializeToString(svgClone);
 
-                // Draw
-                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                const svgUrl = URL.createObjectURL(svgBlob);
+                    // Draw
+                    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                    const svgUrl = URL.createObjectURL(svgBlob);
 
-                const svgImg = new Image();
-                svgImg.crossOrigin = 'Anonymous';
-                await new Promise((resolve, reject) => {
-                    svgImg.onload = resolve;
-                    svgImg.onerror = reject;
-                    svgImg.src = svgUrl;
-                });
+                    const svgImg = new Image();
+                    svgImg.crossOrigin = 'Anonymous';
+                    await new Promise((resolve, reject) => {
+                        svgImg.onload = resolve;
+                        svgImg.onerror = reject;
+                        svgImg.src = svgUrl;
+                    });
 
-                ctx.drawImage(svgImg, 0, 0, width, height);
-                URL.revokeObjectURL(svgUrl);
+                    ctx.drawImage(svgImg, 0, 0, width, height);
+                    URL.revokeObjectURL(svgUrl);
+                }
             }
 
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
