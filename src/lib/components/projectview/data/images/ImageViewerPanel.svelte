@@ -290,295 +290,281 @@
                     }
                 }
 
-                // Pass 2: Draw Text (Overlay - On separate Text Canvas to avoid state corruption)
-                // We use a separate canvas layer for text to isolate it from the complex path rasterization
-                // of the main canvas, which causes text to vanish on Windows WebView2.
-                const textCanvas = document.createElement('canvas');
-                textCanvas.width = width;
-                textCanvas.height = height;
-                // Append to DOM hidden to ensure font rendering works (WebView2 quirk)
-                textCanvas.style.visibility = 'hidden';
-                textCanvas.style.position = 'absolute';
-                textCanvas.style.top = '-9999px';
-                textCanvas.style.left = '-9999px';
-                document.body.appendChild(textCanvas);
-                const textCtx = textCanvas.getContext('2d');
+                // HARD RESET: Snapshot and Clear Canvas to clean context state before Pass 2
+                // This bypasses the Windows WebView2 bug where complex vector drawings (Pass 1)
+                // corrupt the context for subsequent text rendering (Pass 2).
+                const canvasSnapshot = ctx.getImageData(0, 0, width, height);
+                canvas.width = width; // Triggers context reset
+                ctx.putImageData(canvasSnapshot, 0, 0);
 
-                try {
-                    for (const annotation of annotations) {
-                        const shapeData = annotation.target.selector.value;
-                        const s = shapeData.shape;
-                        if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
+                // Pass 2: Draw Text (Overlay)
+                for (const annotation of annotations) {
+                    const shapeData = annotation.target.selector.value;
+                    const s = shapeData.shape;
+                    if (s === 'rectangle' || s === 'circle' || s === 'polygon') continue;
 
-                        const body = annotation.body || [];
-                        const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
-                        const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
-                        const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
-                        const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
+                    const body = annotation.body || [];
+                    const textBody = body.find(b => b.purpose === 'content' && b.type === 'TextualBody');
+                    const htmlBody = body.find(b => b.purpose === 'rendering' && b.type === 'HtmlBody');
+                    const textColorBody = body.find(b => b.purpose === 'rendering' && b.type === 'TextColor');
+                    const fontSizeBody = body.find(b => b.purpose === 'rendering' && b.type === 'FontSize');
 
-                        if ((textBody && textBody.value) || htmlBody) {
-                            const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
-                            const defaultTextColor = textColorBody ? textColorBody.value : 'black';
+                    if ((textBody && textBody.value) || htmlBody) {
+                        const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
+                        const defaultTextColor = textColorBody ? textColorBody.value : 'black';
 
-                            let tx, ty, tw, th;
-                            if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
-                                tx = shapeData.x * S * sx;
-                                ty = shapeData.y * S * sy;
-                                tw = shapeData.width * S * sx;
-                                th = shapeData.height * S * sy;
-                            } else {
-                                // Use inscribed square for text in circles to prevent overflow
-                                const side = shapeData.r * Math.sqrt(2);
-                                tx = (shapeData.cx - side / 2) * S * sx;
-                                ty = (shapeData.cy - side / 2) * S * sy;
-                                tw = side * S * sx;
-                                th = side * S * sy;
-                            }
+                        let tx, ty, tw, th;
+                        if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
+                            tx = shapeData.x * S * sx;
+                            ty = shapeData.y * S * sy;
+                            tw = shapeData.width * S * sx;
+                            th = shapeData.height * S * sy;
+                        } else {
+                            // Use inscribed square for text in circles to prevent overflow
+                            const side = shapeData.r * Math.sqrt(2);
+                            tx = (shapeData.cx - side / 2) * S * sx;
+                            ty = (shapeData.cy - side / 2) * S * sy;
+                            tw = side * S * sx;
+                            th = side * S * sy;
+                        }
 
-                            // Re-create path for clipping in this second pass
-                            let path = new Path2D();
-                            const matrix = new DOMMatrix();
-                            matrix.a = sx; matrix.d = sy;
-                            
-                            // Force rectangular clipping for all text shapes on the overlay canvas.
-                            // This matches the working 'text-area' logic and ensures compatibility.
-                            if (s === 'text-area' || s === 'censored' || s === 'rectangle' || s.startsWith('speech-bubble')) {
-                                path.rect(tx, ty, tw, th);
-                            } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
-                                path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
-                            }
+                        // Re-create path for clipping in this second pass
+                        let path = new Path2D();
+                        const matrix = new DOMMatrix();
+                        matrix.a = sx; matrix.d = sy;
 
-                            // Secure Canvas Rich Text Renderer
-                            const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all') => {
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(html || '', 'text/html');
+                        // Force rectangular clipping for speech bubbles to match text-area logic.
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle' || s.startsWith('speech-bubble')) {
+                            path.rect(tx, ty, tw, th);
+                        } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
+                            path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
+                        }
 
-                                const p = padding * Math.min(sx, sy);
-                                const availableW = width - (p * 2);
-                                const availableH = height - (p * 2);
-                                const startX = x + p;
-                                const startY_box = y + p;
+                        // Secure Canvas Rich Text Renderer
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all') => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html || '', 'text/html');
 
-                                if (availableW <= 0 || availableH <= 0) return;
+                            const p = padding * Math.min(sx, sy);
+                            const availableW = width - (p * 2);
+                            const availableH = height - (p * 2);
+                            const startX = x + p;
+                            const startY_box = y + p;
 
-                                const segments = [];
-                                const walk = (node, styles) => {
-                                    if (node.nodeType === Node.TEXT_NODE) {
-                                        if (node.textContent) segments.push({ text: node.textContent, ...styles });
-                                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                                        const newStyles = { ...styles };
-                                        const tag = node.tagName.toLowerCase();
-                                        const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
+                            if (availableW <= 0 || availableH <= 0) return;
 
-                                        if (tag === 'strong' || tag === 'b') newStyles.bold = true;
-                                        if (tag === 'em' || tag === 'i') newStyles.italic = true;
-                                        if (tag === 'u') newStyles.underline = true;
-                                        if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
+                            const segments = [];
+                            const walk = (node, styles) => {
+                                if (node.nodeType === Node.TEXT_NODE) {
+                                    if (node.textContent) segments.push({ text: node.textContent, ...styles });
+                                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                    const newStyles = { ...styles };
+                                    const tag = node.tagName.toLowerCase();
+                                    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'li'].includes(tag);
 
-                                        const styleAttr = node.getAttribute('style') || '';
-                                        const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
-                                        if (textDecMatch) {
-                                            if (textDecMatch[1].includes('underline')) newStyles.underline = true;
-                                            if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
-                                        }
-                                        const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
-                                        if (colorMatch) newStyles.color = colorMatch[1].trim();
+                                    if (tag === 'strong' || tag === 'b') newStyles.bold = true;
+                                    if (tag === 'em' || tag === 'i') newStyles.italic = true;
+                                    if (tag === 'u') newStyles.underline = true;
+                                    if (tag === 's' || tag === 'strike' || tag === 'del') newStyles.strikethrough = true;
 
-                                        const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
-                                        if (bgMatch) newStyles.highlight = bgMatch[1].trim();
+                                    const styleAttr = node.getAttribute('style') || '';
+                                    const textDecMatch = styleAttr.match(/text-decoration:\s*([^;]+)/);
+                                    if (textDecMatch) {
+                                        if (textDecMatch[1].includes('underline')) newStyles.underline = true;
+                                        if (textDecMatch[1].includes('line-through')) newStyles.strikethrough = true;
+                                    }
+                                    const colorMatch = styleAttr.match(/color:\s*([^;]+)/);
+                                    if (colorMatch) newStyles.color = colorMatch[1].trim();
 
-                                        const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
-                                        if (alignMatch) newStyles.align = alignMatch[1].trim();
+                                    const bgMatch = styleAttr.match(/background-color:\s*([^;]+)/);
+                                    if (bgMatch) newStyles.highlight = bgMatch[1].trim();
 
-                                        const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-                                        if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
+                                    const alignMatch = styleAttr.match(/text-align:\s*([^;]+)/);
+                                    if (alignMatch) newStyles.align = alignMatch[1].trim();
 
-                                        const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
-                                        if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
+                                    const fontFamilyMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+                                    if (fontFamilyMatch) newStyles.fontFamily = fontFamilyMatch[1].trim();
 
-                                        if (tag === 'br') segments.push({ text: '\n', ...newStyles });
+                                    const sizeMatch = styleAttr.match(/font-size:\s*(\d+)px/);
+                                    if (sizeMatch) newStyles.fontSize = parseInt(sizeMatch[1]) * Math.min(sx, sy);
 
-                                        node.childNodes.forEach(child => walk(child, newStyles));
+                                    if (tag === 'br') segments.push({ text: '\n', ...newStyles });
 
-                                        if (isBlock) {
-                                            const lastChild = node.lastChild;
-                                            const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
-                                            if (!endsWithBr) {
-                                                segments.push({ text: '\n', ...newStyles });
-                                            }
+                                    node.childNodes.forEach(child => walk(child, newStyles));
+
+                                    if (isBlock) {
+                                        const lastChild = node.lastChild;
+                                        const endsWithBr = lastChild && lastChild.nodeType === Node.ELEMENT_NODE && lastChild.tagName.toLowerCase() === 'br';
+                                        if (!endsWithBr) {
+                                            segments.push({ text: '\n', ...newStyles });
                                         }
                                     }
-                                };
-                                walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
+                                }
+                            };
+                            walk(doc.body, { bold: false, italic: false, underline: false, strikethrough: false, color: baseColor, highlight: null, fontSize: baseFontSize, align: 'center' });
 
-                                // Word Wrap & Layout
-                                const lines = [[]];
-                                let currentLine = lines[0];
-                                let currentX = 0;
-                                let isSoftWrap = false; // Track if the current line started due to a soft wrap
+                            // Word Wrap & Layout
+                            const lines = [[]];
+                            let currentLine = lines[0];
+                            let currentX = 0;
+                            let isSoftWrap = false; // Track if the current line started due to a soft wrap
 
-                                const LINE_HEIGHT_MULTIPLIER = 1.5;
-                                const effectiveAvailableW = Math.max(1, availableW);
+                            const LINE_HEIGHT_MULTIPLIER = 1.5;
+                            const effectiveAvailableW = Math.max(1, availableW);
 
-                                segments.forEach(seg => {
-                                    const parts = seg.text.split(/(\n)/);
-                                    parts.forEach(part => {
-                                        if (part === '\n') {
-                                            lines.push([]);
-                                            currentLine = lines[lines.length - 1];
-                                            currentX = 0;
-                                            isSoftWrap = false; // Explicit newline, preserve leading spaces
-                                        } else if (part) {
-                                            const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                            ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                            segments.forEach(seg => {
+                                const parts = seg.text.split(/(\n)/);
+                                parts.forEach(part => {
+                                    if (part === '\n') {
+                                        lines.push([]);
+                                        currentLine = lines[lines.length - 1];
+                                        currentX = 0;
+                                        isSoftWrap = false; // Explicit newline, preserve leading spaces
+                                    } else if (part) {
+                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
 
-                                            const words = part.split(/(\s+)/);
-                                            words.forEach(word => {
-                                                let wordWidth = ctx.measureText(word).width;
+                                        const words = part.split(/(\s+)/);
+                                        words.forEach(word => {
+                                            let wordWidth = ctx.measureText(word).width;
 
-                                                if (wordWidth > effectiveAvailableW && word.trim() !== "") {
-                                                    for (const char of word) {
-                                                        const charWidth = ctx.measureText(char).width;
-                                                        if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
-                                                            lines.push([]);
-                                                            currentLine = lines[lines.length - 1];
-                                                            currentX = 0;
-                                                            isSoftWrap = true;
-                                                        }
-                                                        currentLine.push({ ...seg, text: char, width: charWidth });
-                                                        currentX += charWidth;
-                                                    }
-                                                } else {
-                                                    const isSpace = /^\s+$/.test(word);
-                                                    if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                            if (wordWidth > effectiveAvailableW && word.trim() !== "") {
+                                                for (const char of word) {
+                                                    const charWidth = ctx.measureText(char).width;
+                                                    if (currentX + charWidth > effectiveAvailableW && currentX > 0) {
                                                         lines.push([]);
                                                         currentLine = lines[lines.length - 1];
                                                         currentX = 0;
                                                         isSoftWrap = true;
                                                     }
-
-                                                    // Only skip leading spaces if they are a result of a soft wrap.
-                                                    // Preserve them if they follow an explicit newline.
-                                                    if (currentX === 0 && isSpace && isSoftWrap) {
-                                                        // Skip leading space on wrapped line
-                                                    } else {
-                                                        currentLine.push({ ...seg, text: word, width: wordWidth });
-                                                        currentX += wordWidth;
-                                                    }
+                                                    currentLine.push({ ...seg, text: char, width: charWidth });
+                                                    currentX += charWidth;
                                                 }
-                                            });
-                                        }
-                                    });
-                                });
+                                            } else {
+                                                const isSpace = /^\s+$/.test(word);
+                                                if (currentX + wordWidth > effectiveAvailableW && currentX > 0 && !isSpace) {
+                                                    lines.push([]);
+                                                    currentLine = lines[lines.length - 1];
+                                                    currentX = 0;
+                                                    isSoftWrap = true;
+                                                }
 
-                                if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
-
-                                // Vertical Layout
-                                const lineHeights = lines.map(line => {
-                                    if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
-                                    return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
-                                });
-                                const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
-
-                                let currentY = startY_box + (availableH - totalHeight) / 2;
-
-                                lines.forEach((line, i) => {
-                                    const h = lineHeights[i];
-                                    const lineAlign = line[0]?.align || 'center';
-
-                                    let visibleLine = [...line];
-                                    while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
-                                    const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
-
-                                    let lineX;
-                                    if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
-                                    else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
-                                    else lineX = startX;
-
-                                    // Alphabetic baseline
-                                    const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
-                                    // Center the visual line content within the line box height (h)
-                                    // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
-                                    // Easier approximation for vertical center:
-                                    const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
-
-                                    line.forEach(seg => {
-                                        const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
-                                        ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
-                                        ctx.textBaseline = 'alphabetic';
-
-                                        if (renderMode !== 'text') {
-                                            if (seg.highlight && seg.highlight !== 'transparent') {
-                                                ctx.fillStyle = seg.highlight;
-
-                                                // Hybrid Approach for Robustness:
-                                                // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
-                                                //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
-                                                const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                                const standardBottom = lineBaseline + (seg.fontSize * 0.3);
-
-                                                // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
-                                                const m = ctx.measureText(seg.text);
-                                                // Use a small safety padding for ink (10% of font size)
-                                                const safetyPadding = seg.fontSize * 0.1;
-
-                                                // 3. Expand if the ink pokes out
-                                                // Note: actualBoundingBoxAscent is distance UP from baseline
-                                                const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                                const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
-
-                                                const finalTop = Math.min(standardTop, inkTop);
-                                                const finalBottom = Math.max(standardBottom, inkBottom);
-
-                                                ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                                // Only skip leading spaces if they are a result of a soft wrap.
+                                                // Preserve them if they follow an explicit newline.
+                                                if (currentX === 0 && isSpace && isSoftWrap) {
+                                                    // Skip leading space on wrapped line
+                                                } else {
+                                                    currentLine.push({ ...seg, text: word, width: wordWidth });
+                                                    currentX += wordWidth;
+                                                }
                                             }
-                                        }
-
-                                        if (renderMode !== 'highlights') {
-                                            ctx.fillStyle = seg.color || baseColor;
-                                            ctx.fillText(seg.text, lineX, lineBaseline);
-
-                                            if (seg.underline) {
-                                                ctx.strokeStyle = ctx.fillStyle;
-                                                ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                                ctx.beginPath();
-                                                const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                                ctx.moveTo(lineX, yPos);
-                                                ctx.lineTo(lineX + seg.width, yPos);
-                                                ctx.stroke();
-                                            }
-
-                                            if (seg.strikethrough) {
-                                                ctx.strokeStyle = ctx.fillStyle;
-                                                ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                                ctx.beginPath();
-                                                const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                                ctx.moveTo(lineX, yPos);
-                                                ctx.lineTo(lineX + seg.width, yPos);
-                                                ctx.stroke();
-                                            }
-                                        }
-                                        lineX += seg.width;
-                                    });
-                                    currentY += h;
+                                        });
+                                    }
                                 });
-                            };
+                            });
 
-                            const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
-                            const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+                            if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
 
-                            textCtx.save();
-                            textCtx.clip(path);
-                            renderRichText(textCtx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                            textCtx.restore();
-                        }
+                            // Vertical Layout
+                            const lineHeights = lines.map(line => {
+                                if (line.length === 0) return baseFontSize * LINE_HEIGHT_MULTIPLIER;
+                                return Math.max(...line.map(s => s.fontSize), baseFontSize) * LINE_HEIGHT_MULTIPLIER;
+                            });
+                            const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0);
+
+                            let currentY = startY_box + (availableH - totalHeight) / 2;
+
+                            lines.forEach((line, i) => {
+                                const h = lineHeights[i];
+                                const lineAlign = line[0]?.align || 'center';
+
+                                let visibleLine = [...line];
+                                while(visibleLine.length > 0 && /^\s*$/.test(visibleLine[visibleLine.length-1].text)) visibleLine.pop();
+                                const lineWidth = visibleLine.reduce((sum, s) => sum + s.width, 0);
+
+                                let lineX;
+                                if (lineAlign === 'center') lineX = startX + (availableW - lineWidth) / 2;
+                                else if (lineAlign === 'right') lineX = startX + availableW - lineWidth;
+                                else lineX = startX;
+
+                                // Alphabetic baseline
+                                const maxFontSizeInLine = Math.max(...line.map(s => s.fontSize), baseFontSize);
+                                // Center the visual line content within the line box height (h)
+                                // Standard baseline calc: currentY + (h - ascent) / 2 + ascent ?
+                                // Easier approximation for vertical center:
+                                const lineBaseline = currentY + (h - maxFontSizeInLine) / 2 + maxFontSizeInLine * 0.8;
+
+                                line.forEach(seg => {
+                                    const fontFamily = seg.fontFamily ? `${seg.fontFamily}, sans-serif` : 'sans-serif';
+                                    ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
+                                    ctx.textBaseline = 'alphabetic';
+
+                                    if (renderMode !== 'text') {
+                                        if (seg.highlight && seg.highlight !== 'transparent') {
+                                            ctx.fillStyle = seg.highlight;
+
+                                            // Hybrid Approach for Robustness:
+                                            // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                            //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                            const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                            const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+
+                                            // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                            const m = ctx.measureText(seg.text);
+                                            // Use a small safety padding for ink (10% of font size)
+                                            const safetyPadding = seg.fontSize * 0.1;
+
+                                            // 3. Expand if the ink pokes out
+                                            // Note: actualBoundingBoxAscent is distance UP from baseline
+                                            const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                            const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+
+                                            const finalTop = Math.min(standardTop, inkTop);
+                                            const finalBottom = Math.max(standardBottom, inkBottom);
+
+                                            ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                        }
+                                    }
+
+                                    if (renderMode !== 'highlights') {
+                                        ctx.fillStyle = seg.color || baseColor;
+                                        ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                        if (seg.underline) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
+
+                                        if (seg.strikethrough) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
+                                    }
+                                    lineX += seg.width;
+                                });
+                                currentY += h;
+                            });
+                        };
+
+                        const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
+                        const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
+
+                        ctx.save();
+                        ctx.clip(path);
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                        ctx.restore();
                     }
-                } finally {
-                    document.body.removeChild(textCanvas);
                 }
-
-                // Composite the text layer onto the main canvas
-                ctx.drawImage(textCanvas, 0, 0);
             }
 
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
