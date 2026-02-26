@@ -325,13 +325,14 @@
                         let path = new Path2D();
                         const matrix = new DOMMatrix();
                         matrix.a = sx; matrix.d = sy;
-                        if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+
+                        // For export on Windows WebView2, complex path clipping (speech bubbles) combined with text rendering fails.
+                        // We force rectangular clipping for speech bubbles in this pass (Pass 2: Text) to ensure visibility.
+                        // This matches the working 'text-area' logic. The complex bubble shape is already drawn in Pass 1.
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle' || s.startsWith('speech-bubble')) {
                             path.rect(tx, ty, tw, th);
                         } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
                             path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
-                        } else if (s.startsWith('speech-bubble')) {
-                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
-                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
                         }
 
                         // Secure Canvas Rich Text Renderer
@@ -553,25 +554,10 @@
                         const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
 
-                        if (s.startsWith('speech-bubble')) {
-                            // Simplified Rendering Strategy for Windows WebView2 Robustness
-                            // Complex path clipping causes rendering failures (missing text/highlights) on Windows.
-                            // We revert to rectangular clipping (identical to 'text-area' logic) which is confirmed to work.
-                            // This means highlights will be rectangular and not shaped to the bubble tail/curves,
-                            // but guarantees that both text and highlights remain visible and correctly layered.
-                            ctx.save();
-                            const textClipPath = new Path2D();
-                            textClipPath.rect(tx, ty, tw, th);
-                            ctx.clip(textClipPath);
-                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'all');
-                            ctx.restore();
-                        } else {
-                            // Standard clipping for other shapes
-                            ctx.save();
-                            ctx.clip(path);
-                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                            ctx.restore();
-                        }
+                        ctx.save();
+                        ctx.clip(path);
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                        ctx.restore();
                     }
                 }
             }
