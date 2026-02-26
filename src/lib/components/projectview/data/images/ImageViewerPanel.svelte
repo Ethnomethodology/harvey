@@ -290,13 +290,6 @@
                     }
                 }
 
-                // HARD RESET: Snapshot and Clear Canvas to clean context state before Pass 2
-                // This bypasses the Windows WebView2 bug where complex vector drawings (Pass 1)
-                // corrupt the context for subsequent text rendering (Pass 2).
-                const canvasSnapshot = ctx.getImageData(0, 0, width, height);
-                canvas.width = width; // Triggers context reset
-                ctx.putImageData(canvasSnapshot, 0, 0);
-
                 // Pass 2: Draw Text (Overlay)
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
@@ -529,6 +522,10 @@
                                     if (renderMode !== 'highlights') {
                                         ctx.fillStyle = seg.color || baseColor;
                                         ctx.fillText(seg.text, lineX, lineBaseline);
+                                        // Redundant stroke to ensure visibility on Windows WebView2 if fillText fails
+                                        ctx.lineWidth = 0.5;
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.strokeText(seg.text, lineX, lineBaseline);
 
                                         if (seg.underline) {
                                             ctx.strokeStyle = ctx.fillStyle;
