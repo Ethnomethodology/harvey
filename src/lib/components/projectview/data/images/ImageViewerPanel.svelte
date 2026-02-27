@@ -210,6 +210,14 @@
                 };
 
                 // Pass 1: Draw Shapes
+                // Strict Vector Isolation: Complex SVG paths (like speech bubbles) corrupt the Windows WebView2
+                // hardware stencil buffer. We draw ALL shapes onto an isolated offscreen canvas to keep
+                // the main canvas context absolutely pristine for subsequent text rendering.
+                const vectorCanvas = document.createElement('canvas');
+                vectorCanvas.width = width;
+                vectorCanvas.height = height;
+                const vectorCtx = vectorCanvas.getContext('2d');
+
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
@@ -275,20 +283,23 @@
                                 tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
                                 tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH);
 
-                                ctx.save();
-                                ctx.clip(path);
-                                ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
-                                ctx.restore();
+                                vectorCtx.save();
+                                vectorCtx.clip(path);
+                                vectorCtx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
+                                vectorCtx.restore();
                             }
                         }
                     } else {
-                        ctx.fillStyle = fillColor;
-                        ctx.fill(path);
-                        ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = strokeWidth * Math.min(sx, sy);
-                        ctx.stroke(path);
+                        vectorCtx.fillStyle = fillColor;
+                        vectorCtx.fill(path);
+                        vectorCtx.strokeStyle = strokeColor;
+                        vectorCtx.lineWidth = strokeWidth * Math.min(sx, sy);
+                        vectorCtx.stroke(path);
                     }
                 }
+
+                // Composite the pristine vector layer onto the main canvas
+                ctx.drawImage(vectorCanvas, 0, 0);
 
                 // Pass 2: Draw Text (Overlay)
                 for (const annotation of annotations) {
