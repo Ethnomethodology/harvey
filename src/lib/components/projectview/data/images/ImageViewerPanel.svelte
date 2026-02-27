@@ -534,10 +534,24 @@
 
                                     if (renderMode !== 'highlights') {
                                         ctx.fillStyle = seg.color || baseColor;
+
+                                        // Anti-Invisibility Fallback: If Lexical somehow sets a transparent or exact-match color
+                                        // for speech bubbles, we force a slight shadow to guarantee legibility.
+                                        // This also helps mitigate subtle text rendering bugs on Windows.
+                                        ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                                        ctx.shadowBlur = Math.max(2, seg.fontSize * 0.1);
+                                        ctx.shadowOffsetX = 0;
+                                        ctx.shadowOffsetY = 0;
+
                                         ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                        // Reset shadow so it doesn't affect lines/rects
+                                        ctx.shadowColor = "transparent";
+                                        ctx.shadowBlur = 0;
+
                                         // Redundant stroke to ensure visibility on Windows WebView2 if fillText fails
-                                        ctx.lineWidth = 0.5;
-                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(0.5, seg.fontSize * 0.02);
+                                        ctx.strokeStyle = ctx.fillStyle === 'transparent' ? 'black' : ctx.fillStyle;
                                         ctx.strokeText(seg.text, lineX, lineBaseline);
 
                                         if (seg.underline) {
@@ -583,10 +597,14 @@
                                 offCanvas.width = cw;
                                 offCanvas.height = ch;
 
-                                // DOM attachment to ensure font loading/rendering works in isolated contexts
-                                offCanvas.style.visibility = 'hidden';
-                                offCanvas.style.position = 'absolute';
-                                offCanvas.style.top = '-9999px';
+                                // Anti-Culling DOM Attachment: WebView2 may skip hardware rasterization for fully hidden nodes.
+                                // We use fixed positioning and minimal opacity to force rendering without being visible to the user.
+                                offCanvas.style.position = 'fixed';
+                                offCanvas.style.top = '0px';
+                                offCanvas.style.left = '0px';
+                                offCanvas.style.opacity = '0.01';
+                                offCanvas.style.pointerEvents = 'none';
+                                offCanvas.style.zIndex = '-9999';
                                 document.body.appendChild(offCanvas);
 
                                 try {
