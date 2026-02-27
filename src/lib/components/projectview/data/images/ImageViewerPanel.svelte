@@ -325,16 +325,17 @@
                         let path = new Path2D();
                         const matrix = new DOMMatrix();
                         matrix.a = sx; matrix.d = sy;
-
-                        // Force rectangular clipping for speech bubbles to match text-area logic.
-                        if (s === 'text-area' || s === 'censored' || s === 'rectangle' || s.startsWith('speech-bubble')) {
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
                             path.rect(tx, ty, tw, th);
                         } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
                             path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
+                        } else if (s.startsWith('speech-bubble')) {
+                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
+                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
                         }
 
                         // Secure Canvas Rich Text Renderer
-                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all') => {
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html || '', 'text/html');
 
@@ -492,60 +493,52 @@
                                     ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
                                     ctx.textBaseline = 'alphabetic';
 
-                                    if (renderMode !== 'text') {
-                                        if (seg.highlight && seg.highlight !== 'transparent') {
-                                            ctx.fillStyle = seg.highlight;
+                                    if (seg.highlight && seg.highlight !== 'transparent') {
+                                        ctx.fillStyle = seg.highlight;
 
-                                            // Hybrid Approach for Robustness:
-                                            // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
-                                            //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
-                                            const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                            const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+                                        // Hybrid Approach for Robustness:
+                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
 
-                                            // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
-                                            const m = ctx.measureText(seg.text);
-                                            // Use a small safety padding for ink (10% of font size)
-                                            const safetyPadding = seg.fontSize * 0.1;
+                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                        const m = ctx.measureText(seg.text);
+                                        // Use a small safety padding for ink (10% of font size)
+                                        const safetyPadding = seg.fontSize * 0.1;
 
-                                            // 3. Expand if the ink pokes out
-                                            // Note: actualBoundingBoxAscent is distance UP from baseline
-                                            const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                            const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+                                        // 3. Expand if the ink pokes out
+                                        // Note: actualBoundingBoxAscent is distance UP from baseline
+                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
 
-                                            const finalTop = Math.min(standardTop, inkTop);
-                                            const finalBottom = Math.max(standardBottom, inkBottom);
+                                        const finalTop = Math.min(standardTop, inkTop);
+                                        const finalBottom = Math.max(standardBottom, inkBottom);
 
-                                            ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
-                                        }
+                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
                                     }
 
-                                    if (renderMode !== 'highlights') {
-                                        ctx.fillStyle = seg.color || baseColor;
-                                        ctx.fillText(seg.text, lineX, lineBaseline);
-                                        // Redundant stroke to ensure visibility on Windows WebView2 if fillText fails
-                                        ctx.lineWidth = 0.5;
+                                    ctx.fillStyle = seg.color || baseColor;
+                                    ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                    if (seg.underline) {
                                         ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.strokeText(seg.text, lineX, lineBaseline);
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
+                                    }
 
-                                        if (seg.underline) {
-                                            ctx.strokeStyle = ctx.fillStyle;
-                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                            ctx.beginPath();
-                                            const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                            ctx.moveTo(lineX, yPos);
-                                            ctx.lineTo(lineX + seg.width, yPos);
-                                            ctx.stroke();
-                                        }
-
-                                        if (seg.strikethrough) {
-                                            ctx.strokeStyle = ctx.fillStyle;
-                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                            ctx.beginPath();
-                                            const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                            ctx.moveTo(lineX, yPos);
-                                            ctx.lineTo(lineX + seg.width, yPos);
-                                            ctx.stroke();
-                                        }
+                                    if (seg.strikethrough) {
+                                        ctx.strokeStyle = ctx.fillStyle;
+                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                        ctx.beginPath();
+                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                        ctx.moveTo(lineX, yPos);
+                                        ctx.lineTo(lineX + seg.width, yPos);
+                                        ctx.stroke();
                                     }
                                     lineX += seg.width;
                                 });
@@ -553,11 +546,10 @@
                             });
                         };
 
-                        const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
-                        const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
-
                         ctx.save();
                         ctx.clip(path);
+                        const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
+                        const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
                         renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
                         ctx.restore();
                     }
