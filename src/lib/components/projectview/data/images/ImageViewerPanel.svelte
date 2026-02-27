@@ -210,13 +210,6 @@
                 };
 
                 // Pass 1: Draw Shapes
-                // We render speech bubbles to a separate canvas to prevent complex path rasterization
-                // from corrupting the main canvas state on Windows WebView2 (which kills text rendering).
-                const bubbleCanvas = document.createElement('canvas');
-                bubbleCanvas.width = width;
-                bubbleCanvas.height = height;
-                const bubbleCtx = bubbleCanvas.getContext('2d');
-
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
@@ -236,9 +229,6 @@
                     matrix.a = sx; 
                     matrix.d = sy;
                     
-                    // Select drawing context: bubbleCtx for complex shapes, ctx (main) for others
-                    const targetCtx = s.startsWith('speech-bubble') ? bubbleCtx : ctx;
-
                     if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
                         const px = shapeData.x * S * sx;
                         const py = shapeData.y * S * sy;
@@ -292,16 +282,13 @@
                             }
                         }
                     } else {
-                        targetCtx.fillStyle = fillColor;
-                        targetCtx.fill(path);
-                        targetCtx.strokeStyle = strokeColor;
-                        targetCtx.lineWidth = strokeWidth * Math.min(sx, sy);
-                        targetCtx.stroke(path);
+                        ctx.fillStyle = fillColor;
+                        ctx.fill(path);
+                        ctx.strokeStyle = strokeColor;
+                        ctx.lineWidth = strokeWidth * Math.min(sx, sy);
+                        ctx.stroke(path);
                     }
                 }
-
-                // Composite the bubble layer onto the main canvas
-                ctx.drawImage(bubbleCanvas, 0, 0);
 
                 // Pass 2: Draw Text (Overlay)
                 for (const annotation of annotations) {
@@ -507,6 +494,7 @@
 
                                     if (renderMode !== 'text') {
                                         if (seg.highlight && seg.highlight !== 'transparent') {
+                                            ctx.save();
                                             ctx.fillStyle = seg.highlight;
 
                                             // Hybrid Approach for Robustness:
@@ -529,30 +517,13 @@
                                             const finalBottom = Math.max(standardBottom, inkBottom);
 
                                             ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                            ctx.restore();
                                         }
                                     }
 
                                     if (renderMode !== 'highlights') {
                                         ctx.fillStyle = seg.color || baseColor;
-
-                                        // Anti-Invisibility Fallback: If Lexical somehow sets a transparent or exact-match color
-                                        // for speech bubbles, we force a slight shadow to guarantee legibility.
-                                        // This also helps mitigate subtle text rendering bugs on Windows.
-                                        ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                                        ctx.shadowBlur = Math.max(2, seg.fontSize * 0.1);
-                                        ctx.shadowOffsetX = 0;
-                                        ctx.shadowOffsetY = 0;
-
                                         ctx.fillText(seg.text, lineX, lineBaseline);
-
-                                        // Reset shadow so it doesn't affect lines/rects
-                                        ctx.shadowColor = "transparent";
-                                        ctx.shadowBlur = 0;
-
-                                        // Redundant stroke to ensure visibility on Windows WebView2 if fillText fails
-                                        ctx.lineWidth = Math.max(0.5, seg.fontSize * 0.02);
-                                        ctx.strokeStyle = ctx.fillStyle === 'transparent' ? 'black' : ctx.fillStyle;
-                                        ctx.strokeText(seg.text, lineX, lineBaseline);
 
                                         if (seg.underline) {
                                             ctx.strokeStyle = ctx.fillStyle;
@@ -583,48 +554,10 @@
                         const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
 
-                        if (s.startsWith('speech-bubble')) {
-                            // PRISTINE CANVAS STRATEGY FOR SPEECH BUBBLES
-                            // Windows WebView2 has severe bugs with ctx.clip() and state corruption from complex paths.
-                            // We completely isolate the text and highlight rendering for each bubble into a fresh,
-                            // unsullied offscreen canvas. This avoids clipping entirely (canvas bounds act as clip)
-                            // and guarantees a clean rasterizer state.
-                            const cw = Math.ceil(tw);
-                            const ch = Math.ceil(th);
-
-                            if (cw > 0 && ch > 0) {
-                                const offCanvas = document.createElement('canvas');
-                                offCanvas.width = cw;
-                                offCanvas.height = ch;
-
-                                // Anti-Culling DOM Attachment: WebView2 may skip hardware rasterization for fully hidden nodes.
-                                // We use fixed positioning and minimal opacity to force rendering without being visible to the user.
-                                offCanvas.style.position = 'fixed';
-                                offCanvas.style.top = '0px';
-                                offCanvas.style.left = '0px';
-                                offCanvas.style.opacity = '0.01';
-                                offCanvas.style.pointerEvents = 'none';
-                                offCanvas.style.zIndex = '-9999';
-                                document.body.appendChild(offCanvas);
-
-                                try {
-                                    const offCtx = offCanvas.getContext('2d');
-                                    // Render to offscreen canvas at local origin (0, 0)
-                                    renderRichText(offCtx, content, 0, 0, cw, ch, defaultFontSize, defaultTextColor, padding);
-                                } finally {
-                                    document.body.removeChild(offCanvas);
-                                }
-
-                                // Composite back to main canvas at absolute coordinates
-                                ctx.drawImage(offCanvas, tx, ty);
-                            }
-                        } else {
-                            // Standard clipping for 'text-area' which does not suffer from complex path corruption
-                            ctx.save();
-                            ctx.clip(path);
-                            renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
-                            ctx.restore();
-                        }
+                        ctx.save();
+                        ctx.clip(path);
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+                        ctx.restore();
                     }
                 }
             }
