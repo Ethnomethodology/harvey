@@ -567,7 +567,15 @@
 
                         ctx.save();
                         ctx.clip(path);
-                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+
+                        // WebView2 GPU Batching Bug Workaround:
+                        // "text within speech bubble is not appearing... if the text is highlighted"
+                        // Alternating `fillRect` (highlight) and `fillText` (text) in the same loop
+                        // iteration causes hardware rendering corruption.
+                        // We strictly segregate these into two distinct rendering passes.
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights');
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
+
                         ctx.restore();
                     }
                 }
