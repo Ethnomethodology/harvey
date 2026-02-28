@@ -345,7 +345,7 @@
                         }
 
                         // Secure Canvas Rich Text Renderer
-                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all') => {
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all', isSpeechBubble = false) => {
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html || '', 'text/html');
 
@@ -536,6 +536,20 @@
                                         ctx.fillStyle = seg.color || baseColor;
                                         ctx.fillText(seg.text, lineX, lineBaseline);
 
+                                        // Direct2D/WebView2 Anti-Aliasing Bug Fallback:
+                                        // User confirmed `strokeText` works (produces "hollow effect") while `fillText` is completely
+                                        // swallowed on specific Windows configurations inside speech bubbles when combined with clipping.
+                                        // We force a thick stroke using the same color to simulate a solid fill.
+                                        if (isSpeechBubble) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            // Make the stroke thick enough to visually fill the text glyphs (approx 6% of font size)
+                                            ctx.lineWidth = Math.max(1, seg.fontSize * 0.06);
+                                            // Force line joins and caps to be round for smoother simulated text
+                                            ctx.lineJoin = 'round';
+                                            ctx.lineCap = 'round';
+                                            ctx.strokeText(seg.text, lineX, lineBaseline);
+                                        }
+
                                         if (seg.underline) {
                                             ctx.strokeStyle = ctx.fillStyle;
                                             ctx.lineWidth = Math.max(1, seg.fontSize / 15);
@@ -573,8 +587,8 @@
                         // Alternating `fillRect` (highlight) and `fillText` (text) in the same loop
                         // iteration causes hardware rendering corruption.
                         // We strictly segregate these into two distinct rendering passes.
-                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights');
-                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text');
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights', s.startsWith('speech-bubble'));
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text', s.startsWith('speech-bubble'));
 
                         ctx.restore();
                     }
