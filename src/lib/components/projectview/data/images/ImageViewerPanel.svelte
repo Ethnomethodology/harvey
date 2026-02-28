@@ -210,6 +210,14 @@
                 };
 
                 // Pass 1: Draw Shapes
+                // Strict Vector Isolation: Complex SVG paths (like speech bubbles) corrupt the Windows WebView2
+                // hardware stencil buffer. We draw ALL shapes onto an isolated offscreen canvas to keep
+                // the main canvas context absolutely pristine for subsequent text rendering.
+                const vectorCanvas = document.createElement('canvas');
+                vectorCanvas.width = width;
+                vectorCanvas.height = height;
+                const vectorCtx = vectorCanvas.getContext('2d');
+
                 for (const annotation of annotations) {
                     const shapeData = annotation.target.selector.value;
                     const s = shapeData.shape;
@@ -275,20 +283,23 @@
                                 tCtx.drawImage(tempC, 0, 0, safeW, safeH, 0, 0, smallW, smallH);
                                 tCtx.drawImage(tempC, 0, 0, smallW, smallH, 0, 0, safeW, safeH);
 
-                                ctx.save();
-                                ctx.clip(path);
-                                ctx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
-                                ctx.restore();
+                                vectorCtx.save();
+                                vectorCtx.clip(path);
+                                vectorCtx.drawImage(tempC, 0, 0, safeW, safeH, safeX, safeY, safeW, safeH);
+                                vectorCtx.restore();
                             }
                         }
                     } else {
-                        ctx.fillStyle = fillColor;
-                        ctx.fill(path);
-                        ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = strokeWidth * Math.min(sx, sy); 
-                        ctx.stroke(path);
+                        vectorCtx.fillStyle = fillColor;
+                        vectorCtx.fill(path);
+                        vectorCtx.strokeStyle = strokeColor;
+                        vectorCtx.lineWidth = strokeWidth * Math.min(sx, sy);
+                        vectorCtx.stroke(path);
                     }
                 }
+
+                // Composite the pristine vector layer onto the main canvas
+                ctx.drawImage(vectorCanvas, 0, 0);
 
                 // Pass 2: Draw Text (Overlay)
                 for (const annotation of annotations) {
@@ -305,7 +316,7 @@
                     if ((textBody && textBody.value) || htmlBody) {
                         const defaultFontSize = (fontSizeBody ? fontSizeBody.value : 14) * Math.min(sx, sy);
                         const defaultTextColor = textColorBody ? textColorBody.value : 'black';
-                        
+
                         let tx, ty, tw, th;
                         if (s === 'text-area' || s === 'speech-bubble-rect' || s === 'rectangle') {
                             tx = shapeData.x * S * sx;
@@ -325,20 +336,19 @@
                         let path = new Path2D();
                         const matrix = new DOMMatrix();
                         matrix.a = sx; matrix.d = sy;
-                        if (s === 'text-area' || s === 'censored' || s === 'rectangle') {
+
+                        // Force rectangular clipping for speech bubbles to match text-area logic.
+                        if (s === 'text-area' || s === 'censored' || s === 'rectangle' || s.startsWith('speech-bubble')) {
                             path.rect(tx, ty, tw, th);
                         } else if (s === 'text-area-circle' || s === 'censored-circle' || s === 'circle') {
                             path.ellipse(shapeData.cx * S * sx, shapeData.cy * S * sy, shapeData.r * S * sx, shapeData.r * S * sy, 0, 0, 2 * Math.PI);
-                        } else if (s.startsWith('speech-bubble')) {
-                            const pathStr = getBubblePath(shapeData, s === 'speech-bubble-circle');
-                            if (pathStr) { path.addPath(new Path2D(pathStr), matrix); }
                         }
 
                         // Secure Canvas Rich Text Renderer
-                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding) => {
+                        const renderRichText = (ctx, html, x, y, width, height, baseFontSize, baseColor, padding, renderMode = 'all', isSpeechBubble = false) => {
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html || '', 'text/html');
-                            
+
                             const p = padding * Math.min(sx, sy);
                             const availableW = width - (p * 2);
                             const availableH = height - (p * 2);
@@ -493,52 +503,76 @@
                                     ctx.font = `${seg.bold ? '700' : '400'} ${seg.italic ? 'italic' : ''} ${seg.fontSize}px ${fontFamily}`;
                                     ctx.textBaseline = 'alphabetic';
 
-                                    if (seg.highlight && seg.highlight !== 'transparent') {
-                                        ctx.fillStyle = seg.highlight;
+                                    if (renderMode !== 'text') {
+                                        if (seg.highlight && seg.highlight !== 'transparent') {
+                                            ctx.save();
+                                            ctx.fillStyle = seg.highlight;
 
-                                        // Hybrid Approach for Robustness:
-                                        // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
-                                        //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
-                                        const standardTop = lineBaseline - (seg.fontSize * 1.1);
-                                        const standardBottom = lineBaseline + (seg.fontSize * 0.3);
+                                            // Hybrid Approach for Robustness:
+                                            // 1. Start with a "standard" box based on font size for visual uniformity (User's preferred "double padding").
+                                            //    Top: -1.1em, Bottom: +0.3em (Total 1.4em)
+                                            const standardTop = lineBaseline - (seg.fontSize * 1.1);
+                                            const standardBottom = lineBaseline + (seg.fontSize * 0.3);
 
-                                        // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
-                                        const m = ctx.measureText(seg.text);
-                                        // Use a small safety padding for ink (10% of font size)
-                                        const safetyPadding = seg.fontSize * 0.1;
+                                            // 2. Measure actual ink to ensure safety for unusual fonts (scripts, etc.)
+                                            const m = ctx.measureText(seg.text);
+                                            // Use a small safety padding for ink (10% of font size)
+                                            const safetyPadding = seg.fontSize * 0.1;
 
-                                        // 3. Expand if the ink pokes out
-                                        // Note: actualBoundingBoxAscent is distance UP from baseline
-                                        const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
-                                        const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
+                                            // 3. Expand if the ink pokes out
+                                            // Note: actualBoundingBoxAscent is distance UP from baseline
+                                            const inkTop = lineBaseline - (m.actualBoundingBoxAscent || seg.fontSize * 0.8) - safetyPadding;
+                                            const inkBottom = lineBaseline + (m.actualBoundingBoxDescent || seg.fontSize * 0.2) + safetyPadding;
 
-                                        const finalTop = Math.min(standardTop, inkTop);
-                                        const finalBottom = Math.max(standardBottom, inkBottom);
+                                            const finalTop = Math.min(standardTop, inkTop);
+                                            const finalBottom = Math.max(standardBottom, inkBottom);
 
-                                        ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                            ctx.fillRect(lineX, finalTop, seg.width, finalBottom - finalTop);
+                                            ctx.restore();
+                                        }
                                     }
 
-                                    ctx.fillStyle = seg.color || baseColor;
-                                    ctx.fillText(seg.text, lineX, lineBaseline);
+                                    if (renderMode !== 'highlights') {
+                                        ctx.fillStyle = seg.color || baseColor;
 
-                                    if (seg.underline) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline + (seg.fontSize * 0.15);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
-                                    }
+                                        // Color Contrast Safety:
+                                        // If text is highlighted inside a speech bubble, Lexical HTML parsing sometimes
+                                        // inherits or defaults to a text color that perfectly matches the highlight color
+                                        // (or is transparent). To guarantee visibility without breaking user choices,
+                                        // we enforce contrast only if the colors are identical.
+                                        if (isSpeechBubble && seg.highlight && seg.highlight !== 'transparent') {
+                                            const currentFill = ctx.fillStyle.toString().toLowerCase().replace(/\s/g, '');
+                                            const currentHighlight = seg.highlight.toLowerCase().replace(/\s/g, '');
 
-                                    if (seg.strikethrough) {
-                                        ctx.strokeStyle = ctx.fillStyle;
-                                        ctx.lineWidth = Math.max(1, seg.fontSize / 15);
-                                        ctx.beginPath();
-                                        const yPos = lineBaseline - (seg.fontSize * 0.25);
-                                        ctx.moveTo(lineX, yPos);
-                                        ctx.lineTo(lineX + seg.width, yPos);
-                                        ctx.stroke();
+                                            if (currentFill === currentHighlight || currentFill === 'transparent' || currentFill === 'rgba(0,0,0,0)') {
+                                                // Fallback to black or white based on a simple heuristic (assuming most highlights are light)
+                                                // A robust implementation would calculate relative luminance, but a simple inversion
+                                                // or forcing a solid color works for preventing absolute invisibility.
+                                                ctx.fillStyle = currentHighlight.includes('0,0,0') ? 'white' : 'black';
+                                            }
+                                        }
+
+                                        ctx.fillText(seg.text, lineX, lineBaseline);
+
+                                        if (seg.underline) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline + (seg.fontSize * 0.15);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
+
+                                        if (seg.strikethrough) {
+                                            ctx.strokeStyle = ctx.fillStyle;
+                                            ctx.lineWidth = Math.max(1, seg.fontSize / 15);
+                                            ctx.beginPath();
+                                            const yPos = lineBaseline - (seg.fontSize * 0.25);
+                                            ctx.moveTo(lineX, yPos);
+                                            ctx.lineTo(lineX + seg.width, yPos);
+                                            ctx.stroke();
+                                        }
                                     }
                                     lineX += seg.width;
                                 });
@@ -546,11 +580,20 @@
                             });
                         };
 
-                        ctx.save();
-                        ctx.clip(path);
                         const content = htmlBody ? htmlBody.value : `<p>${textBody.value}</p>`;
                         const padding = (s === 'rectangle' || s === 'speech-bubble-rect' || s === 'text-area') ? 4 : 8;
-                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding);
+
+                        ctx.save();
+                        ctx.clip(path);
+
+                        // WebView2 GPU Batching Bug Workaround:
+                        // "text within speech bubble is not appearing... if the text is highlighted"
+                        // Alternating `fillRect` (highlight) and `fillText` (text) in the same loop
+                        // iteration causes hardware rendering corruption.
+                        // We strictly segregate these into two distinct rendering passes.
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'highlights', s.startsWith('speech-bubble'));
+                        renderRichText(ctx, content, tx, ty, tw, th, defaultFontSize, defaultTextColor, padding, 'text', s.startsWith('speech-bubble'));
+
                         ctx.restore();
                     }
                 }
