@@ -129,6 +129,8 @@ pub struct AdvancedTranscriptionConfig {
     pub faster_whisper_beam_size: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub num_threads: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faster_whisper_enable_hotwords: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
