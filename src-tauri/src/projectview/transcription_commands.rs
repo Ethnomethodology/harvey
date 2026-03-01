@@ -645,6 +645,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             Some(&original_media_path), // Original media path as source reference
             original_speakers.as_ref().map(|s_xml| &s_xml.names),
             None, // language_code: Option<&str> - Not known at initial import
+            None, // custom_vocabulary
         ) {
             warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
         } else {
