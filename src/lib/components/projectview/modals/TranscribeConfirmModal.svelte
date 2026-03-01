@@ -23,6 +23,8 @@
 	let modalTranscriptionMode = 'automatic'; // Kept for store compatibility if needed, but UI uses modalTab
 	let modalTab = 'automatic'; // 'automatic' | 'manual'
 	let modalSelectedLanguage = 'auto';
+    let modalCustomVocabulary = '';
+    let showCustomVocabularyEdit = false;
 
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
@@ -110,6 +112,7 @@
 				selectedLanguage: modalSelectedLanguage,
 				enableDiarization: modalEnableDiarization,
 				speakersConfig: modalSpeakersConfig,
+                customVocabulary: modalCustomVocabulary,
 			});
 		} else {
 			dispatch('confirmStart', {
@@ -166,6 +169,9 @@
 			$transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTab = $transcriptStore.transcriptionMode || 'automatic'; // Initialize tab from store
+
+        modalCustomVocabulary = $transcriptStore.customVocabulary || '';
+        showCustomVocabularyEdit = false;
 
 		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
 		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
@@ -354,6 +360,42 @@
 									bind:value={modalSelectedLanguage}
 									placeholder="Select a Language"
 								/>
+							</div>
+
+							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">
+								<div class="flex justify-between items-center">
+									<div class="font-medium text-gray-900 dark:text-gray-100">
+										Custom Vocabulary
+									</div>
+									<button type="button" class="btn-xs-secondary" on:click={() => (showCustomVocabularyEdit = !showCustomVocabularyEdit)}>
+										{showCustomVocabularyEdit ? 'Hide' : 'Edit Vocabularies'}
+									</button>
+								</div>
+								{#if !showCustomVocabularyEdit}
+									{#if modalCustomVocabulary && modalCustomVocabulary.trim() !== ''}
+										{@const vocabList = modalCustomVocabulary.split(',').map(v => v.trim()).filter(v => v !== '')}
+										<div class="pl-4">
+											<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+												({vocabList.slice(0, 5).join(', ')}{vocabList.length > 5 ? `, ... (${vocabList.length} total)` : ''})
+											</p>
+										</div>
+									{:else}
+										<div class="pl-4">
+											<p class="text-xs text-gray-400 dark:text-gray-500 italic">None</p>
+										</div>
+									{/if}
+								{:else}
+									<div class="mt-2">
+										<textarea
+											id="modalCustomVocabulary"
+											rows="2"
+											class="ui-input w-full text-xs p-2 resize-none"
+											placeholder="Acronym1, Term2, Name3..."
+											bind:value={modalCustomVocabulary}
+										></textarea>
+										<p class="text-[10px] text-gray-500 mt-1">Enter specific business terms, names, or acronyms separated by commas to improve transcription accuracy.</p>
+									</div>
+								{/if}
 							</div>
 
 							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">

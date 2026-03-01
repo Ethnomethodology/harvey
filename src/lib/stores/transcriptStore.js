@@ -67,6 +67,9 @@ export const initialTranscriptState = {
         lastUsedSpeakerIndex: -1
     },
 
+    // Custom Vocabulary
+    customVocabulary: "",
+
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
     secondaryTranscriptPath: null,
@@ -181,6 +184,10 @@ export function undoTranscriptChange() {
     });
 }
 
+export function setCustomVocabulary(vocab) {
+    transcriptStore.update((ts) => ({ ...ts, customVocabulary: vocab }));
+}
+
 export function redoTranscriptChange() {
     const store = get(transcriptStore);
     if (store.transcriptRedoStack.length === 0) {
@@ -242,6 +249,7 @@ export function clearTranscriptState() {
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
                 speakers: { count: 0, names: [], translatedNames: [] },
+                customVocabulary: "",
                 activeMediaDuringTranscriptionStart: null,
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
@@ -331,6 +339,25 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                 console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
             }
 
+            // Load custom vocabulary when media changes
+            let customVocab = "";
+            if (newSelectedMedia && newSelectedMedia.relative_path) {
+                try {
+                    const projectData = get(projectMainStore);
+                    if (projectData && projectData.id) {
+                        const vocabRes = await invoke('load_media_custom_vocabulary', {
+                            projectId: projectData.id,
+                            assetRelativePath: newSelectedMedia.relative_path
+                        });
+                        if (vocabRes) {
+                            customVocab = vocabRes;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("[TranscriptStore] Failed to load custom vocabulary:", err);
+                }
+            }
+
             transcriptStore.update((ts) => {
                 const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
                 return {
@@ -345,6 +372,7 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                         currentSegmentIndex: -1
                     },
                     speakers: speakersToLoad,
+                    customVocabulary: customVocab,
                     segments: [],
                     activeTranscript: null,
                     currentTranscriptPath: null,

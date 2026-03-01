@@ -1043,6 +1043,8 @@ pub struct TranscribeMediaPayload {
     translated_speaker_names: Option<Vec<String>>, // For translated transcript
     #[serde(default)]
     transcription_engine: Option<String>,
+    #[serde(default)]
+    custom_vocabulary: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -1187,6 +1189,15 @@ pub async fn transcribe_media_command<R: Runtime>(
         return Err(CommandError::from("Transcription cancelled before main processing pass."));
     }
 
+    // Clean up custom vocabulary (strip whitespace around commas)
+    let clean_custom_vocab = payload.custom_vocabulary.as_ref().map(|vocab| {
+        vocab.split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<&str>>()
+            .join(", ")
+    });
+
     // --- First Pass: Original Language Transcription ---
     emit_progress_cmd(&app_handle_clone, &job_id, 10.0, &format!("Transcribing {}...", media_filename_for_progress))?;
 
@@ -1206,6 +1217,7 @@ pub async fn transcribe_media_command<R: Runtime>(
         &media_filename_for_progress,
         cancel_flag.clone(),
         payload.transcription_engine.clone(),
+        clean_custom_vocab.clone(),
     ).await {
         Ok(segments) => segments,
         Err(e) => {
@@ -1263,6 +1275,42 @@ pub async fn transcribe_media_command<R: Runtime>(
         lexical_json_orig_str,
         original_lang_code_to_save,
     ).await?;
+
+    // Save custom vocabulary to database
+    if let Some(vocab) = &payload.custom_vocabulary {
+        let normalized_xml_path = crate::projectview::shared_utils::normalize_path_for_comparison(&PathBuf::from(&payload.project_xml_path));
+        if let Some(project_base_dir) = normalized_xml_path.parent() {
+             let media_path_buf = PathBuf::from(&payload.media_path_str);
+             if let Ok(relative_path) = media_path_buf.strip_prefix(project_base_dir) {
+                 let asset_relative_path = relative_path.to_string_lossy().replace("\\", "/");
+
+                 // Need project_uuid to save to DB. We can load project data.
+                 match crate::projectview::core_commands::load_project_data(payload.project_xml_path.clone()).await {
+                     Ok(project_data) => {
+                         let project_uuid = project_data.project_uuid;
+                         let mut speaker_names = None;
+                         if let Some(media_entry) = project_data.files.iter().find(|f| f.path == payload.media_path_str) {
+                             if let Some(speakers) = &media_entry.speakers {
+                                 speaker_names = Some(&speakers.names);
+                             }
+                         }
+
+                         let _ = db_handler::save_media_transcript_data(
+                             &project_uuid,
+                             &asset_relative_path,
+                             Some(&payload.media_path_str),
+                             speaker_names,
+                             payload.language_code.as_deref(),
+                             Some(vocab)
+                         );
+                     },
+                     Err(e) => {
+                         warn!("[Transcribe Command][{}] Failed to load project data to save custom vocabulary: {}", job_id, e);
+                     }
+                 }
+             }
+        }
+    }
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
     emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
 
@@ -1362,6 +1410,7 @@ pub async fn transcribe_media_command<R: Runtime>(
                 &media_filename_for_progress,
                 cancel_flag.clone(),
                 payload.transcription_engine.clone(),
+                clean_custom_vocab.clone(),
             ).await;
 
             let mut translated_segments = match translation_result {
@@ -2057,6 +2106,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     media_filename_for_progress: &str,
     cancel_flag: Arc<AtomicBool>,
     transcription_engine: Option<String>,
+    custom_vocabulary: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, Engine: {:?}", job_id, language_code, is_translation_pass, num_speakers, transcription_engine);
 
@@ -2069,6 +2119,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         model_path: model_path.to_string(),
         output_dir: output_dir,
         translate: is_translation_pass,
+        custom_vocabulary,
     };
 
     let engine: Box<dyn TranscriptionEngine> = if transcription_engine.as_deref() == Some("faster-whisper") {
@@ -2612,6 +2663,18 @@ pub async fn cancel_transcription(
         warn!("[Transcribe Command][Cancel] Cancellation request for unknown or already completed job ID: {}", job_id);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn load_media_custom_vocabulary(
+    project_id: String,
+    asset_relative_path: String
+) -> Result<Option<String>, CommandError> {
+    match db_handler::load_media_transcript_data(&project_id, &asset_relative_path) {
+        Ok(Some(data)) => Ok(data.custom_vocabulary),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
