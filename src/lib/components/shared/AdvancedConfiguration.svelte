@@ -254,7 +254,7 @@
                             <input type="checkbox" bind:checked={config.faster_whisper_enable_hotwords} class="mt-1 ui-checkbox" />
                             <div class="flex flex-col">
                                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable hotwords for custom vocabulary</span>
-                                <span class="text-[10px] text-gray-500">When enabled, custom vocabulary is passed to faster-whisper as both 'initial_prompt' and 'hotwords'. This forces the engine to pay closer attention to these terms but may cause it to hallucinate them more often. Disable to use initial prompt only (consistent with whisper.cpp).</span>
+                                <span class="text-[10px] text-gray-500">When enabled, custom vocabulary is passed to faster-whisper as both 'initial_prompt' and 'hotwords'. This forces the engine to pay closer attention to these terms but may cause it to hallucinate them more often. Disable to use initial prompt only.</span>
                             </div>
                         </label>
                     </div>
