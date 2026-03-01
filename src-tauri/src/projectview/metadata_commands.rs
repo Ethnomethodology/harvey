@@ -126,7 +126,8 @@ pub async fn update_asset_metadata_command(
         metadata_payload.original_import_path.as_deref(), // Use metadata_payload here
         metadata_payload.speaker_names.as_ref(),        // Use metadata_payload here
         None, // language_code: Option<&str> - Not known at initial import
-        None, // custom_vocabulary
+        None, // initial_prompt
+        None, // hotwords
     ) {
         warn!(
             "[CMD] Failed to save media_transcript_data during metadata update for project_id {}: {}. Error: {}",

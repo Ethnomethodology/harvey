@@ -67,8 +67,9 @@ export const initialTranscriptState = {
         lastUsedSpeakerIndex: -1
     },
 
-    // Custom Vocabulary
-    customVocabulary: "",
+    // Additional Parameters
+    initialPrompt: "",
+    hotwords: "",
 
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
@@ -184,8 +185,8 @@ export function undoTranscriptChange() {
     });
 }
 
-export function setCustomVocabulary(vocab) {
-    transcriptStore.update((ts) => ({ ...ts, customVocabulary: vocab }));
+export function setAdditionalParameters(initialPrompt, hotwords) {
+    transcriptStore.update((ts) => ({ ...ts, initialPrompt, hotwords }));
 }
 
 export function redoTranscriptChange() {
@@ -249,7 +250,8 @@ export function clearTranscriptState() {
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
                 speakers: { count: 0, names: [], translatedNames: [] },
-                customVocabulary: "",
+                initialPrompt: "",
+                hotwords: "",
                 activeMediaDuringTranscriptionStart: null,
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
@@ -339,22 +341,24 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                 console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
             }
 
-            // Load custom vocabulary when media changes
-            let customVocab = "";
+            // Load additional parameters when media changes
+            let initialPrompt = "";
+            let hotwords = "";
             if (newSelectedMedia && newSelectedMedia.relative_path) {
                 try {
                     const projectData = get(projectMainStore);
                     if (projectData && projectData.id) {
-                        const vocabRes = await invoke('load_media_custom_vocabulary', {
+                        const paramsRes = await invoke('load_media_additional_parameters', {
                             projectId: projectData.id,
                             assetRelativePath: newSelectedMedia.relative_path
                         });
-                        if (vocabRes) {
-                            customVocab = vocabRes;
+                        if (paramsRes) {
+                            initialPrompt = paramsRes.initial_prompt || "";
+                            hotwords = paramsRes.hotwords || "";
                         }
                     }
                 } catch (err) {
-                    console.warn("[TranscriptStore] Failed to load custom vocabulary:", err);
+                    console.warn("[TranscriptStore] Failed to load additional parameters:", err);
                 }
             }
 
@@ -372,7 +376,8 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                         currentSegmentIndex: -1
                     },
                     speakers: speakersToLoad,
-                    customVocabulary: customVocab,
+                    initialPrompt: initialPrompt,
+                    hotwords: hotwords,
                     segments: [],
                     activeTranscript: null,
                     currentTranscriptPath: null,

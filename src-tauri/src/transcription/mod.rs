@@ -15,7 +15,8 @@ pub struct TranscriptionOptions {
     pub model_path: String,
     pub output_dir: PathBuf,
     pub translate: bool,
-    pub custom_vocabulary: Option<String>,
+    pub initial_prompt: Option<String>,
+    pub hotwords: Option<String>,
 }
 
 #[async_trait]

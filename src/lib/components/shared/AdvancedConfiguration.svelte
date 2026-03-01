@@ -16,7 +16,6 @@
         quantization_preference: 'int8', // Default to int8 as per user request for performance option
         faster_whisper_compute_type: 'int8',
         faster_whisper_beam_size: 5,
-        faster_whisper_enable_hotwords: true,
         transcription_num_threads: 4 // Renamed for clarity in UI state
     };
 
@@ -75,7 +74,6 @@
                     config.faster_whisper_compute_type = savedTranscriptionConfig.faster_whisper_compute_type;
                 }
                 if (savedTranscriptionConfig.faster_whisper_beam_size !== undefined) config.faster_whisper_beam_size = savedTranscriptionConfig.faster_whisper_beam_size;
-                if (savedTranscriptionConfig.faster_whisper_enable_hotwords !== undefined && savedTranscriptionConfig.faster_whisper_enable_hotwords !== null) config.faster_whisper_enable_hotwords = savedTranscriptionConfig.faster_whisper_enable_hotwords;
                 if (savedTranscriptionConfig.num_threads !== undefined) config.transcription_num_threads = savedTranscriptionConfig.num_threads;
             }
 
@@ -109,7 +107,6 @@
             const transcriptionPayload = {
                 faster_whisper_compute_type: config.faster_whisper_compute_type,
                 faster_whisper_beam_size: parseInt(config.faster_whisper_beam_size),
-                faster_whisper_enable_hotwords: config.faster_whisper_enable_hotwords,
                 num_threads: parseInt(config.transcription_num_threads)
             };
             await invoke('set_advanced_transcription_config', { newConfig: transcriptionPayload });
@@ -149,7 +146,6 @@
     function resetTranscription() {
         config.faster_whisper_compute_type = 'int8';
         config.faster_whisper_beam_size = 5;
-        config.faster_whisper_enable_hotwords = true;
         config.transcription_num_threads = 4;
         statusMessage = 'Transcription settings reset (Click Save to apply).';
         statusType = 'info';
@@ -247,16 +243,6 @@
                             <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" />
                             <p class="text-[10px] text-gray-500">Number of paths to search. 1 is greedy (fastest), 5 is standard.</p>
                         </div>
-                    </div>
-
-                    <div class="mt-4">
-                        <label class="flex items-start space-x-2">
-                            <input type="checkbox" bind:checked={config.faster_whisper_enable_hotwords} class="mt-1 ui-checkbox" />
-                            <div class="flex flex-col">
-                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable hotwords for custom vocabulary</span>
-                                <span class="text-[10px] text-gray-500">When enabled, custom vocabulary is passed to faster-whisper as both 'initial_prompt' and 'hotwords'. This forces the engine to pay closer attention to these terms but may cause it to hallucinate them more often. Disable to use initial prompt only.</span>
-                            </div>
-                        </label>
                     </div>
 
                     <!-- Panel Actions -->

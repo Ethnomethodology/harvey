@@ -407,7 +407,7 @@ pub fn run() {
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,
-            projectview::transcription_commands::load_media_custom_vocabulary,
+            projectview::transcription_commands::load_media_additional_parameters,
             
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,

@@ -645,7 +645,8 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             Some(&original_media_path), // Original media path as source reference
             original_speakers.as_ref().map(|s_xml| &s_xml.names),
             None, // language_code: Option<&str> - Not known at initial import
-            None, // custom_vocabulary
+            None, // initial_prompt
+            None, // hotwords
         ) {
             warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
         } else {
@@ -1045,7 +1046,9 @@ pub struct TranscribeMediaPayload {
     #[serde(default)]
     transcription_engine: Option<String>,
     #[serde(default)]
-    custom_vocabulary: Option<String>,
+    initial_prompt: Option<String>,
+    #[serde(default)]
+    hotwords: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -1190,17 +1193,17 @@ pub async fn transcribe_media_command<R: Runtime>(
         return Err(CommandError::from("Transcription cancelled before main processing pass."));
     }
 
-    // Clean up custom vocabulary (strip whitespace around commas)
-    let clean_custom_vocab = payload.custom_vocabulary.as_ref().map(|vocab| {
+    // --- First Pass: Original Language Transcription ---
+    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, &format!("Transcribing {}...", media_filename_for_progress))?;
+
+    // Clean up hotwords (strip whitespace around commas)
+    let clean_hotwords = payload.hotwords.as_ref().map(|vocab| {
         vocab.split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .collect::<Vec<&str>>()
             .join(", ")
     });
-
-    // --- First Pass: Original Language Transcription ---
-    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, &format!("Transcribing {}...", media_filename_for_progress))?;
 
     let mut original_segments = match execute_transcription_pass(
         &app_handle_clone,
@@ -1218,7 +1221,8 @@ pub async fn transcribe_media_command<R: Runtime>(
         &media_filename_for_progress,
         cancel_flag.clone(),
         payload.transcription_engine.clone(),
-        clean_custom_vocab.clone(),
+        payload.initial_prompt.clone(),
+        clean_hotwords.clone(),
     ).await {
         Ok(segments) => segments,
         Err(e) => {
@@ -1277,41 +1281,41 @@ pub async fn transcribe_media_command<R: Runtime>(
         original_lang_code_to_save,
     ).await?;
 
-    // Save custom vocabulary to database
-    if let Some(vocab) = &payload.custom_vocabulary {
-        let normalized_xml_path = crate::projectview::shared_utils::normalize_path_for_comparison(&PathBuf::from(&payload.project_xml_path));
-        if let Some(project_base_dir) = normalized_xml_path.parent() {
-             let media_path_buf = PathBuf::from(&payload.media_path_str);
-             if let Ok(relative_path) = media_path_buf.strip_prefix(project_base_dir) {
-                 let asset_relative_path = relative_path.to_string_lossy().replace("\\", "/");
+    // Save additional parameters to database
+    let normalized_xml_path = crate::projectview::shared_utils::normalize_path_for_comparison(&PathBuf::from(&payload.project_xml_path));
+    if let Some(project_base_dir) = normalized_xml_path.parent() {
+         let media_path_buf = PathBuf::from(&payload.media_path_str);
+         if let Ok(relative_path) = media_path_buf.strip_prefix(project_base_dir) {
+             let asset_relative_path = relative_path.to_string_lossy().replace("\\", "/");
 
-                 // Need project_uuid to save to DB. We can load project data.
-                 match crate::projectview::core_commands::load_project_data(payload.project_xml_path.clone()).await {
-                     Ok(project_data) => {
-                         let project_uuid = project_data.project_uuid;
-                         let mut speaker_names = None;
-                         if let Some(media_entry) = project_data.files.iter().find(|f| f.path == payload.media_path_str) {
-                             if let Some(speakers) = &media_entry.speakers {
-                                 speaker_names = Some(&speakers.names);
-                             }
+             // Need project_uuid to save to DB. We can load project data.
+             match crate::projectview::core_commands::load_project_data(payload.project_xml_path.clone()).await {
+                 Ok(project_data) => {
+                     let project_uuid = project_data.project_uuid;
+                     let mut speaker_names = None;
+                     if let Some(media_entry) = project_data.files.iter().find(|f| f.path == payload.media_path_str) {
+                         if let Some(speakers) = &media_entry.speakers {
+                             speaker_names = Some(&speakers.names);
                          }
-
-                         let _ = db_handler::save_media_transcript_data(
-                             &project_uuid,
-                             &asset_relative_path,
-                             Some(&payload.media_path_str),
-                             speaker_names,
-                             payload.language_code.as_deref(),
-                             Some(vocab)
-                         );
-                     },
-                     Err(e) => {
-                         warn!("[Transcribe Command][{}] Failed to load project data to save custom vocabulary: {}", job_id, e);
                      }
+
+                     let _ = db_handler::save_media_transcript_data(
+                         &project_uuid,
+                         &asset_relative_path,
+                         Some(&payload.media_path_str),
+                         speaker_names,
+                         payload.language_code.as_deref(),
+                         payload.initial_prompt.as_deref(),
+                         clean_hotwords.as_deref()
+                     );
+                 },
+                 Err(e) => {
+                     warn!("[Transcribe Command][{}] Failed to load project data to save additional parameters: {}", job_id, e);
                  }
              }
-        }
+         }
     }
+
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
     emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
 
@@ -1411,7 +1415,8 @@ pub async fn transcribe_media_command<R: Runtime>(
                 &media_filename_for_progress,
                 cancel_flag.clone(),
                 payload.transcription_engine.clone(),
-                clean_custom_vocab.clone(),
+                payload.initial_prompt.clone(),
+                clean_hotwords.clone(),
             ).await;
 
             let mut translated_segments = match translation_result {
@@ -2107,7 +2112,8 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     media_filename_for_progress: &str,
     cancel_flag: Arc<AtomicBool>,
     transcription_engine: Option<String>,
-    custom_vocabulary: Option<String>,
+    initial_prompt: Option<String>,
+    hotwords: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, Engine: {:?}", job_id, language_code, is_translation_pass, num_speakers, transcription_engine);
 
@@ -2120,7 +2126,8 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         model_path: model_path.to_string(),
         output_dir: output_dir,
         translate: is_translation_pass,
-        custom_vocabulary,
+        initial_prompt,
+        hotwords,
     };
 
     let engine: Box<dyn TranscriptionEngine> = if transcription_engine.as_deref() == Some("faster-whisper") {
@@ -2666,13 +2673,22 @@ pub async fn cancel_transcription(
     Ok(())
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct MediaAdditionalParameters {
+    pub initial_prompt: Option<String>,
+    pub hotwords: Option<String>,
+}
+
 #[tauri::command]
-pub async fn load_media_custom_vocabulary(
+pub async fn load_media_additional_parameters(
     project_id: String,
     asset_relative_path: String
-) -> Result<Option<String>, CommandError> {
+) -> Result<Option<MediaAdditionalParameters>, CommandError> {
     match db_handler::load_media_transcript_data(&project_id, &asset_relative_path) {
-        Ok(Some(data)) => Ok(data.custom_vocabulary),
+        Ok(Some(data)) => Ok(Some(MediaAdditionalParameters {
+            initial_prompt: data.initial_prompt,
+            hotwords: data.hotwords,
+        })),
         Ok(None) => Ok(None),
         Err(e) => Err(e),
     }

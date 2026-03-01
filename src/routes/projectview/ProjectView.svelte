@@ -128,7 +128,7 @@ async function loadTranscriptionConfigData() {
 	}
 
 async function onConfirmTranscriptionStart(event) {
-    const { transcriptionMode, selectedModel, selectedModelFamily, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig, manualSettings, customVocabulary } = event.detail;
+    const { transcriptionMode, selectedModel, selectedModelFamily, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig, manualSettings, initialPrompt, hotwords } = event.detail;
 
     // Common: Update speaker config
     if (speakersConfig) {
@@ -142,7 +142,7 @@ async function onConfirmTranscriptionStart(event) {
         setSelectedLanguage(selectedLanguage);
         setTranslateToEnglish(translateToEnglish);
         setDiarizationPreference(enableDiarization);
-        transcriptStore.update(ts => ({ ...ts, customVocabulary: customVocabulary || "" }));
+        transcriptStore.update(ts => ({ ...ts, initialPrompt: initialPrompt || "", hotwords: hotwords || "" }));
 
         await handleConfirmStartTranscription(transcriptionMode);
     } else if (transcriptionMode === 'manual') {

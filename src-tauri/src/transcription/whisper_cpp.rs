@@ -86,6 +86,13 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             args.push("--translate".into());
         }
 
+        if let Some(prompt) = &options.initial_prompt {
+            if !prompt.trim().is_empty() {
+                args.push("--prompt".into());
+                args.push(prompt.clone());
+            }
+        }
+
         info!("[WhisperCppEngine][{}] Executing sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
 
         let shell_scope = self.app_handle.shell();

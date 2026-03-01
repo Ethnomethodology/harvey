@@ -71,23 +71,36 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
             python_args.push("translate".to_string());
         }
 
-        let mut enable_hotwords = true;
+        if let Some(prompt) = &options.initial_prompt {
+            if !prompt.trim().is_empty() {
+                python_args.push("--prompt".to_string());
+                python_args.push(prompt.clone());
+            }
+        }
+
+        if let Some(hotwords) = &options.hotwords {
+            if !hotwords.trim().is_empty() {
+                python_args.push("--hotwords".to_string());
+                python_args.push(hotwords.clone());
+            }
+        }
+
         // Read advanced config
         if let Ok(config) = read_config() {
             // General device/threads settings (reusing from translation config or moving to transcription)
             // Note: advanced_translation contains general CPU threads and Device prefs which are likely system-wide intent.
-            if let Some(adv) = &config.advanced_translation {
+            if let Some(adv) = config.advanced_translation {
                 if let Some(threads) = adv.num_threads {
                     python_args.push("--threads".to_string());
                     python_args.push(threads.to_string());
                 }
-                if let Some(device) = &adv.device_preference {
+                if let Some(device) = adv.device_preference {
                     python_args.push("--device".to_string());
-                    python_args.push(device.clone());
+                    python_args.push(device);
                 }
             }
             // Faster-Whisper specific settings
-            if let Some(trans_conf) = &config.advanced_transcription {
+            if let Some(trans_conf) = config.advanced_transcription {
                 // If specific num_threads is set for transcription, use it.
                 // This overrides the global one if both are present (which logic implies by appending later)
                 if let Some(threads) = trans_conf.num_threads {
@@ -100,27 +113,13 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
                     python_args.push(threads.to_string());
                 }
 
-                if let Some(compute_type) = &trans_conf.faster_whisper_compute_type {
+                if let Some(compute_type) = trans_conf.faster_whisper_compute_type {
                     python_args.push("--compute_type".to_string());
-                    python_args.push(compute_type.clone());
+                    python_args.push(compute_type);
                 }
                 if let Some(beam_size) = trans_conf.faster_whisper_beam_size {
                     python_args.push("--beam_size".to_string());
                     python_args.push(beam_size.to_string());
-                }
-                if let Some(hotwords_pref) = trans_conf.faster_whisper_enable_hotwords {
-                    enable_hotwords = hotwords_pref;
-                }
-            }
-        }
-
-        if let Some(vocab) = &options.custom_vocabulary {
-            if !vocab.trim().is_empty() {
-                python_args.push("--prompt".to_string());
-                python_args.push(vocab.clone());
-                if enable_hotwords {
-                    python_args.push("--hotwords".to_string());
-                    python_args.push(vocab.clone());
                 }
             }
         }

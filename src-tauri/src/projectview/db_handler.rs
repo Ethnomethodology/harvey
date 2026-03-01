@@ -49,7 +49,8 @@ pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
     pub language_code: Option<String>,
-    pub custom_vocabulary: Option<String>,
+    pub initial_prompt: Option<String>,
+    pub hotwords: Option<String>,
 }
 
 pub fn get_db_path() -> Result<PathBuf, CommandError> {
@@ -593,7 +594,8 @@ pub fn init_db() -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             language_code TEXT, -- New column for language code
-            custom_vocabulary TEXT, -- New column for custom vocabulary
+            initial_prompt TEXT, -- New column for initial prompt
+            hotwords TEXT, -- New column for hotwords
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
@@ -615,15 +617,25 @@ pub fn init_db() -> Result<(), CommandError> {
         conn.execute("ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT", [])?;
     }
 
-    // Migration for custom_vocabulary
-    let mut stmt_check_custom_vocab = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
-    let custom_vocab_exists = stmt_check_custom_vocab
+    // Migration for initial_prompt and hotwords
+    let mut stmt_check_prompt = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let prompt_exists = stmt_check_prompt
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "custom_vocabulary"));
+        .any(|name_res| name_res.map_or(false, |name| name == "initial_prompt"));
 
-    if !custom_vocab_exists {
-        info!("[DB] Adding custom_vocabulary column to media_transcript_data table.");
-        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN custom_vocabulary TEXT", [])?;
+    if !prompt_exists {
+        info!("[DB] Adding initial_prompt column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN initial_prompt TEXT", [])?;
+    }
+
+    let mut stmt_check_hotwords = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let hotwords_exists = stmt_check_hotwords
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "hotwords"));
+
+    if !hotwords_exists {
+        info!("[DB] Adding hotwords column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN hotwords TEXT", [])?;
     }
 
     // Trigger for media_transcript_data updated_at
@@ -938,7 +950,8 @@ pub fn save_media_transcript_data(
     original_import_path: Option<&str>,
     speaker_names: Option<&Vec<String>>,
     language_code: Option<&str>,
-    custom_vocabulary: Option<&str>,
+    initial_prompt: Option<&str>,
+    hotwords: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
         "[DB] Saving media transcript data for project_id {}: {}",
@@ -954,13 +967,14 @@ pub fn save_media_transcript_data(
 
     let sql = "
         INSERT INTO media_transcript_data (
-            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code, custom_vocabulary
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code, initial_prompt, hotwords
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
             language_code = excluded.language_code,
-            custom_vocabulary = excluded.custom_vocabulary,
+            initial_prompt = excluded.initial_prompt,
+            hotwords = excluded.hotwords,
             updated_at = CURRENT_TIMESTAMP;
     ";
 
@@ -972,7 +986,8 @@ pub fn save_media_transcript_data(
             to_sql_optional_str(original_import_path),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
             to_sql_optional_str(language_code),
-            to_sql_optional_str(custom_vocabulary),
+            to_sql_optional_str(initial_prompt),
+            to_sql_optional_str(hotwords),
         ],
     )?;
 
@@ -996,7 +1011,7 @@ pub fn load_media_transcript_data(
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare("
-        SELECT original_import_path, speaker_names_json, language_code, custom_vocabulary
+        SELECT original_import_path, speaker_names_json, language_code, initial_prompt, hotwords
         FROM media_transcript_data
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1006,7 +1021,8 @@ pub fn load_media_transcript_data(
             original_import_path: row.get(0)?,
             speaker_names_json: row.get(1)?,
             language_code: row.get(2)?,
-            custom_vocabulary: row.get(3)?,
+            initial_prompt: row.get(3)?,
+            hotwords: row.get(4)?,
         })
     }).optional()?;
 
@@ -2385,7 +2401,8 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             language_code TEXT,
-            custom_vocabulary TEXT,
+            initial_prompt TEXT,
+            hotwords TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
