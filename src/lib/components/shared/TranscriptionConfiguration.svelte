@@ -260,25 +260,7 @@
                     const isFasterWhisper = (m) => m.family === 'faster-whisper';
                     const validCount = downloadedModels.filter(m => isWhisperCpp(m) || isFasterWhisper(m)).length;
 					setTranscriptionModelsDownloaded(validCount > 0);
-				} catch (e) {
-					console.error(`Failed to refresh models after ${modelName} completion:`, e);
-				}
-			});
-
-			unlistenComplete = await listen('download-complete', async (event) => {
-				const modelName = event.payload;
-				if (!modelName) return;
-				const newProgress = { ...downloadProgress };
-				delete newProgress[modelName];
-				downloadProgress = newProgress;
-				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
-				try {
-					downloadedModels = await getDownloadedModels();
-                    // Helper to check valid models
-                    const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
-                    const isFasterWhisper = (m) => m.family === 'faster-whisper';
-                    const validCount = downloadedModels.filter(m => isWhisperCpp(m) || isFasterWhisper(m)).length;
-					setTranscriptionModelsDownloaded(validCount > 0);
+                    await updateConfigStatus(true); // Force update to catch whisper_cpp_installed status
 				} catch (e) {
 					console.error(`Failed to refresh models after ${modelName} completion:`, e);
 				}
