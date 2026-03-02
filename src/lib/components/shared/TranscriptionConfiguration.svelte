@@ -512,7 +512,9 @@
             modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
             await updateConfigStatus(true);
         } catch (err) {
-            modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
+            let errorMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
+            modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${errorMsg}` }];
+            console.error("Installation failed:", err);
         } finally {
             unlistenLog();
             isInstallingDependencies = false;

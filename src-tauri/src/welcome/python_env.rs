@@ -511,7 +511,7 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let config_dir = get_config_dir()?;
 
     let micromamba_path = config_dir.join("bin").join("micromamba");
-    let mut conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "whisper.cpp", "-c", "conda-forge", "-y"];
+    let conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "whisper.cpp", "-c", "conda-forge", "-y"];
 
     let emit_log = |msg: String| {
         let payload = if let Some(m_name) = model_name {
@@ -525,10 +525,15 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     emit_log("Installing whisper.cpp via micromamba...".to_string());
     log::info!("Executing: micromamba {}", conda_args.join(" "));
 
-    let (mut rx, child) = shell
-        .command(micromamba_path.to_string_lossy().to_string())
-        .args(conda_args)
-        .spawn()
+    let mut conda_command = shell.sidecar("micromamba")?;
+    conda_command = conda_command.args(&conda_args)
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+
+    if cfg!(target_os = "windows") {
+        conda_command = conda_command.env("MAMBA_SSL_NO_REVOKE", "true");
+    }
+
+    let (mut rx, _child) = conda_command.spawn()
         .map_err(|e| CommandError::from(format!("Failed to start micromamba for whisper.cpp: {}", e)))?;
 
     let mut success = false;
@@ -578,7 +583,7 @@ pub async fn install_faster_whisper_dependencies<R: Runtime>(
 
     // Step 1: Install portaudio via micromamba
     emit_log(&emitter, log_event_name, "Installing system audio libraries (portaudio)...".into(), model_name);
-    let mut conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "portaudio", "-c", "conda-forge", "-y"];
+    let conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "portaudio", "-c", "conda-forge", "-y"];
     let mut conda_command = shell.sidecar("micromamba")?;
     conda_command = conda_command.args(&conda_args)
         .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
