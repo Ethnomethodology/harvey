@@ -3,6 +3,7 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
+	import { invoke } from '@tauri-apps/api/core';
 	import {
 		downloadModel,
         downloadFasterWhisperModel,
