@@ -185,10 +185,6 @@ export function undoTranscriptChange() {
     });
 }
 
-export function setAdditionalParameters(initialPrompt, hotwords) {
-    transcriptStore.update((ts) => ({ ...ts, initialPrompt, hotwords }));
-}
-
 export function redoTranscriptChange() {
     const store = get(transcriptStore);
     if (store.transcriptRedoStack.length === 0) {

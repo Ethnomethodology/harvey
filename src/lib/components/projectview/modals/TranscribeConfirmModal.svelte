@@ -683,7 +683,7 @@
             modalHotwords = e.detail.hotwords;
 
             // 1. Update store
-            transcriptStore.setAdditionalParameters(modalInitialPrompt, modalHotwords);
+            transcriptStore.update(ts => ({ ...ts, initialPrompt: modalInitialPrompt, hotwords: modalHotwords }));
 
             // 2. Update DB
             try {
