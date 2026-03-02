@@ -83,6 +83,7 @@
 	let totalDownloadedCount = 0; // Total across ALL families
 
     $: hasDownloadedFasterWhisper = Array.isArray(downloadedModels) && downloadedModels.some(m => m.family === 'faster-whisper');
+    $: hasDownloadedWhisperCpp = Array.isArray(downloadedModels) && downloadedModels.some(m => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/')));
 
 	// Update display data reactively
 	$: {
@@ -525,6 +526,29 @@
         }
     }
 
+    async function handleInstallWCDependencies() {
+        if (isInstallingDependencies) return;
+        isInstallingDependencies = true;
+        showLogModal = true;
+        modalLogs = [{ id: uuidv4(), message: "Starting installation of whisper.cpp dependencies..." }];
+        dependencyErrors = [];
+
+        const unlistenLog = await listen('installation-log', (event) => {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.log_line || event.payload.message || event.payload.status }];
+        });
+
+        try {
+            await invoke('install_whisper_cpp_dependencies_command');
+            modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
+            await updateConfigStatus(true);
+        } catch (err) {
+            modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
+        } finally {
+            unlistenLog();
+            isInstallingDependencies = false;
+        }
+    }
+
     $: if ($configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper) {
         checkDependencyErrors();
     }
@@ -564,6 +588,22 @@
                     {/each}
                 </div>
             {/if}
+        </div>
+    {/if}
+
+    {#if $configStatus.isInitialized && !$configStatus.whisper_cpp_installed && hasDownloadedWhisperCpp}
+        <div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center">
+                    <svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Whisper.cpp binary is missing.</span>
+                </div>
+                <button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
+                    Install Now
+                </button>
+            </div>
         </div>
     {/if}
 

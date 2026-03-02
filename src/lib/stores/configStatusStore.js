@@ -12,6 +12,7 @@ const initialStatus = {
     translation_models_downloaded: true,
     ctranslate2_installed: true,
     faster_whisper_dependencies_installed: true,
+    whisper_cpp_installed: true,
 };
 
 // Create the writable store
@@ -42,6 +43,7 @@ export async function updateConfigStatus(force = false) {
             translation_models_downloaded: false,
             ctranslate2_installed: false,
             faster_whisper_dependencies_installed: false,
+            whisper_cpp_installed: false,
         });
     }
 }
@@ -64,4 +66,7 @@ export const setTranslationModelsDownloaded = (status) => {
 };
 export const setFasterWhisperDependenciesInstalled = (status) => {
     configStatus.update(s => ({ ...s, faster_whisper_dependencies_installed: status }));
+};
+export const setWhisperCppInstalled = (status) => {
+    configStatus.update(s => ({ ...s, whisper_cpp_installed: status }));
 };

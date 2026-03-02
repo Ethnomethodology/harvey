@@ -346,6 +346,8 @@ pub fn run() {
             welcome::commands::is_ctranslate2_installed,
             welcome::commands::is_faster_whisper_dependencies_installed,
             welcome::commands::install_faster_whisper_dependencies_command,
+            welcome::commands::is_whisper_cpp_installed,
+            welcome::commands::install_whisper_cpp_dependencies_command,
             welcome::commands::get_dependency_check_errors,
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,

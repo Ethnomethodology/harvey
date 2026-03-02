@@ -19,6 +19,7 @@ pub struct ConfigStatus {
     pub translation_models_downloaded: bool,
     pub ctranslate2_installed: bool,
     pub faster_whisper_dependencies_installed: bool,
+    pub whisper_cpp_installed: bool,
 }
 
 use crate::welcome::config::{read_config, write_config};
@@ -37,6 +38,7 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     let mut hf_token_present = config.verification_status.hf_token_verified;
     let mut ct2_installed = config.verification_status.ctranslate2_verified;
     let mut fw_deps_installed = config.verification_status.faster_whisper_dependencies_verified;
+    let mut whisper_cpp_installed = config.verification_status.whisper_cpp_verified;
 
     // --- Lightweight Checks ---
     if python_libs_installed && !python_env::get_env_path()?.exists() {
@@ -47,6 +49,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config.verification_status.ctranslate2_verified = false;
         fw_deps_installed = false;
         config.verification_status.faster_whisper_dependencies_verified = false;
+        whisper_cpp_installed = false;
+        config.verification_status.whisper_cpp_verified = false;
         config_changed = true;
     }
 
@@ -118,6 +122,13 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
                 config_changed = true;
             }
         }
+        if !whisper_cpp_installed {
+            whisper_cpp_installed = super::commands::is_whisper_cpp_installed(app_handle.clone()).await.unwrap_or(false);
+            if whisper_cpp_installed {
+                config.verification_status.whisper_cpp_verified = true;
+                config_changed = true;
+            }
+        }
     } else {
         // If python libs are not installed (or failed check), ensure these are false
         if ct2_installed {
@@ -128,6 +139,11 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         if fw_deps_installed {
             fw_deps_installed = false;
             config.verification_status.faster_whisper_dependencies_verified = false;
+            config_changed = true;
+        }
+        if whisper_cpp_installed {
+            whisper_cpp_installed = false;
+            config.verification_status.whisper_cpp_verified = false;
             config_changed = true;
         }
     }
@@ -158,5 +174,6 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         translation_models_downloaded,
         ctranslate2_installed: ct2_installed,
         faster_whisper_dependencies_installed: fw_deps_installed,
+        whisper_cpp_installed,
     })
 }

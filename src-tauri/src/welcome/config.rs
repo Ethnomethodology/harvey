@@ -68,6 +68,8 @@ pub struct VerificationStatus {
     pub ctranslate2_verified: bool,
     #[serde(default)]
     pub faster_whisper_dependencies_verified: bool,
+    #[serde(default)]
+    pub whisper_cpp_verified: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

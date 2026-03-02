@@ -1,4 +1,5 @@
 use crate::welcome::config::{CommandError, read_config};
+use crate::welcome::python_env::get_env_path;
 use super::{TranscriptionEngine, TranscriptionOptions};
 use crate::projectview::shared_types::TranscriptSegment;
 use tauri::{AppHandle, Runtime, Manager};
@@ -61,7 +62,17 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
         job_id: &str,
         cancel_flag: Arc<AtomicBool>,
     ) -> Result<Vec<TranscriptSegment>, CommandError> {
-        let sidecar_name = "whisper-cli";
+        let env_path = get_env_path()?;
+        #[cfg(target_os = "windows")]
+        let binary_path = env_path.join("Library").join("bin").join("whisper-cli.exe");
+        #[cfg(not(target_os = "windows"))]
+        let binary_path = env_path.join("bin").join("whisper-cli");
+
+        if !binary_path.exists() {
+            return Err(CommandError::from("whisper.cpp binary not found. Please install it from settings."));
+        }
+
+        let binary_path_str = binary_path.to_string_lossy().to_string();
         let lang_arg = options.language_code.as_deref().unwrap_or("auto");
         
         // Prepare output path and normalize it for the CLI
@@ -114,48 +125,43 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             }
         }
 
-        info!("[WhisperCppEngine][{}] Executing sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+        info!("[WhisperCppEngine][{}] Executing command '{}' with args: {:?}", job_id, binary_path_str, args);
 
         let shell_scope = self.app_handle.shell();
-        let mut command = shell_scope.sidecar(sidecar_name)
-            .map_err(|e| CommandError::from(format!("Failed to create sidecar command: {}", e)))?
+        let mut command = shell_scope.command(binary_path_str.clone())
             .args(args.clone());
 
-        // Set the library path for the sidecar process
+        // Set the library path for the child process so it can find dependencies (like ffmpeg if needed)
         if cfg!(target_os = "windows") {
-            if let Ok(resource_dir) = self.app_handle.path().resource_dir() {
-                let sidecars_path = resource_dir.join("sidecars");
-                if sidecars_path.exists() {
-                    if let Ok(cleaned_sidecars_path) = dunce::canonicalize(&sidecars_path) {
-                        let sidecars_path_str = cleaned_sidecars_path.to_string_lossy();
-                        info!("[WhisperCppEngine][{}] Setting PATH to include sidecars: {}", job_id, sidecars_path_str);
-                        if let Ok(existing_path) = std::env::var("PATH") {
-                            command = command.env("PATH", format!("{};{}", sidecars_path_str, existing_path));
-                        } else {
-                            command = command.env("PATH", sidecars_path_str.to_string());
-                        }
+            let env_bin_path = env_path.join("Library").join("bin");
+            if env_bin_path.exists() {
+                if let Ok(cleaned_env_path) = dunce::canonicalize(&env_bin_path) {
+                    let env_path_str = cleaned_env_path.to_string_lossy();
+                    info!("[WhisperCppEngine][{}] Setting PATH to include conda bin: {}", job_id, env_path_str);
+                    if let Ok(existing_path) = std::env::var("PATH") {
+                        command = command.env("PATH", format!("{};{}", env_path_str, existing_path));
+                    } else {
+                        command = command.env("PATH", env_path_str.to_string());
                     }
                 }
             }
         } else if cfg!(target_os = "macos") {
-             if let Ok(resource_dir) = self.app_handle.path().resource_dir() {
-                let sidecars_path = resource_dir.join("sidecars");
-                 if sidecars_path.exists() {
-                    let sidecars_path_str = sidecars_path.to_string_lossy();
-                     info!("[WhisperCppEngine][{}] Setting DYLD_LIBRARY_PATH for macOS: {}", job_id, sidecars_path_str);
-                    if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
-                        command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
-                    } else {
-                        command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
-                    }
+            let env_lib_path = env_path.join("lib");
+            if env_lib_path.exists() {
+                let env_lib_path_str = env_lib_path.to_string_lossy();
+                info!("[WhisperCppEngine][{}] Setting DYLD_LIBRARY_PATH for macOS: {}", job_id, env_lib_path_str);
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", env_lib_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", env_lib_path_str.to_string());
                 }
             }
         }
 
         let (mut rx, child) = command.spawn()
-            .map_err(|e| CommandError::from(format!("Failed to spawn whisper-cli sidecar: {}", e)))?;
+            .map_err(|e| CommandError::from(format!("Failed to spawn whisper-cli: {}", e)))?;
 
-        info!("[WhisperCppEngine][{}] Spawned sidecar (PID: {:?})", job_id, child.pid());
+        info!("[WhisperCppEngine][{}] Spawned process (PID: {:?})", job_id, child.pid());
 
         let shared_child = Arc::new(Mutex::new(Some(child)));
         let cancel_flag_clone = cancel_flag.clone();

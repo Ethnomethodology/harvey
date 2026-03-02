@@ -498,6 +498,74 @@ pub async fn install_pip_packages<R: Runtime>(
     Ok(())
 }
 
+use tauri_plugin_shell::process::CommandEvent;
+
+pub async fn install_whisper_cpp_dependencies<R: Runtime>(
+    app: &AppHandle<R>,
+    shell: &Shell<R>,
+    log_event_name: &str,
+    model_name: Option<&str>,
+) -> Result<(), CommandError> {
+    let emitter = app.clone();
+    let env_path = get_env_path()?;
+    let config_dir = get_config_dir()?;
+
+    let micromamba_path = config_dir.join("bin").join("micromamba");
+    let mut conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "whisper.cpp", "-c", "conda-forge", "-y"];
+
+    let emit_log = |msg: String| {
+        let payload = if let Some(m_name) = model_name {
+            serde_json::json!({ "model_name": m_name, "log_line": msg })
+        } else {
+            serde_json::json!({ "log_line": msg })
+        };
+        let _ = emitter.emit(log_event_name, payload);
+    };
+
+    emit_log("Installing whisper.cpp via micromamba...".to_string());
+    log::info!("Executing: micromamba {}", conda_args.join(" "));
+
+    let (mut rx, child) = shell
+        .command(micromamba_path.to_string_lossy().to_string())
+        .args(conda_args)
+        .spawn()
+        .map_err(|e| CommandError::from(format!("Failed to start micromamba for whisper.cpp: {}", e)))?;
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => emit_log(String::from_utf8_lossy(&line).to_string()),
+            CommandEvent::Stderr(line) => emit_log(String::from_utf8_lossy(&line).to_string()),
+            CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    success = true;
+                } else {
+                    emit_log(format!("whisper.cpp install failed with code: {:?}", payload.code));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !success {
+        return Err(CommandError::from("Failed to install whisper.cpp via micromamba."));
+    }
+
+    // Verify it was installed
+    #[cfg(target_os = "windows")]
+    let binary_path = env_path.join("Library").join("bin").join("whisper-cli.exe");
+    #[cfg(not(target_os = "windows"))]
+    let binary_path = env_path.join("bin").join("whisper-cli");
+
+    if !binary_path.exists() {
+        emit_log(format!("Installation reported success, but binary not found at {:?}", binary_path));
+        return Err(CommandError::from("whisper-cli binary not found after installation."));
+    }
+
+    emit_log("whisper.cpp installed successfully.".to_string());
+    Ok(())
+}
+
 pub async fn install_faster_whisper_dependencies<R: Runtime>(
     app: &AppHandle<R>,
     shell: &Shell<R>,

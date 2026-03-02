@@ -280,6 +280,19 @@ pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Resul
 }
 
 #[command]
+pub async fn is_whisper_cpp_installed<R: Runtime>(_app: AppHandle<R>) -> Result<bool, CommandError> {
+    let env_path = python_env::get_env_path()?;
+
+    #[cfg(target_os = "windows")]
+    let binary_path = env_path.join("Library").join("bin").join("whisper-cli.exe");
+
+    #[cfg(not(target_os = "windows"))]
+    let binary_path = env_path.join("bin").join("whisper-cli");
+
+    Ok(binary_path.exists())
+}
+
+#[command]
 pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     let shell = app.shell();
     let python_path = python_env::get_python_path()?;
@@ -313,6 +326,12 @@ pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle
 pub async fn install_faster_whisper_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
     log::info!("CMD: install_faster_whisper_dependencies_command");
     python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None).await
+}
+
+#[command]
+pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+    log::info!("CMD: install_whisper_cpp_dependencies_command");
+    python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "installation-log", None).await
 }
 
 // --- Transcription Model Download Command (Faster-Whisper) ---
@@ -1397,7 +1416,53 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     log::info!("Config updated.");
     Ok(())
 }
-#[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: download_model: {} -> {}", model_info.name, download_location); let model_name = model_info.name.clone(); let target_dir = PathBuf::from(&download_location); if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); } if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); } let cancel_flag = Arc::new(AtomicBool::new(false)); cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag)); log::info!("Cancel token stored for {}", model_name); let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await; if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); } match download_result { Ok(_) => { log::info!("Download success for {}", model_name); app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?; Ok(()) } Err(e) => { log::error!("Download error for {}: {}", model_name, e); let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err)); Err(e) } } }
+#[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> {
+    log::info!("CMD: download_model: {} -> {}", model_info.name, download_location);
+    let model_name = model_info.name.clone();
+    let target_dir = PathBuf::from(&download_location);
+
+    if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); }
+    if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); }
+
+    // Ensure whisper.cpp binary is installed via micromamba first
+    let is_installed = is_whisper_cpp_installed(app.clone()).await.unwrap_or(false);
+    if !is_installed {
+        log::info!("whisper.cpp not found in conda environment. Installing...");
+        let window = app.get_webview_window("main").unwrap();
+        window.emit("transcription-download-log", serde_json::json!({
+            "model_name": model_name.clone(),
+            "log_line": "Installing whisper.cpp dependencies via micromamba..."
+        })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+
+        python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+
+        window.emit("transcription-download-log", serde_json::json!({
+            "model_name": model_name.clone(),
+            "log_line": "whisper.cpp installed successfully. Starting model download..."
+        })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag));
+    log::info!("Cancel token stored for {}", model_name);
+
+    let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await;
+
+    if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); }
+
+    match download_result {
+        Ok(_) => {
+            log::info!("Download success for {}", model_name);
+            app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Download error for {}: {}", model_name, e);
+            let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err));
+            Err(e)
+        }
+    }
+}
 async fn download_and_save_bin(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
