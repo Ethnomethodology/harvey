@@ -79,7 +79,7 @@
 							placeholder="e.g. Hello. This is Dr. Smith from Acme Corp."
 						></textarea>
 						<p class="text-xs text-gray-500">
-							Injects text into the model's context window. Best for teaching capitalization, punctuation, and general style.
+							Injects text into the model's context window. Best for instructing capitalization, punctuation, and general style.
 						</p>
 					</div>
 

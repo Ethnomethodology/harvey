@@ -367,7 +367,7 @@
 								/>
 							</div>
 
-							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">
+							<div class="pt-2 space-y-3 border-t border-gray-200 dark:border-gray-700 mt-3">
 								<div class="flex justify-between items-center">
 									<div>
 										<strong>Speakers:</strong>
@@ -384,15 +384,7 @@
 										</p>
 									</div>
 								{/if}
-							</div>
 
-                            <div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3 flex justify-center">
-                                <button type="button" class="btn-xs-secondary w-full" on:click={() => (showAdditionalParamsModal = true)}>
-                                    Edit Additional Parameters
-                                </button>
-                            </div>
-
-							<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
 								{#if $configStatus.diarization_model_downloaded}
 									<div class="flex items-center space-x-2">
 										<input
@@ -412,7 +404,7 @@
 									</div>
 									{#if modalEnableDiarization}
 										<p
-											class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black"
+											class="text-xs mt-1 ml-6 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black"
 										>
 											Note: Speaker identification can significantly increase transcription time.
 										</p>
@@ -450,6 +442,12 @@
 									</div>
 								{/if}
 							</div>
+
+                            <div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3 flex justify-center">
+                                <button type="button" class="btn-xs-secondary w-full" on:click={() => (showAdditionalParamsModal = true)}>
+                                    Edit Additional Parameters
+                                </button>
+                            </div>
 						{/if}
 					{:else}
 						<!-- MANUAL SETTINGS -->
