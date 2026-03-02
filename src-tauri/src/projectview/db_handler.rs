@@ -998,6 +998,60 @@ pub fn save_media_transcript_data(
     Ok(())
 }
 
+pub fn update_media_additional_parameters(
+    project_id: &str,
+    asset_relative_path: &str,
+    initial_prompt: Option<&str>,
+    hotwords: Option<&str>,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Updating media additional parameters for project_id {}: {}",
+        project_id, asset_relative_path
+    );
+
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // We do an upsert but keep the existing values for other columns if they exist.
+    // The easiest way is INSERT ... ON CONFLICT DO UPDATE SET.
+    // However, if the row doesn't exist, we'll insert NULLs for other columns, which might be okay.
+    // Let's use standard UPDATE first. If the row doesn't exist, it does nothing.
+    // Typically, when a user sets these parameters, the media_transcript_data row should already exist
+    // because it's created during media import or transcript load.
+    // So we'll try an UPDATE. If no rows affected, we can do an INSERT.
+
+    let rows_affected = conn.execute(
+        "UPDATE media_transcript_data SET
+            initial_prompt = ?1,
+            hotwords = ?2,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE project_id = ?3 AND asset_relative_path = ?4",
+        params![
+            to_sql_optional_str(initial_prompt),
+            to_sql_optional_str(hotwords),
+            project_id,
+            asset_relative_path
+        ]
+    )?;
+
+    if rows_affected == 0 {
+        // If it doesn't exist, insert it.
+        conn.execute(
+            "INSERT INTO media_transcript_data (
+                project_id, asset_relative_path, initial_prompt, hotwords
+            ) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                project_id,
+                asset_relative_path,
+                to_sql_optional_str(initial_prompt),
+                to_sql_optional_str(hotwords)
+            ]
+        )?;
+    }
+
+    Ok(())
+}
+
 pub fn load_media_transcript_data(
     project_id: &str,
     asset_relative_path: &str,

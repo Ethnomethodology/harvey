@@ -2695,6 +2695,21 @@ pub async fn load_media_additional_parameters(
 }
 
 #[tauri::command]
+pub async fn save_media_additional_parameters(
+    project_id: String,
+    asset_relative_path: String,
+    initial_prompt: Option<String>,
+    hotwords: Option<String>
+) -> Result<(), CommandError> {
+    db_handler::update_media_additional_parameters(
+        &project_id,
+        &asset_relative_path,
+        initial_prompt.as_deref(),
+        hotwords.as_deref()
+    )
+}
+
+#[tauri::command]
 pub async fn start_live_transcription(
     app_handle: AppHandle,
     model_name: String,

@@ -8,6 +8,8 @@
 	import SpeakersModal from './SpeakersModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
+	import { invoke } from '@tauri-apps/api/core';
+	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 
 	// Props
 	export let fileName = '';
@@ -676,9 +678,30 @@
         currentEngine={downloadedModelsList.find(m => m.name === modalSelectedModel)?.family || 'whisper-cpp'}
         initialPrompt={modalInitialPrompt}
         hotwords={modalHotwords}
-        on:confirm={(e) => {
+        on:confirm={async (e) => {
             modalInitialPrompt = e.detail.initialPrompt;
             modalHotwords = e.detail.hotwords;
+
+            // 1. Update store
+            transcriptStore.setAdditionalParameters(modalInitialPrompt, modalHotwords);
+
+            // 2. Update DB
+            try {
+                const projectData = get(projectMainStore);
+                const relativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+                if (projectData && projectData.id && relativePath) {
+                    await invoke('save_media_additional_parameters', {
+                        projectId: projectData.id,
+                        assetRelativePath: relativePath,
+                        initialPrompt: modalInitialPrompt,
+                        hotwords: modalHotwords
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to save additional parameters immediately:", err);
+            }
+
             showAdditionalParamsModal = false;
         }}
         on:close={() => (showAdditionalParamsModal = false)}
