@@ -1,4 +1,4 @@
-use crate::welcome::config::CommandError;
+use crate::welcome::config::{CommandError, read_config};
 use super::{TranscriptionEngine, TranscriptionOptions};
 use crate::projectview::shared_types::TranscriptSegment;
 use tauri::{AppHandle, Runtime, Manager};
@@ -90,6 +90,27 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             if !prompt.trim().is_empty() {
                 args.push("--prompt".into());
                 args.push(prompt.clone());
+            }
+        }
+
+        if let Ok(config) = read_config() {
+            let mut device_preference_set = false;
+            if let Some(trans_conf) = &config.advanced_transcription {
+                if let Some(device) = &trans_conf.device_preference {
+                    if device == "cpu" {
+                        args.push("-ng".into());
+                    }
+                    device_preference_set = true;
+                }
+            }
+            if !device_preference_set {
+                if let Some(adv) = &config.advanced_translation {
+                    if let Some(device) = &adv.device_preference {
+                        if device == "cpu" {
+                            args.push("-ng".into());
+                        }
+                    }
+                }
             }
         }
 

@@ -227,6 +227,11 @@
                     <!-- General Settings -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                            <Dropdown options={deviceOptions} bind:value={config.transcription_device_preference} />
+                            <p class="text-[10px] text-gray-500">Auto will use GPU if available. 'CPU' bypasses GPU for both engines.</p>
+                        </div>
+                        <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
                             <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" />
                             <p class="text-[10px] text-gray-500">Threads for inference (Faster-Whisper & Whisper.cpp).</p>
@@ -237,11 +242,6 @@
 
                     <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Faster-Whisper Settings</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.transcription_device_preference} />
-                            <p class="text-[10px] text-gray-500">Auto will use GPU if available.</p>
-                        </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Compute Type (Quantization)</label>
                             <Dropdown options={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
