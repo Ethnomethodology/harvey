@@ -220,7 +220,7 @@ $: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
 // whisper.cpp models exist but the binary is missing, which is a critical/non-critical depending on how we treat it.
 // For now, let's add it to non-critical to prompt the user to open settings, or add it to critical if they want to transcribe.
 // In the current context, missing whisper_cpp_installed is a non-critical issue globally because it only affects transcription.
-$: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded || !$configStatus.whisper_cpp_installed);
+$: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded);
 $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onMount(async () => {

@@ -165,8 +165,7 @@
 		(!$configStatus.hf_token_present ||
 			!$configStatus.transcription_models_downloaded ||
 			!$configStatus.diarization_model_downloaded ||
-			!$configStatus.translation_models_downloaded ||
-			!$configStatus.whisper_cpp_installed);
+			!$configStatus.translation_models_downloaded);
 
 	let isInitialized = false;
 	// When the modal is about to show the confirm view, initialize local states from the store

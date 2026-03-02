@@ -80,8 +80,7 @@
 		(!$configStatus.hf_token_present ||
 			!$configStatus.transcription_models_downloaded ||
 			!$configStatus.diarization_model_downloaded ||
-			!$configStatus.translation_models_downloaded ||
-			!$configStatus.whisper_cpp_installed);
+			!$configStatus.translation_models_downloaded);
 
 	function handleOpenConfig() {
 		dispatch('openConfig');

@@ -478,7 +478,7 @@
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
 			</div>
 
-			{#if !ct2Installed}
+			{#if !ct2Installed && translationModelCount > 0}
 				<div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
 					<div class="flex items-center">
 						<svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -495,7 +495,7 @@
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Larger file size, slower on lower-end CPUs. Best with GPU.</p>
-                {#if !ct2Installed}
+                {#if !ct2Installed && translationModelCount > 0}
                     <div class="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

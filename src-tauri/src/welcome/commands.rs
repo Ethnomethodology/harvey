@@ -1424,22 +1424,29 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); }
     if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); }
 
-    // Ensure whisper.cpp binary is installed via micromamba first
-    let is_installed = is_whisper_cpp_installed(app.clone()).await.unwrap_or(false);
-    if !is_installed {
-        log::info!("whisper.cpp not found in conda environment. Installing...");
-        let window = app.get_webview_window("main").unwrap();
-        window.emit("transcription-download-log", serde_json::json!({
-            "model_name": model_name.clone(),
-            "log_line": "Installing whisper.cpp dependencies via micromamba..."
-        })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    // Check if this model is a whisper.cpp model by looking at its engine field or download location
+    // Currently whisper.cpp models download to the base transcription model directory or a specific folder.
+    // The safest way is to check the `model_info.engine` field if it exists, or just check the download_location string.
+    let is_whisper_cpp_model = download_location.contains("transcription");
 
-        python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+    if is_whisper_cpp_model {
+        // Ensure whisper.cpp binary is installed via micromamba first
+        let is_installed = is_whisper_cpp_installed(app.clone()).await.unwrap_or(false);
+        if !is_installed {
+            log::info!("whisper.cpp not found in conda environment. Installing...");
+            let window = app.get_webview_window("main").unwrap();
+            window.emit("transcription-download-log", serde_json::json!({
+                "model_name": model_name.clone(),
+                "log_line": "Installing whisper.cpp dependencies via micromamba..."
+            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
 
-        window.emit("transcription-download-log", serde_json::json!({
-            "model_name": model_name.clone(),
-            "log_line": "whisper.cpp installed successfully. Starting model download..."
-        })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+
+            window.emit("transcription-download-log", serde_json::json!({
+                "model_name": model_name.clone(),
+                "log_line": "whisper.cpp installed successfully. Starting model download..."
+            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+        }
     }
 
     let cancel_flag = Arc::new(AtomicBool::new(false));

@@ -139,7 +139,7 @@
   }
 
   $: hasCriticalConfigIssues = !$configStatus.python_libraries_installed;
-  $: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded || !$configStatus.whisper_cpp_installed);
+  $: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (!$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded);
 </script>
 
 <div class="flex h-screen bg-gray-100 dark:bg-gray-950 font-sans text-sm">
