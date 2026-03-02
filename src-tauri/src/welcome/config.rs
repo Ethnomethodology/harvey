@@ -129,6 +129,8 @@ pub struct AdvancedTranscriptionConfig {
     pub faster_whisper_beam_size: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub num_threads: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_preference: Option<String>, // "auto", "cpu", "cuda", "mps"
 }
 
 #[derive(Debug, Serialize)]

@@ -89,16 +89,30 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
         if let Ok(config) = read_config() {
             // General device/threads settings (reusing from translation config or moving to transcription)
             // Note: advanced_translation contains general CPU threads and Device prefs which are likely system-wide intent.
+            let mut device_preference_set = false;
+
+            // Prioritize transcription-specific device preference if available
+            if let Some(trans_conf) = &config.advanced_transcription {
+                if let Some(device) = &trans_conf.device_preference {
+                    python_args.push("--device".to_string());
+                    python_args.push(device.clone());
+                    device_preference_set = true;
+                }
+            }
+
             if let Some(adv) = config.advanced_translation {
                 if let Some(threads) = adv.num_threads {
                     python_args.push("--threads".to_string());
                     python_args.push(threads.to_string());
                 }
-                if let Some(device) = adv.device_preference {
-                    python_args.push("--device".to_string());
-                    python_args.push(device);
+                if !device_preference_set {
+                    if let Some(device) = adv.device_preference {
+                        python_args.push("--device".to_string());
+                        python_args.push(device);
+                    }
                 }
             }
+
             // Faster-Whisper specific settings
             if let Some(trans_conf) = config.advanced_transcription {
                 // If specific num_threads is set for transcription, use it.
