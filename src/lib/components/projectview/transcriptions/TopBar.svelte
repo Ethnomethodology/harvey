@@ -6,6 +6,7 @@
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
 	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
+	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
 
 	// --- Service Imports ---
 	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
@@ -23,6 +24,7 @@
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
+	import { AudioLines } from 'lucide-svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -292,7 +294,12 @@
 		// Modal closes itself on selection
 	}
 
-	
+	function cycleWaveformLayout() {
+		const layouts = ['none', 'horizontal', 'vertical'];
+		const currentIndex = layouts.indexOf($waveformLayoutStore);
+		const nextIndex = (currentIndex + 1) % layouts.length;
+		waveformLayoutStore.setLayout(layouts[nextIndex]);
+	}
 
 </script>
 
@@ -397,6 +404,17 @@
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
+		<!-- Waveform Toggle Button -->
+		<button 
+			on:click="{cycleWaveformLayout}" 
+			class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$waveformLayoutStore === 'none' ? 'bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600' : 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'}"
+			title="Toggle Waveform Panel ({$waveformLayoutStore})"
+		>
+			<div class="transition-transform duration-200" style="transform: rotate({$waveformLayoutStore === 'vertical' ? '90deg' : '0deg'})">
+				<AudioLines size={16} strokeWidth={2} />
+			</div>
+		</button>
+
 		<!-- Theme Toggle Button -->
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
 			{@html themeIconHtml}
@@ -418,6 +436,7 @@
 	currentLayoutKey="{$activeLayout}"
 	on:selectLayout="{handleLayoutSelected}"
 	on:close={() => isLayoutSettingsModalOpen = false}
+	hideWaveformOptions={true}
 />
 
 <TranslateModal 

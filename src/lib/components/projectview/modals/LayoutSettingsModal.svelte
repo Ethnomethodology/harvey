@@ -8,7 +8,7 @@
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
-	export let hideWaveformOptions = false; // New prop to control waveform options visibility
+	export let hideWaveformOptions = true; // Default to true now that it's in the top bar
     export let hideDualModeOptions = false; // New prop to control dual mode options visibility
 
 	const dispatch = createEventDispatcher();
