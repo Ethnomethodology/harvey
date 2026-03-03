@@ -122,13 +122,6 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
                 config_changed = true;
             }
         }
-        if !whisper_cpp_installed {
-            whisper_cpp_installed = super::commands::is_whisper_cpp_installed(app_handle.clone()).await.unwrap_or(false);
-            if whisper_cpp_installed {
-                config.verification_status.whisper_cpp_verified = true;
-                config_changed = true;
-            }
-        }
     } else {
         // If python libs are not installed (or failed check), ensure these are false
         if ct2_installed {
@@ -141,9 +134,13 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
             config.verification_status.faster_whisper_dependencies_verified = false;
             config_changed = true;
         }
+    }
+
+    // whisper.cpp binary check (independent of python pip libraries)
+    if !whisper_cpp_installed {
+        whisper_cpp_installed = super::commands::is_whisper_cpp_installed(app_handle.clone()).await.unwrap_or(false);
         if whisper_cpp_installed {
-            whisper_cpp_installed = false;
-            config.verification_status.whisper_cpp_verified = false;
+            config.verification_status.whisper_cpp_verified = true;
             config_changed = true;
         }
     }
