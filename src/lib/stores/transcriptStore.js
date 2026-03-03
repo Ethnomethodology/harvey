@@ -73,6 +73,7 @@ export const initialTranscriptState = {
 
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
+    showDualTranscriptModal: false,
     secondaryTranscriptPath: null,
     secondaryTranscriptSegments: [],
 
@@ -259,8 +260,7 @@ export function clearTranscriptState() {
 
 export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
     const store = get(transcriptStore);
-    const isDualMode = store.isDualModeActive;
-
+    
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -278,6 +278,11 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
             await switchTranscript(transcriptPathToPrioritize);
         }
     } else {
+        // If a different media is selected, deactivate dual mode if it's active.
+        if (store.isDualModeActive) {
+            console.log('[TranscriptStore] Media changed, deactivating dual mode.');
+            await deactivateDualMode();
+        }
 
         const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
         const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
@@ -390,19 +395,6 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
             } else {
                 
             }
-        }
-    }
-
-    if (isDualMode) {
-        const updatedStore = get(transcriptStore);
-        const associatedTranscripts = updatedStore.selectedMediaFile?.associated_transcripts || [];
-        const primaryTranscriptPath = updatedStore.currentTranscriptPath;
-        const otherTranscripts = associatedTranscripts.filter(t => t.path !== primaryTranscriptPath);
-
-        if (otherTranscripts.length > 0) {
-            await setSecondaryTranscript(otherTranscripts[0].path);
-        } else {
-            await setSecondaryTranscript(null);
         }
     }
 }
@@ -1623,6 +1615,74 @@ export function setSpeakerConfig(newSpeakerConfig) {
 }
 
 // --- Dual Transcript Mode Functions ---
+
+export function setDualTranscriptModal(show) {
+    transcriptStore.update(ts => ({ ...ts, showDualTranscriptModal: !!show }));
+}
+
+export async function activateDualMode(primaryPath, secondaryPath) {
+    console.log('[TranscriptStore] activateDualMode:', primaryPath, secondaryPath);
+    const store = get(transcriptStore);
+    
+    // Logic to activate dual mode via store
+    transcriptStore.update(ts => ({
+        ...ts,
+        isDualModeActive: true,
+        showDualTranscriptModal: false
+    }));
+
+    try {
+        const projectService = await import('../services/projectService.js');
+        
+        // Use existing functions to load both
+        await projectService.loadTranscriptFile(primaryPath);
+        await setSecondaryTranscript(secondaryPath);
+
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(true));
+        }
+    } catch (e) {
+        console.error('[TranscriptStore] Error activating dual mode:', e);
+        message(`Failed to activate dual mode: ${e.message || e}`, { title: 'Error', type: 'error' });
+        // Revert on error
+        transcriptStore.update(ts => ({
+            ...ts,
+            isDualModeActive: false
+        }));
+    }
+}
+
+export async function deactivateDualMode() {
+    const store = get(transcriptStore);
+    if (store.transcriptDirty) {
+        // We should ideally attempt to save here as requested: "after saving changes (if there is anything to be saved)"
+        try {
+            const projectService = await import('../services/projectService.js');
+            await projectService.saveTranscriptData();
+        } catch (e) {
+            const confirmed = await confirm('Failed to save changes. Deactivate Dual Mode anyway? Changes will be lost.', { title: 'Save Failed', type: 'warning' });
+            if (!confirmed) return;
+        }
+    }
+
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(false));
+        } catch (error) {
+            console.error('[TranscriptStore] Error saving dual mode state to localStorage:', error);
+        }
+    }
+
+    transcriptStore.update(ts => ({
+        ...ts,
+        isDualModeActive: false,
+        secondaryTranscriptPath: null,
+        secondaryTranscriptSegments: [],
+        transcriptDirty: false, // Reset dirty after save/discard
+        transcriptUndoStack: [],
+        transcriptRedoStack: []
+    }));
+}
 
 export async function switchDualModeTranscripts(newPrimaryPath) {
     await switchTranscript(newPrimaryPath);

@@ -9,7 +9,7 @@
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
 	export let hideWaveformOptions = true; // Default to true now that it's in the top bar
-    export let hideDualModeOptions = false; // New prop to control dual mode options visibility
+    export let hideDualModeOptions = true; // Default to true now that it's in the top bar
 
 	const dispatch = createEventDispatcher();
 
@@ -100,24 +100,6 @@
 				/>
 			</div>
 			{/if}
-
-            <!-- Dual Transcript Mode Section -->
-            {#if !hideDualModeOptions}
-            <div class="mb-6">
-                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Dual Transcript Mode</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Display two transcripts in an interleaved view for simultaneous comparison and editing.
-                </p>
-				<Dropdown
-					containerClasses="w-full"
-					options={[{value: 'false', label: 'Disable'}, {value: 'true', label: 'Enable'}]}
-					value={$transcriptStore.isDualModeActive ? 'true' : 'false'}
-					on:change={(e) => toggleDualMode(e.detail === 'true')}
-					disabled={$transcriptStore.transcriptDirty}
-					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
-				/>
-            </div>
-            {/if}
 
 			<!-- DOCX Export Layout Section -->
 			<div>

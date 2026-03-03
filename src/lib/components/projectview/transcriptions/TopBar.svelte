@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode, setDualTranscriptModal, deactivateDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
 
@@ -20,11 +20,12 @@
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+	import DualTranscriptModal from '../modals/DualTranscriptModal.svelte';
 	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
-	import { AudioLines } from 'lucide-svelte';
+	import { AudioLines, Rows2 } from 'lucide-svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -301,6 +302,21 @@
 		waveformLayoutStore.setLayout(layouts[nextIndex]);
 	}
 
+	async function handleDualModeToggle() {
+		if ($transcriptStore.isDualModeActive) {
+			// If already active, deactivate
+			await deactivateDualMode();
+		} else {
+			// If not active, check for media first
+			if (!$transcriptStore.selectedMediaFile?.path) {
+				message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
+				return;
+			}
+			// Open the selection modal
+			setDualTranscriptModal(true);
+		}
+	}
+
 </script>
 
 <!-- Top Bar Structure -->
@@ -395,6 +411,16 @@
 		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
+
+		<!-- Dual Mode Toggle Button -->
+		<button 
+			on:click="{handleDualModeToggle}" 
+			class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+			title="Dual Transcript Mode"
+		>
+			<Rows2 size={16} strokeWidth={2} />
+		</button>
+
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
@@ -438,6 +464,8 @@
 	on:close={() => isLayoutSettingsModalOpen = false}
 	hideWaveformOptions={true}
 />
+
+<DualTranscriptModal />
 
 <TranslateModal 
     availableTranscripts={transcriptsForModal}
