@@ -214,10 +214,11 @@
  }
 	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
 	function openSpeakersModal() { isSpeakersModalOpen = true; }
-	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail;
- console.log("TopBar: Confirmed speakers:", count, names, secondNames);
- updateSpeakerConfig(count, names, secondNames);
- }
+	function handleSpeakersConfirm(event) {
+		const { count, names, translatedNames } = event.detail;
+		console.log("TopBar: Confirmed speakers:", count, names, translatedNames);
+		updateSpeakerConfig(count, names, translatedNames);
+	}
 	function handleMediaSelectionChange(selectedPath) {
 		if (!selectedPath) { return; }
 		const currentDropdownList = mediaFilesForDropdown;
