@@ -421,7 +421,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             if (!ranInBackground && jobFinishedPath) {
                 console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
                 let refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
-                refreshPromise.then(() => {
+                refreshPromise.then(async () => {
                     console.log('[ProjectView HMC] Entered refreshPromise.then()');
                     // This block runs after refreshProjectFiles has completed and its UI updates have likely propagated
                     const projectFiles = get(project).files;
@@ -449,7 +449,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                         mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
 
                         if (mediaFileEntry) {
-                            selectMediaStoreAction(mediaFileEntry); // This line should already exist
+                            await selectMediaStoreAction(mediaFileEntry); // This line should already exist
 
                             const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
                             if (newTranscriptPath) {
@@ -868,7 +868,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
         if (fileEntry) {
             console.log(`[ProjectView] handleRequestMediaSelection: Calling selectMediaStoreAction with fileEntry:`, fileEntry);
-            selectMediaStoreAction(fileEntry);
+            await selectMediaStoreAction(fileEntry);
             console.log(`[ProjectView] handleRequestMediaSelection: selectMediaStoreAction called.`);
         } else {
             console.error(`[ProjectView] handleRequestMediaSelection: FileEntry not found for path: '${mediaPath}'. An error message should be shown to the user.`);
@@ -903,7 +903,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         await tick();
 
         // Now trigger the transcription dialog
-        requestTranscriptionService();
+        await requestTranscriptionService();
 
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Dialog opened.` }));
     }

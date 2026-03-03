@@ -127,7 +127,7 @@
 	onMount(async () => { await loadConfiguration(); });
 
 	// --- Event Handlers ---
-	function handleTranscribeClick() {
+	async function handleTranscribeClick() {
 		console.log('TopBar: Transcribe icon clicked');
 		if (!$transcriptStore.selectedMediaFile?.path) {
 			message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
@@ -138,7 +138,7 @@
 			message("Please select the audio language first.", { title: "No Language Selected", type: "warning" });
 			return;
 		}
-		requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
+		await requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
 	}
 
 	function openExportModal() {
