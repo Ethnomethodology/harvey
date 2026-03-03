@@ -1699,19 +1699,6 @@ export async function deactivateDualMode() {
     }));
 }
 
-export async function switchDualModeTranscripts(newPrimaryPath) {
-    await switchTranscript(newPrimaryPath);
-    const store = get(transcriptStore);
-    const associatedTranscripts = store.selectedMediaFile?.associated_transcripts || [];
-    const otherTranscripts = associatedTranscripts.filter(t => t.path !== newPrimaryPath);
-
-    if (otherTranscripts.length > 0) {
-        await setSecondaryTranscript(otherTranscripts[0].path);
-    } else {
-        await setSecondaryTranscript(null);
-    }
-}
-
 export async function setSecondaryTranscript(path) {
     if (!path) {
         transcriptStore.update(ts => ({
