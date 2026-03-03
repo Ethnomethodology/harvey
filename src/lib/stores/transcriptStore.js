@@ -1622,32 +1622,47 @@ export function setDualTranscriptModal(show) {
 
 export async function activateDualMode(primaryPath, secondaryPath) {
     console.log('[TranscriptStore] activateDualMode:', primaryPath, secondaryPath);
-    const store = get(transcriptStore);
     
-    // Logic to activate dual mode via store
+    // Set loading state or just proceed if loadTranscriptFile handles it
     transcriptStore.update(ts => ({
         ...ts,
-        isDualModeActive: true,
         showDualTranscriptModal: false
     }));
 
     try {
         const projectService = await import('../services/projectService.js');
         
-        // Use existing functions to load both
+        // Use existing functions to load both. 
+        // These expect ABSOLUTE paths when called directly like this if the backend needs them.
         await projectService.loadTranscriptFile(primaryPath);
         await setSecondaryTranscript(secondaryPath);
+
+        // ONLY after successful load of BOTH, set dual mode active
+        transcriptStore.update(ts => ({
+            ...ts,
+            isDualModeActive: true
+        }));
 
         if (typeof window !== 'undefined') {
             localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(true));
         }
     } catch (e) {
         console.error('[TranscriptStore] Error activating dual mode:', e);
-        message(`Failed to activate dual mode: ${e.message || e}`, { title: 'Error', type: 'error' });
-        // Revert on error
+        
+        // Extract a readable error message
+        let errorMsg = 'Unknown error';
+        if (typeof e === 'string') errorMsg = e;
+        else if (e instanceof Error) errorMsg = e.message;
+        else if (e && typeof e === 'object' && e.message) errorMsg = e.message;
+        
+        message(`Failed to activate dual mode: ${errorMsg}`, { title: 'Error', type: 'error' });
+        
+        // Ensure dual mode is OFF on failure
         transcriptStore.update(ts => ({
             ...ts,
-            isDualModeActive: false
+            isDualModeActive: false,
+            secondaryTranscriptPath: null,
+            secondaryTranscriptSegments: []
         }));
     }
 }

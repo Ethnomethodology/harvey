@@ -16,25 +16,86 @@
     $: transcriptOptions = ($transcriptStore.selectedMediaFile?.associated_transcripts || []).map(t => {
         let label = t.language_code || 'Original';
         if (t.name) label += ` (${t.name})`;
+        // IMPORTANT: Use absolute path (t.path) for loading, but keep relativePath for matching
         return {
             value: t.path,
-            label: label
+            label: label,
+            relPath: t.relativePath
         };
     });
 
+    function getBaseName(path) {
+        if (!path) return '';
+        return path.split(/[\\/]/).pop();
+    }
+
     // Initialize paths from store if possible
-    onMount(() => {
+    function initializeSelections() {
         const store = $transcriptStore;
-        primaryPath = store.currentTranscriptPath || '';
-        secondaryPath = store.secondaryTranscriptPath || '';
         
-        if (!primaryPath && transcriptOptions.length > 0) {
+        // currentTranscriptPath in store is usually relative
+        const currentPath = store.activeTranscript?.path || store.currentTranscriptPath;
+        console.log('[DualTranscriptModal] Initializing selections. currentPath from store:', currentPath);
+        
+        if (currentPath && transcriptOptions.length > 0) {
+            // 1. Try matching against relPath (since store path is usually relative)
+            let match = transcriptOptions.find(o => o.relPath === currentPath);
+            
+            // 2. Try exact match against value (absolute path)
+            if (!match) {
+                match = transcriptOptions.find(o => o.value === currentPath);
+            }
+
+            // 3. Try matching by filename (base name) as final fallback
+            if (!match) {
+                const currentBase = getBaseName(currentPath);
+                match = transcriptOptions.find(o => getBaseName(o.value) === currentBase);
+                if (match) console.log('[DualTranscriptModal] Matched by base name:', currentBase);
+            }
+
+            if (match) {
+                primaryPath = match.value;
+                console.log('[DualTranscriptModal] Set primaryPath to:', primaryPath);
+            } else {
+                console.log('[DualTranscriptModal] No match found for currentPath. Defaulting to first option.');
+                primaryPath = transcriptOptions[0].value;
+            }
+        } else if (transcriptOptions.length > 0) {
             primaryPath = transcriptOptions[0].value;
         }
-        if (!secondaryPath && transcriptOptions.length > 1) {
-            secondaryPath = transcriptOptions[1].value;
+
+        // Auto-select secondary if not set or if it matches primary
+        if (!secondaryPath || secondaryPath === primaryPath) {
+            // Match secondaryTranscriptPath (might be absolute or relative)
+            const sPath = store.secondaryTranscriptPath;
+            const sMatch = sPath ? transcriptOptions.find(o => o.value === sPath || o.relPath === sPath) : null;
+
+            if (sMatch && sMatch.value !== primaryPath) {
+                secondaryPath = sMatch.value;
+            } else if (transcriptOptions.length > 1) {
+                const other = transcriptOptions.find(o => o.value !== primaryPath);
+                if (other) {
+                    secondaryPath = other.value;
+                }
+            }
+        }
+        console.log('[DualTranscriptModal] Final selections -> Primary:', primaryPath, 'Secondary:', secondaryPath);
+    }
+
+    onMount(() => {
+        if ($transcriptStore.showDualTranscriptModal) {
+            initializeSelections();
         }
     });
+
+    // Reactive selection if modal is opened/re-opened
+    let lastModalState = false;
+    $: if ($transcriptStore.showDualTranscriptModal && !lastModalState) {
+        initializeSelections();
+        lastModalState = true;
+    } else if (!$transcriptStore.showDualTranscriptModal) {
+        lastModalState = false;
+    }
 
     $: if (primaryPath || secondaryPath) {
         updateSegmentCounts(primaryPath, secondaryPath);
@@ -45,7 +106,6 @@
         try {
             const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
             const data = JSON.parse(jsonString);
-            // Lexical table format: root -> children -> table -> children (rows)
             const table = data.root.children.find(c => c.type === 'table');
             return table?.children?.length || 0;
         } catch (e) {
@@ -71,9 +131,8 @@
             return;
         }
         if (primarySegmentCount !== secondarySegmentCount) {
-            return; // Should be disabled anyway
+            return;
         }
-
         await activateDualMode(primaryPath, secondaryPath);
     }
 
