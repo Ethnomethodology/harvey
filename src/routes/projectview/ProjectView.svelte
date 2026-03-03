@@ -539,7 +539,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 			} else if (selectedTab === 'transcriptions') {
 				if (transcriptionsViewRef) {
 					try {
-						await transcriptionsViewRef.handleToggleEditMode();
+						await transcriptionsViewRef.exitEditModeIfActive();
 						canProceed = true;
 					} catch (e) {
 						canProceed = false;
@@ -832,15 +832,15 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         } else {
             // If already on transcriptions tab, check if different media is being selected
             if (get(transcriptStore).selectedMediaFile?.path !== mediaPath && get(transcriptStore).selectedMediaFile?.path) {
-                console.log("[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Calling handleToggleEditMode.");
+                console.log("[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Calling exitEditModeIfActive.");
                 if (transcriptionsViewRef) {
                     try {
-                        // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
-                        await transcriptionsViewRef.handleToggleEditMode();
+                        // Attempt to save and exit edit mode if active. exitEditModeIfActive handles dirty check and confirmation via handleToggleEditMode.
+                        await transcriptionsViewRef.exitEditModeIfActive();
                     } catch (e) {
-                        // If handleToggleEditMode throws, it means the user cancelled the save/discard.
+                        // If exitEditModeIfActive throws (via handleToggleEditMode), it means the user cancelled the save/discard.
                         project.update(p => ({ ...p, isLoading: false, statusMessage: 'Media selection cancelled.' }));
-                        console.log(`[ProjectView] handleRequestMediaSelection: 'handleToggleEditMode' threw an error. Aborting media selection.`);
+                        console.log(`[ProjectView] handleRequestMediaSelection: 'exitEditModeIfActive' threw an error. Aborting media selection.`);
                         return;
                     }
                 }
@@ -964,7 +964,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             if (get(transcriptStore).transcriptDirty) {
                 const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${actionType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
                 if (!confirmImport) canProceed = false;
-                else { clearTranscriptState(); if (transcriptionsViewRef?.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
+                else { clearTranscriptState(); if (transcriptionsViewRef?.exitEditModeIfActive) transcriptionsViewRef.exitEditModeIfActive(); }
             }
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }

@@ -288,6 +288,15 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
+    /**
+     * Exits edit mode if it's currently active.
+     */
+    export async function exitEditModeIfActive() {
+        if (panelEditModeActive) {
+            await handleToggleEditMode();
+        }
+    }
+
     export async function enterManualEditMode() {
         console.log("[TranscriptionsView] enterManualEditMode called.");
         panelEditModeActive = true;
