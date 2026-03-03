@@ -1424,10 +1424,9 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); }
     if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); }
 
-    // Check if this model is a whisper.cpp model by looking at its engine field or download location
-    // Currently whisper.cpp models download to the base transcription model directory or a specific folder.
-    // The safest way is to check the `model_info.engine` field if it exists, or just check the download_location string.
-    let is_whisper_cpp_model = download_location.contains("transcription");
+    // Check if this model is a whisper.cpp model by looking at its family or name
+    let family = model_info.family.as_deref().unwrap_or("");
+    let is_whisper_cpp_model = family == "whisper-cpp" || (family.is_empty() && model_name.starts_with("ggml-"));
 
     if is_whisper_cpp_model {
         // Ensure whisper.cpp binary is installed via micromamba first
