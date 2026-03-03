@@ -1,10 +1,9 @@
 // src-tauri/src/welcome/diarization.rs
-use super::python_env::get_python_path;
+use super::python_env;
 use std::fs;
 use crate::welcome::config::{read_config, write_config};
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_shell::ShellExt;
 
 // Helper to read the HuggingFace token
 fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String> {
@@ -22,54 +21,26 @@ fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String>
 }
 
 #[tauri::command]
-
 pub async fn check_diarization_model_access<R: Runtime>(
-
     app_handle: AppHandle<R>,
-
 ) -> Result<bool, String> {
+    let script_path = app_handle
+        .path()
+        .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
 
-    let python_path = get_python_path().map_err(|e| e.to_string())?;
-
-    let shell = app_handle.shell();
-
-
-
-        let script_path = app_handle
-
-
-
-            .path()
-
-
-
-            .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
-
-
-
-            .map_err(|e| e.to_string())?;
-
-
-
-    let mut command = shell.command(python_path.to_string_lossy().to_string());
-    command = command.args(&[script_path.to_string_lossy().to_string()]);
-
-    let output = command.output().await.map_err(|e| e.to_string())?;
-
-
+    let output = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
+        .args(&[script_path.to_string_lossy().to_string()])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if !output.status.success() {
-
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
-
     }
 
-
-
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
     Ok(stdout == "cached")
-
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -82,8 +53,6 @@ pub async fn download_diarization_model<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<(), String> {
     let token = get_hf_token(&app_handle)?;
-    let python_path = get_python_path().map_err(|e| e.to_string())?;
-    let shell = app_handle.shell();
 
     let script_path = app_handle
         .path()
@@ -93,11 +62,11 @@ pub async fn download_diarization_model<R: Runtime>(
 
     app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
 
-    let mut command = shell.command(python_path.to_string_lossy().to_string());
-    command = command.args(&[script_path.to_string_lossy().to_string(), token.clone()]);
-    command = command.env("HF_HUB_DISABLE_PROGRESS_BARS", "1");
-
-    let (mut rx, _child) = command.spawn().map_err(|e| e.to_string())?;
+    let (mut rx, _child) = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
+        .args(&[script_path.to_string_lossy().to_string(), token.clone()])
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
     let mut success = false;
     while let Some(event) = rx.recv().await {
@@ -134,16 +103,12 @@ pub async fn download_diarization_model<R: Runtime>(
 pub async fn get_diarization_cache_path<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<String, String> {
-    let python_path = get_python_path().map_err(|e| e.to_string())?;
-    let shell = app_handle.shell();
-
     let script_path = app_handle
         .path()
         .resolve("scripts/get_diarization_cache_path.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
 
-    let output = shell
-        .command(python_path.to_string_lossy().to_string())
+    let output = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
         .args(&[script_path.to_string_lossy().to_string()])
         .output()
         .await

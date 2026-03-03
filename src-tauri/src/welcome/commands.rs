@@ -228,50 +228,16 @@ pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConf
 
 #[command]
 pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
-    let env_path = python_env::get_env_path()?;
-    
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
+    python_env::check_package_installed(&app, "ctranslate2").await
 }
 
 #[command]
 pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Result<Vec<String>, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
-    let env_path = python_env::get_env_path()?;
-    
     let mut errors = Vec::new();
     let packages = vec!["faster_whisper", "sounddevice", "ctranslate2"];
 
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     for pkg in packages {
-        if let Some(err) = python_env::get_package_import_error(&shell, &python_path, pkg, &windows_path_env, &env_path).await? {
+        if let Some(err) = python_env::get_package_import_error(&app, pkg).await? {
             errors.push(format!("{}: {}", pkg, err));
         }
     }
@@ -294,27 +260,10 @@ pub async fn is_whisper_cpp_installed<R: Runtime>(_app: AppHandle<R>) -> Result<
 
 #[command]
 pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
-    let env_path = python_env::get_env_path()?;
-    
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     // Check for faster-whisper, sounddevice, and ctranslate2
-    let fw_installed = python_env::check_package_installed(&shell, &python_path, "faster_whisper", &windows_path_env, &env_path).await?;
-    let sd_installed = python_env::check_package_installed(&shell, &python_path, "sounddevice", &windows_path_env, &env_path).await?;
-    let ct2_installed = python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await?;
+    let fw_installed = python_env::check_package_installed(&app, "faster_whisper").await?;
+    let sd_installed = python_env::check_package_installed(&app, "sounddevice").await?;
+    let ct2_installed = python_env::check_package_installed(&app, "ctranslate2").await?;
     
     let all_installed = fw_installed && sd_installed && ct2_installed;
     log::info!("Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}", fw_installed, sd_installed, ct2_installed, all_installed);
@@ -1535,6 +1484,7 @@ async fn download_and_save_bin(
 
     let mut stream = response.bytes_stream();
     let mut downloaded: u64 = 0;
+    let mut last_percent = 0;
     let _ = app.emit("download-progress", &DownloadProgress {
         model_name: model_name.clone(),
         downloaded_bytes: 0,
@@ -1557,6 +1507,17 @@ async fn download_and_save_bin(
                     downloaded_bytes: downloaded,
                     total_bytes: total_size
                 });
+
+                if let Some(total) = total_size {
+                    let percent = (downloaded * 100 / total) as u32;
+                    if percent >= last_percent + 5 || percent == 100 {
+                        last_percent = percent;
+                        let _ = app.emit("transcription-download-log", serde_json::json!({
+                            "model_name": model_name.clone(),
+                            "log_line": format!("Downloading: {}%", percent)
+                        }));
+                    }
+                }
             }
             Err(e) => {
                 drop(dest_file);

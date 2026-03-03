@@ -16,9 +16,8 @@ use std::{
 use log::{info, warn, error, debug};
 use tauri::{AppHandle, Runtime};
 use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
-use crate::welcome::python_env::get_python_path;
+use crate::welcome::python_env::get_python_command;
 use uuid::Uuid;
 use quick_xml;
 // use serde::{Serialize, Deserialize};
@@ -230,7 +229,6 @@ pub async fn import_document<R: Runtime>(
                 _ => unreachable!(), // Should be caught by outer match
             };
 
-            let python_path = get_python_path()?;
             let script_path = app_handle.path()
                 .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
                 .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
@@ -242,9 +240,9 @@ pub async fn import_document<R: Runtime>(
                 source_format_arg.to_string(),
             ];
             
-            info!("[import_document] Running pandoc script: {:?} {} {}", python_path, script_path.display(), pandoc_args.join(" "));
+            info!("[import_document] Running pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
 
-            let (mut rx, _child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+            let (mut rx, _child) = get_python_command(&app_handle)?
                 .args(&[script_path.to_string_lossy().to_string()])
                 .args(&pandoc_args)
                 .spawn()

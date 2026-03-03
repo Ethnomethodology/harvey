@@ -28,6 +28,51 @@ pub fn get_python_path() -> Result<PathBuf, CommandError> {
     }
 }
 
+pub fn get_env_command<R: Runtime>(app: &AppHandle<R>, binary_path: &str) -> Result<tauri_plugin_shell::process::Command, CommandError> {
+    let env_path = get_env_path()?;
+    let shell = app.shell();
+    let mut command = shell.command(binary_path);
+
+    // Add environment bin folder to PATH so subprocesses (like pandoc) can be found
+    let mut bin_paths = Vec::new();
+    
+    #[cfg(target_os = "windows")]
+    {
+        bin_paths.push(env_path.join("Library").join("bin"));
+        bin_paths.push(env_path.join("Scripts")); // Some python tools on windows
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        bin_paths.push(env_path.join("bin"));
+    }
+
+    let existing_path = std::env::var("PATH").unwrap_or_default();
+    let separator = if cfg!(target_os = "windows") { ";" } else { ":" };
+    
+    let mut new_path_str = String::new();
+    for path in bin_paths {
+        if path.exists() {
+            if !new_path_str.is_empty() {
+                new_path_str.push_str(separator);
+            }
+            new_path_str.push_str(&path.to_string_lossy());
+        }
+    }
+
+    if !new_path_str.is_empty() {
+        new_path_str.push_str(separator);
+        new_path_str.push_str(&existing_path);
+        command = command.env("PATH", new_path_str);
+    }
+
+    Ok(command)
+}
+
+pub fn get_python_command<R: Runtime>(app: &AppHandle<R>) -> Result<tauri_plugin_shell::process::Command, CommandError> {
+    let python_path = get_python_path()?;
+    get_env_command(app, python_path.to_str().unwrap())
+}
+
 #[derive(PartialEq, Debug)]
 enum PyTorchInstallStrategy {
     Gpu,
@@ -151,6 +196,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         "python=3.12".to_string(),
         "pip".to_string(),
         "ffmpeg".to_string(), // Always include ffmpeg
+        "pandoc".to_string(), // Include pandoc from conda-forge
         "--override-channels".to_string(),
         "-c".to_string(),
         "conda-forge".to_string(),
@@ -280,22 +326,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     emit_log(&emitter, "installation-log", "Successfully installed Python libraries.".into(), None);
 
-    // Step 3: Download pandoc binaries
-    emit_log(&emitter, "installation-log", "Downloading Pandoc binaries...".into(), None);
-    let python_path = get_python_path()?;
-    let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
-    let output = shell.command(python_path.to_str().unwrap())
-        .args(&pandoc_args)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        emit_log(&emitter, "installation-log", format!("Failed to download pandoc: {}", stderr), None);
-    } else {
-        emit_log(&emitter, "installation-log", "Pandoc downloaded successfully.".into(), None);
-    }
-
     emit_log(&emitter, "installation-log", "Installation complete.".into(), None);
     emitter.emit("installation-finished", ()).unwrap();
     Ok(())
@@ -336,8 +366,8 @@ pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, 
 }
 
 pub async fn check_python_libraries_installed<R: Runtime>(
-    _app: &AppHandle<R>,
-    shell: &Shell<R>,
+    app: &AppHandle<R>,
+    _shell: &Shell<R>,
 ) -> Result<bool, CommandError> {
     let result: Result<bool, CommandError> = async {
         let env_path = get_env_path()?;
@@ -345,8 +375,6 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             log::info!("Python env does not exist at {:?}", env_path);
             return Ok(false);
         }
-
-        let python_path = get_python_path()?;
 
         let packages_to_check = vec![
             ("torch", "torch"),
@@ -359,23 +387,8 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             ("pypandoc", "pypandoc"),
         ];
 
-        // Prepare Windows PATH once, before the loop
-        let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-            let env_bin_path = env_path.join("Library").join("bin");
-            if env_bin_path.exists() {
-                let existing_path = std::env::var("PATH").unwrap_or_default();
-                let new_path = format!("{};{}", env_bin_path.to_string_lossy(), existing_path);
-                log::info!("Prepared PATH for verification: {}", new_path);
-                Some(new_path)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         for (package_name, import_name) in &packages_to_check {
-            if !check_package_installed(shell, &python_path, import_name, &windows_path_env, &env_path).await? {
+            if !check_package_installed(app, import_name).await? {
                 log::warn!("Package '{}' not found.", package_name);
                 return Ok(false);
             }
@@ -395,13 +408,10 @@ pub async fn check_python_libraries_installed<R: Runtime>(
 }
 
 pub async fn check_package_installed<R: Runtime>(
-    shell: &Shell<R>,
-    python_path: &std::path::Path,
+    app: &AppHandle<R>,
     import_name: &str,
-    windows_path_env: &Option<String>,
-    env_path: &std::path::Path,
 ) -> Result<bool, CommandError> {
-    let output = run_python_import_check(shell, python_path, import_name, windows_path_env, env_path).await?;
+    let output = run_python_import_check(app, import_name).await?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         log::warn!("Import check failed for '{}': {}", import_name, stderr);
@@ -410,13 +420,10 @@ pub async fn check_package_installed<R: Runtime>(
 }
 
 pub async fn get_package_import_error<R: Runtime>(
-    shell: &Shell<R>,
-    python_path: &std::path::Path,
+    app: &AppHandle<R>,
     import_name: &str,
-    windows_path_env: &Option<String>,
-    env_path: &std::path::Path,
 ) -> Result<Option<String>, CommandError> {
-    let output = run_python_import_check(shell, python_path, import_name, windows_path_env, env_path).await?;
+    let output = run_python_import_check(app, import_name).await?;
     if !output.status.success() {
         Ok(Some(String::from_utf8_lossy(&output.stderr).to_string()))
     } else {
@@ -425,18 +432,10 @@ pub async fn get_package_import_error<R: Runtime>(
 }
 
 async fn run_python_import_check<R: Runtime>(
-    shell: &Shell<R>,
-    python_path: &std::path::Path,
+    app: &AppHandle<R>,
     import_name: &str,
-    windows_path_env: &Option<String>,
-    _env_path: &std::path::Path,
 ) -> Result<tauri_plugin_shell::process::Output, CommandError> {
-    let mut command = shell.command(python_path.to_str().unwrap());
-
-    // Apply the pre-calculated PATH for Windows
-    if let Some(path_val) = &windows_path_env {
-        command = command.env("PATH", path_val.clone());
-    }
+    let command = get_python_command(app)?;
 
     let output = command
         .args(&["-c", &format!("import {}", import_name)])
@@ -510,7 +509,6 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let env_path = get_env_path()?;
     let config_dir = get_config_dir()?;
 
-    let micromamba_path = config_dir.join("bin").join("micromamba");
     let conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "whisper.cpp", "-c", "conda-forge", "-y"];
 
     let emit_log = |msg: String| {

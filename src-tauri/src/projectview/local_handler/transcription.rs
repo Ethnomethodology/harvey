@@ -9,7 +9,7 @@ use crate::projectview::transcription_commands::{
 };
 use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
-use crate::welcome::python_env::get_python_path;
+use crate::welcome::python_env::{get_python_command, get_env_command};
 
 use log::{debug, error, info, warn};
 use serde::{Deserialize}; // Removed Serialize
@@ -294,14 +294,14 @@ pub async fn run_transcription<R: Runtime>(
         job_id: internal_job_id.clone(),
         status: "done".to_string(),
         job_finished_path: media_path.clone(),
-        transcript_file_path: Some(final_transcript_path.to_string_lossy().to_string()),
+        transcript_file_path: Some(final_transcript_path.to_string_lossy().into_owned()),
         translated_transcript_file_path: None,
         error_message: None,
     });
 
     Ok(TranscriptionResult {
         segments: segments_for_frontend_result,
-        transcript_file_path: final_transcript_path.to_string_lossy().to_string(),
+        transcript_file_path: final_transcript_path.to_string_lossy().into_owned(),
     })
 }
 
@@ -352,9 +352,7 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
     ];
     debug!("[FFmpeg][{}] Command arguments: {:?}", job_id, args);
 
-    let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope
-        .command(ffmpeg_path)
+    let (mut rx, child) = get_env_command(app_handle, &ffmpeg_path.to_string_lossy())?
         .args(args)
         .spawn()?;
     debug!("[FFmpeg][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
@@ -601,8 +599,6 @@ async fn run_whisper_cpp_sidecar<R: Runtime>(
     Ok(expected_output_path.to_path_buf())
 }
 
-// (The rest of the file: parse_whisper_json, parse_whisper_timestamp, run_python_diarization, parse_rttm_file, merge_diarization_results, find_model_file, emit_progress remain unchanged from the previous version as they were correctly using internal_job_id or not using job_id at all in a way that needed changes for this specific refactor pass)
-// ... (rest of the file as per previous correct version)
 fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
     debug!("[JSON Parse] Reading whisper output: {:?}", json_path);
     let file = File::open(json_path)?;
@@ -676,7 +672,6 @@ async fn run_python_diarization<R: Runtime>(
         return Err(CommandError::from(format!("Could not get parent directory for RTTM output: {}", output_rttm_path.display())));
     }
 
-    let python_path = get_python_path().map_err(|e| CommandError::from(e.to_string()))?;
     let script_path = app_handle
         .path()
         .resolve("scripts/run_diarization.py", tauri::path::BaseDirectory::Resource)
@@ -694,9 +689,10 @@ async fn run_python_diarization<R: Runtime>(
         token,
     ];
 
-    debug!("[PyDiarize][{}] Running script '{}' with python '{}'", job_id, script_path.display(), python_path.display());
-    let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.command(python_path.to_string_lossy().to_string()).args(args).spawn()
+    debug!("[PyDiarize][{}] Running script '{}'", job_id, script_path.display());
+    let (mut rx, child) = get_python_command(&app_handle)?
+        .args(args)
+        .spawn()
       .map_err(|e| {
           error!("Failed to spawn Python script: {}. Ensure Python environment and pyannote.audio are set up.", e);
           CommandError::from(format!("Failed to execute Python diarization script: {}.", e))

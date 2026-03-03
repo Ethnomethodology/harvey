@@ -29,7 +29,7 @@ use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
 use regex::Regex;
-use crate::welcome::python_env::get_python_path;
+use crate::welcome::python_env::get_python_command;
 use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
 use crate::transcription::whisper_cpp::WhisperCppEngine;
 use crate::transcription::faster_whisper::FasterWhisperEngine;
@@ -1927,8 +1927,6 @@ async fn run_diarization_script<R: Runtime>(
     info!("[Diarization Script][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
     if let Some(parent_dir) = output_rttm_path.parent() { fs::create_dir_all(parent_dir)?; }
 
-    let python_path = get_python_path().map_err(|e| CommandError::from(e.to_string()))?;
-
     let script_path = app_handle
         .path()
         .resolve("scripts/run_diarization.py", tauri::path::BaseDirectory::Resource)
@@ -1957,8 +1955,8 @@ async fn run_diarization_script<R: Runtime>(
         }
     }
 
-    let shell_scope = app_handle.shell();
-    let mut command = shell_scope.command(python_path.to_string_lossy().to_string()).args(args);
+    let mut command = get_python_command(app_handle).map_err(|e| CommandError::from(e.to_string()))?;
+    command = command.args(args);
 
     if cfg!(target_os = "macos") {
         if let Ok(resource_dir) = app_handle.path().resource_dir() {

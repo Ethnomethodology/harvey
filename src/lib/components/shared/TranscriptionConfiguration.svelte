@@ -253,6 +253,8 @@
 				delete newProgress[modelName];
 				downloadProgress = newProgress;
 				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
+                modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
+                isDownloading = false;
 				try {
 					downloadedModels = await getDownloadedModels();
                     // Helper to check valid models
@@ -282,6 +284,8 @@
 				delete newProgress[modelName];
 				downloadProgress = newProgress;
 				downloadStatus = { ...downloadStatus, [modelName]: finalStatus };
+                modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${modelName}: ${errorMessage}` }];
+                isDownloading = false;
 			});
 
             // Faster-whisper events
@@ -401,6 +405,15 @@
                 alert(`Model "${model?.name || 'Unknown'}" is missing a download URL.`);
                 return;
             }
+            modalLogs = [];
+            isDownloading = true;
+            showLogModal = true;
+
+            // Listen for installation logs in case lazy install triggers (e.g. whisper.cpp installation)
+            const unlistenInstallLog = await listen('installation-log', (event) => {
+                modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
+            });
+
             downloadProgress = { ...downloadProgress, [model.name]: { downloadedBytes: 0, totalBytes: undefined } };
             try {
                 await downloadModel(model, downloadLocation);
@@ -410,6 +423,9 @@
                 delete newProgress[model.name];
                 downloadProgress = newProgress;
                 downloadStatus = { ...downloadStatus, [model.name]: 'error' };
+                isDownloading = false;
+            } finally {
+                unlistenInstallLog();
             }
         }
 	}
