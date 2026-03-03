@@ -8,10 +8,16 @@ import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
 function normalizePath(path) {
-    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
-        return path.substring(4);
+    if (typeof path !== 'string') {
+        return path;
     }
-    return path;
+    // On Windows, paths may start with the `\\?\` prefix. This removes it.
+    let normalized = path.startsWith('\\\\?\\') ? path.substring(4) : path;
+
+    // Normalize backslashes to forward slashes for consistent path handling.
+    normalized = normalized.replace(/\\/g, '/');
+
+    return normalized;
 }
 
 
@@ -459,6 +465,7 @@ export function updatePlayerCurrentSegmentIndex(index) {
 }
 
 export function setTranscriptData(path, data, inferSpeakers = false) {
+    const normalizedInputPath = normalizePath(path);
     const newSegments = Array.isArray(data) ? data : [];
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
@@ -484,21 +491,21 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        const mediaFile = get(transcriptStore).selectedMediaFile;
+        const mediaFile = ts.selectedMediaFile;
         const projectRootPath = get(projectMainStore).projectRootPath;
 
-        let relativePathToMatch = path;
-        if (projectRootPath && path.startsWith(projectRootPath)) {
-            relativePathToMatch = path.substring(projectRootPath.length).replace(/^[\\/]/, '');
+        let relativePathToMatch = normalizedInputPath;
+        if (projectRootPath && normalizedInputPath.startsWith(projectRootPath)) {
+            relativePathToMatch = normalizedInputPath.substring(projectRootPath.length).replace(/^[\\/]/, '');
         }
 
         const transcriptInfo = mediaFile?.associated_transcripts?.find(t => {
             // Compare against relativePath if available, otherwise fallback to path
-            return t.relativePath === relativePathToMatch || t.path === path;
+            return t.relativePath === relativePathToMatch || t.path === normalizedInputPath;
         });
 
         if (!transcriptInfo) {
-            console.error(`[setTranscriptData] Could not find transcript info for path: ${path}. Current selectedMediaFile:`, mediaFile);
+            console.error(`[setTranscriptData] Could not find transcript info for path: ${normalizedInputPath}. Current selectedMediaFile:`, mediaFile);
             console.error(`[setTranscriptData] Available associated_transcripts:`, mediaFile?.associated_transcripts);
             // Clear transcript data if path is invalid or not found
             return {
@@ -511,24 +518,27 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        const langCode = transcriptInfo.language_code || (path.endsWith('.en.json') ? 'en' : 'original');
+        const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
         const isEnglish = langCode === 'en';
         const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
-        updateProjectStoreState({ statusMessage: `Media transcript loaded: ${path.split(/[\\/]/).pop()}` });
+        // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree
+        const targetPath = transcriptInfo.path;
 
-        const loadedSettings = loadManualSettingsForTranscript(path);
+        updateProjectStoreState({ statusMessage: `Media transcript loaded: ${targetPath.split(/[\\/]/).pop()}` });
+
+        const loadedSettings = loadManualSettingsForTranscript(targetPath);
 
         return {
             ...ts,
             segments: finalSegmentsForDisplay,
             activeTranscript: {
-                path: path,
+                path: targetPath,
                 language_code: langCode,
                 segments: newSegments, // Store raw, unmapped segments
             },
-			currentTranscriptPath: path,
+			currentTranscriptPath: targetPath,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -1710,13 +1720,22 @@ export async function setSecondaryTranscript(path) {
     }
 
     const store = get(transcriptStore);
-    if (store.secondaryTranscriptPath === path) {
+    const normalizedInputPath = normalizePath(path);
+    
+    // Find the transcript info from the project tree to get the canonical normalized path
+    const transcriptInfo = store.selectedMediaFile?.associated_transcripts?.find(t => {
+        return t.path === normalizedInputPath || t.relativePath === normalizedInputPath;
+    });
+
+    const targetPath = transcriptInfo ? transcriptInfo.path : normalizedInputPath;
+
+    if (store.secondaryTranscriptPath === targetPath) {
         return; // Already selected
     }
 
     // Automatically switch the primary if the user selects the same one
-    if (store.currentTranscriptPath === path) {
-        const otherTranscripts = store.selectedMediaFile?.associated_transcripts?.filter(t => t.path !== path) || [];
+    if (store.currentTranscriptPath === targetPath) {
+        const otherTranscripts = store.selectedMediaFile?.associated_transcripts?.filter(t => t.path !== targetPath) || [];
         if (otherTranscripts.length > 0) {
             await switchTranscript(otherTranscripts[0].path);
         } else {
@@ -1728,8 +1747,7 @@ export async function setSecondaryTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const normalizedPath = normalizePath(path);
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: targetPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
 
         const primarySegments = get(transcriptStore).segments;
@@ -1741,11 +1759,11 @@ export async function setSecondaryTranscript(path) {
 
         transcriptStore.update(ts => ({
             ...ts,
-            secondaryTranscriptPath: path,
+            secondaryTranscriptPath: targetPath,
             secondaryTranscriptSegments: segments,
         }));
     } catch (e) {
-        console.error(`[TranscriptStore] Failed to load secondary transcript from ${path}:`, e);
+        console.error(`[TranscriptStore] Failed to load secondary transcript from ${targetPath}:`, e);
         updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}` });
         transcriptStore.update(ts => ({ ...ts, secondaryTranscriptPath: null, secondaryTranscriptSegments: [] }));
     }
