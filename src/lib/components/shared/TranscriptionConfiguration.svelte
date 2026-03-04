@@ -156,13 +156,17 @@
 		}
 	}
 
+    async function handleEngineChange(newEngine) {
+        setSelectedTranscriptionEngineStore(newEngine);
+		await setSelectedTranscriptionEngine(newEngine);
+	}
+
 	onMount(async () => {
 		configError = '';
 		try {
 			const persistedEngine = await getSelectedTranscriptionEngine();
             if (persistedEngine) {
-                selectedEngine = persistedEngine;
-                setSelectedTranscriptionEngineStore(selectedEngine);
+                setSelectedTranscriptionEngineStore(persistedEngine);
             }
 			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
@@ -390,10 +394,10 @@
 		<div class="flex items-center">
 			{#if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
-					{selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount} {selectedEngine === 'whisper-cpp' ? 'Whisper.cpp' : 'Faster-Whisper'} {(selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) === 1 ? 'Model' : 'Models'} Downloaded
+					{selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount} {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} {(selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">No {selectedEngine === 'whisper-cpp' ? 'Whisper.cpp' : 'Faster-Whisper'} Models Downloaded</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
@@ -453,10 +457,7 @@
 					class:dark:text-gray-400={selectedEngine !== 'whisper-cpp'}
 					class:border-gray-200={selectedEngine !== 'whisper-cpp'}
 					class:dark:border-gray-700={selectedEngine !== 'whisper-cpp'}
-					on:click={async () => {
-                        selectedEngine = 'whisper-cpp';
-                        await setSelectedTranscriptionEngine('whisper-cpp');
-                    }}
+					on:click={() => handleEngineChange('whisper-cpp')}
 				>
 					whisper.cpp
 				</button>
@@ -471,10 +472,7 @@
 					class:dark:text-gray-400={selectedEngine !== 'faster-whisper'}
 					class:border-gray-200={selectedEngine !== 'faster-whisper'}
 					class:dark:border-gray-700={selectedEngine !== 'faster-whisper'}
-					on:click={async () => {
-                        selectedEngine = 'faster-whisper';
-                        await setSelectedTranscriptionEngine('faster-whisper');
-                    }}
+					on:click={() => handleEngineChange('faster-whisper')}
 				>
 					faster-whisper
 				</button>
