@@ -48,13 +48,18 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models.
+	// Filter out translation models and other non-transcription models.
 	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper' OR family === 'whisper-cpp'.
-	const transcriptionModels = Array.isArray(models) ? models.filter(model =>
-		(!model.family && !model.name.includes('/')) ||
-		model.family === 'faster-whisper' ||
-		model.family === 'whisper-cpp'
-	) : [];
+    // We also exclude models that contain 'paraphrase' as they are likely translation/helper models.
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => {
+        const family = model.family;
+        const name = model.name || '';
+        const isWhisperCpp = (!family && !name.includes('/')) || family === 'whisper-cpp';
+        const isFasterWhisper = family === 'faster-whisper';
+        const isParaphrase = name.includes('paraphrase');
+        
+        return (isWhisperCpp || isFasterWhisper) && !isParaphrase;
+    }) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);

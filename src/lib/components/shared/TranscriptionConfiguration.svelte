@@ -1,3 +1,4 @@
+<!-- src/lib/components/shared/TranscriptionConfiguration.svelte -->
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
@@ -18,7 +19,8 @@
 		setSelectedTranscriptionEngine,
 		getSelectedTranscriptionEngine,
         installFasterWhisperDependencies,
-        getDependencyCheckErrors
+        getDependencyCheckErrors,
+        getDownloadedModels
 	} from '$lib/services/configureActions';
 	import { setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import notificationStore from '$lib/stores/notificationStore.js';
@@ -63,9 +65,6 @@
 		const newData = {};
 		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
 
-        const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
-        const isFasterWhisper = (m) => m.family === 'faster-whisper';
-
         const targetList = selectedEngine === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;
 
 		for (const model of targetList) {
@@ -108,9 +107,6 @@
 	$: displayedModels = (() => {
 		let baseList = selectedEngine === 'whisper-cpp' ? [...availableWhisperCppModels] : [...availableFasterWhisperModels];
 
-        const isWhisperCpp = (m) => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
-        const isFasterWhisper = (m) => m.family === 'faster-whisper';
-
 		// Enrichment with local info
 		return baseList
 			.map((m) => {
@@ -152,7 +148,7 @@
             if (persistedEngine) {
                 selectedEngine = persistedEngine;
             }
-			const models = await invoke('get_downloaded_models');
+			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
 		} catch (e) {
@@ -202,7 +198,7 @@
                 }, 1000);
                 
 				try {
-					const models = await invoke('get_downloaded_models');
+					const models = await getDownloadedModels();
 					downloadedModels = Array.isArray(models) ? models : [];
 					totalDownloadedCount = downloadedModels.length;
 					setTranscriptionModelsDownloaded(totalDownloadedCount > 0);
@@ -280,7 +276,7 @@
 
 		try {
 			await deleteModel(model);
-			const models = await invoke('get_downloaded_models');
+			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
 			downloadStatus = { ...downloadStatus, [modelNameForDelete]: 'not_downloaded' };

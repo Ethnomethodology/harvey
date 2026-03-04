@@ -8,6 +8,7 @@
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
     import { transcriptStore, toggleTranslateModal } from "$lib/stores/transcriptStore.js";
+    import { configStatus } from '$lib/stores/configStatusStore.js';
     import { exportTranscript } from '$lib/services/configureActions.js';
     import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
