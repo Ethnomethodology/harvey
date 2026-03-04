@@ -55,10 +55,10 @@
 	$: fasterWhisperDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'faster-whisper').length : 0;
 
 	$: {
-	if ($configStatus.isInitialized) {
-	setWhisperCppModelsDownloaded(whisperCppDownloadedCount > 0);
-	setFasterWhisperModelsDownloaded(fasterWhisperDownloadedCount > 0);
-	}
+		if ($configStatus.isInitialized) {
+			setWhisperCppModelsDownloaded(whisperCppDownloadedCount > 0);
+			setFasterWhisperModelsDownloaded(fasterWhisperDownloadedCount > 0);
+		}
 	}
 
 	$: hasDownloadedFasterWhisper = fasterWhisperDownloadedCount > 0;
@@ -67,6 +67,7 @@
 	let unlistenStartFW = null;
 	let unlistenLog = null;
 	let unlistenComplete = null;
+	let unlistenCompleteFW = null;
 	let unlistenError = null;
 	let unlistenErrorFW = null;
 	let unlistenDownloadProgress = null;
@@ -83,7 +84,7 @@
 		const newData = {};
 		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
 
-	const targetList = selectedEngine === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;
+		const targetList = selectedEngine === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;
 
 		for (const model of targetList) {
 			const id = model.name;
@@ -132,7 +133,7 @@
 				return {
 					...m,
 					sizeOnDisk: local?.size || null,
-	family: local?.family || (selectedEngine === 'faster-whisper' ? 'faster-whisper' : 'whisper-cpp'),
+					family: local?.family || (selectedEngine === 'faster-whisper' ? 'faster-whisper' : 'whisper-cpp'),
 					isInstalled: !!local
 				};
 			})
@@ -160,7 +161,7 @@
 	}
 
 	async function handleEngineChange(newEngine) {
-	setSelectedTranscriptionEngineStore(newEngine);
+		setSelectedTranscriptionEngineStore(newEngine);
 		await setSelectedTranscriptionEngine(newEngine);
 	}
 
@@ -168,9 +169,9 @@
 		configError = '';
 		try {
 			const persistedEngine = await getSelectedTranscriptionEngine();
-	if (persistedEngine) {
-	setSelectedTranscriptionEngineStore(persistedEngine);
-	}
+			if (persistedEngine) {
+				setSelectedTranscriptionEngineStore(persistedEngine);
+			}
 			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
@@ -184,16 +185,16 @@
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
-	isInstallingDependencies = false;
+				isInstallingDependencies = false;
 				showLogModal = true;
 			});
 
-	unlistenStartFW = await listen('transcription-download-start', (event) => {
+			unlistenStartFW = await listen('transcription-download-start', (event) => {
 				const modelName = event.payload;
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
-	isInstallingDependencies = false;
+				isInstallingDependencies = false;
 				showLogModal = true;
 			});
 
@@ -216,19 +217,19 @@
 				const downloadedModelName = event.payload;
 				downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
 
-	// Clear progress data for this model
-	const nextProgressData = { ...downloadProgressData };
-	delete nextProgressData[downloadedModelName];
-	downloadProgressData = nextProgressData;
+				// Clear progress data for this model
+				const nextProgressData = { ...downloadProgressData };
+				delete nextProgressData[downloadedModelName];
+				downloadProgressData = nextProgressData;
 
-	// Clear from local status tracking after a delay to let reactive derived handle it via downloadedModels
-	setTimeout(() => {
-	if (downloadStatus[downloadedModelName] === 'complete') {
-	const nextStatus = { ...downloadStatus };
-	delete nextStatus[downloadedModelName];
-	downloadStatus = nextStatus;
-	}
-	}, 1000);
+				// Clear from local status tracking after a delay to let reactive derived handle it via downloadedModels
+				setTimeout(() => {
+					if (downloadStatus[downloadedModelName] === 'complete') {
+						const nextStatus = { ...downloadStatus };
+						delete nextStatus[downloadedModelName];
+						downloadStatus = nextStatus;
+					}
+				}, 1000);
 
 				try {
 					const models = await getDownloadedModels();
@@ -239,6 +240,8 @@
 					console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e);
 				}
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${downloadedModelName}.` }];
+				isDownloading = false;
+				isInstallingDependencies = false;
 			});
 
 			unlistenError = await listen('download-error', (event) => {
@@ -253,10 +256,10 @@
 				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
 				isDownloading = false;
-	isInstallingDependencies = false;
+				isInstallingDependencies = false;
 			});
 
-	unlistenErrorFW = await listen('transcription-download-error', (event) => {
+			unlistenErrorFW = await listen('transcription-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
 				let finalStatus;
 				if (error_message.toLowerCase().includes('cancel')) {
@@ -268,19 +271,19 @@
 				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
 				isDownloading = false;
-	isInstallingDependencies = false;
+				isInstallingDependencies = false;
 			});
 
 			unlistenFinished = await listen('transcription-download-finished', async () => {
 				console.log('Frontend: Received transcription-download-finished event. Setting isDownloading to false.');
 				isDownloading = false;
-	isInstallingDependencies = false;
-	isChecking = true;
-	try {
-	await updateConfigStatus(true);
-	} finally {
-	isChecking = false;
-	}
+				isInstallingDependencies = false;
+				isChecking = true;
+				try {
+					await updateConfigStatus(true);
+				} finally {
+					isChecking = false;
+				}
 			});
 		} catch (err) {
 			console.error('Failed to attach download event listeners:', err);
@@ -290,11 +293,12 @@
 
 	onDestroy(() => {
 		if (unlistenStart) unlistenStart();
-	if (unlistenStartFW) unlistenStartFW();
+		if (unlistenStartFW) unlistenStartFW();
 		if (unlistenLog) unlistenLog();
 		if (unlistenComplete) unlistenComplete();
+		if (unlistenCompleteFW) unlistenCompleteFW();
 		if (unlistenError) unlistenError();
-	if (unlistenErrorFW) unlistenErrorFW();
+		if (unlistenErrorFW) unlistenErrorFW();
 		if (unlistenDownloadProgress) unlistenDownloadProgress();
 		if (unlistenFinished) unlistenFinished();
 	});
@@ -312,16 +316,16 @@
 		try {
 			modalLogs = [];
 
-	// Check if we will likely need to install dependencies
-	const willInstallDeps = (selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed) ||
-	(selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed);
+			// Check if we will likely need to install dependencies
+			const willInstallDeps = (selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed) ||
+				(selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed);
 
-	if (willInstallDeps) {
-	isInstallingDependencies = true;
-	} else {
-	isDownloading = true;
-	}
-	showLogModal = true;
+			if (willInstallDeps) {
+				isInstallingDependencies = true;
+			} else {
+				isDownloading = true;
+			}
+			showLogModal = true;
 
 			if (selectedEngine === 'faster-whisper') {
 				await downloadFasterWhisperModel(model, downloadLocation);
@@ -331,7 +335,7 @@
 		} catch (err) {
 			notificationStore.add(`Failed to start download for ${modelName}: ${err.message || err}`, 'error');
 			isDownloading = false;
-	isInstallingDependencies = false;
+			isInstallingDependencies = false;
 		}
 	}
 
@@ -366,11 +370,11 @@
 		downloadStatus = { ...downloadStatus, [modelName]: 'cancelling' };
 		configError = '';
 		try {
-	if (model.family === 'faster-whisper') {
-			    await cancelFasterWhisperModelDownload(modelName);
-	} else {
-	await cancelDownload(modelName);
-	}
+			if (model.family === 'faster-whisper') {
+				await cancelFasterWhisperModelDownload(modelName);
+			} else {
+				await cancelDownload(modelName);
+			}
 		} catch (err) {
 			alert(`Failed to send cancel request for ${modelName}: ${err.message || err}`);
 			downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
@@ -378,77 +382,77 @@
 	}
 
 	async function handleInstallFWDependencies() {
-	if (isInstallingDependencies) return;
-	isInstallingDependencies = true;
-	showLogModal = true;
-	modalLogs = [{ id: uuidv4(), message: "Starting installation of Faster-Whisper dependencies..." }];
-	dependencyErrors = [];
+		if (isInstallingDependencies) return;
+		isInstallingDependencies = true;
+		showLogModal = true;
+		modalLogs = [{ id: uuidv4(), message: "Starting installation of Faster-Whisper dependencies..." }];
+		dependencyErrors = [];
 
-	const unlistenLog = await listen('installation-log', (event) => {
-	modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
-	});
+		const unlistenLog = await listen('installation-log', (event) => {
+			modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.message }];
+		});
 
-	try {
-	await installFasterWhisperDependencies();
-	modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
-	isChecking = true;
-	try {
-	await updateConfigStatus(true);
-	} finally {
-	isChecking = false;
-	}
-	} catch (err) {
-	let errorMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
-	modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${errorMsg}` }];
-	console.error("Installation failed:", err);
-	} finally {
-	unlistenLog();
-	isInstallingDependencies = false;
-	}
+		try {
+			await installFasterWhisperDependencies();
+			modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
+			isChecking = true;
+			try {
+				await updateConfigStatus(true);
+			} finally {
+				isChecking = false;
+			}
+		} catch (err) {
+			let errorMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
+			modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${errorMsg}` }];
+			console.error("Installation failed:", err);
+		} finally {
+			unlistenLog();
+			isInstallingDependencies = false;
+		}
 	}
 
 	async function checkDependencyErrors() {
-	try {
-	dependencyErrors = await getDependencyCheckErrors();
-	} catch (e) {
-	console.error("Failed to get dependency errors:", e);
-	}
+		try {
+			dependencyErrors = await getDependencyCheckErrors();
+		} catch (e) {
+			console.error("Failed to get dependency errors:", e);
+		}
 	}
 
 	async function handleInstallWCDependencies() {
-	if (isInstallingDependencies) return;
-	isInstallingDependencies = true;
-	showLogModal = true;
-	modalLogs = [{ id: uuidv4(), message: "Starting installation of whisper.cpp dependencies..." }];
-	dependencyErrors = [];
+		if (isInstallingDependencies) return;
+		isInstallingDependencies = true;
+		showLogModal = true;
+		modalLogs = [{ id: uuidv4(), message: "Starting installation of whisper.cpp dependencies..." }];
+		dependencyErrors = [];
 
-	const unlistenLog = await listen('installation-log', (event) => {
-	modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.log_line || event.payload.message || event.payload.status }];
-	});
+		const unlistenLog = await listen('installation-log', (event) => {
+			modalLogs = [...modalLogs, { id: uuidv4(), message: event.payload.log_line || event.payload.message || event.payload.status }];
+		});
 
-	try {
-	await invoke('install_whisper_cpp_dependencies_command');
-	modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
-	isChecking = true;
-	try {
-	await updateConfigStatus(true);
-	} finally {
-	isChecking = false;
-	}
-	} catch (err) {
-	modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
-	} finally {
-	unlistenLog();
-	isInstallingDependencies = false;
-	}
+		try {
+			await invoke('install_whisper_cpp_dependencies_command');
+			modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
+			isChecking = true;
+			try {
+				await updateConfigStatus(true);
+			} finally {
+				isChecking = false;
+			}
+		} catch (err) {
+			modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
+		} finally {
+			unlistenLog();
+			isInstallingDependencies = false;
+		}
 	}
 
 	$: if ($configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper) {
-	checkDependencyErrors();
+		checkDependencyErrors();
 	}
-	</script>
+</script>
 
-	<div class="flex flex-col h-full overflow-y-auto p-1">
+<div class="flex flex-col h-full overflow-y-auto p-1">
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
 		<div class="flex items-center">
@@ -463,42 +467,42 @@
 	</div>
 
 	{#if $configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper}
-	<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
-	<div class="flex items-center justify-between mb-2">
-	<div class="flex items-center">
-	<svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-	<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-	</svg>
-	<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Faster-Whisper libraries are missing.</span>
-	</div>
-	<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallFWDependencies} disabled={isInstallingDependencies}>
-	Install Now
-	</button>
-	</div>
-	{#if dependencyErrors.length > 0}
-	<div class="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80 font-mono bg-orange-50/50 dark:bg-orange-950/30 p-2 rounded border border-orange-200/50 dark:border-orange-800/50 max-h-32 overflow-y-auto">
-	{#each dependencyErrors as err}
-	<div class="mb-1 last:mb-0">{err}</div>
-	{/each}
-	</div>
-	{/if}
-	</div>
+		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
+			<div class="flex items-center justify-between mb-2">
+				<div class="flex items-center">
+					<svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+						<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+					</svg>
+					<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Faster-Whisper libraries are missing.</span>
+				</div>
+				<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallFWDependencies} disabled={isInstallingDependencies}>
+					Install Now
+				</button>
+			</div>
+			{#if dependencyErrors.length > 0}
+				<div class="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80 font-mono bg-orange-50/50 dark:bg-orange-950/30 p-2 rounded border border-orange-200/50 dark:border-orange-800/50 max-h-32 overflow-y-auto">
+					{#each dependencyErrors as err}
+						<div class="mb-1 last:mb-0">{err}</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
 	{/if}
 
 	{#if $configStatus.isInitialized && !$configStatus.whisper_cpp_installed && hasDownloadedWhisperCpp}
-	<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
-	<div class="flex items-center justify-between mb-2">
-	<div class="flex items-center">
-	<svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-	<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-	</svg>
-	<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Whisper.cpp library is missing.</span>
-	</div>
-	<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
-	Install Now
-	</button>
-	</div>
-	</div>
+		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
+			<div class="flex items-center justify-between mb-2">
+				<div class="flex items-center">
+					<svg class="w-4 h-4 text-orange-600 dark:text-orange-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+						<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+					</svg>
+					<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Whisper.cpp library is missing.</span>
+				</div>
+				<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
+					Install Now
+				</button>
+			</div>
+		</div>
 	{/if}
 
 	<!-- Engine Toggle -->
@@ -592,9 +596,9 @@
 							</div>
 							<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center space-x-3">
 								<span class="flex items-center" title="Engine Family">
-	{#if model.family}
-									    <span>{model.family === 'faster-whisper' ? 'Faster-Whisper' : 'Whisper.cpp'}</span>
-	{/if}
+									{#if model.family}
+										<span>{model.family === 'faster-whisper' ? 'Faster-Whisper' : 'Whisper.cpp'}</span>
+									{/if}
 								</span>
 								<span class="flex items-center text-gray-400" title="Model Size">
 									<span>&bull;</span>
@@ -607,11 +611,11 @@
 									</span>
 								{/if}
 							</div>
-	{#if model.description}
-	<div class="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic line-clamp-1">
-	{model.description}
-	</div>
-	{/if}
+							{#if model.description}
+								<div class="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic line-clamp-1">
+									{model.description}
+								</div>
+							{/if}
 						</div>
 
 						<div class="flex-shrink-0 flex items-center space-x-2 pt-1">
@@ -662,16 +666,16 @@
 			{/each}
 		</div>
 	</div>
-	</div>
+</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Transcription Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
+<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Transcription Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 
-	<style lang="postcss">
+<style lang="postcss">
 	.btn-blue-small, .btn-delete, .btn-cancel, .btn-retry {
 		@apply px-3 py-1.5 border text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
 	}
 	.btn-blue-small {
-	@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
+		@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
 	}
 	.btn-delete {
 		@apply border-gray-300 dark:border-gray-600 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-800/20 focus:ring-red-400;
@@ -680,6 +684,6 @@
 		@apply border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-indigo-500;
 	}
 	.btn-retry {
-	@apply border-transparent text-white bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500;
+		@apply border-transparent text-white bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500;
 	}
-	</style>
+</style>
