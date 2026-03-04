@@ -5,13 +5,14 @@
   import { ask } from "@tauri-apps/plugin-dialog";
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
-  import { configStatus, setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
+  import { configStatus, setDiarizationModelDownloaded, updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   export let arePythonLibrariesInstalled = false;
   let hasAccess = false;
   let isLoading = true;
   let isDownloading = false;
+  let isChecking = false;
   let error = '';
   let cachePath = '';
   let showInstallModal = false;
@@ -66,6 +67,7 @@
   async function handleDownload() {
     showInstallModal = true;
     isDownloading = true;
+    isChecking = false;
     installLogs = [];
     error = '';
 
@@ -75,11 +77,10 @@
       });
 
       await invoke('download_diarization_model');
-      await checkAccessStatus(); // This will re-check access and get the cache path
     } catch (e) {
       console.error('Error downloading diarization model:', e);
       error = `Failed to download model: ${e.message || e}`;
-      installLogs = [...installLogs, `Error: ${e.message || e}`];
+      installLogs = [...installLogs, { id: installLogs.length, message: `Error: ${e.message || e}` }];
       isDownloading = false; // Set to false on error
     } finally {
       if (unlistenLog) {
@@ -89,12 +90,16 @@
   }
 
   onMount(async () => {
-    // The checkAccessStatus is now triggered by the reactive block below
-
     unlistenFinished = await listen('diarization-installation-finished', async () => {
         isDownloading = false;
-        await checkAccessStatus(); // Re-check status after installation attempt
-        setDiarizationModelDownloaded(true);
+        isChecking = true;
+        try {
+            await updateConfigStatus(true);
+            await checkAccessStatus(); // Re-check status after installation attempt
+            setDiarizationModelDownloaded(hasAccess);
+        } finally {
+            isChecking = false;
+        }
     });
   });
 
@@ -190,7 +195,7 @@
   </div>
 </div>
 
-<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isDownloading} title="Diarization Model Download" inProgressText="Download in progress..." buttonInProgressText="Downloading..." />
+<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isDownloading} isChecking={isChecking} title="Diarization Model Download" inProgressText="Download in progress..." buttonInProgressText="Downloading..." />
 
 <style lang="postcss">
     .btn-red-small {

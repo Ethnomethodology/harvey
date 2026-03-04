@@ -45,6 +45,7 @@
 	let modalLogs = [];
 	let isDownloading = false;
     let isInstallingDependencies = false;
+    let isChecking = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
 	$: selectedEngine = $configStatus.selected_translation_engine;
@@ -248,11 +249,12 @@
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
+                isInstallingDependencies = false;
 				showLogModal = true;
 			});
 			unlistenLog = await listen('translation-download-log', (event) => {
 				const { model_name, log_line } = event.payload;
-				if (downloadStatus[model_name] === 'downloading') {
+				if (downloadStatus[model_name] === 'downloading' || isInstallingDependencies) {
 					modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
 				}
 			});
@@ -285,12 +287,19 @@
 				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
 				isDownloading = false;
+                isInstallingDependencies = false;
 			});
 
-			unlistenFinished = await listen('translation-download-finished', () => {
+			unlistenFinished = await listen('translation-download-finished', async () => {
 				console.log('Frontend: Received translation-download-finished event. Setting isDownloading to false.');
 				isDownloading = false;
-                updateConfigStatus(true);
+                isInstallingDependencies = false;
+                isChecking = true;
+                try {
+                    await updateConfigStatus(true);
+                } finally {
+                    isChecking = false;
+                }
 			});
 		} catch (err) {
 			console.error('Failed to attach download event listeners:', err);
@@ -327,10 +336,22 @@
 
 		try {
 			modalLogs = [];
+            
+            // For Helsinki models, we might need to install CTranslate2
+            const willInstallDeps = family === 'helsinki' && !ct2Installed;
+            
+            if (willInstallDeps) {
+                isInstallingDependencies = true;
+            } else {
+                isDownloading = true;
+            }
+            showLogModal = true;
+
 			await downloadTranslationModel(null, null, downloadLocation, modelToDownload, family);
 		} catch (err) {
 			notificationStore.add(`Failed to start download for ${modelToDownload}: ${err.message || err}`, 'error');
 			isDownloading = false; 
+            isInstallingDependencies = false;
 		}
 	}
 
@@ -375,8 +396,13 @@
         try {
             await installFasterWhisperDependencies(); // This installs ctranslate2, faster-whisper, and sounddevice
             modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
-            await updateConfigStatus(true);
-            ct2Installed = await isCTranslate2Installed();
+            isChecking = true;
+            try {
+                await updateConfigStatus(true);
+                ct2Installed = await isCTranslate2Installed();
+            } finally {
+                isChecking = false;
+            }
         } catch (err) {
             modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
         } finally {
@@ -453,7 +479,7 @@
 		</div>
 	</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
+	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 	{#if configError}
 		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
