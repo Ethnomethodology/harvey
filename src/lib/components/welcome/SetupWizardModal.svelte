@@ -194,6 +194,16 @@
             downloadProgressData[model_name] = { downloaded_bytes, total_bytes };
         });
 
+        const unlistenTranscriptionComplete = await listen('transcription-download-complete', (event) => {
+            const model_name = event.payload;
+            delete downloadProgressData[model_name];
+        });
+
+        const unlistenTranslationComplete = await listen('translation-download-complete', (event) => {
+            const model_name = event.payload;
+            delete downloadProgressData[model_name];
+        });
+
         unlistenTranscriptionDownloadLog = await listen('transcription-download-log', (event) => {
             const { model_name, log_line } = event.payload;
             if (installProgress.phase === 'models' && installProgress.currentItem === model_name) {

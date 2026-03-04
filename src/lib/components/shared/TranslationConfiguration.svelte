@@ -243,6 +243,15 @@
 			unlistenComplete = await listen('translation-download-complete', async (event) => {
 				const downloadedModelName = event.payload;
 				downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
+				// Clear from local status tracking to let reactive derived handle it via downloadedModels
+				setTimeout(() => {
+					if (downloadStatus[downloadedModelName] === 'complete') {
+						const nextStatus = { ...downloadStatus };
+						delete nextStatus[downloadedModelName];
+						downloadStatus = nextStatus;
+					}
+				}, 1000);
+
 				try {
 					downloadedModels = await getLocalTranslationModels();
 					ct2Installed = await isCTranslate2Installed();

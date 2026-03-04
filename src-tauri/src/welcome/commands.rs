@@ -366,6 +366,7 @@ pub async fn download_faster_whisper_model_command(
     }
 
     if !success {
+        window.emit("transcription-download-finished", ()).unwrap();
         return Err(CommandError::Message("Transcription model download failed.".to_string()));
     }
 
@@ -391,14 +392,17 @@ pub async fn download_faster_whisper_model_command(
             Ok(_) => {
                 // Emit complete event ONLY after config is updated to avoid race conditions
                 window.emit("transcription-download-complete", &model_name).unwrap();
+                window.emit("transcription-download-finished", ()).unwrap();
                 Ok(())
             },
             Err(e) => {
                 log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
+                window.emit("transcription-download-finished", ()).unwrap();
                 Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
             }
         }
     } else {
+        window.emit("transcription-download-finished", ()).unwrap();
         Err(CommandError::Message("Transcription model download failed.".to_string()))
     }
 }
@@ -1577,7 +1581,8 @@ async fn download_and_save_bin(
 
     // Emit completion event AFTER config update to avoid race conditions in frontend
     log::info!("Download success for {}", model_name);
-    app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-finished", ()).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
 
     Ok(())
 }

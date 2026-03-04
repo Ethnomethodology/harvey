@@ -183,9 +183,24 @@
 				};
 			});
 
-			unlistenComplete = await listen('download-complete', async (event) => {
+			unlistenComplete = await listen('transcription-download-complete', async (event) => {
 				const downloadedModelName = event.payload;
 				downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
+                
+                // Clear progress data for this model
+                const nextProgressData = { ...downloadProgressData };
+                delete nextProgressData[downloadedModelName];
+                downloadProgressData = nextProgressData;
+
+                // Clear from local status tracking after a delay to let reactive derived handle it via downloadedModels
+                setTimeout(() => {
+                    if (downloadStatus[downloadedModelName] === 'complete') {
+                        const nextStatus = { ...downloadStatus };
+                        delete nextStatus[downloadedModelName];
+                        downloadStatus = nextStatus;
+                    }
+                }, 1000);
+                
 				try {
 					const models = await invoke('get_downloaded_models');
 					downloadedModels = Array.isArray(models) ? models : [];
