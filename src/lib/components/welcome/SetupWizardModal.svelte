@@ -504,54 +504,53 @@
             {#if currentStep === 1}
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2">Choose Components</h3>
-                    <p class="text-gray-600 dark:text-gray-400 mb-8">Select the tools you'd like to use. We'll set up the environment next.</p>
+                    <p class="text-gray-600 dark:text-gray-400 mb-8">Select the AI engines and tools you'd like to use. We'll set up the required libraries next.</p>
                     <div class="space-y-6">
                         <div class="flex items-start p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900/50 bg-blue-50/30">
                             <div class="pt-1 mr-4"><Library class="w-5 h-5 text-blue-600" /></div>
                             <div class="flex-grow">
-                                <h4 class="font-bold">Environment Setup</h4>
+                                <h4 class="font-bold">Core AI Libraries</h4>
                                 <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                    <p>Harvey needs a dedicated AI runtime to work.</p>
+                                    <p>Harvey uses a local environment to manage required AI libraries.</p>
                                     <button on:click={() => showMoreInfo = !showMoreInfo} class="text-[10px] font-bold text-blue-600 mt-2 flex items-center">
                                         {showMoreInfo ? 'Show less' : 'More info'}
                                         <ChevronRight class="w-3 h-3 ml-0.5 transition-transform {showMoreInfo ? 'rotate-90' : ''}" />
                                     </button>
                                     {#if showMoreInfo}
                                         <div class="mt-3 space-y-2 border-t pt-3" transition:fade>
-                                            <div class="text-xs"><strong>Python:</strong> Core runtime for executing AI models.</div>
-                                            <div class="text-xs"><strong>FFmpeg:</strong> Audio processing and extraction.</div>
-                                            <div class="text-xs"><strong>PyTorch:</strong> AI inference framework.</div>
-                                            <div class="text-xs"><strong>Transformers:</strong> Interface for language models.</div>
-                                            <div class="text-xs"><strong>Pyannote:</strong> Audio processing for speaker identification.</div>
-                                            <div class="text-xs"><strong>Pandoc:</strong> Document conversion and imports.</div>
+                                            <div class="text-xs"><strong>Python & micromamba:</strong> Core runtime for executing AI models locally.</div>
+                                            <div class="text-xs"><strong>FFmpeg:</strong> For processing audio and video files.</div>
+                                            <div class="text-xs"><strong>PyTorch & Transformers:</strong> AI engine for running translation and analysis models.</div>
+                                            <div class="text-xs"><strong>pyannote.audio:</strong> Specifically for speaker identification (diarization).</div>
+                                            <div class="text-xs"><strong>Pandoc:</strong> For converting and importing documents (e.g., MS Word).</div>
                                         </div>
                                     {/if}
                                 </div>
                             </div>
                         </div>
                         <div class="space-y-3">
-                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Mic class="w-4 h-4 mr-2" /> Transcription</h4>
+                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Mic class="w-4 h-4 mr-2" /> Transcription Engines</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <button on:click={() => transcriptionEngines.whisperCpp = !transcriptionEngines.whisperCpp} class="flex flex-col p-4 rounded-xl border-2 text-left {transcriptionEngines.whisperCpp ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
                                     <span class="font-bold">whisper.cpp</span>
-                                    <p class="text-xs text-gray-600">Fast on Mac (Metal) and CPU.</p>
+                                    <p class="text-xs text-gray-600">Lightweight, fast on Mac (Metal) and CPU.</p>
                                 </button>
                                 <button on:click={() => transcriptionEngines.fasterWhisper = !transcriptionEngines.fasterWhisper} class="flex flex-col p-4 rounded-xl border-2 text-left {transcriptionEngines.fasterWhisper ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
                                     <span class="font-bold">faster-whisper</span>
-                                    <p class="text-xs text-gray-600">Blazing fast on NVIDIA GPUs.</p>
+                                    <p class="text-xs text-gray-600">Blazing fast, optimized for NVIDIA GPUs.</p>
                                 </button>
                             </div>
                         </div>
                         <div class="space-y-3">
-                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Languages class="w-4 h-4 mr-2" /> Translation</h4>
+                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Languages class="w-4 h-4 mr-2" /> Translation Families</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <button on:click={() => translationEngines.helsinki = !translationEngines.helsinki} class="flex flex-col p-4 rounded-xl border-2 text-left {translationEngines.helsinki ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
                                     <span class="font-bold">Helsinki-NLP</span>
-                                    <p class="text-xs text-gray-600">Lightweight language pairs.</p>
+                                    <p class="text-xs text-gray-600">Lightweight, optimized for language pairs.</p>
                                 </button>
                                 <button on:click={() => translationEngines.nllb = !translationEngines.nllb} class="flex flex-col p-4 rounded-xl border-2 text-left {translationEngines.nllb ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
                                     <span class="font-bold">NLLB (Meta)</span>
-                                    <p class="text-xs text-gray-600">Universal model (200+ langs).</p>
+                                    <p class="text-xs text-gray-600">Universal model supporting 200+ languages.</p>
                                 </button>
                             </div>
                         </div>
@@ -563,7 +562,7 @@
                     {#if installProgress.phase === 'idle'}
                         <div class="mb-8 space-y-4">
                             <p class="text-gray-600 dark:text-gray-400 text-sm">
-                                To support your selections, Harvey will now download and install the core AI libraries and engine-specific dependencies.
+                                Harvey uses <strong>micromamba</strong> to install and manage required AI libraries locally on your device.
                             </p>
                             
                             <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
@@ -571,7 +570,7 @@
                                     <Check class="w-3 h-3 mr-1 text-green-500" /> Selected Components
                                 </h4>
                                 <div class="flex flex-wrap gap-2">
-                                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">Core AI Runtime</span>
+                                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">Core AI Libraries</span>
                                     {#if transcriptionEngines.whisperCpp}
                                         <span class="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">whisper.cpp</span>
                                     {/if}
@@ -588,7 +587,7 @@
                             </div>
 
                             <p class="text-[11px] text-gray-500 italic">
-                                This process may take a few minutes depending on your internet connection.
+                                Once downloaded, everything runs offline on your device to ensure privacy. This process may take a few minutes.
                             </p>
                         </div>
                         
@@ -600,7 +599,7 @@
                             <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border">
                                 <div class="flex justify-between items-center">
                                     <div>
-                                        <h4 class="font-bold">{installProgress.phase === 'complete' ? 'Installation Ready!' : 'Installing Environment...'}</h4>
+                                        <h4 class="font-bold">{installProgress.phase === 'complete' ? 'Installation Ready!' : 'Installing Libraries...'}</h4>
                                         <p class="text-xs text-gray-500 font-mono mt-1">{installProgress.currentItem}</p>
                                     </div>
                                     {#if installProgress.phase !== 'complete'}<Loader2 class="w-5 h-5 animate-spin text-blue-600" />{:else}<Check class="w-6 h-6 text-green-500" />{/if}
@@ -615,7 +614,8 @@
                 </div>
             {:else if currentStep === 3}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-6">Whisper.cpp Models</h3>
+                    <h3 class="text-xl font-bold mb-2">Whisper.cpp Models</h3>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2">
                         {#each availableWhisperCppModels as model}
                             <button on:click={() => selectedWhisperCppModels = selectedWhisperCppModels.includes(model.name) ? selectedWhisperCppModels.filter(m => m !== model.name) : [...selectedWhisperCppModels, model.name]} class="flex items-center justify-between p-3 rounded-lg border {selectedWhisperCppModels.includes(model.name) ? 'border-blue-600 bg-blue-50' : ''}">
@@ -627,7 +627,8 @@
                 </div>
             {:else if currentStep === 4}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-6">Faster-Whisper Models</h3>
+                    <h3 class="text-xl font-bold mb-2">Faster-Whisper Models</h3>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[400px]">
                         {#each availableFasterWhisperModels as model}
                             <button on:click={() => selectedFasterWhisperModels = selectedFasterWhisperModels.includes(model.name) ? selectedFasterWhisperModels.filter(m => m !== model.name) : [...selectedFasterWhisperModels, model.name]} class="flex items-center justify-between p-3 rounded-lg border {selectedFasterWhisperModels.includes(model.name) ? 'border-blue-600 bg-blue-50' : ''}">
@@ -639,8 +640,9 @@
                 </div>
             {:else if currentStep === 5}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-4">Helsinki-NLP Models</h3>
-                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={helsinkiSearchQuery} placeholder="Search..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
+                    <h3 class="text-xl font-bold mb-2">Helsinki-NLP Models</h3>
+                    <p class="text-[11px] text-gray-500 mb-4 italic">Lightweight, very fast on CPU, requires separate models for every language pair.</p>
+                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={helsinkiSearchQuery} placeholder="Search language pairs..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingHelsinki}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
                         {:else}{#each filteredHelsinki as model}<button on:click={() => helsinkiModels = helsinkiModels.includes(model.id) ? helsinkiModels.filter(m => m !== model.id) : [...helsinkiModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {helsinkiModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if helsinkiModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
@@ -648,8 +650,9 @@
                 </div>
             {:else if currentStep === 6}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-4">NLLB Models</h3>
-                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={nllbSearchQuery} placeholder="Search..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
+                    <h3 class="text-xl font-bold mb-2">NLLB Models</h3>
+                    <p class="text-[11px] text-gray-500 mb-4 italic">Universal model supporting 200+ languages. Great for rare languages, but larger file size.</p>
+                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={nllbSearchQuery} placeholder="Search models..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingNLLB}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
                         {:else}{#each filteredNLLB as model}<button on:click={() => nllbModels = nllbModels.includes(model.id) ? nllbModels.filter(m => m !== model.id) : [...nllbModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {nllbModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if nllbModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
@@ -695,12 +698,14 @@
                             <div class="text-center"><h4 class="text-lg font-bold text-gray-900 dark:text-gray-100">Model Installed</h4><p class="text-sm text-gray-500">Speaker identification is ready to use.</p></div>
                         </div>
                     {:else}
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Speaker diarization identifies and separates different speakers. This requires a gated model from Hugging Face.</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                            Speaker diarization is the process of identifying and separating different speakers in an audio file.
+                        </p>
                         <div class="space-y-6">
                             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-4">
                                 <h4 class="text-sm font-bold flex items-center"><Info class="w-4 h-4 mr-2 text-blue-500" /> Setup Instructions</h4>
                                 <ol class="text-xs text-gray-600 dark:text-gray-400 space-y-3 list-decimal ml-4">
-                                    <li><strong>Accept Model License:</strong> Visit <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>pyannote/speaker-diarization-3.1</button> and click "Agree".</li>
+                                    <li><strong>Accept Model License:</strong> Harvey uses the gated <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>pyannote/speaker-diarization-3.1</button> model. Visit the link and click "Agree".</li>
                                     <li><strong>Create Access Token:</strong> Go to <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/settings/tokens')}>HF Settings</button> and create a <strong>Read</strong> token.</li>
                                     <li><strong>Verify & Download:</strong> Paste your token below and click verify.</li>
                                 </ol>
