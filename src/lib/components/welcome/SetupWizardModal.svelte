@@ -559,10 +559,40 @@
                 </div>
             {:else if currentStep === 2}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Installation</h3>
+                    <h3 class="text-xl font-bold mb-2">Environment Setup</h3>
                     {#if installProgress.phase === 'idle'}
-                        <p class="mb-8">Ready to set up the environment for selected tools.</p>
-                        <button on:click={startCoreInstallation} class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center space-x-2 mx-auto">
+                        <div class="mb-8 space-y-4">
+                            <p class="text-gray-600 dark:text-gray-400 text-sm">
+                                To support your selections, Harvey will now download and install the core AI libraries and engine-specific dependencies.
+                            </p>
+                            
+                            <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                                <h4 class="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
+                                    <Check class="w-3 h-3 mr-1 text-green-500" /> Selected Components
+                                </h4>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">Core AI Runtime</span>
+                                    {#if transcriptionEngines.whisperCpp}
+                                        <span class="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">whisper.cpp</span>
+                                    {/if}
+                                    {#if transcriptionEngines.fasterWhisper}
+                                        <span class="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">faster-whisper</span>
+                                    {/if}
+                                    {#if translationEngines.helsinki}
+                                        <span class="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full text-xs font-medium">Helsinki-NLP</span>
+                                    {/if}
+                                    {#if translationEngines.nllb}
+                                        <span class="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full text-xs font-medium">NLLB-200</span>
+                                    {/if}
+                                </div>
+                            </div>
+
+                            <p class="text-[11px] text-gray-500 italic">
+                                This process may take a few minutes depending on your internet connection.
+                            </p>
+                        </div>
+                        
+                        <button on:click={startCoreInstallation} class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center space-x-2 mx-auto shadow-lg hover:bg-blue-700 transition-all">
                             <span>Start Installation</span> <ChevronRight class="w-5 h-5" />
                         </button>
                     {:else}
