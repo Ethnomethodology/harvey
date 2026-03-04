@@ -1066,9 +1066,12 @@
                             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-4">
                                 <h4 class="text-sm font-bold flex items-center text-gray-900 dark:text-gray-100"><Info class="w-4 h-4 mr-2 text-blue-500" /> Setup Instructions</h4>
                                 <ol class="text-xs text-gray-600 dark:text-gray-400 space-y-3 list-decimal ml-4">
+                                    <li>If you don't have one, create a HuggingFace account on their <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/join')}>website</button>.</li>
                                     <li><strong>Accept Model License:</strong> Harvey uses the gated <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>pyannote/speaker-diarization-3.1</button> model. Visit the link and click "Agree".</li>
-                                    <li><strong>Create Access Token:</strong> Go to <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/settings/tokens')}>HF Settings</button> and create a <strong>Read</strong> token.</li>
-                                    <li><strong>Verify & Download:</strong> Paste your token below and click verify.</li>
+                                    <li>
+                                        Generate an access token from your HuggingFace account settings. You can find it under <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/settings/tokens')}>Access Tokens</button> (ensure it has <strong>Read</strong> access).
+                                    </li>
+                                    <li>Paste the access token in the field below and click "Verify".</li>
                                 </ol>
                             </div>
 
@@ -1113,7 +1116,7 @@
                 {:else if currentStep === 7}
                     <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
                 {:else}
-                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">Finish Setup</button>
+                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">Launch Setup Wizard</button>
                 {/if}
             </div>
         </div>
