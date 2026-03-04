@@ -218,7 +218,7 @@
                 on:click={() => showWizardModal = true}
                 class="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-bold shadow-md shadow-yellow-600/20 transition-all flex items-center space-x-2"
               >
-                <span>Finish Setup</span>
+                <span>Launch Setup Wizard</span>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
