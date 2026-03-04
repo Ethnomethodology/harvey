@@ -3,7 +3,13 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import {
+		configStatus,
+		updateConfigStatus,
+		setSelectedTranslationEngineStore,
+		setHelsinkiModelsDownloaded,
+		setNllbModelsDownloaded
+	} from '$lib/stores/configStatusStore.js';
 	import {
 		downloadTranslationModel,
 		deleteTranslationModel,
@@ -41,7 +47,17 @@
     let isInstallingDependencies = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
-	let selectedEngine = 'helsinki';
+	$: selectedEngine = $configStatus.selected_translation_engine;
+
+    $: helsinkiDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'helsinki' || !m.family).length : 0;
+    $: nllbDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'nllb').length : 0;
+
+    $: {
+        if ($configStatus.isInitialized) {
+            setHelsinkiModelsDownloaded(helsinkiDownloadedCount > 0);
+            setNllbModelsDownloaded(nllbDownloadedCount > 0);
+        }
+    }
 
 	// --- Marketplace / Search View State ---
 	let availableModelsList = [];
@@ -194,8 +210,9 @@
 		}
 	}
 
-	async function handleEngineChange() {
-		await setSelectedTranslationEngine(selectedEngine);
+	async function handleEngineChange(newEngine) {
+        setSelectedTranslationEngineStore(newEngine);
+		await setSelectedTranslationEngine(newEngine);
 	}
 
 	async function handleRefreshModels() {
@@ -220,7 +237,6 @@
 		configError = '';
 		try {
 			downloadedModels = await getLocalTranslationModels();
-			selectedEngine = await getSelectedTranslationEngine() || 'helsinki';
 			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {
 			configError = `Failed to load model configuration: ${e.message || e}`;
@@ -427,12 +443,12 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Translation Models</h3>
 		<div class="flex items-center">
-			{#if downloadedModels.length > 0}
-				<span class="text-sm font-medium text-green-600 dark:text-green-400">
-					{downloadedModels.length} {downloadedModels.length === 1 ? 'Model' : 'Models'} Downloaded
+			{#if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
+					{selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount} {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} {(selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400">No Models Downloaded</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
@@ -459,7 +475,7 @@
 					class:dark:text-gray-400={selectedEngine !== 'helsinki'}
 					class:border-gray-200={selectedEngine !== 'helsinki'}
 					class:dark:border-gray-700={selectedEngine !== 'helsinki'}
-					on:click={() => { selectedEngine = 'helsinki'; handleEngineChange(); }}
+					on:click={() => handleEngineChange('helsinki')}
 				>
 					Helsinki-NLP
 				</button>
@@ -474,7 +490,7 @@
 					class:dark:text-gray-400={selectedEngine !== 'nllb'}
 					class:border-gray-200={selectedEngine !== 'nllb'}
 					class:dark:border-gray-700={selectedEngine !== 'nllb'}
-					on:click={() => { selectedEngine = 'nllb'; handleEngineChange(); }}
+					on:click={() => handleEngineChange('nllb')}
 				>
 					NLLB (Meta)
 				</button>

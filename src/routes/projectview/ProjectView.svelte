@@ -221,7 +221,8 @@ $: hasCriticalConfigIssues = ($configStatus.selected_transcription_engine === 'f
 $: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (
     !$configStatus.hf_token_present || 
     !$configStatus.diarization_model_downloaded || 
-    !$configStatus.translation_models_downloaded ||
+    ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) ||
+    ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded) ||
     ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_models_downloaded) ||
     ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_models_downloaded || !$configStatus.faster_whisper_dependencies_installed || !$configStatus.python_libraries_installed))
 );

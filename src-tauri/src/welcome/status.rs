@@ -19,6 +19,8 @@ pub struct ConfigStatus {
     pub faster_whisper_models_downloaded: bool,
     pub diarization_model_downloaded: bool,
     pub translation_models_downloaded: bool,
+    pub helsinki_models_downloaded: bool,
+    pub nllb_models_downloaded: bool,
     pub ctranslate2_installed: bool,
     pub faster_whisper_dependencies_installed: bool,
     pub whisper_cpp_installed: bool,
@@ -39,6 +41,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     let mut faster_whisper_models_downloaded = false;
     let mut diarization_model_downloaded = config.verification_status.diarization_model_verified;
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
+    let mut helsinki_models_downloaded = false;
+    let mut nllb_models_downloaded = false;
     let mut hf_token_present = config.verification_status.hf_token_verified;
     let mut ct2_installed = config.verification_status.ctranslate2_verified;
     let mut fw_deps_installed = config.verification_status.faster_whisper_dependencies_verified;
@@ -74,7 +78,11 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
 
     let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded;
 
-    let has_translation = !get_local_translation_models().await?.is_empty();
+    let translation_models = get_local_translation_models().await?;
+    helsinki_models_downloaded = translation_models.iter().any(|m| m.family.as_deref().unwrap_or("helsinki") == "helsinki");
+    nllb_models_downloaded = translation_models.iter().any(|m| m.family.as_deref().unwrap_or("") == "nllb");
+
+    let has_translation = !translation_models.is_empty();
 
     if !transcription_models_downloaded && has_transcription {
         transcription_models_downloaded = true;
@@ -177,6 +185,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         faster_whisper_models_downloaded,
         diarization_model_downloaded,
         translation_models_downloaded,
+        helsinki_models_downloaded,
+        nllb_models_downloaded,
         ctranslate2_installed: ct2_installed,
         faster_whisper_dependencies_installed: fw_deps_installed,
         whisper_cpp_installed,
