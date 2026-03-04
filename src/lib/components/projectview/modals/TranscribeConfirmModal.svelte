@@ -107,12 +107,12 @@
 		// Start time is now handled by store
 		if (modalTab === 'automatic') {
             const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel);
-            const family = selectedModelObj?.family || 'whisper-cpp';
+            const engine = selectedModelObj?.family || 'whisper-cpp';
 
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
 				selectedModel: modalSelectedModel,
-                selectedModelFamily: family,
+                selectedTranscriptionEngine: engine,
 				selectedLanguage: modalSelectedLanguage,
 				enableDiarization: modalEnableDiarization,
 				speakersConfig: modalSpeakersConfig,

@@ -10,7 +10,7 @@
         ChevronRight, 
         ChevronLeft, 
         Download, 
-        Library, 
+        PackageOpen, 
         Languages, 
         Mic, 
         ShieldCheck, 
@@ -484,7 +484,7 @@
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
             <div class="flex items-center space-x-3">
                 <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <Library class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <PackageOpen class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                     <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">Setup Wizard</h2>
@@ -507,7 +507,7 @@
                     <p class="text-gray-600 dark:text-gray-400 mb-8">Select the AI engines and tools you'd like to use. We'll set up the required libraries next.</p>
                     <div class="space-y-6">
                         <div class="flex items-start p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900/50 bg-blue-50/30">
-                            <div class="pt-1 mr-4"><Library class="w-5 h-5 text-blue-600" /></div>
+                            <div class="pt-1 mr-4"><PackageOpen class="w-5 h-5 text-blue-600" /></div>
                             <div class="flex-grow">
                                 <h4 class="font-bold">Core Libraries</h4>
                                 <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
