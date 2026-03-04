@@ -750,10 +750,32 @@
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2">
                         {#each availableWhisperCppModels as model}
-                            <button on:click={() => selectedWhisperCppModels = selectedWhisperCppModels.includes(model.name) ? selectedWhisperCppModels.filter(m => m !== model.name) : [...selectedWhisperCppModels, model.name]} class="flex items-center justify-between p-3 rounded-lg border {selectedWhisperCppModels.includes(model.name) ? 'border-blue-600 bg-blue-50' : ''}">
-                                <div class="flex items-center space-x-3"><div class="w-5 h-5 border flex items-center justify-center">{#if selectedWhisperCppModels.includes(model.name)}<Check class="w-4 h-4" />{/if}</div><span class="font-bold text-sm">{model.name}</span></div>
-                                <div class="text-xs font-mono text-gray-500">{model.size}</div>
-                            </button>
+                            <div class="flex items-center p-3 rounded-lg border transition-all {selectedWhisperCppModels.includes(model.name) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
+                                <button 
+                                    on:click={() => selectedWhisperCppModels = selectedWhisperCppModels.includes(model.name) ? selectedWhisperCppModels.filter(m => m !== model.name) : [...selectedWhisperCppModels, model.name]} 
+                                    class="flex-grow flex items-start space-x-3 text-left focus:outline-none"
+                                >
+                                    <div class="w-5 h-5 border rounded mt-0.5 flex flex-shrink-0 items-center justify-center bg-white dark:bg-gray-800">
+                                        {#if selectedWhisperCppModels.includes(model.name)}<Check class="w-4 h-4 text-blue-600" />{/if}
+                                    </div>
+                                    <div class="flex flex-col min-w-0 pr-2">
+                                        <div class="flex items-center space-x-2">
+                                            <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name}</span>
+                                            <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
+                                        </div>
+                                        <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
+                                    </div>
+                                </button>
+                                {#if model.info_url}
+                                    <button 
+                                        class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
+                                        title="View on Hugging Face"
+                                        on:click|stopPropagation={() => openLink(model.info_url)}
+                                    >
+                                        <ExternalLink class="w-3.5 h-3.5" />
+                                    </button>
+                                {/if}
+                            </div>
                         {/each}
                     </div>
                 </div>
@@ -763,10 +785,32 @@
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[400px]">
                         {#each availableFasterWhisperModels as model}
-                            <button on:click={() => selectedFasterWhisperModels = selectedFasterWhisperModels.includes(model.name) ? selectedFasterWhisperModels.filter(m => m !== model.name) : [...selectedFasterWhisperModels, model.name]} class="flex items-center justify-between p-3 rounded-lg border {selectedFasterWhisperModels.includes(model.name) ? 'border-blue-600 bg-blue-50' : ''}">
-                                <div class="flex items-center space-x-3"><div class="w-5 h-5 border flex items-center justify-center">{#if selectedFasterWhisperModels.includes(model.name)}<Check class="w-4 h-4" />{/if}</div><span class="font-bold text-sm">{model.name.split('/').pop()}</span></div>
-                                <div class="text-xs font-mono text-gray-500">{model.size}</div>
-                            </button>
+                            <div class="flex items-center p-3 rounded-lg border transition-all {selectedFasterWhisperModels.includes(model.name) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
+                                <button 
+                                    on:click={() => selectedFasterWhisperModels = selectedFasterWhisperModels.includes(model.name) ? selectedFasterWhisperModels.filter(m => m !== model.name) : [...selectedFasterWhisperModels, model.name]} 
+                                    class="flex-grow flex items-start space-x-3 text-left focus:outline-none"
+                                >
+                                    <div class="w-5 h-5 border rounded mt-0.5 flex flex-shrink-0 items-center justify-center bg-white dark:bg-gray-800">
+                                        {#if selectedFasterWhisperModels.includes(model.name)}<Check class="w-4 h-4 text-blue-600" />{/if}
+                                    </div>
+                                    <div class="flex flex-col min-w-0 pr-2">
+                                        <div class="flex items-center space-x-2">
+                                            <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name.split('/').pop()}</span>
+                                            <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
+                                        </div>
+                                        <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
+                                    </div>
+                                </button>
+                                {#if model.info_url}
+                                    <button 
+                                        class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
+                                        title="View on Hugging Face"
+                                        on:click|stopPropagation={() => openLink(model.info_url)}
+                                    >
+                                        <ExternalLink class="w-3.5 h-3.5" />
+                                    </button>
+                                {/if}
+                            </div>
                         {/each}
                     </div>
                 </div>
@@ -789,7 +833,31 @@
                     </div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingHelsinki}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
-                        {:else}{#each filteredHelsinki as model}<button on:click={() => helsinkiModels = helsinkiModels.includes(model.id) ? helsinkiModels.filter(m => m !== model.id) : [...helsinkiModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {helsinkiModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if helsinkiModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
+                        {:else}
+                            {#each filteredHelsinki as model}
+                                <div class="flex items-center p-3 rounded-lg border transition-all {helsinkiModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
+                                    <button 
+                                        on:click={() => helsinkiModels = helsinkiModels.includes(model.id) ? helsinkiModels.filter(m => m !== model.id) : [...helsinkiModels, model.id]} 
+                                        class="flex-grow flex items-start space-x-3 text-left focus:outline-none"
+                                    >
+                                        <div class="w-5 h-5 border rounded mt-0.5 flex flex-shrink-0 items-center justify-center bg-white dark:bg-gray-800">
+                                            {#if helsinkiModels.includes(model.id)}<Check class="w-4 h-4 text-blue-600" />{/if}
+                                        </div>
+                                        <div class="flex flex-col min-w-0 pr-2">
+                                            <div class="font-bold text-sm text-gray-900 dark:text-gray-100">{formatModelDisplayName(model.id)}</div>
+                                            <div class="text-[10px] font-mono text-gray-500">{model.id}</div>
+                                        </div>
+                                    </button>
+                                    <button 
+                                        class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
+                                        title="View on Hugging Face"
+                                        on:click|stopPropagation={() => openLink(`https://huggingface.co/${model.id}`)}
+                                    >
+                                        <ExternalLink class="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            {/each}
+                        {/if}
                     </div>
                 </div>
             {:else if currentStep === 6}
@@ -811,7 +879,31 @@
                     </div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingNLLB}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
-                        {:else}{#each filteredNLLB as model}<button on:click={() => nllbModels = nllbModels.includes(model.id) ? nllbModels.filter(m => m !== model.id) : [...nllbModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {nllbModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if nllbModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
+                        {:else}
+                            {#each filteredNLLB as model}
+                                <div class="flex items-center p-3 rounded-lg border transition-all {nllbModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
+                                    <button 
+                                        on:click={() => nllbModels = nllbModels.includes(model.id) ? nllbModels.filter(m => m !== model.id) : [...nllbModels, model.id]} 
+                                        class="flex-grow flex items-start space-x-3 text-left focus:outline-none"
+                                    >
+                                        <div class="w-5 h-5 border rounded mt-0.5 flex flex-shrink-0 items-center justify-center bg-white dark:bg-gray-800">
+                                            {#if nllbModels.includes(model.id)}<Check class="w-4 h-4 text-blue-600" />{/if}
+                                        </div>
+                                        <div class="flex flex-col min-w-0 pr-2">
+                                            <div class="font-bold text-sm text-gray-900 dark:text-gray-100">{formatModelDisplayName(model.id)}</div>
+                                            <div class="text-[10px] font-mono text-gray-500">{model.id}</div>
+                                        </div>
+                                    </button>
+                                    <button 
+                                        class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
+                                        title="View on Hugging Face"
+                                        on:click|stopPropagation={() => openLink(`https://huggingface.co/${model.id}`)}
+                                    >
+                                        <ExternalLink class="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            {/each}
+                        {/if}
                     </div>
                 </div>
             {:else if currentStep === 7}
