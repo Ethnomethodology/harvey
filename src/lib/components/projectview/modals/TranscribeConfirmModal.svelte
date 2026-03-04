@@ -11,7 +11,6 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { open as openExternal } from '@tauri-apps/plugin-shell';
 
 	// Props
 	export let fileName = '';
