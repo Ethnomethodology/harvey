@@ -689,7 +689,7 @@
                                 <div class="space-y-4" in:fly={{ y: 10 }}>
                                     <div class="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 flex items-center justify-between">
                                         <div class="flex items-center space-x-3"><ShieldCheck class="w-5 h-5 text-blue-600 dark:text-blue-400" /><span class="text-sm font-bold text-blue-700 dark:text-blue-300">Access Verified</span></div>
-                                        {#if !isDownloadingDiarization && !diarizationDownloaded}
+                                        {#if diarizationAccessGranted && !isDownloadingDiarization && !diarizationDownloaded}
                                             <button on:click={downloadDiarization} class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 flex items-center space-x-2 shadow-lg transition-all"><Download class="w-3.5 h-3.5" /><span>Download Model</span></button>
                                         {/if}
                                     </div>
