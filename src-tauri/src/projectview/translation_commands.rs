@@ -13,7 +13,6 @@ use crate::TranslationCancellationState;
 use crate::transcription::TranslationEngine;
 use crate::transcription::python_engine::PythonTranslationEngine;
 use crate::projectview::shared_types::{ProjectXml, TranscriptSegment};
-use crate::projectview::shared_utils;
 
 
 // --- CancelGuard for ensuring cleanup ---

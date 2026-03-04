@@ -598,6 +598,7 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
     to_json_response(headers, records)
 }
 
+#[allow(dead_code)]
 fn records_to_json(_headers: &[String], records: Vec<serde_json::Map<String, Value>>) -> Result<Value, CommandError> {
     Ok(json!(records))
 }
@@ -688,6 +689,7 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
     Ok(())
 }
 
+#[allow(dead_code)]
 fn get_headers(path: &Path) -> Result<Vec<String>, CommandError> {
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
     match extension.as_str() {

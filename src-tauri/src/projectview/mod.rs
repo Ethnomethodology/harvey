@@ -26,4 +26,3 @@ pub mod tag_handler;
 pub mod utils;
 
 // Re-export specific commands if needed, for now, direct paths are used in lib.rs
-pub use table_handler::{import_table_file, delete_table_column, set_table_headers, load_table_data, save_table_data, rename_table_header, save_table_styles, load_table_styles};

@@ -2,15 +2,15 @@ use crate::welcome::config::{CommandError, read_config};
 use crate::welcome::python_env::get_env_path;
 use super::{TranscriptionEngine, TranscriptionOptions};
 use crate::projectview::shared_types::TranscriptSegment;
-use tauri::{AppHandle, Runtime, Manager};
+use tauri::{AppHandle, Runtime};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::time::Duration;
 use tokio::time::sleep;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use std::fs::{self, File};
 use std::io::BufReader;
 use serde::Deserialize;
@@ -267,5 +267,5 @@ fn parse_ts(ts_str: &str) -> Result<f64, String> {
          let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
          let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
          Ok(m * 60.0 + s + ms / 1000.0)
-    } else {{ Err(format!("Invalid timestamp format: {}", ts_str)) }}
+    } else { Err(format!("Invalid timestamp format: {}", ts_str)) }
 }

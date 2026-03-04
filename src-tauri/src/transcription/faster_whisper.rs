@@ -6,7 +6,7 @@ use tauri::{AppHandle, Runtime, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use log::{debug, error, info, warn};
 use tokio::sync::Mutex;

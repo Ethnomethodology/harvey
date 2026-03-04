@@ -25,7 +25,7 @@ use std::{
 };
 use dashmap::DashMap;
 use tauri_plugin_shell::{process::CommandEvent};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration};
 use quick_xml;
 use regex::Regex;
 use crate::welcome::python_env::get_python_command;
@@ -1052,6 +1052,7 @@ pub struct TranscribeMediaPayload {
     hotwords: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(serde::Serialize, Clone)]
 pub struct TranscriptionResultPayload {
     original_transcript_path: String,

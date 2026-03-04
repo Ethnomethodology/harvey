@@ -1400,6 +1400,8 @@
 	
 	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
 	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
+	.secondary-segment { @apply bg-gray-50/50 dark:bg-gray-800/30 border-l-4 border-l-gray-300 dark:border-l-gray-600; }
+	.secondary-segment.segment-active { @apply border-l-blue-500 dark:border-l-blue-400; }
 	.preview-interaction-disabled { @apply cursor-default opacity-80; }
 	div[class*='overflow-y-auto']::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
 	div[class*='overflow-y-auto']::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-900 rounded-lg; }
