@@ -63,6 +63,7 @@
     let unlistenTranscriptionDownloadLog;
     let unlistenTranslationDownloadLog;
     let unlistenDiarizationDownloadLog;
+    let unlistenDiarizationFinished;
     let downloadProgressData = $state({});
 
     // Step 3 & 4: Model Selections
@@ -158,13 +159,9 @@
             }
         });
 
-        const unlistenFinished = await listen('diarization-installation-finished', () => {
+        unlistenDiarizationFinished = await listen('diarization-installation-finished', () => {
             isDownloadingDiarization = false;
             diarizationDownloaded = true;
-        });
-        
-        onDestroy(() => {
-            unlistenFinished();
         });
     });
 
@@ -175,6 +172,7 @@
         if (unlistenTranscriptionDownloadLog) unlistenTranscriptionDownloadLog();
         if (unlistenTranslationDownloadLog) unlistenTranslationDownloadLog();
         if (unlistenDiarizationDownloadLog) unlistenDiarizationDownloadLog();
+        if (unlistenDiarizationFinished) unlistenDiarizationFinished();
     });
 
     async function close() {
