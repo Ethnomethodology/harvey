@@ -88,6 +88,7 @@
     let diarizationDownloaded = $state(false);
     let diarizationError = $state('');
     let diarizationLogs = $state([]);
+    let showModelDetails = $state(false);
 
     let selectedModelsSummary = $derived.by(() => {
         const models = [];
@@ -820,15 +821,27 @@
                         <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Review your selections. We'll download these models to your local device.</p>
                         
                         <div class="space-y-4 mb-8">
-                            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800 flex justify-between items-center">
-                                    <span class="text-xs font-bold uppercase text-gray-500 tracking-wider">Selected Models ({selectedModelsSummary.count})</span>
-                                    <span class="text-xs font-bold text-blue-600 dark:text-blue-400">~{selectedModelsSummary.totalGB} GB Total</span>
+                            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                                <div class="px-4 py-3 bg-gray-100/50 dark:bg-gray-800 flex justify-between items-center">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200">{selectedModelsSummary.count} Models to download</span>
+                                        {#if selectedModelsSummary.count > 0}
+                                            <span class="text-gray-400">&bull;</span>
+                                            <span class="text-sm font-medium text-blue-600 dark:text-blue-400">~{selectedModelsSummary.totalGB} GB Total</span>
+                                        {/if}
+                                    </div>
+                                    {#if selectedModelsSummary.count > 0}
+                                        <button 
+                                            on:click={() => showModelDetails = !showModelDetails} 
+                                            class="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center space-x-1"
+                                        >
+                                            <span>{showModelDetails ? 'Hide details' : 'Show details'}</span>
+                                        </button>
+                                    {/if}
                                 </div>
-                                <div class="max-h-48 overflow-y-auto p-2 space-y-1">
-                                    {#if selectedModelsSummary.models.length === 0}
-                                        <div class="p-4 text-center text-sm text-gray-500 italic text-balance">No models selected. You can add them later in the Configure tab.</div>
-                                    {:else}
+
+                                {#if showModelDetails && selectedModelsSummary.count > 0}
+                                    <div class="max-h-48 overflow-y-auto p-2 space-y-1 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/30" in:fade={{ duration: 200 }}>
                                         {#each selectedModelsSummary.models as model}
                                             <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors">
                                                 <div class="flex flex-col">
@@ -838,8 +851,14 @@
                                                 <span class="text-xs font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
                                             </div>
                                         {/each}
-                                    {/if}
-                                </div>
+                                    </div>
+                                {/if}
+
+                                {#if selectedModelsSummary.count === 0}
+                                    <div class="p-6 text-center text-sm text-gray-500 italic border-t border-gray-200 dark:border-gray-700">
+                                        No models selected. You can add them later in the Configure tab.
+                                    </div>
+                                {/if}
                             </div>
 
                             {#if selectedModelsSummary.count > 0}
