@@ -5,7 +5,13 @@
 	import { ask } from "@tauri-apps/plugin-dialog";
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import {
+		configStatus,
+		updateConfigStatus,
+		setSelectedTranscriptionEngineStore,
+		setWhisperCppModelsDownloaded,
+		setFasterWhisperModelsDownloaded
+	} from '$lib/stores/configStatusStore.js';
 	import {
 		availableWhisperCppModels,
 		availableFasterWhisperModels
@@ -42,11 +48,20 @@
     let isInstallingDependencies = false;
     let dependencyErrors = [];
 
-	let selectedEngine = 'whisper-cpp'; // 'whisper-cpp' or 'faster-whisper'
+    $: selectedEngine = $configStatus.selected_transcription_engine;
 
-	$: hasDownloadedFasterWhisper = Array.isArray(downloadedModels) && downloadedModels.some(m => m.family === 'faster-whisper');
-	$: hasDownloadedWhisperCpp = Array.isArray(downloadedModels) && downloadedModels.some(m => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/')));
+    $: whisperCppDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'))).length : 0;
+    $: fasterWhisperDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'faster-whisper').length : 0;
 
+    $: {
+    	if ($configStatus.isInitialized) {
+    		setWhisperCppModelsDownloaded(whisperCppDownloadedCount > 0);
+    		setFasterWhisperModelsDownloaded(fasterWhisperDownloadedCount > 0);
+    	}
+    }
+
+    $: hasDownloadedFasterWhisper = fasterWhisperDownloadedCount > 0;
+    $: hasDownloadedWhisperCpp = whisperCppDownloadedCount > 0;
 	let unlistenStart = null;
 	let unlistenLog = null;
 	let unlistenComplete = null;
@@ -147,6 +162,7 @@
 			const persistedEngine = await getSelectedTranscriptionEngine();
             if (persistedEngine) {
                 selectedEngine = persistedEngine;
+                setSelectedTranscriptionEngineStore(selectedEngine);
             }
 			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
@@ -372,12 +388,12 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
 		<div class="flex items-center">
-			{#if totalDownloadedCount > 0}
-				<span class="text-sm font-medium text-green-600 dark:text-green-400">
-					{totalDownloadedCount} {totalDownloadedCount === 1 ? 'Model' : 'Models'} Downloaded
+			{#if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
+					{selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount} {selectedEngine === 'whisper-cpp' ? 'Whisper.cpp' : 'Faster-Whisper'} {(selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) === 1 ? 'Model' : 'Models'} Downloaded
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400">No Models Downloaded</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">No {selectedEngine === 'whisper-cpp' ? 'Whisper.cpp' : 'Faster-Whisper'} Models Downloaded</span>
 			{/if}
 		</div>
 	</div>

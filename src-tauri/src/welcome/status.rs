@@ -15,6 +15,8 @@ pub struct ConfigStatus {
     pub python_libraries_installed: bool,
     pub hf_token_present: bool,
     pub transcription_models_downloaded: bool,
+    pub whisper_cpp_models_downloaded: bool,
+    pub faster_whisper_models_downloaded: bool,
     pub diarization_model_downloaded: bool,
     pub translation_models_downloaded: bool,
     pub ctranslate2_installed: bool,
@@ -33,6 +35,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
     // --- Initialize status from config ---
     let mut python_libs_installed = config.verification_status.python_libraries_verified;
     let mut transcription_models_downloaded = config.verification_status.transcription_models_verified;
+    let mut whisper_cpp_models_downloaded = false; // We calculate these below
+    let mut faster_whisper_models_downloaded = false;
     let mut diarization_model_downloaded = config.verification_status.diarization_model_verified;
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
     let mut hf_token_present = config.verification_status.hf_token_verified;
@@ -54,19 +58,21 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config_changed = true;
     }
 
-    // Always re-verify model presence if config says they are there
+    // Always re-verify model presence
     let models = get_downloaded_models().await?;
 
     // Check for valid transcription models (whisper-cpp or faster-whisper)
-    // whisper-cpp: family is None (legacy) or "whisper-cpp", and no '/' in name (unless handled elsewhere)
-    // faster-whisper: family is "faster-whisper"
-    let has_transcription = models.iter().any(|m| {
+    whisper_cpp_models_downloaded = models.iter().any(|m| {
         let family = m.family.as_deref().unwrap_or("whisper-cpp");
-        let is_whisper_cpp = family == "whisper-cpp" || (m.family.is_none() && !m.name.contains('/'));
-        let is_faster_whisper = family == "faster-whisper";
-
-        !m.name.contains("paraphrase") && (is_whisper_cpp || is_faster_whisper)
+        (family == "whisper-cpp" || (m.family.is_none() && !m.name.contains('/'))) && !m.name.contains("paraphrase")
     });
+
+    faster_whisper_models_downloaded = models.iter().any(|m| {
+        let family = m.family.as_deref().unwrap_or("");
+        family == "faster-whisper" && !m.name.contains("paraphrase")
+    });
+
+    let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded;
 
     let has_translation = !get_local_translation_models().await?.is_empty();
 
@@ -167,6 +173,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         python_libraries_installed: python_libs_installed,
         hf_token_present,
         transcription_models_downloaded,
+        whisper_cpp_models_downloaded,
+        faster_whisper_models_downloaded,
         diarization_model_downloaded,
         translation_models_downloaded,
         ctranslate2_installed: ct2_installed,
