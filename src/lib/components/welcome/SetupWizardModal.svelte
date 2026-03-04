@@ -11,6 +11,7 @@
         ChevronLeft, 
         Download, 
         PackageOpen, 
+        Library,
         Languages, 
         Mic, 
         ShieldCheck, 
@@ -87,6 +88,60 @@
     let diarizationDownloaded = $state(false);
     let diarizationError = $state('');
     let diarizationLogs = $state([]);
+
+    let selectedModelsSummary = $derived.by(() => {
+        const models = [];
+        let totalSizeMiB = 0;
+
+        const parseSize = (sizeStr) => {
+            if (!sizeStr) return 0;
+            const match = sizeStr.match(/^([\d.]+)\s*(MiB|GiB|MB|GB)$/i);
+            if (!match) return 0;
+            const val = parseFloat(match[1]);
+            const unit = match[2].toLowerCase();
+            if (unit === 'gib' || unit === 'gb') return val * 1024;
+            return val;
+        };
+
+        if (transcriptionEngines.whisperCpp) {
+            selectedWhisperCppModels.forEach(name => {
+                const m = availableWhisperCppModels.find(am => am.name === name);
+                if (m) {
+                    models.push({ name: m.name, size: m.size, type: 'whisper.cpp' });
+                    totalSizeMiB += parseSize(m.size);
+                }
+            });
+        }
+        if (transcriptionEngines.fasterWhisper) {
+            selectedFasterWhisperModels.forEach(name => {
+                const m = availableFasterWhisperModels.find(am => am.name === name);
+                if (m) {
+                    models.push({ name: m.name.split('/').pop(), size: m.size, type: 'faster-whisper' });
+                    totalSizeMiB += parseSize(m.size);
+                }
+            });
+        }
+        helsinkiModels.forEach(id => {
+            const m = allAvailableTranslationModels.find(am => am.id === id);
+            if (m) {
+                models.push({ name: formatModelDisplayName(m.id), size: 'Variable', type: 'Helsinki-NLP' });
+                // Helsinki sizes aren't explicitly in the object, usually small ~30-50MB
+                totalSizeMiB += 45; 
+            }
+        });
+        nllbModels.forEach(id => {
+            const m = allAvailableTranslationModels.find(am => am.id === id);
+            if (m) {
+                models.push({ name: formatModelDisplayName(m.id), size: 'Variable', type: 'NLLB' });
+                if (m.id.includes('600M')) totalSizeMiB += 1200;
+                else if (m.id.includes('1.3B')) totalSizeMiB += 2600;
+                else totalSizeMiB += 5000;
+            }
+        });
+
+        const totalGB = (totalSizeMiB / 1024).toFixed(1);
+        return { models, totalGB, count: models.length };
+    });
 
     let isMac = $derived(platform.startsWith('macos'));
     let recommendWhisperCpp = $derived(isMac);
@@ -507,7 +562,7 @@
                     <p class="text-gray-600 dark:text-gray-400 mb-8">Select the AI engines and tools you'd like to use. We'll set up the required libraries next.</p>
                     <div class="space-y-6">
                         <div class="flex items-start p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900/50 bg-blue-50/30">
-                            <div class="pt-1 mr-4"><PackageOpen class="w-5 h-5 text-blue-600" /></div>
+                            <div class="pt-1 mr-4"><Library class="w-5 h-5 text-blue-600" /></div>
                             <div class="flex-grow">
                                 <h4 class="font-bold">Core Libraries</h4>
                                 <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -518,11 +573,33 @@
                                     </button>
                                     {#if showMoreInfo}
                                         <div class="mt-3 space-y-2 border-t pt-3" transition:fade>
-                                            <div class="text-xs"><strong>Python & micromamba:</strong> Core runtime for executing AI models locally.</div>
-                                            <div class="text-xs"><strong>FFmpeg:</strong> For processing audio and video files.</div>
-                                            <div class="text-xs"><strong>PyTorch & Transformers:</strong> AI engine for running translation and analysis models.</div>
-                                            <div class="text-xs"><strong>pyannote.audio:</strong> Specifically for speaker identification (diarization).</div>
-                                            <div class="text-xs"><strong>Pandoc:</strong> For converting and importing documents (e.g., MS Word).</div>
+                                            <div class="text-xs">
+                                                <strong>
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://www.python.org/')}>Python</button> & 
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html')}>micromamba</button>:
+                                                </strong> Core runtime for executing AI models locally.
+                                            </div>
+                                            <div class="text-xs">
+                                                <strong>
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://ffmpeg.org/')}>FFmpeg</button>:
+                                                </strong> For processing audio and video files.
+                                            </div>
+                                            <div class="text-xs">
+                                                <strong>
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://pytorch.org/')}>PyTorch</button> & 
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://huggingface.co/docs/transformers/index')}>Transformers</button>:
+                                                </strong> AI engine for running translation and analysis models.
+                                            </div>
+                                            <div class="text-xs">
+                                                <strong>
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://github.com/pyannote/pyannote-audio')}>pyannote.audio</button>:
+                                                </strong> Specifically for speaker identification (diarization).
+                                            </div>
+                                            <div class="text-xs">
+                                                <strong>
+                                                    <button class="text-blue-600 hover:underline" on:click={() => openLink('https://pandoc.org/')}>Pandoc</button>:
+                                                </strong> For converting and importing documents (e.g., MS Word).
+                                            </div>
                                         </div>
                                     {/if}
                                 </div>
@@ -531,27 +608,71 @@
                         <div class="space-y-3">
                             <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Mic class="w-4 h-4 mr-2" /> Transcription Engines</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <button on:click={() => transcriptionEngines.whisperCpp = !transcriptionEngines.whisperCpp} class="flex flex-col p-4 rounded-xl border-2 text-left {transcriptionEngines.whisperCpp ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
-                                    <span class="font-bold">whisper.cpp</span>
+                                <div 
+                                    role="button"
+                                    tabindex="0"
+                                    on:click={() => transcriptionEngines.whisperCpp = !transcriptionEngines.whisperCpp} 
+                                    on:keydown={(e) => e.key === 'Enter' && (transcriptionEngines.whisperCpp = !transcriptionEngines.whisperCpp)}
+                                    class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {transcriptionEngines.whisperCpp ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
+                                >
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-bold">whisper.cpp</span>
+                                        <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://github.com/ggerganov/whisper.cpp')}>
+                                            <ExternalLink class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                     <p class="text-xs text-gray-600">Lightweight, fast on Mac (Metal) and CPU.</p>
-                                </button>
-                                <button on:click={() => transcriptionEngines.fasterWhisper = !transcriptionEngines.fasterWhisper} class="flex flex-col p-4 rounded-xl border-2 text-left {transcriptionEngines.fasterWhisper ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
-                                    <span class="font-bold">faster-whisper</span>
+                                </div>
+                                <div 
+                                    role="button"
+                                    tabindex="0"
+                                    on:click={() => transcriptionEngines.fasterWhisper = !transcriptionEngines.fasterWhisper} 
+                                    on:keydown={(e) => e.key === 'Enter' && (transcriptionEngines.fasterWhisper = !transcriptionEngines.fasterWhisper)}
+                                    class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {transcriptionEngines.fasterWhisper ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
+                                >
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-bold">faster-whisper</span>
+                                        <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://github.com/SYSTRAN/faster-whisper')}>
+                                            <ExternalLink class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                     <p class="text-xs text-gray-600">Blazing fast, optimized for NVIDIA GPUs.</p>
-                                </button>
+                                </div>
                             </div>
                         </div>
                         <div class="space-y-3">
                             <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Languages class="w-4 h-4 mr-2" /> Translation Engines</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <button on:click={() => translationEngines.helsinki = !translationEngines.helsinki} class="flex flex-col p-4 rounded-xl border-2 text-left {translationEngines.helsinki ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
-                                    <span class="font-bold">Helsinki-NLP</span>
+                                <div 
+                                    role="button"
+                                    tabindex="0"
+                                    on:click={() => translationEngines.helsinki = !translationEngines.helsinki} 
+                                    on:keydown={(e) => e.key === 'Enter' && (translationEngines.helsinki = !translationEngines.helsinki)}
+                                    class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {translationEngines.helsinki ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
+                                >
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-bold">Helsinki-NLP</span>
+                                        <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://huggingface.co/Helsinki-NLP')}>
+                                            <ExternalLink class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                     <p class="text-xs text-gray-600">Lightweight, optimized for language pairs.</p>
-                                </button>
-                                <button on:click={() => translationEngines.nllb = !translationEngines.nllb} class="flex flex-col p-4 rounded-xl border-2 text-left {translationEngines.nllb ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
-                                    <span class="font-bold">NLLB (Meta)</span>
+                                </div>
+                                <div 
+                                    role="button"
+                                    tabindex="0"
+                                    on:click={() => translationEngines.nllb = !translationEngines.nllb} 
+                                    on:keydown={(e) => e.key === 'Enter' && (translationEngines.nllb = !translationEngines.nllb)}
+                                    class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {translationEngines.nllb ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
+                                >
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-bold">NLLB (Meta)</span>
+                                        <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://huggingface.co/facebook/nllb-200-distilled-600M')}>
+                                            <ExternalLink class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                     <p class="text-xs text-gray-600">Universal model supporting 200+ languages.</p>
-                                </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -642,7 +763,19 @@
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2">Helsinki-NLP Models</h3>
                     <p class="text-[11px] text-gray-500 mb-4 italic">Lightweight, very fast on CPU, requires separate models for every language pair.</p>
-                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={helsinkiSearchQuery} placeholder="Search language pairs..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
+                    <div class="relative mb-4">
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input 
+                            type="text" 
+                            bind:value={helsinkiSearchQuery} 
+                            placeholder="Search language pairs..." 
+                            class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                        />
+                    </div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingHelsinki}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
                         {:else}{#each filteredHelsinki as model}<button on:click={() => helsinkiModels = helsinkiModels.includes(model.id) ? helsinkiModels.filter(m => m !== model.id) : [...helsinkiModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {helsinkiModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if helsinkiModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
@@ -652,7 +785,19 @@
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2">NLLB Models</h3>
                     <p class="text-[11px] text-gray-500 mb-4 italic">Universal model supporting 200+ languages. Great for rare languages, but larger file size.</p>
-                    <div class="relative mb-4"><Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" bind:value={nllbSearchQuery} placeholder="Search models..." class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
+                    <div class="relative mb-4">
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input 
+                            type="text" 
+                            bind:value={nllbSearchQuery} 
+                            placeholder="Search models..." 
+                            class="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                        />
+                    </div>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[350px]">
                         {#if isFetchingNLLB}<div class="py-8 text-center"><Loader2 class="w-6 h-6 animate-spin mx-auto mb-2" />Fetching...</div>
                         {:else}{#each filteredNLLB as model}<button on:click={() => nllbModels = nllbModels.includes(model.id) ? nllbModels.filter(m => m !== model.id) : [...nllbModels, model.id]} class="flex items-center space-x-3 p-3 rounded-lg border {nllbModels.includes(model.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}"><div class="w-5 h-5 border flex items-center justify-center">{#if nllbModels.includes(model.id)}<Check class="w-4 h-4" />{/if}</div><div class="text-left"><div class="font-bold text-sm">{formatModelDisplayName(model.id)}</div><div class="text-[10px] font-mono">{model.id}</div></div></button>{/each}{/if}
@@ -660,11 +805,45 @@
                 </div>
             {:else if currentStep === 7}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Download Progress</h3>
+                    <h3 class="text-xl font-bold mb-2">Download Models</h3>
                     {#if installProgress.phase !== 'models' && installProgress.phase !== 'complete'}
-                        <div class="flex flex-col items-center py-12">
-                            <div class="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-full mb-6"><Download class="w-12 h-12 text-blue-600" /></div>
-                            <button on:click={startModelDownloads} class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center space-x-2 shadow-lg"><span>Start Downloads</span><ChevronRight class="w-5 h-5" /></button>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Review your selections. We'll download these models to your local device.</p>
+                        
+                        <div class="space-y-4 mb-8">
+                            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800 flex justify-between items-center">
+                                    <span class="text-xs font-bold uppercase text-gray-500 tracking-wider">Selected Models ({selectedModelsSummary.count})</span>
+                                    <span class="text-xs font-bold text-blue-600 dark:text-blue-400">~{selectedModelsSummary.totalGB} GB Total</span>
+                                </div>
+                                <div class="max-h-48 overflow-y-auto p-2 space-y-1">
+                                    {#if selectedModelsSummary.models.length === 0}
+                                        <div class="p-4 text-center text-sm text-gray-500 italic text-balance">No models selected. You can add them later in the Configure tab.</div>
+                                    {:else}
+                                        {#each selectedModelsSummary.models as model}
+                                            <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors">
+                                                <div class="flex flex-col">
+                                                    <span class="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{model.name}</span>
+                                                    <span class="text-[10px] text-gray-500 uppercase font-mono">{model.type}</span>
+                                                </div>
+                                                <span class="text-xs font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
+                                            </div>
+                                        {/each}
+                                    {/if}
+                                </div>
+                            </div>
+
+                            {#if selectedModelsSummary.count > 0}
+                                <p class="text-[11px] text-gray-500 italic text-center px-4">
+                                    Total size is an estimate. Download times vary based on your connection speed.
+                                </p>
+                            {/if}
+                        </div>
+
+                        <div class="flex flex-col items-center">
+                            <button on:click={startModelDownloads} class="px-10 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center space-x-2 shadow-lg hover:bg-blue-700 transition-all active:scale-95">
+                                <span>{selectedModelsSummary.count === 0 ? 'Skip to Final Step' : 'Start Downloads'}</span> 
+                                <ChevronRight class="w-5 h-5" />
+                            </button>
                         </div>
                     {:else}
                         <div class="space-y-6">
