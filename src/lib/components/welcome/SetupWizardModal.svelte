@@ -89,6 +89,35 @@
     let diarizationError = $state('');
     let diarizationLogs = $state([]);
     let showModelDetails = $state(false);
+    let isCleaningUp = $state(false);
+
+    function resetWizard() {
+        currentStep = 1;
+        showMoreInfo = false;
+        transcriptionEngines.whisperCpp = recommendWhisperCpp;
+        transcriptionEngines.fasterWhisper = recommendFasterWhisper;
+        translationEngines.helsinki = true;
+        translationEngines.nllb = false;
+        installLogs = [];
+        isInstalling = false;
+        installProgress = { phase: 'idle', current: 0, total: 0, currentItem: '' };
+        downloadProgressData = {};
+        selectedWhisperCppModels = ['ggml-base'];
+        selectedFasterWhisperModels = [];
+        helsinkiModels = [];
+        nllbModels = [];
+        helsinkiSearchQuery = '';
+        nllbSearchQuery = '';
+        hfToken = '';
+        isVerifyingToken = false;
+        diarizationAccessGranted = false;
+        isDownloadingDiarization = false;
+        diarizationDownloaded = false;
+        diarizationError = '';
+        diarizationLogs = [];
+        showModelDetails = false;
+        isCleaningUp = false;
+    }
 
     let selectedModelsSummary = $derived.by(() => {
         const models = [];
@@ -242,16 +271,38 @@
     });
 
     async function close() {
-        if (isInstalling || isDownloadingDiarization) return;
+        if (isCleaningUp) return;
+
+        const isActivelyInstalling = isInstalling || isDownloadingDiarization || (installProgress.phase !== 'complete' && installProgress.phase !== 'idle' && installProgress.phase !== 'models');
+        const needsConfirm = isActivelyInstalling || currentStep < 8;
         
-        if (installProgress.phase !== 'complete' || currentStep < 8) {
+        if (needsConfirm) {
             const confirmed = await ask(
                 'Are you sure you want to exit the Setup Wizard? You can always complete the environment setup and download models manually from the "Configure" tab later.',
                 { title: 'Exit Setup?', kind: 'warning', okLabel: 'Exit', cancelLabel: 'Stay' }
             );
             if (!confirmed) return;
+
+            // If we are currently installing core libraries or diarization components,
+            // we delete the environment to prevent corruption from a partial install.
+            if (isDownloadingDiarization || (isInstalling && installProgress.phase === 'libraries')) {
+                isCleaningUp = true;
+                try {
+                    await invoke('delete_virtual_env');
+                    // Definitively stop all backend sidecar processes by reloading the main window
+                    // This is the only way to ensure the Tauri sidecar child process is killed 
+                    // if it doesn't respond to standard termination signals.
+                    window.location.reload();
+                    return; 
+                } catch (e) {
+                    console.error('Cleanup failed during wizard exit:', e);
+                } finally {
+                    isCleaningUp = false;
+                }
+            }
         }
         
+        resetWizard();
         showModal = false;
         dispatch('close');
     }
@@ -567,15 +618,23 @@
         </div>
 
         <div class="flex-grow overflow-y-auto p-8">
-            {#if currentStep === 1}
+            {#if isCleaningUp}
+                <div class="h-full flex flex-col items-center justify-center space-y-4" in:fade>
+                    <Loader2 class="w-12 h-12 animate-spin text-blue-600" />
+                    <div class="text-center">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Cleaning up...</h3>
+                        <p class="text-sm text-gray-500">Removing partial installation to prevent environment corruption.</p>
+                    </div>
+                </div>
+            {:else if currentStep === 1}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Choose Components</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Choose Components</h3>
                     <p class="text-gray-600 dark:text-gray-400 mb-8">Select the AI engines and tools you'd like to use. We'll set up the required libraries next.</p>
                     <div class="space-y-6">
                         <div class="flex items-start p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900/50 bg-blue-50/30">
                             <div class="pt-1 mr-4"><Library class="w-5 h-5 text-blue-600" /></div>
                             <div class="flex-grow">
-                                <h4 class="font-bold">Core Libraries</h4>
+                                <h4 class="font-bold text-gray-900 dark:text-gray-100">Core Libraries</h4>
                                 <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                     <p>Harvey uses a local environment to manage required AI libraries.</p>
                                     <button on:click={() => showMoreInfo = !showMoreInfo} class="text-[10px] font-bold text-blue-600 mt-2 flex items-center">
@@ -627,7 +686,7 @@
                                     class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {transcriptionEngines.whisperCpp ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
                                 >
                                     <div class="flex justify-between items-start">
-                                        <span class="font-bold">whisper.cpp</span>
+                                        <span class="font-bold text-gray-900 dark:text-gray-100">whisper.cpp</span>
                                         <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://github.com/ggerganov/whisper.cpp')}>
                                             <ExternalLink class="w-3.5 h-3.5" />
                                         </button>
@@ -642,7 +701,7 @@
                                     class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {transcriptionEngines.fasterWhisper ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
                                 >
                                     <div class="flex justify-between items-start">
-                                        <span class="font-bold">faster-whisper</span>
+                                        <span class="font-bold text-gray-900 dark:text-gray-100">faster-whisper</span>
                                         <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://github.com/SYSTRAN/faster-whisper')}>
                                             <ExternalLink class="w-3.5 h-3.5" />
                                         </button>
@@ -662,7 +721,7 @@
                                     class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {translationEngines.helsinki ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
                                 >
                                     <div class="flex justify-between items-start">
-                                        <span class="font-bold">Helsinki-NLP</span>
+                                        <span class="font-bold text-gray-900 dark:text-gray-100">Helsinki-NLP</span>
                                         <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://huggingface.co/Helsinki-NLP')}>
                                             <ExternalLink class="w-3.5 h-3.5" />
                                         </button>
@@ -677,7 +736,7 @@
                                     class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {translationEngines.nllb ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
                                 >
                                     <div class="flex justify-between items-start">
-                                        <span class="font-bold">NLLB (Meta)</span>
+                                        <span class="font-bold text-gray-900 dark:text-gray-100">NLLB (Meta)</span>
                                         <button class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600" on:click|stopPropagation={() => openLink('https://huggingface.co/facebook/nllb-200-distilled-600M')}>
                                             <ExternalLink class="w-3.5 h-3.5" />
                                         </button>
@@ -690,7 +749,7 @@
                 </div>
             {:else if currentStep === 2}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Environment Setup</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Environment Setup</h3>
                     {#if installProgress.phase === 'idle'}
                         <div class="mb-8 space-y-4">
                             <p class="text-gray-600 dark:text-gray-400 text-sm">
@@ -728,10 +787,10 @@
                         </button>
                     {:else}
                         <div class="space-y-6">
-                            <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border">
+                            <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                                 <div class="flex justify-between items-center">
                                     <div>
-                                        <h4 class="font-bold">{installProgress.phase === 'complete' ? 'Installation Ready!' : 'Installing Libraries...'}</h4>
+                                        <h4 class="font-bold text-gray-900 dark:text-gray-100">{installProgress.phase === 'complete' ? 'Installation Ready!' : 'Installing Libraries...'}</h4>
                                         <p class="text-xs text-gray-500 font-mono mt-1">{installProgress.currentItem}</p>
                                     </div>
                                     {#if installProgress.phase !== 'complete'}<Loader2 class="w-5 h-5 animate-spin text-blue-600" />{:else}<Check class="w-6 h-6 text-green-500" />{/if}
@@ -746,7 +805,7 @@
                 </div>
             {:else if currentStep === 3}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Whisper.cpp Models</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Whisper.cpp Models</h3>
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2">
                         {#each availableWhisperCppModels as model}
@@ -781,7 +840,7 @@
                 </div>
             {:else if currentStep === 4}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Faster-Whisper Models</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Faster-Whisper Models</h3>
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[400px]">
                         {#each availableFasterWhisperModels as model}
@@ -816,7 +875,7 @@
                 </div>
             {:else if currentStep === 5}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Helsinki-NLP Models</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Helsinki-NLP Models</h3>
                     <p class="text-[11px] text-gray-500 mb-4 italic">Lightweight, very fast on CPU, requires separate models for every language pair.</p>
                     <div class="relative mb-4">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -862,7 +921,7 @@
                 </div>
             {:else if currentStep === 6}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">NLLB Models</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">NLLB Models</h3>
                     <p class="text-[11px] text-gray-500 mb-4 italic">Universal model supporting 200+ languages. Great for rare languages, but larger file size.</p>
                     <div class="relative mb-4">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -908,7 +967,7 @@
                 </div>
             {:else if currentStep === 7}
                 <div in:fade>
-                    <h3 class="text-xl font-bold mb-2">Download Models</h3>
+                    <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Download Models</h3>
                     {#if installProgress.phase !== 'models' && installProgress.phase !== 'complete'}
                         <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Review your selections. We'll download these models to your local device.</p>
                         
@@ -970,7 +1029,7 @@
                         <div class="space-y-6">
                             <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                                 <div class="flex justify-between items-center mb-4">
-                                    <div><h4 class="font-bold">{installProgress.phase === 'complete' ? 'Finished!' : `Downloading (${installProgress.current}/${installProgress.total})`}</h4><p class="text-xs text-gray-500 font-mono mt-1">{installProgress.currentItem}</p></div>
+                                    <div><h4 class="font-bold text-gray-900 dark:text-gray-100">{installProgress.phase === 'complete' ? 'Finished!' : `Downloading (${installProgress.current}/${installProgress.total})`}</h4><p class="text-xs text-gray-500 font-mono mt-1">{installProgress.currentItem}</p></div>
                                     {#if installProgress.phase !== 'complete'}<Loader2 class="w-5 h-5 animate-spin text-blue-600" />{:else}<div class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white"><Check class="w-4 h-4" /></div>{/if}
                                 </div>
                                 {#if installProgress.phase === 'models'}<div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"><div class="h-full bg-blue-600 transition-all duration-300" style="width: {(installProgress.current / installProgress.total) * 100}%"></div></div>{/if}
@@ -990,7 +1049,7 @@
                 </div>
             {:else if currentStep === 8}
                 <div in:fade={{ duration: 200 }}>
-                    <div class="flex items-center space-x-3 mb-6"><div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg"><ShieldCheck class="w-6 h-6 text-amber-600 dark:text-amber-400" /></div><h3 class="text-xl font-bold">Diarization Setup</h3></div>
+                    <div class="flex items-center space-x-3 mb-6"><div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg"><ShieldCheck class="w-6 h-6 text-amber-600 dark:text-amber-400" /></div><h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Diarization Setup</h3></div>
                     
                     {#if diarizationDownloaded}
                         <div class="flex flex-col items-center justify-center py-12 space-y-4" in:fade>
@@ -1003,7 +1062,7 @@
                         </p>
                         <div class="space-y-6">
                             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-4">
-                                <h4 class="text-sm font-bold flex items-center"><Info class="w-4 h-4 mr-2 text-blue-500" /> Setup Instructions</h4>
+                                <h4 class="text-sm font-bold flex items-center text-gray-900 dark:text-gray-100"><Info class="w-4 h-4 mr-2 text-blue-500" /> Setup Instructions</h4>
                                 <ol class="text-xs text-gray-600 dark:text-gray-400 space-y-3 list-decimal ml-4">
                                     <li><strong>Accept Model License:</strong> Harvey uses the gated <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>pyannote/speaker-diarization-3.1</button> model. Visit the link and click "Agree".</li>
                                     <li><strong>Create Access Token:</strong> Go to <button class="text-blue-600 dark:text-blue-400 hover:underline font-medium" on:click={() => openLink('https://huggingface.co/settings/tokens')}>HF Settings</button> and create a <strong>Read</strong> token.</li>
@@ -1014,8 +1073,8 @@
                             <div class="space-y-2">
                                 <label class="text-xs font-bold uppercase text-gray-500 flex items-center"><Key class="w-3 h-3 mr-1" /> HF Token</label>
                                 <div class="flex space-x-2">
-                                    <input type="password" bind:value={hfToken} on:input={() => { diarizationAccessGranted = false; diarizationError = ''; }} placeholder="hf_..." class="flex-grow border rounded-lg px-4 py-2 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" />
-                                    <button on:click={verifyHfToken} disabled={!hfToken || isVerifyingToken || isDownloadingDiarization} class="px-6 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-bold disabled:opacity-50 flex items-center">{#if isVerifyingToken}<Loader2 class="w-4 h-4 animate-spin mr-2" />{/if}Verify</button>
+                                    <input type="password" bind:value={hfToken} on:input={() => { diarizationAccessGranted = false; diarizationError = ''; }} placeholder="hf_..." class="flex-grow border rounded-lg px-4 py-2 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-gray-100" />
+                                    <button on:click={verifyHfToken} disabled={!hfToken || isVerifyingToken || isDownloadingDiarization} class="px-6 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-bold disabled:opacity-50 flex items-center transition-colors">{#if isVerifyingToken}<Loader2 class="w-4 h-4 animate-spin mr-2" />{/if}Verify</button>
                                 </div>
                                 {#if diarizationError && !isDownloadingDiarization}<p class="text-[10px] text-red-600 dark:text-red-400 font-medium flex items-center"><AlertTriangle class="w-3 h-3 mr-1" /> {diarizationError}</p>{/if}
                             </div>
@@ -1042,17 +1101,17 @@
             {/if}
         </div>
 
-        <div class="px-6 py-4 border-t flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
-            <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization} class="px-4 py-2 text-sm font-bold text-gray-600 disabled:opacity-30 flex items-center transition-colors"><ChevronLeft class="w-4 h-4 mr-1" /> Back</button>
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
+            <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization || isCleaningUp} class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 disabled:opacity-30 flex items-center transition-colors hover:text-gray-900 dark:hover:text-gray-200"><ChevronLeft class="w-4 h-4 mr-1" /> Back</button>
             <div class="flex space-x-3">
                 {#if currentStep === 2}
-                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete'} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
                 {:else if currentStep < 7}
-                    <button on:click={nextStep} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold flex items-center">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+                    <button on:click={nextStep} disabled={isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
                 {:else if currentStep === 7}
-                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete'} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
                 {:else}
-                    <button on:click={close} disabled={isDownloadingDiarization} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50">Finish Setup</button>
+                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">Finish Setup</button>
                 {/if}
             </div>
         </div>
@@ -1063,4 +1122,5 @@
 <style>
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
