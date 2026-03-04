@@ -74,12 +74,12 @@ pub fn get_python_command<R: Runtime>(app: &AppHandle<R>) -> Result<tauri_plugin
 }
 
 #[derive(PartialEq, Debug)]
-enum PyTorchInstallStrategy {
+pub enum PyTorchInstallStrategy {
     Gpu,
     Cpu,
 }
 
-async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchInstallStrategy {
+pub async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchInstallStrategy {
     let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
     if target_triple.contains("apple-darwin") {

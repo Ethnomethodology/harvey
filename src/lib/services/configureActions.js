@@ -302,7 +302,15 @@ export async function fetchAvailableModels() {
 		return Array.isArray(models) ? models : [];
 	} catch (error) {
 		console.error("Error invoking fetch_available_models_command:", error);
-		throw new Error(`Failed to fetch available models: ${error?.message || error}`);
+		let errorMessage = "Unknown error";
+		if (typeof error === 'string') {
+			errorMessage = error;
+		} else if (error && typeof error === 'object') {
+			if (error.payload) errorMessage = error.payload;
+			else if (error.message) errorMessage = error.message;
+			else errorMessage = JSON.stringify(error);
+		}
+		throw new Error(`Failed to fetch available models: ${errorMessage}`);
 	}
 }
 

@@ -61,6 +61,7 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
     (path, is_translation || is_faster_whisper)
 }
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationDownloadProgress {
   model_name: String,
@@ -69,6 +70,7 @@ struct TranslationDownloadProgress {
   total_bytes: Option<u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationErrorPayload {
   model_name: String,
@@ -673,11 +675,21 @@ pub async fn get_selected_transcription_engine() -> Result<Option<String>, Comma
     Ok(config.selected_transcription_engine)
 }
 
+#[tauri::command]
+pub async fn is_cuda_available_command<R: tauri::Runtime>(_app_handle: tauri::AppHandle<R>) -> bool {
+    use tauri_plugin_shell::ShellExt;
+    let shell = _app_handle.shell();
+    let strategy = super::python_env::get_pytorch_install_strategy(&shell).await;
+    strategy == super::python_env::PyTorchInstallStrategy::Gpu
+}
+
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct HuggingFaceApiResponse {
     siblings: Vec<HuggingFaceApiFile>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct HuggingFaceApiFile {
     rfilename: String,
@@ -1626,10 +1638,19 @@ pub async fn fetch_available_models_command(app: AppHandle) -> Result<serde_json
          return Err(CommandError::from(format!("Script not found at: {:?}", script_path)));
     }
 
-    let python_path = python_env::get_python_path()?; 
+    let python_path = python_env::get_python_path()?;
+    
+    // Try internal python first, fall back to system if not exists (likely during wizard)
+    let cmd_binary = if python_path.exists() {
+        python_path.to_str().unwrap().to_string()
+    } else {
+        if cfg!(windows) { "python".to_string() } else { "python3".to_string() }
+    };
+
+    log::info!("Using python binary: {}", cmd_binary);
 
     let output = app.shell()
-        .command(python_path.to_str().unwrap())
+        .command(cmd_binary)
         .args(&[script_path.to_str().unwrap()])
         .output()
         .await

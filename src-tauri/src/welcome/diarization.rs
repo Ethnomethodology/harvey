@@ -43,6 +43,49 @@ pub async fn check_diarization_model_access<R: Runtime>(
     Ok(stdout == "cached")
 }
 
+#[tauri::command]
+pub async fn check_gated_model_access<R: Runtime>(
+    _app_handle: AppHandle<R>,
+    token: String,
+) -> Result<bool, String> {
+    log::info!("Checking HF token validity and gated model access");
+    
+    let client = reqwest::Client::new();
+    
+    // 1. Verify token validity
+    let whoami_url = "https://huggingface.co/api/whoami-v2";
+    let whoami_res = client.get(whoami_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error checking HF token: {}", e))?;
+
+    if !whoami_res.status().is_success() {
+        log::warn!("HF token verification failed (Status {})", whoami_res.status());
+        return Err("Invalid Hugging Face token. Please check your token and try again.".to_string());
+    }
+
+    // 2. Check model access
+    let url = "https://huggingface.co/api/models/pyannote/speaker-diarization-3.1";
+    let res = client.get(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error checking HF model access: {}", e))?;
+
+    if res.status().is_success() {
+        log::info!("HF Access granted (Status 200)");
+        Ok(true)
+    } else {
+        let status = res.status().as_u16();
+        log::warn!("HF Model access denied (Status {})", status);
+        if status == 403 {
+            return Err("Access to pyannote/speaker-diarization-3.1 is restricted. Please ensure you have accepted the license on Hugging Face.".to_string());
+        }
+        Ok(false)
+    }
+}
+
 #[derive(Clone, serde::Serialize)]
 struct LogPayload {
   message: String,

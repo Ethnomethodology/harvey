@@ -185,7 +185,6 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
-                use tauri::WebviewWindowBuilder; // Explicit import
                 let app_handle = app_mut_ref.handle();
                 
                 // 1. App Menu (Harvey)
@@ -326,6 +325,7 @@ pub fn run() {
             welcome::commands::fetch_available_models_command,
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::get_platform_info,
+            welcome::commands::is_cuda_available_command,
             welcome::commands::check_python_libraries_installed,
             welcome::commands::install_python_libraries,
             welcome::python_env::is_ffmpeg_installed,
@@ -334,6 +334,7 @@ pub fn run() {
             welcome::hf_auth::check_hf_auth_status,
             welcome::hf_auth::save_hf_auth_token,
             welcome::diarization::check_diarization_model_access,
+            welcome::diarization::check_gated_model_access,
             welcome::diarization::download_diarization_model,
             welcome::diarization::delete_diarization_model,
             welcome::diarization::get_diarization_cache_path,
