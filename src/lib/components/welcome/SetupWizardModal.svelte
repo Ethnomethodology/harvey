@@ -35,7 +35,7 @@
         fetchAvailableModels,
         getDownloadLocation,
         setSelectedTranscriptionEngine,
-        setSelectedTranslationFamily
+        setSelectedTranslationEngine
     } from '$lib/services/configureActions';
     import { languageMap } from '$lib/constants/languageMap.js';
 
@@ -340,7 +340,7 @@
                 installLogs.push({ id: installLogs.length, message: event.payload.message });
             });
 
-            installProgress.currentItem = 'Core AI Libraries';
+            installProgress.currentItem = 'Core Libraries';
             await invoke('install_python_libraries');
 
             if (transcriptionEngines.whisperCpp) {
@@ -375,7 +375,7 @@
             }
             if (translationEngines.helsinki || translationEngines.nllb) {
                 const family = translationEngines.helsinki ? 'helsinki' : 'nllb';
-                await setSelectedTranslationFamily(family);
+                await setSelectedTranslationEngine(family);
             }
 
             const modelsToDownload = [];
@@ -509,7 +509,7 @@
                         <div class="flex items-start p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900/50 bg-blue-50/30">
                             <div class="pt-1 mr-4"><Library class="w-5 h-5 text-blue-600" /></div>
                             <div class="flex-grow">
-                                <h4 class="font-bold">Core AI Libraries</h4>
+                                <h4 class="font-bold">Core Libraries</h4>
                                 <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                     <p>Harvey uses a local environment to manage required AI libraries.</p>
                                     <button on:click={() => showMoreInfo = !showMoreInfo} class="text-[10px] font-bold text-blue-600 mt-2 flex items-center">
@@ -542,7 +542,7 @@
                             </div>
                         </div>
                         <div class="space-y-3">
-                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Languages class="w-4 h-4 mr-2" /> Translation Families</h4>
+                            <h4 class="text-sm font-bold text-gray-500 uppercase flex items-center"><Languages class="w-4 h-4 mr-2" /> Translation Engines</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <button on:click={() => translationEngines.helsinki = !translationEngines.helsinki} class="flex flex-col p-4 rounded-xl border-2 text-left {translationEngines.helsinki ? 'border-blue-600 bg-blue-50/30' : 'border-gray-200 dark:border-gray-800'}">
                                     <span class="font-bold">Helsinki-NLP</span>
@@ -570,7 +570,7 @@
                                     <Check class="w-3 h-3 mr-1 text-green-500" /> Selected Components
                                 </h4>
                                 <div class="flex flex-wrap gap-2">
-                                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">Core AI Libraries</span>
+                                    <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">Core Libraries</span>
                                     {#if transcriptionEngines.whisperCpp}
                                         <span class="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">whisper.cpp</span>
                                     {/if}

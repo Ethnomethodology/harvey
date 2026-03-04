@@ -212,7 +212,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
   }
 }
 
-export async function getSelectedTranslationFamily() {
+export async function getSelectedTranslationEngine() {
 	return await invoke('get_selected_translation_family');
 }
 
@@ -232,7 +232,7 @@ export async function getDependencyCheckErrors() {
 	return await invoke('get_dependency_check_errors');
 }
 
-export async function setSelectedTranslationFamily(family) {
+export async function setSelectedTranslationEngine(family) {
 
 	try {
 		await invoke('set_selected_translation_family', { family });

@@ -41,7 +41,7 @@ export const initialTranscriptState = {
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
-    selectedModelFamily: 'whisper-cpp',
+    selectedTranscriptionEngine: 'whisper-cpp',
     selectedLanguage: null,
     speakers: { count: 0, names: [], translatedNames: [] },
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -856,8 +856,8 @@ export function setSelectedModel(modelName) {
     transcriptStore.update((ts) => ({ ...ts, selectedModelName: modelName || null }));
 }
 
-export function setSelectedModelFamily(family) {
-    transcriptStore.update((ts) => ({ ...ts, selectedModelFamily: family || 'whisper-cpp' }));
+export function setSelectedTranscriptionEngine(engine) {
+    transcriptStore.update((ts) => ({ ...ts, selectedTranscriptionEngine: engine || 'whisper-cpp' }));
 }
 
 export function setSelectedLanguage(languageCode) {
@@ -1835,7 +1835,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             
             // Set start time if starting fresh, otherwise keep existing
-            const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
+            const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
 
             updatedState = {
                 ...ts,
@@ -1914,7 +1914,7 @@ export function clearTranslationStatus(finalStatusMessage = 'Ready', error = nul
             translationProgress: { percent: 0, message: '' },
             translationJobStatus: null,
             translationErrorMessage: null,
-            ranTranslationInBackground: false,
+            ranInBackground: false,
             showTranslateModal: false,
             translationStartTime: null,
         };

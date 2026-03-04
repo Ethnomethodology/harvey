@@ -1467,7 +1467,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         speaker_names: currentTs.speakers.names || [],
         translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
         transcription_mode: transcriptionMode,
-        transcription_engine: currentTs.selectedModelFamily,
+        transcription_engine: currentTs.selectedTranscriptionEngine,
         initial_prompt: currentTs.initialPrompt || null,
         hotwords: currentTs.hotwords || null
     };

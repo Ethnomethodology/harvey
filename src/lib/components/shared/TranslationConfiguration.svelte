@@ -10,8 +10,8 @@
         getLocalTranslationModels,
 		cancelTranslationModelDownload,
 		fetchAvailableModels,
-		getSelectedTranslationFamily,
-		setSelectedTranslationFamily,
+		getSelectedTranslationEngine,
+		setSelectedTranslationEngine,
 		isCTranslate2Installed,
         installFasterWhisperDependencies
 	} from '$lib/services/configureActions';
@@ -41,7 +41,7 @@
     let isInstallingDependencies = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
-	let selectedFamily = 'helsinki';
+	let selectedEngine = 'helsinki';
 
 	// --- Marketplace / Search View State ---
 	let availableModelsList = [];
@@ -133,8 +133,8 @@
 			}
 		}
 
-		// Filter by family
-		baseList = baseList.filter(m => m.family === selectedFamily);
+		// Filter by engine/family
+		baseList = baseList.filter(m => m.family === selectedEngine);
 
 		// Filter by search query
 		if (searchQuery.trim() !== '') {
@@ -194,8 +194,8 @@
 		}
 	}
 
-	async function handleFamilyChange() {
-		await setSelectedTranslationFamily(selectedFamily);
+	async function handleEngineChange() {
+		await setSelectedTranslationEngine(selectedEngine);
 	}
 
 	async function handleRefreshModels() {
@@ -220,7 +220,7 @@
 		configError = '';
 		try {
 			downloadedModels = await getLocalTranslationModels();
-			selectedFamily = await getSelectedTranslationFamily() || 'helsinki';
+			selectedEngine = await getSelectedTranslationEngine() || 'helsinki';
 			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {
 			configError = `Failed to load model configuration: ${e.message || e}`;
@@ -437,42 +437,42 @@
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
-			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Model Family</span>
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Translation Engine</span>
 			<div class="flex space-x-2">
 				<button 
 					class="px-3 py-1 text-xs rounded-full border transition-all"
-					class:bg-blue-600={selectedFamily === 'helsinki'}
-					class:text-white={selectedFamily === 'helsinki'}
-					class:border-transparent={selectedFamily === 'helsinki'}
-					class:bg-white={selectedFamily !== 'helsinki'}
-					class:dark:bg-gray-800={selectedFamily !== 'helsinki'}
-					class:text-gray-600={selectedFamily !== 'helsinki'}
-					class:dark:text-gray-400={selectedFamily !== 'helsinki'}
-					class:border-gray-200={selectedFamily !== 'helsinki'}
-					class:dark:border-gray-700={selectedFamily !== 'helsinki'}
-					on:click={() => { selectedFamily = 'helsinki'; handleFamilyChange(); }}
+					class:bg-blue-600={selectedEngine === 'helsinki'}
+					class:text-white={selectedEngine === 'helsinki'}
+					class:border-transparent={selectedEngine === 'helsinki'}
+					class:bg-white={selectedEngine !== 'helsinki'}
+					class:dark:bg-gray-800={selectedEngine !== 'helsinki'}
+					class:text-gray-600={selectedEngine !== 'helsinki'}
+					class:dark:text-gray-400={selectedEngine !== 'helsinki'}
+					class:border-gray-200={selectedEngine !== 'helsinki'}
+					class:dark:border-gray-700={selectedEngine !== 'helsinki'}
+					on:click={() => { selectedEngine = 'helsinki'; handleEngineChange(); }}
 				>
 					Helsinki-NLP
 				</button>
 				<button 
 					class="px-3 py-1 text-xs rounded-full border transition-all"
-					class:bg-blue-600={selectedFamily === 'nllb'}
-					class:text-white={selectedFamily === 'nllb'}
-					class:border-transparent={selectedFamily === 'nllb'}
-					class:bg-white={selectedFamily !== 'nllb'}
-					class:dark:bg-gray-800={selectedFamily !== 'nllb'}
-					class:text-gray-600={selectedFamily !== 'nllb'}
-					class:dark:text-gray-400={selectedFamily !== 'nllb'}
-					class:border-gray-200={selectedFamily !== 'nllb'}
-					class:dark:border-gray-700={selectedFamily !== 'nllb'}
-					on:click={() => { selectedFamily = 'nllb'; handleFamilyChange(); }}
+					class:bg-blue-600={selectedEngine === 'nllb'}
+					class:text-white={selectedEngine === 'nllb'}
+					class:border-transparent={selectedEngine === 'nllb'}
+					class:bg-white={selectedEngine !== 'nllb'}
+					class:dark:bg-gray-800={selectedEngine !== 'nllb'}
+					class:text-gray-600={selectedEngine !== 'nllb'}
+					class:dark:text-gray-400={selectedEngine !== 'nllb'}
+					class:border-gray-200={selectedEngine !== 'nllb'}
+					class:dark:border-gray-700={selectedEngine !== 'nllb'}
+					on:click={() => { selectedEngine = 'nllb'; handleEngineChange(); }}
 				>
 					NLLB (Meta)
 				</button>
 			</div>
 		</div>
 		
-		{#if selectedFamily === 'helsinki'}
+		{#if selectedEngine === 'helsinki'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed mb-2">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common language pairs.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
@@ -541,7 +541,7 @@
 								bind:value={searchQuery}
 								class="input w-full"
 								style="padding-left: 2.25rem;"
-								placeholder={selectedFamily === 'helsinki' ? "Search languages (e.g. 'French', 'en-ja')..." : "Search NLLB models..."}
+								placeholder={selectedEngine === 'helsinki' ? "Search languages (e.g. 'French', 'en-ja')..." : "Search NLLB models..."}
 								autocomplete="off"
 								autocorrect="off"
 								autocapitalize="off"
@@ -679,7 +679,7 @@
 							autocomplete="off"
 							autocorrect="off"
 							class="input w-full"
-							placeholder={selectedFamily === 'helsinki' ? "e.g. Helsinki-NLP/opus-mt-en-jap" : "e.g. facebook/nllb-200-distilled-600M"}
+							placeholder={selectedEngine === 'helsinki' ? "e.g. Helsinki-NLP/opus-mt-en-jap" : "e.g. facebook/nllb-200-distilled-600M"}
 						/>
 					</div>
 					<button on:click={() => handleDownload(null)} class="btn-blue-small mb-0.5">
