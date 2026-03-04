@@ -10,6 +10,8 @@
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
+	import { open as openExternal } from '@tauri-apps/plugin-shell';
+	import { open as openExternal } from '@tauri-apps/plugin-shell';
 
 	// Props
 	export let fileName = '';
@@ -363,7 +365,25 @@
 							</div>
 						{:else}
 							<div class="space-y-1">
-								<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+								<div class="flex items-center justify-between">
+									<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+									{#if modalSelectedModel}
+										{@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+										{#if selectedModelObj?.info_url}
+											<button 
+												class="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 focus:outline-none p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-1"
+												title="View on Hugging Face"
+												on:click|stopPropagation={() => openExternal(selectedModelObj.info_url)}
+											>
+												<span class="text-[10px]">Hugging Face</span>
+												<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
+													<path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
+													<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
+												</svg>
+											</button>
+										{/if}
+									{/if}
+								</div>
 								<Dropdown
 									containerClasses="w-full"
 									options={downloadedModelsList.map((m) => ({ value: m.name, label: `${m.name} (${m.family || 'whisper.cpp'})` }))}
@@ -371,6 +391,14 @@
 									placeholder="Select a Model"
 									disabled={downloadedModelsList.length === 0}
 								/>
+                                {#if modalSelectedModel}
+                                    {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+                                    {#if selectedModelObj?.description}
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 italic">
+                                            {selectedModelObj.description}
+                                        </p>
+                                    {/if}
+                                {/if}
 							</div>
 
 							<div class="space-y-1">

@@ -1,10 +1,10 @@
-<!-- src/lib/components/shared/TranscriptionConfiguration.svelte -->
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import { invoke } from "@tauri-apps/api/core";
 	import { ask } from "@tauri-apps/plugin-dialog";
 	import { listen } from '@tauri-apps/api/event';
+	import { open as openExternal } from '@tauri-apps/plugin-shell';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 	import {
 		availableWhisperCppModels,
@@ -500,6 +500,18 @@
 						<div class="flex flex-col min-w-0 pr-4">
 							<div class="flex items-center space-x-2">
 								<span class="font-semibold text-gray-800 dark:text-gray-200 truncate">{model.name}</span>
+								{#if model.info_url}
+									<button 
+										class="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 focus:outline-none p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+										title="View on Hugging Face"
+										on:click|stopPropagation={() => openExternal(model.info_url)}
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
+											<path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
+											<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
+										</svg>
+									</button>
+								{/if}
 								{#if status === 'complete'}
 									<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Installed</span>
 								{/if}
@@ -521,6 +533,11 @@
 									</span>
 								{/if}
 							</div>
+                            {#if model.description}
+                                <div class="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic line-clamp-1">
+                                    {model.description}
+                                </div>
+                            {/if}
 						</div>
 
 						<div class="flex-shrink-0 flex items-center space-x-2 pt-1">
