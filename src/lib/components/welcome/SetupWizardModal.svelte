@@ -696,7 +696,7 @@
                                     {#if diarizationLogs.length > 0}
                                         <div class="bg-gray-900 rounded-lg p-4 font-mono text-[10px] text-gray-300 h-40 overflow-y-auto scrollbar-hide border border-gray-800">
                                             {#each diarizationLogs as log}<div class="mb-1 opacity-80"><span class="text-blue-500 mr-2">›</span>{log.message}</div>{/each}
-                                            {#if isDownloadingDiarization}<div class="animate-pulse text-blue-400">_</div>{/if}
+                                            {#if isDownloadingDiarization}<div class="flex items-center text-blue-400 mt-1"><Loader2 class="w-3 h-3 animate-spin mr-2" /><span>Processing...</span></div>{/if}
                                         </div>
                                     {/if}
                                 </div>

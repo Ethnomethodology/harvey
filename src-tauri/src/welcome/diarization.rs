@@ -107,7 +107,7 @@ pub async fn download_diarization_model<R: Runtime>(
 
     let (mut rx, _child) = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
         .args(&[script_path.to_string_lossy().to_string(), token.clone()])
-        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "0")
         .spawn()
         .map_err(|e| e.to_string())?;
 
