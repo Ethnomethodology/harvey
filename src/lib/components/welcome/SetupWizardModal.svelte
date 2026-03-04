@@ -1116,7 +1116,7 @@
                 {:else if currentStep === 7}
                     <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
                 {:else}
-                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">Launch Setup Wizard</button>
+                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">Get Started</button>
                 {/if}
             </div>
         </div>

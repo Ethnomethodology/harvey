@@ -214,21 +214,30 @@
               Your installation is almost complete! Some required libraries or AI models are missing. Please complete the setup to enable full transcription and translation features.
             </p>
             <div class="mt-4 flex items-center space-x-4">
-              <button
-                on:click={() => showWizardModal = true}
-                class="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-bold shadow-md shadow-yellow-600/20 transition-all flex items-center space-x-2"
-              >
-                <span>Launch Setup Wizard</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </button>
-              <button
-                on:click={() => switchTab('configure')}
-                class="text-xs font-bold text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-200 underline decoration-2 underline-offset-4 transition-colors"
-              >
-                Manual Configuration
-              </button>
+              {#if hasCriticalConfigIssues}
+                <button
+                  on:click={() => showWizardModal = true}
+                  class="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-bold shadow-md shadow-yellow-600/20 transition-all flex items-center space-x-2"
+                >
+                  <span>Launch Setup Wizard</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+                <button
+                  on:click={() => switchTab('configure')}
+                  class="text-xs font-bold text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-200 underline decoration-2 underline-offset-4 transition-colors"
+                >
+                  Manually Configure
+                </button>
+              {:else}
+                <button
+                  on:click={() => switchTab('configure')}
+                  class="text-sm font-bold text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-200 underline decoration-2 underline-offset-4 transition-colors"
+                >
+                  Switch to Configure tab
+                </button>
+              {/if}
             </div>
           </div>
         </div>
