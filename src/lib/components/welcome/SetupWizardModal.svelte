@@ -278,7 +278,9 @@
         
         if (needsConfirm) {
             const confirmed = await ask(
-                'Are you sure you want to exit the Setup Wizard? You can always complete the environment setup and download models manually from the "Configure" tab later.',
+                'Are you sure you want to exit the Setup Wizard?\n\n' +
+                'You can always install libraries and download models ' +
+                'manually from the "Configure" tab later.',
                 { title: 'Exit Setup?', kind: 'warning', okLabel: 'Exit', cancelLabel: 'Stay' }
             );
             if (!confirmed) return;
