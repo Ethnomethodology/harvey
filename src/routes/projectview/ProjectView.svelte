@@ -46,7 +46,7 @@
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
-    import { configStatus } from '$lib/stores/configStatusStore.js';
+    import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
