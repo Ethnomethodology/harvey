@@ -69,7 +69,7 @@
 
     // Step 3 & 4: Model Selections
     let selectedWhisperCppModels = $state(['ggml-base']); 
-    let selectedFasterWhisperModels = $state([]);
+    let selectedFasterWhisperModels = $state(['Systran/faster-whisper-base']);
     
     // Step 5 & 6: Translation Model Selections
     let helsinkiModels = $state([]);
@@ -103,7 +103,7 @@
         installProgress = { phase: 'idle', current: 0, total: 0, currentItem: '' };
         downloadProgressData = {};
         selectedWhisperCppModels = ['ggml-base'];
-        selectedFasterWhisperModels = [];
+        selectedFasterWhisperModels = ['Systran/faster-whisper-base'];
         helsinkiModels = [];
         nllbModels = [];
         helsinkiSearchQuery = '';
@@ -743,7 +743,7 @@
                                             <ExternalLink class="w-3.5 h-3.5" />
                                         </button>
                                     </div>
-                                    <p class="text-xs text-gray-600">Universal model supporting 200+ languages.</p>
+                                    <p class="text-xs text-gray-600">Heavy model supporting 200+ languages.</p>
                                 </div>
                             </div>
                         </div>
@@ -808,7 +808,7 @@
             {:else if currentStep === 3}
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Whisper.cpp Models</h3>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from HuggingFace.</p>
                     <div class="grid grid-cols-1 gap-2">
                         {#each availableWhisperCppModels as model}
                             <div class="flex items-center p-3 rounded-lg border transition-all {selectedWhisperCppModels.includes(model.name) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
@@ -823,6 +823,9 @@
                                         <div class="flex items-center space-x-2">
                                             <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name}</span>
                                             <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
+                                            {#if model.name === 'ggml-base'}
+                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Recommended</span>
+                                            {/if}
                                         </div>
                                         <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
                                     </div>
@@ -843,7 +846,7 @@
             {:else if currentStep === 4}
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Faster-Whisper Models</h3>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from the transcription marketplace.</p>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Select models to download from HuggingFace.</p>
                     <div class="grid grid-cols-1 gap-2 overflow-y-auto max-h-[400px]">
                         {#each availableFasterWhisperModels as model}
                             <div class="flex items-center p-3 rounded-lg border transition-all {selectedFasterWhisperModels.includes(model.name) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-800'}">
@@ -858,6 +861,9 @@
                                         <div class="flex items-center space-x-2">
                                             <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name.split('/').pop()}</span>
                                             <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
+                                            {#if model.name === 'Systran/faster-whisper-base'}
+                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Recommended</span>
+                                            {/if}
                                         </div>
                                         <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
                                     </div>
@@ -924,7 +930,7 @@
             {:else if currentStep === 6}
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">NLLB Models</h3>
-                    <p class="text-[11px] text-gray-500 mb-4 italic">Universal model supporting 200+ languages. Great for rare languages, but larger file size.</p>
+                    <p class="text-[11px] text-gray-500 mb-4 italic">One model supporting 200+ languages. Great for rare languages, but larger file size.</p>
                     <div class="relative mb-4">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input 

@@ -553,7 +553,7 @@
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
-				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Larger file size, slower on lower-end CPUs. Best with GPU.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Very heavy resource usage, large file size, and slower on CPUs. Best with GPU.</p>
                 {#if !ct2Installed && translationModelCount > 0}
                     <div class="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
                         <div class="flex items-center">
