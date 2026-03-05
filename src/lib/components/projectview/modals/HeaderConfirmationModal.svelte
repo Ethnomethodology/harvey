@@ -22,7 +22,7 @@
 	};
 
 	const DATETIME_FORMATS = {
-		'Date': ['None', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'MMMM DD, YYYY'],
+		'Date': ['None', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'MMMM DD, YYYY', 'YYYY', 'MMMM', 'MMMM YYYY'],
 		'Date & Time': ['None', 'YYYY-MM-DD HH:mm', 'DD/MM/YYYY HH:mm', 'MM/DD/YYYY hh:mm A'],
 		'Time': ['None', 'HH:mm', 'HH:mm:ss', 'hh:mm A']
 	};
@@ -213,12 +213,9 @@
                                                 <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600" />
                                             </div>
 										{:else if field.type === 'DateTime'}
-											<div class="flex flex-col space-y-1">
-												<span class="text-[10px] text-gray-500 uppercase font-bold">Format</span>
-												<select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600">
-													{#each DATETIME_FORMATS[field.subType] as fmt}<option value={fmt}>{fmt}</option>{/each}
-												</select>
-											</div>
+											<select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600">
+												{#each DATETIME_FORMATS[field.subType] as fmt}<option value={fmt}>{fmt}</option>{/each}
+											</select>
                                         {/if}
 									</td>
                                     <td class="px-3 py-2">

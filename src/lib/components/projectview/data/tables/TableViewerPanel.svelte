@@ -560,6 +560,18 @@
                     } else if (schema.format === 'MM/DD/YYYY') {
                         isValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
                         errorMsg = "Invalid format (MM/DD/YYYY)";
+                    } else if (schema.format === 'YYYY') {
+                        isValid = /^\d{4}$/.test(value);
+                        errorMsg = "Invalid format (YYYY)";
+                    } else if (schema.format === 'MMMM') {
+                        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+                        isValid = months.includes(value.toLowerCase());
+                        errorMsg = "Invalid format (Full Month Name)";
+                    } else if (schema.format === 'MMMM YYYY') {
+                        const parts = value.split(' ');
+                        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+                        isValid = parts.length === 2 && months.includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        errorMsg = "Invalid format (Month YYYY)";
                     } else {
                         isValid = !isNaN(Date.parse(value));
                         errorMsg = "Invalid date format";
