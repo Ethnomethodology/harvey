@@ -34,6 +34,7 @@
     let isLiveTranscriptionActive = false;
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
+    let isAddingTimestamps = false;
     let showTranslateDocumentModal = false;
     let showDocumentExportModal = false;
     let showTableExportModal = false;
@@ -482,7 +483,7 @@
             // Removed activeMediaNoteEditorRef from live transcription updates
 
             if (editorRef?.ref?.updateLiveTranscriptionText) {
-                editorRef.ref.updateLiveTranscriptionText(text, is_final, start_time, end_time);
+                editorRef.ref.updateLiveTranscriptionText(text, is_final, start_time, end_time, isAddingTimestamps);
             }
         });
     });
@@ -512,7 +513,7 @@
     }
 
     async function handleLiveTranscribe(event) {
-        const { model, language, saveAudio, family } = event.detail;
+        const { model, language, saveAudio, family, addTimestamps } = event.detail;
         try {
             const projectState = get(project);
             const activePath = projectState.selectedDocumentPath || projectState.selectedMediaNotePath;
@@ -526,6 +527,7 @@
             }
 
             liveTranscriptionError = null;
+            isAddingTimestamps = addTimestamps;
             const started = await invoke('start_live_transcription', {
                 modelName: model,
                 language: language,

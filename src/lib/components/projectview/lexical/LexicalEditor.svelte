@@ -953,7 +953,7 @@
     };
   });
 
-    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps = false) {
     if (!editor || !isReady || !editable) return;
 
     editor.update(() => {
@@ -972,8 +972,12 @@
         if (isFinal) {
             // On final result, clear the live paragraph and append the final text.
             livePara.clear();
-            const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
-            livePara.append(_createTextNode(timestamp + ' ' + text + ' '));
+            let finalText = text;
+            if (addTimestamps) {
+                const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
+                finalText = timestamp + ' ' + text;
+            }
+            livePara.append(_createTextNode(finalText + ' '));
             // Then, remove the style so it becomes a normal paragraph.
             livePara.setStyle('');
             // And create a new, empty live paragraph for the next utterance.

@@ -626,6 +626,11 @@
              }
         }
     }
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps = false) {
+        if (editorRef) {
+            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps);
+        }
+    }
     export function getItemPath() {
         return itemPath;
     }
