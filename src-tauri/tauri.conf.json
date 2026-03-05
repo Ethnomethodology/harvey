@@ -45,8 +45,6 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "sidecars/whisper-cli",
-      "sidecars/whisper-stream",
       "binaries/micromamba"
     ],
     "licenseFile": "../LICENSE.md",
@@ -54,7 +52,6 @@
     "resources": [
       "third_party_licenses",
       "scripts/*",
-      "sidecars",
       "binaries",
       "python"
     ]
