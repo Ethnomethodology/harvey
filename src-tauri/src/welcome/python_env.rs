@@ -511,16 +511,7 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
 
     let conda_args = vec!["install", "-p", env_path.to_str().unwrap(), "whisper.cpp", "-c", "conda-forge", "-y"];
 
-    let emit_log = |msg: String| {
-        let payload = if let Some(m_name) = model_name {
-            serde_json::json!({ "model_name": m_name, "log_line": msg })
-        } else {
-            serde_json::json!({ "log_line": msg })
-        };
-        let _ = emitter.emit(log_event_name, payload);
-    };
-
-    emit_log("Installing whisper.cpp via micromamba...".to_string());
+    emit_log(&emitter, log_event_name, "Installing whisper.cpp via micromamba...".to_string(), model_name);
     log::info!("Executing: micromamba {}", conda_args.join(" "));
 
     let mut conda_command = shell.sidecar("micromamba")?;
@@ -537,14 +528,16 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let mut success = false;
     while let Some(event) = rx.recv().await {
         match event {
-            CommandEvent::Stdout(line) => emit_log(String::from_utf8_lossy(&line).to_string()),
-            CommandEvent::Stderr(line) => emit_log(String::from_utf8_lossy(&line).to_string()),
+            CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+                emit_log(&emitter, log_event_name, String::from_utf8_lossy(&line).to_string(), model_name);
+            }
             CommandEvent::Terminated(payload) => {
                 if payload.code == Some(0) {
                     success = true;
                 } else {
-                    emit_log(format!("whisper.cpp install failed with code: {:?}", payload.code));
+                    emit_log(&emitter, log_event_name, format!("whisper.cpp install failed with code: {:?}", payload.code), model_name);
                 }
+                break;
             }
             _ => {}
         }
@@ -561,11 +554,11 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let binary_path = env_path.join("bin").join("whisper-cli");
 
     if !binary_path.exists() {
-        emit_log(format!("Installation reported success, but binary not found at {:?}", binary_path));
+        emit_log(&emitter, log_event_name, format!("Installation reported success, but binary not found at {:?}", binary_path), model_name);
         return Err(CommandError::from("whisper-cli binary not found after installation."));
     }
 
-    emit_log("whisper.cpp installed successfully.".to_string());
+    emit_log(&emitter, log_event_name, "whisper.cpp installed successfully.".to_string(), model_name);
     Ok(())
 }
 
