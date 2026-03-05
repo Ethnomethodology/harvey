@@ -20,6 +20,7 @@
     import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
+    import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -34,8 +35,60 @@
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
+    function getSubtypeIconHtml(colSchema) {
+        const type = colSchema.type;
+        const subType = colSchema.subType;
+        
+        let iconPath = '';
+        
+        if (subType === 'Checkbox') {
+            iconPath = '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'; // check-square
+        } else if (subType === 'Selectbox') {
+            iconPath = '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>'; // list
+        } else if (subType === 'Tags') {
+            iconPath = '<path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19"/><path d="M9.586 5.586A2 2 0 0 0 8.172 5H3a2 2 0 0 0-2 2v5.172a2 2 0 0 0 .586 1.414L8.293 20a2 2 0 0 0 2.828 0l5.586-5.586a2 2 0 0 0 0-2.828L9.586 5.586z"/><circle cx="4.5" cy="8.5" r=".5" fill="currentColor"/>'; // tags
+        } else if (subType === 'Project Link') {
+            iconPath = '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'; // link
+        } else if (type === 'Numeric') {
+            if (subType === 'Currency') {
+                iconPath = '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'; // dollar-sign
+            } else if (subType === 'Percent') {
+                iconPath = '<line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'; // percent
+            } else {
+                iconPath = '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>'; // hash
+            }
+        } else if (type === 'DateTime') {
+            if (subType === 'Date') {
+                iconPath = '<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>'; // calendar
+            } else if (subType === 'Time') {
+                iconPath = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'; // clock
+            } else {
+                iconPath = '<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14h6"/><path d="M15 11v6"/>'; // calendar-clock (simplified)
+            }
+        } else if (type === 'Contact') {
+            if (subType === 'Email') {
+                iconPath = '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'; // mail
+            } else if (subType === 'Phone') {
+                iconPath = '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.74 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'; // phone
+            }
+        } else {
+            iconPath = '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/>'; // type
+        }
+
+        return `<span class="inline-flex items-center mr-1.5 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide">
+                ${iconPath}
+            </svg>
+        </span>`;
+    }
+
     let tableReady = false;
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
+
+    let showEditEntryModal = false;
+    let editingEntryData = null;
+    let editingEntryIndex = -1;
+    let tableColumnsForModal = [];
     
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
@@ -343,6 +396,27 @@
         }
     }
 
+    function openEditEntryModal(row) {
+        editingEntryData = { ...row.getData() };
+        editingEntryIndex = row.getData().harvey_internal_id;
+        tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== 'harvey_internal_id');
+        showEditEntryModal = true;
+    }
+
+    async function handleSaveEntry(event) {
+        const { rowData, rowIndex } = event.detail;
+        if (tabulatorInstance) {
+            const row = tabulatorInstance.getRow(rowIndex);
+            if (row) {
+                await row.update(rowData);
+                debouncedSave();
+            }
+        }
+        showEditEntryModal = false;
+        editingEntryData = null;
+        editingEntryIndex = -1;
+    }
+
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
         const columns = tabulatorInstance.getColumns(); // This gets fields in their current display order
@@ -615,8 +689,9 @@
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         let dataColumnDefs = headers.map(header => {
             const colSchema = schema[header] || {};
+            const iconHtml = getSubtypeIconHtml(colSchema);
             const colDef = {
-                title: header,
+                title: `<div class="flex items-center">${iconHtml}<span>${header}</span></div>`,
                 field: header,
                 headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
                 headerFilterPlaceholder: "Filter...",
@@ -886,6 +961,8 @@
                     }));
 
                     const menu = [
+                        { label: "Edit Entry", action: (e, row) => openEditEntryModal(row) },
+                        { separator: true },
                         { label: "Cut Entry", action: (e, row) => cutRow(row) },
                         { label: "Copy Entry", action: (e, row) => copyRow(row) },
                     ];
@@ -920,9 +997,26 @@
                     frozen: true,
                     headerSort:false,
                     hozAlign:"center",
-                    formatter: "rownum",
+                    formatter: function(cell) {
+                        const rowNum = cell.getRow().getPosition(true);
+                        return `<div class="row-number-container group relative flex items-center justify-center h-full w-full">
+                            <span class="row-number-text group-hover:hidden">${rowNum}</span>
+                            <button class="edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors" title="Edit Entry">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                                </svg>
+                            </button>
+                        </div>`;
+                    },
+                    cellClick: (e, cell) => {
+                        if (e.target.closest('.edit-icon-placeholder')) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openEditEntryModal(cell.getRow());
+                        }
+                    },
                     width: 50,
-                    cssClass:"range-header-col"
+                    cssClass:"range-header-col tabulator-row-number-column"
                 },
                 clipboard: true,
                 clipboardCopyStyled:false,
@@ -1174,6 +1268,17 @@
 </div>
 {/if}
 
+{#if showEditEntryModal}
+    <EditEntryModal
+        rowData={editingEntryData}
+        rowIndex={editingEntryIndex}
+        columns={tableColumnsForModal}
+        schema={tableSchema}
+        on:save={handleSaveEntry}
+        on:cancel={() => showEditEntryModal = false}
+    />
+{/if}
+
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
      <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
         <div class="flex items-center space-x-2">
@@ -1296,8 +1401,25 @@
          font-weight: bold;
          color: #555;
          border-right: 1px solid #ddd;
-         padding-right: 5px; /* Adjust padding */
+         padding: 0 !important;
          text-align: center; /* Center the number */
+     }
+     :global(.row-number-container:hover .row-number-text) {
+         display: none;
+     }
+     :global(.row-number-container:hover .edit-icon-placeholder) {
+         display: flex !important;
+     }
+     :global(.tabulator-row:hover .tabulator-row-number-column) {
+         background-color: #e5e7eb !important;
+     }
+     :global(html.dark .tabulator-row-number-column) {
+         background-color: #1f2937;
+         color: #9ca3af;
+         border-right: 1px solid #374151;
+     }
+     :global(html.dark .tabulator-row:hover .tabulator-row-number-column) {
+         background-color: #374151 !important;
      }
 
     .flex-grow {
