@@ -323,16 +323,9 @@ pub async fn download_faster_whisper_model_command(
     let python_path = python_env::get_python_path()?;
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
 
-    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
-    let token = if token_path.exists() {
-        fs::read_to_string(token_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
@@ -453,16 +446,9 @@ pub async fn download_translation_model_command(
     // 2. Download model weights
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
 
-    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
-    let token = if token_path.exists() {
-        fs::read_to_string(token_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
