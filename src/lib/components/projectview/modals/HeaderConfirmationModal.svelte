@@ -11,7 +11,7 @@
 
 	let step = 1; // 1: Header Confirmation, 2: Schema Definition
 	let hasHeaders = true;
-	let fields = []; // { name, type, subType, options, required, min, max, description }
+	let fields = []; // { name, type, subType, options, required, min, max, description, format }
 
 	const FIELD_TYPES = {
 		'Text': ['Small Text', 'Long Text'],
@@ -19,6 +19,12 @@
 		'DateTime': ['Date', 'Date & Time', 'Time'],
 		'Contact': ['Email', 'Phone', 'Hyperlink'],
 		'Misc': ['Selectbox', 'Checkbox', 'Tags', 'Project Link']
+	};
+
+	const DATETIME_FORMATS = {
+		'Date': ['None', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'MMMM DD, YYYY'],
+		'Date & Time': ['None', 'YYYY-MM-DD HH:mm', 'DD/MM/YYYY HH:mm', 'MM/DD/YYYY hh:mm A'],
+		'Time': ['None', 'HH:mm', 'HH:mm:ss', 'hh:mm A']
 	};
 
 	$: if (showModal && previewData && previewData.fields && fields.length === 0) {
@@ -30,7 +36,8 @@
             required: false,
             min: '',
             max: '',
-            description: ''
+            description: '',
+			format: 'None'
 		}));
 	}
 
@@ -45,10 +52,15 @@
 	function handleTypeChange(index) {
 		const type = fields[index].type;
 		fields[index].subType = FIELD_TYPES[type][0];
+		fields[index].format = 'None';
         if (type !== 'Numeric') {
             fields[index].min = '';
             fields[index].max = '';
         }
+	}
+
+	function handleSubTypeChange(index) {
+		fields[index].format = 'None';
 	}
 
 	function goToStep2() {
@@ -71,7 +83,8 @@
                 required: f.required,
                 min: f.min !== '' ? parseFloat(f.min) : null,
                 max: f.max !== '' ? parseFloat(f.max) : null,
-                description: f.description.trim()
+                description: f.description.trim(),
+				format: f.format !== 'None' ? f.format : null
 			};
 		});
 
@@ -184,7 +197,7 @@
 										</select>
 									</td>
 									<td class="px-3 py-2">
-										<select bind:value={field.subType} class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
+										<select bind:value={field.subType} on:change={() => handleSubTypeChange(i)} class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
 											{#each FIELD_TYPES[field.type] as sub}<option value={sub}>{sub}</option>{/each}
 										</select>
 									</td>
@@ -199,6 +212,13 @@
                                                 <input type="number" bind:value={field.min} placeholder="Min" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600" />
                                                 <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600" />
                                             </div>
+										{:else if field.type === 'DateTime'}
+											<div class="flex flex-col space-y-1">
+												<span class="text-[10px] text-gray-500 uppercase font-bold">Format</span>
+												<select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600">
+													{#each DATETIME_FORMATS[field.subType] as fmt}<option value={fmt}>{fmt}</option>{/each}
+												</select>
+											</div>
                                         {/if}
 									</td>
                                     <td class="px-3 py-2">

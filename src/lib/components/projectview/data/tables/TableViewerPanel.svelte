@@ -537,11 +537,37 @@
                 if (!isValid) errorMsg = "Invalid phone format";
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    isValid = /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
-                    if (!isValid) errorMsg = "Invalid time format (HH:MM)";
+                    if (schema.format === 'HH:mm') {
+                        isValid = /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+                        errorMsg = "Invalid format (HH:mm)";
+                    } else if (schema.format === 'HH:mm:ss') {
+                        isValid = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
+                        errorMsg = "Invalid format (HH:mm:ss)";
+                    } else if (schema.format === 'hh:mm A') {
+                        isValid = /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
+                        errorMsg = "Invalid format (hh:mm AM/PM)";
+                    } else {
+                        isValid = /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
+                        errorMsg = "Invalid time format";
+                    }
+                } else if (subType === 'Date') {
+                    if (schema.format === 'YYYY-MM-DD') {
+                        isValid = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value);
+                        errorMsg = "Invalid format (YYYY-MM-DD)";
+                    } else if (schema.format === 'DD/MM/YYYY') {
+                        isValid = /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
+                        errorMsg = "Invalid format (DD/MM/YYYY)";
+                    } else if (schema.format === 'MM/DD/YYYY') {
+                        isValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
+                        errorMsg = "Invalid format (MM/DD/YYYY)";
+                    } else {
+                        isValid = !isNaN(Date.parse(value));
+                        errorMsg = "Invalid date format";
+                    }
                 } else {
+                    // Date & Time
                     isValid = !isNaN(Date.parse(value));
-                    if (!isValid) errorMsg = "Invalid date format";
+                    errorMsg = "Invalid date & time format";
                 }
             }
         }
@@ -620,7 +646,12 @@
                     };
                 }
             } else if (colSchema.type === 'DateTime') {
-                colDef.editor = colSchema.subType === 'Time' ? "time" : "date";
+                if (colSchema.format) {
+                    colDef.editor = "textarea";
+                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                } else {
+                    colDef.editor = colSchema.subType === 'Time' ? "time" : "date";
+                }
             } else {
                 colDef.editor = "textarea";
                 colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
