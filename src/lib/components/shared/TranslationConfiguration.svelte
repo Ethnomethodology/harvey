@@ -254,7 +254,13 @@
 			});
 			unlistenLog = await listen('translation-download-log', (event) => {
 				const { model_name, log_line } = event.payload;
-				if (downloadStatus[model_name] === 'downloading' || isInstallingDependencies) {
+                
+                // Detect installation activity to update spinner text
+                if (log_line.includes("CTranslate2") || log_line.includes("micromamba") || log_line.includes("Optimizing")) {
+                    isInstallingDependencies = true;
+                }
+
+				if (downloadStatus[model_name] === 'downloading' || isInstallingDependencies || model_name === "System") {
 					modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
 				}
 			});
@@ -276,6 +282,8 @@
 					setTranslationModelsDownloaded(downloadedModels.length > 0);
 				} catch (e) { console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e); }
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${downloadedModelName}.` }];
+                isDownloading = false;
+                isInstallingDependencies = false;
 				if (modelName.trim() === downloadedModelName) {
 					modelName = '';
 				}
@@ -316,7 +324,7 @@
 	});
 
 	async function handleDownload(targetModelId) {
-		if (isBusy) return;
+		if (isBusy || isDownloading || isInstallingDependencies) return;
 		if (!downloadLocation || downloadLocation.trim() === '') {
 			notificationStore.add('Please set a valid model download location first.', 'error');
 			return;

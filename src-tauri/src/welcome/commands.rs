@@ -508,18 +508,35 @@ pub async fn download_translation_model_command(
         args.push(&quant_str);
     }
 
-    let output = app.shell()
+    let (mut rx_opt, _child_opt) = app.shell()
         .command(python_path.to_str().unwrap())
         .args(&args)
-        .output()
-        .await?;
+        .spawn()
+        .map_err(|e| format!("Failed to spawn optimization script: {}", e))?;
 
-    if output.status.success() {
-        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log::error!("Optimization failed: {}", stderr);
-        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
+    while let Some(event) = rx_opt.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::info!("[Optimization] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::error!("[Optimization Error] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization Error: {}", &line_str) })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
+                } else {
+                    log::error!("Optimization failed with code: {:?}", payload.code);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed with code: {:?}", payload.code) })).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
     }
 
     window.emit("translation-download-complete", &model_name).unwrap();

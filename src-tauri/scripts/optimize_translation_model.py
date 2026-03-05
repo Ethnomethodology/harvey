@@ -20,6 +20,7 @@ def optimize_model(model_path, output_path, quantization=None):
         # Detect family
         is_nllb = "nllb" in model_path.lower()
         
+        print("Loading source model into converter (this may take a moment)...", flush=True)
         converter = ctranslate2.converters.TransformersConverter(model_path)
         
         # Determine quantization: 
@@ -32,6 +33,7 @@ def optimize_model(model_path, output_path, quantization=None):
             quant = "int8"
             print(f"Using default quantization for {'NLLB' if is_nllb else 'Helsinki'}: {quant}", flush=True)
         
+        print(f"Starting conversion to CTranslate2 format with {quant} quantization...", flush=True)
         converter.convert(
             output_path,
             quantization=quant,
