@@ -14,7 +14,8 @@
         saveTableStyles,
         loadTableStyles,
         saveTableHighlights,
-        loadTableHighlights
+        loadTableHighlights,
+        loadTableSchema
     } from '$lib/services/projectService.js';
     import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
@@ -26,6 +27,7 @@
     let tableContainer;
     let tabulatorInstance = null;
     let tableData = [];
+    let tableSchema = {};
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
@@ -55,7 +57,7 @@
         
         tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
         
-        // Trigger a reformat of rows to apply new styles
+        // Trigger a reformat of entries to apply new styles
         if (tabulatorInstance && tableReady) {
             tabulatorInstance.getRows().forEach(row => row.reformat());
         }
@@ -94,9 +96,9 @@
                         setTimeout(() => {
                             el.style.outline = 'none';
                         }, 2000);
-                    }).catch(err => console.error(`[TableViewerPanel] Scroll failed for row ${rowIndex}:`, err));
+                    }).catch(err => console.error(`[TableViewerPanel] Scroll failed for entry ${rowIndex}:`, err));
                 } else {
-                    console.warn(`[TableViewerPanel] Row ${rowIndex} not found for highlight ${id}`);
+                    console.warn(`[TableViewerPanel] Entry ${rowIndex} not found for highlight ${id}`);
                 }
             }, 100);
         }
@@ -114,7 +116,7 @@
         await Promise.all(
             columns.map(async (column) => {
                 const definition = column.getDefinition();
-                if (definition.field) { // Ensure it's a data column
+                if (definition.field) { // Ensure it's a data field
                     if (!areFiltersVisible) {
                         // Clear the filter value before hiding
                         tabulatorInstance.setHeaderFilterValue(definition.field, "");
@@ -131,7 +133,7 @@
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
 
-        // Redraw rows to recalculate height after resize
+        // Redraw entries to recalculate height after resize
         tabulatorInstance.redraw(true);
 
         const baseDirForSave = get(project)?.baseDirectory;
@@ -160,7 +162,7 @@
 
         const columns = tabulatorInstance.getColumns();
         const orderedHeaders = columns
-            .filter(column => column.getField()) // Ensure we only get data columns
+            .filter(column => column.getField()) // Ensure we only get data fields
             .map(column => column.getDefinition().title);
 
         await saveTableData(tablePath, dataToSave, orderedHeaders);
@@ -179,7 +181,7 @@
         return newName;
     }
 
-    // Column Actions
+    // Field Actions
     async function copyColumn(column) {
         const field = column.getField();
         const values = tabulatorInstance.getRows().map(row => row.getData()[field]);
@@ -202,7 +204,7 @@
             await column.delete();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
-            console.error(`Error deleting column "${columnName}":`, err);
+            console.error(`Error deleting field "${columnName}":`, err);
             // If the backend fails, we should probably reload to be safe
             await initializeTable(tablePath, null, true);
         }
@@ -210,28 +212,28 @@
 
     function getColumnContextMenu(column) {
         const menu = [
-            { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
+            { label: "Edit Field Label", action: (e, column) => openHeaderEditor(column) },
             { separator: true },
             { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
             { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
             { separator: true },
-            { label: "Cut Column", action: (e, column) => cutColumn(column) },
-            { label: "Copy Column", action: (e, column) => copyColumn(column) },
+            { label: "Cut Field", action: (e, column) => cutColumn(column) },
+            { label: "Copy Field", action: (e, column) => copyColumn(column) },
         ];
         if (tableClipboard && tableClipboard.type === 'column') {
-            menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
-            menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
+            menu.push({ label: "Paste Field Before", action: (e, column) => pasteColumn(column, 'before') });
+            menu.push({ label: "Paste Field After", action: (e, column) => pasteColumn(column, 'after') });
         }
         menu.push({ separator: true });
-        menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
-        menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
+        menu.push({ label: "Insert Field Before", action: (e, column) => insertColumn(column, 'before') });
+        menu.push({ label: "Insert Field After", action: (e, column) => insertColumn(column, 'after') });
         menu.push({ separator: true });
-        menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
+        menu.push({ label: "Delete Field", action: (e, column) => deleteColumn(column) });
         return menu;
     }
 
     async function insertColumn(column, position) {
-        const newFieldName = getUniqueColumnName("NewColumn");
+        const newFieldName = getUniqueColumnName("NewField");
         const newColumnDef = {
             title: newFieldName,
             field: newFieldName,
@@ -253,13 +255,13 @@
             await saveTableChanges();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
-            console.error(`Error inserting column ${position} ${column.getField()}:`, err);
+            console.error(`Error inserting field ${position} ${column.getField()}:`, err);
         }
     }
 
     async function pasteColumn(column, position) {
         if (!tableClipboard || tableClipboard.type !== 'column') {
-            alert("No column data on clipboard.");
+            alert("No field data on clipboard.");
             return;
         }
         const newFieldName = getUniqueColumnName(tableClipboard.header);
@@ -283,11 +285,11 @@
             await saveTableChanges();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
-            console.error(`Error pasting column ${position} ${column.getField()}:`, err);
+            console.error(`Error pasting field ${position} ${column.getField()}:`, err);
         }
     }
 
-    // Row Actions
+    // Entry Actions
     async function copyRow(row) {
         tableClipboard = { type: 'row', data: row.getData() };
     }
@@ -302,7 +304,7 @@
             await row.delete();
             await saveTableChanges();
         } catch (err) {
-            console.error("Error deleting row:", err);
+            console.error("Error deleting entry:", err);
         }
     }
 
@@ -316,7 +318,7 @@
         try {
             const addedRow = await tabulatorInstance.addRow(newRowData, position === 'before', row);
 
-            // Workaround for suspected backend bug: "dirty" a cell to ensure the new row is saved.
+            // Workaround for suspected backend bug: "dirty" a cell to ensure the new entry is saved.
             const cells = addedRow.getCells();
             if (cells.length > 0) {
                 cells[0].setValue(" ", true); // Set a single space, suppress cellEdited event
@@ -324,26 +326,26 @@
 
             await saveTableChanges();
         } catch (err) {
-            console.error("Error inserting row:", err);
+            console.error("Error inserting entry:", err);
         }
     }
 
     async function pasteRow(row, position) {
         if (!tableClipboard || tableClipboard.type !== 'row') {
-            alert("No row data on clipboard.");
+            alert("No entry data on clipboard.");
             return;
         }
         try {
             await tabulatorInstance.addRow(tableClipboard.data, position === 'before', row);
             await saveTableChanges();
         } catch (err) {
-            console.error("Error pasting row:", err);
+            console.error("Error pasting entry:", err);
         }
     }
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
-        const columns = tabulatorInstance.getColumns(); // This gets columns in their current display order
+        const columns = tabulatorInstance.getColumns(); // This gets fields in their current display order
         const newSnapshotColumns = {};
         columns.forEach((column, index) => {
             const definition = column.getDefinition();
@@ -397,7 +399,7 @@
             
             if (color) {
                 const cellValue = rowData[colField];
-                const text = `Cell [Row ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
+                const text = `Cell [Entry ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
                 
                 currentHighlights.push({
                     id: cellKey,
@@ -423,11 +425,11 @@
             const rowData = row.getData();
             const rowIndex = rowData.harvey_internal_id;
 
-            // Remove existing highlight for this row
+            // Remove existing highlight for this entry
             currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
 
             if (color) {
-                // Construct the text in the correct order, starting with the 1-indexed row number.
+                // Construct the text in the correct order, starting with the 1-indexed entry number.
                 const rowNumber = rowIndex + 1;
                 const textParts = [rowNumber.toString()];
                 orderedColumns.forEach(column => {
@@ -496,57 +498,178 @@
         return editor;
     }
 
-    function generateColumns(data, headers, savedLayoutObj) {
+    // Custom soft validator
+    function softValidator(cell, value, parameters) {
+        const colField = cell.getField();
+        const schema = tableSchema[colField];
+        if (!schema) return true;
+
+        let isValid = true;
+        let errorMsg = "";
+        const type = schema.type;
+        const subType = schema.subType;
+
+        // Check Required
+        if (schema.required && (value === null || value === undefined || value === "")) {
+            isValid = false;
+            errorMsg = "Field is required";
+        } else if (value !== null && value !== undefined && value !== "") {
+            // Type Validations
+            if (type === 'Numeric') {
+                const num = parseFloat(value);
+                if (isNaN(num) || !isFinite(value)) {
+                    isValid = false;
+                    errorMsg = "Invalid number format";
+                } else {
+                    if (schema.min !== null && num < schema.min) {
+                        isValid = false;
+                        errorMsg = `Minimum value is ${schema.min}`;
+                    } else if (schema.max !== null && num > schema.max) {
+                        isValid = false;
+                        errorMsg = `Maximum value is ${schema.max}`;
+                    }
+                }
+            } else if (type === 'Contact' && subType === 'Email') {
+                isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (!isValid) errorMsg = "Invalid email format";
+            } else if (type === 'Contact' && subType === 'Phone') {
+                isValid = /^\+?[\d\s-]{7,20}$/.test(value);
+                if (!isValid) errorMsg = "Invalid phone format";
+            } else if (type === 'DateTime') {
+                if (subType === 'Time') {
+                    isValid = /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
+                    if (!isValid) errorMsg = "Invalid time format (HH:MM)";
+                } else {
+                    isValid = !isNaN(Date.parse(value));
+                    if (!isValid) errorMsg = "Invalid date format";
+                }
+            }
+        }
+
+        const element = cell.getElement();
+        if (!isValid) {
+            element.classList.add('invalid-cell');
+            element.title = errorMsg;
+        } else {
+            element.classList.remove('invalid-cell');
+            element.removeAttribute('title');
+        }
+
+        return true; // Always return true to allow saving (soft validation)
+    }
+
+    function getAllProjectAssets() {
+        const assets = [];
+        function traverse(nodes) {
+            if (!Array.isArray(nodes)) return;
+            nodes.forEach(node => {
+                if (node.path && node.file_type && node.file_type !== 'directory' && node.file_type !== 'directory_media_stem') {
+                    assets.push({ label: node.name, value: node.path });
+                }
+                if (node.children) traverse(node.children);
+            });
+        }
+        traverse(get(project).files);
+        return assets.sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    function generateColumns(data, headers, savedLayoutObj, schema) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         let dataColumnDefs = headers.map(header => {
+            const colSchema = schema[header] || {};
             const colDef = {
                 title: header,
                 field: header,
-                headerFilter: areFiltersVisible ? customHeaderFilterEditor : null, // Use custom editor
-                headerFilterPlaceholder: "Filter...", // Add a placeholder
+                headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+                headerFilterPlaceholder: "Filter...",
                 headerFilterFunc: function(headerValue, rowValue, rowData, filterParams){
-                    // headerValue is the value from the header filter input
-                    // rowValue is the value of the cell in the current row for this column
-                    if (headerValue === null || headerValue === undefined || String(headerValue).trim() === "") {
-                        return true; // Show all rows if filter is empty
-                    }
-                    if (rowValue === null || rowValue === undefined) {
-                        return false; // Don't show rows with empty cell values if filter is not empty
-                    }
+                    if (headerValue === null || headerValue === undefined || String(headerValue).trim() === "") return true;
+                    if (rowValue === null || rowValue === undefined) return false;
                     return String(rowValue).toLowerCase().includes(String(headerValue).toLowerCase());
                 },
-                sorter: "string",
-                editor: "textarea",
-                editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
-                formatter: (cell) => {
-                    const rowIndex = cell.getRow().getData().harvey_internal_id;
-                    const colField = cell.getField();
-                    const cellKey = `cell-${rowIndex}-${colField}`;
-                    const cellElement = cell.getElement();
-                    const cellColor = tableStyles.cellStyles[cellKey];
-                    cellElement.style.backgroundColor = cellColor || "";
-                    if (cellColor) {
-                        cellElement.classList.add('highlighted-cell');
-                    } else {
-                        cellElement.classList.remove('highlighted-cell');
-                    }
-                    cell.getElement().style.whiteSpace = "pre-wrap";
-
-                    const term = searchTerm.trim();
-                    const cellValue = cell.getValue();
-                    if (term && cellValue !== null && cellValue !== undefined) {
-                        const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                        const regex = new RegExp(`(${escapedTerm})`, 'gi');
-                        return String(cellValue).replace(regex, '<span class="search-match-highlight">$1</span>');
-                    }
-                    return cellValue;
-                },
+                sorter: colSchema.type === 'Numeric' ? 'number' : (colSchema.type === 'DateTime' ? 'datetime' : 'string'),
+                validator: softValidator,
                 headerContextMenu: getColumnContextMenu,
-                contextMenu: (e, cell) => {
-                    e.preventDefault();
-                    return [];
-                }
+                headerTooltip: colSchema.description || null,
             };
+
+            // Set editor based on schema
+            if (colSchema.subType === 'Checkbox') {
+                colDef.editor = "tickCross";
+                colDef.formatter = "tickCross";
+                colDef.hozAlign = "center";
+            } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
+                colDef.editor = "list";
+                colDef.editorParams = {
+                    values: colSchema.options || [],
+                    multiselect: colSchema.subType === 'Tags'
+                };
+            } else if (colSchema.subType === 'Project Link') {
+                colDef.editor = "list";
+                colDef.editorParams = {
+                    values: getAllProjectAssets()
+                };
+            } else if (colSchema.type === 'Numeric') {
+                colDef.editor = "number";
+                if (colSchema.subType === 'Currency') {
+                    colDef.formatter = "money";
+                } else if (colSchema.subType === 'Percent') {
+                    colDef.formatter = (cell) => {
+                        const val = cell.getValue();
+                        return (val !== null && val !== undefined && val !== "") ? val + '%' : '';
+                    };
+                }
+            } else if (colSchema.type === 'DateTime') {
+                colDef.editor = colSchema.subType === 'Time' ? "time" : "date";
+            } else {
+                colDef.editor = "textarea";
+                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+            }
+
+            // Apply custom styling/highlighting formatter logic
+            const baseFormatter = colDef.formatter;
+            colDef.formatter = (cell, formatterParams, onRendered) => {
+                const rowIndex = cell.getRow().getData().harvey_internal_id;
+                const colField = cell.getField();
+                const cellKey = `cell-${rowIndex}-${colField}`;
+                const cellElement = cell.getElement();
+                const cellColor = tableStyles.cellStyles[cellKey];
+                
+                cellElement.style.backgroundColor = cellColor || "";
+                if (cellColor) {
+                    cellElement.classList.add('highlighted-cell');
+                } else {
+                    cellElement.classList.remove('highlighted-cell');
+                }
+                
+                if (colSchema.type === 'Text' || !colSchema.type) {
+                    cellElement.style.whiteSpace = "pre-wrap";
+                }
+
+                // Call base formatter if it exists
+                let value = cell.getValue();
+                if (typeof baseFormatter === 'function') {
+                    value = baseFormatter(cell, formatterParams, onRendered);
+                } else if (typeof baseFormatter === 'string') {
+                    if (baseFormatter === 'tickCross') {
+                        const icon = value === true || value === 'true' || value === 1 ? '✔' : '✖';
+                        value = `<div style="text-align:center">${icon}</div>`;
+                    } else if (baseFormatter === 'money') {
+                        if (value !== null && value !== undefined && value !== "") {
+                            value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+                        }
+                    }
+                }
+
+                const term = searchTerm.trim();
+                if (term && value !== null && value !== undefined && typeof value === 'string') {
+                    const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const regex = new RegExp(`(${escapedTerm})`, 'gi');
+                    return String(value).replace(regex, '<span class="search-match-highlight">$1</span>');
+                }
+                return value;
+            };
+
             if (savedLayoutObj?.columns?.[header]) {
                 const savedCol = savedLayoutObj.columns[header];
                 if (typeof savedCol.width === 'number' && savedCol.width > 0) colDef.width = savedCol.width;
@@ -577,13 +700,16 @@
         }
 
         try {
-            // 1. Load Table Data first so we can use it for format conversion if needed
+            // 1. Load Table Data
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
             tableData.forEach((d, i) => d.harvey_internal_id = i);
             const tableHeaders = response.headers;
 
-            // 2. Load Highlights/Styles
+            // 2. Load Schema
+            tableSchema = await loadTableSchema(pathForTable) || {};
+
+            // 3. Load Highlights/Styles
             const loadedHighlightsOrStyles = await loadTableStyles(pathForTable);
 
             let highlightsForStore = [];
@@ -604,7 +730,7 @@
                             if (rowData) {
                                 const rowNumber = rowIndex + 1;
                                 const textParts = [rowNumber.toString()];
-                                // We don't have ordered columns yet, so we just use all values
+                                // We don't have ordered fields yet, so we just use all values
                                 Object.keys(rowData).forEach(key => {
                                     if (key !== 'harvey_internal_id') {
                                         const value = rowData[key];
@@ -634,7 +760,7 @@
                                 const rowData = tableData[rowIndex];
                                 if (rowData) {
                                     const cellValue = rowData[colField];
-                                    const text = `Cell [Row ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
+                                    const text = `Cell [Entry ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
                                     highlightsForStore.push({
                                         id: cellKey,
                                         color: color,
@@ -674,7 +800,7 @@
                 data: tableData,
                 index: "harvey_internal_id",
                 layout: "fitData",
-                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout),
+                columns: generateColumns(tableData, tableHeaders, savedLayout, tableSchema),
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
@@ -717,23 +843,23 @@
                     }));
 
                     const menu = [
-                        { label: "Cut Row", action: (e, row) => cutRow(row) },
-                        { label: "Copy Row", action: (e, row) => copyRow(row) },
+                        { label: "Cut Entry", action: (e, row) => cutRow(row) },
+                        { label: "Copy Entry", action: (e, row) => copyRow(row) },
                     ];
 
                     if (tableClipboard && tableClipboard.type === 'row') {
-                        menu.push({ label: "Paste Row Above", action: (e, row) => pasteRow(row, 'before') });
-                        menu.push({ label: "Paste Row Below", action: (e, row) => pasteRow(row, 'after') });
+                        menu.push({ label: "Paste Entry Above", action: (e, row) => pasteRow(row, 'before') });
+                        menu.push({ label: "Paste Entry Below", action: (e, row) => pasteRow(row, 'after') });
                     }
 
                     menu.push({ separator: true });
-                    menu.push({ label: "Insert Row Above", action: (e, row) => insertRow(row, 'before') });
-                    menu.push({ label: "Insert Row Below", action: (e, row) => insertRow(row, 'after') });
+                    menu.push({ label: "Insert Entry Above", action: (e, row) => insertRow(row, 'before') });
+                    menu.push({ label: "Insert Entry Below", action: (e, row) => insertRow(row, 'after') });
                     menu.push({ separator: true });
-                    menu.push({ label: "Delete Row", action: (e, row) => deleteRow(row) });
+                    menu.push({ label: "Delete Entry", action: (e, row) => deleteRow(row) });
                     menu.push({ separator: true });
-                    menu.push({ label: "Highlight Row", menu: highlightColorOptions });
-                    menu.push({ label: "Clear Row Highlight", action: () => highlightAction(null) });
+                    menu.push({ label: "Highlight Entry", menu: highlightColorOptions });
+                    menu.push({ label: "Clear Entry Highlight", action: () => highlightAction(null) });
 
                     return menu;
                 },
@@ -828,7 +954,7 @@
             return;
         }
 
-        // Filter rows first
+        // Filter entries first
         tabulatorInstance.setFilter((data) => {
             for (const key in data) {
                 if (key === 'harvey_internal_id') continue;
@@ -840,7 +966,7 @@
             return false;
         });
 
-        // After filtering, find all matching cells in the active (visible) rows
+        // After filtering, find all matching cells in the active (visible) entries
         const activeRows = tabulatorInstance.getRows('active');
         activeRows.forEach(row => {
             row.getCells().forEach(cell => {
@@ -876,8 +1002,8 @@
         currentMatchIndex = index;
         const currentCell = cellMatches[currentMatchIndex];
 
-        // Scroll to the row of the current cell first to ensure it is visible
-        await currentCell.getRow().scrollTo().catch(err => console.error("Scroll to row failed", err));
+        // Scroll to the entry of the current cell first to ensure it is visible
+        await currentCell.getRow().scrollTo().catch(err => console.error("Scroll to entry failed", err));
 
         // Use Tabulator's built-in range selection to highlight the active cell
         tabulatorInstance.addRange(currentCell, currentCell);
@@ -975,7 +1101,7 @@
             }
             await initializeTable(tablePath, null, true);
         } catch (error) {
-            console.error("Failed to rename header:", error);
+            console.error("Failed to rename field label:", error);
         } finally {
             showEditHeaderModal = false;
         }
@@ -985,8 +1111,8 @@
 {#if showEditHeaderModal}
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white dark:bg-gray-700 p-4 shadow-lg">
-        <h3 class="text-lg font-bold mb-4">Edit Header</h3>
-        <label for="header-name-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Header Name</label>
+        <h3 class="text-lg font-bold mb-4">Edit Field Label</h3>
+        <label for="header-name-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Field Name</label>
         <input
             id="header-name-input"
             type="text"
@@ -1179,5 +1305,9 @@
         :global(html.dark .search-match-highlight) {
             background-color: #ffdd77;
             color: #111827;
+        }
+        :global(.invalid-cell) {
+            box-shadow: inset 0 0 5px #ef4444 !important;
+            border: 1px solid #ef4444 !important;
         }
 </style>

@@ -915,40 +915,100 @@ mod tests {
     }
 }
 #[tauri::command]
-pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) -> Result<String, CommandError> {
-    info!("[Backend Create Table] Start: project_xml_path={}, headers={:?}", project_xml_path, headers);
+pub async fn save_table_schema(
+    table_path_str: String,
+    schema: Value,
+) -> Result<(), CommandError> {
+    info!("[save_table_schema] Saving schema for table: {}", table_path_str);
+    let table_path = PathBuf::from(&table_path_str);
+    let table_dir = table_path.parent().ok_or_else(|| CommandError::from("Invalid table path: no parent directory"))?;
+    
+    let schema_path = table_dir.join("schema.json");
+    let schema_json = serde_json::to_string_pretty(&schema)
+        .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
+    
+    fs::write(&schema_path, schema_json)
+        .map_err(|e| CommandError::from(format!("Failed to write schema file: {}", e)))?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn load_table_schema(
+    table_path_str: String,
+) -> Result<Value, CommandError> {
+    debug!("[load_table_schema] Loading schema for table: {}", table_path_str);
+    let table_path = PathBuf::from(&table_path_str);
+    let table_dir = table_path.parent().ok_or_else(|| CommandError::from("Invalid table path: no parent directory"))?;
+    
+    let schema_path = table_dir.join("schema.json");
+    if !schema_path.exists() {
+        return Ok(json!({}));
+    }
+    
+    let schema_json = fs::read_to_string(&schema_path)
+        .map_err(|e| CommandError::from(format!("Failed to read schema file: {}", e)))?;
+    
+    let schema: Value = serde_json::from_str(&schema_json)
+        .map_err(|e| CommandError::from(format!("Failed to parse schema JSON: {}", e)))?;
+    
+    Ok(schema)
+}
+
+#[tauri::command]
+pub async fn create_new_table(
+    project_xml_path: String, 
+    headers: Vec<String>,
+    schema: Option<Value>
+) -> Result<String, CommandError> {
+    info!("[Backend Create Table] Start: project_xml_path={}, headers={:?}, has_schema={}", project_xml_path, headers, schema.is_some());
 
     let xml_path = PathBuf::from(&project_xml_path);
     let project_base_dir = xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base directory."))?;
 
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path)?)?;
 
-    // Create a unique filename
+    let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
+    fs::create_dir_all(&tables_base)?;
+
+    // Create a unique folder and filename
     let mut i = 1;
-    let new_table_path;
-    let new_table_name;
+    let mut folder_path;
+    let mut table_name;
     loop {
-        let table_name = format!("Untitled_{}.csv", i);
-        let relative_path = format!("{}/{}/{}", HARVEY_FILES_DIR, TABLES_DIR, table_name);
-        if !project_data.table_files.files.iter().any(|f| f.relative_path == relative_path) {
-            new_table_path = project_base_dir.join(&relative_path);
-            new_table_name = table_name;
+        let base_name = format!("Untitled_{}", i);
+        folder_path = tables_base.join(&base_name);
+        table_name = format!("{}.csv", base_name);
+        
+        let relative_path = format!("{}/{}/{}/{}", HARVEY_FILES_DIR, TABLES_DIR, base_name, table_name);
+        if !folder_path.exists() && !project_data.table_files.files.iter().any(|f| f.relative_path == relative_path) {
             break;
         }
         i += 1;
     }
 
+    fs::create_dir_all(&folder_path)?;
+    let new_table_path = folder_path.join(&table_name);
+
     // Create the CSV file with headers and an empty row
-    fs::create_dir_all(new_table_path.parent().unwrap())?;
     let mut wtr = csv::Writer::from_path(&new_table_path)?;
     wtr.write_record(&headers)?;
     wtr.write_record(headers.iter().map(|_| ""))?;
     wtr.flush()?;
 
+    // Save schema if provided
+    if let Some(s) = schema {
+        let schema_path = folder_path.join("schema.json");
+        let schema_json = serde_json::to_string_pretty(&s)
+            .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
+        fs::write(schema_path, schema_json)?;
+    }
+
     // Update project XML
+    let relative_path_for_xml = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
     project_data.table_files.files.push(TableEntryXml {
-        name: new_table_name.clone(),
-        relative_path: new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/"),
+        name: table_name.clone(),
+        relative_path: relative_path_for_xml.clone(),
         has_headers: Some(true),
         language_code: None,
     });
@@ -957,45 +1017,25 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
 
     let project_id_for_db = project_data.project_uuid.clone();
     if project_id_for_db.is_empty() {
-        error!("[Backend Create Table] Project UUID is empty in XML file: {}. Cannot create table without project_id.", xml_path.display());
-        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table creation cannot proceed.", xml_path.display())));
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}).", xml_path.display())));
     }
-
-    let relative_path_for_db = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
     let file_metadata_for_db = FileMetadata {
-        file_name: new_table_name.clone(),
+        file_name: table_name.clone(),
         file_path: new_table_path.to_string_lossy().into_owned(),
         last_modified: Utc::now().to_rfc3339(),
-        title: String::new(),
-        description: String::new(),
-        summary: String::new(),
-        duration_seconds: None,
-        width: None,
-        height: None,
-        frame_rate: None,
-        bit_rate: None,
-        audio_codec: None,
-        video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
-        original_import_path: None,
-        speaker_names: None,
-        waveform_data: None,
-        language_code: None,
         properties: Some(json!({"has_headers": true}).to_string()),
+        ..Default::default()
     };
 
-    if let Err(e) = db_handler::save_asset_metadata(
+    db_handler::save_asset_metadata(
         &project_id_for_db,
         &file_metadata_for_db,
-        &relative_path_for_db,
+        &relative_path_for_xml,
         "table",
         None,
-    ) {
-        error!("[Backend Create Table] Failed to save table metadata to DB for table '{}' (path: {}, project_id: {}): {}", new_table_name, relative_path_for_db, project_id_for_db, e);
-        return Err(e);
-    }
-    info!("[Backend Create Table] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_db, project_id_for_db);
+    )?;
 
     info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
     Ok(new_table_path.to_string_lossy().to_string())

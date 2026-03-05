@@ -3,7 +3,7 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath } from '$lib/services/projectService.js';
+	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
@@ -386,15 +386,18 @@
     }
 
     async function handleHeaderConfirmation(event) {
-        const { hasHeaders } = event.detail;
+        const { hasHeaders, schema } = event.detail;
         const { tablePath } = headerConfirmationData;
         try {
             await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+            if (schema) {
+                await saveTableSchema(tablePath, schema);
+            }
             await refreshProjectFiles();
 
             dispatch('requestviewchange', { viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
         } catch (error) {
-            console.error(`[DataLeftPanel] Error setting table headers:`, error);
+            console.error(`[DataLeftPanel] Error setting table headers or schema:`, error);
             await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
         }
     }

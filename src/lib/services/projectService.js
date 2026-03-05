@@ -172,6 +172,26 @@ export async function loadHighlightsForFile(filePath, itemType) {
     }
 }
 
+export async function saveTableSchema(tablePath, schema) {
+    if (!tablePath || !schema) return;
+    try {
+        await invoke('save_table_schema', { tablePathStr: tablePath, schema });
+    } catch (error) {
+        console.error(`[ProjectService] Error saving table schema for ${tablePath}:`, error);
+        throw error;
+    }
+}
+
+export async function loadTableSchema(tablePath) {
+    if (!tablePath) return null;
+    try {
+        return await invoke('load_table_schema', { tablePathStr: tablePath });
+    } catch (error) {
+        console.error(`[ProjectService] Error loading table schema for ${tablePath}:`, error);
+        return null;
+    }
+}
+
 export async function deleteTableColumn(tablePath, columnName) {
     if (!tablePath || !columnName) {
         throw new Error("Missing required parameters for deleting table column.");
