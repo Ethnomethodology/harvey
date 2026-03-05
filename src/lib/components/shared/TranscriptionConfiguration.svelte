@@ -489,12 +489,6 @@
 						<div class="mb-1 last:mb-0">{err}</div>
 					{/each}
 				</div>
-			{#if dependencyErrors.length > 0}
-				<div class="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80 font-mono bg-orange-50/50 dark:bg-orange-950/30 p-2 rounded border border-orange-200/50 dark:border-orange-800/50 max-h-32 overflow-y-auto">
-					{#each dependencyErrors as err}
-						<div class="mb-1 last:mb-0">{err}</div>
-					{/each}
-				</div>
 			{/if}
 		</div>
 	{/if}
