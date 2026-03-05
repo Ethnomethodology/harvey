@@ -106,7 +106,13 @@
   // Reactively check status based on Python library installation
   $: {
     if ($configStatus.python_libraries_installed) {
-        checkAccessStatus();
+        if ($configStatus.diarization_model_downloaded) {
+            hasAccess = true;
+            isLoading = false;
+            if (!cachePath) getCachePath();
+        } else {
+            checkAccessStatus();
+        }
     } else {
         // Reset local state if Python libraries are not installed
         hasAccess = false;

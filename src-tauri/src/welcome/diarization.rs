@@ -26,7 +26,7 @@ pub async fn check_diarization_model_access<R: Runtime>(
 ) -> Result<bool, String> {
     let script_path = app_handle
         .path()
-        .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
+        .resolve("scripts/verify_diarization_model.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
 
     let output = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
@@ -36,11 +36,12 @@ pub async fn check_diarization_model_access<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        // If it fails to run the script, it's not cached or verified
+        return Ok(false);
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok(stdout == "cached")
+    Ok(stdout == "verified")
 }
 
 #[tauri::command]
