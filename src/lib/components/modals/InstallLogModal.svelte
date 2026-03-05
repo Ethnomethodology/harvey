@@ -4,12 +4,14 @@
     export let showModal = false;
     export let logs = [];
     export let isInstalling = true;
+    export let isChecking = false;
     export let title = "Installation Logs";
     export let inProgressText = "Downloading...";
     export let buttonInProgressText = "Installing...";
+    export let checkingText = "Checking library installations...";
 
     function closeModal() {
-        if (!isInstalling) {
+        if (!isInstalling && !isChecking) {
             showModal = false;
         }
     }
@@ -60,6 +62,11 @@
                     <div class="spinner animate-spin"></div>
                     <p class="ml-2">{inProgressText}</p>
                 </div>
+            {:else if isChecking}
+                <div class="flex items-center">
+                    <div class="spinner animate-spin"></div>
+                    <p class="ml-2">{checkingText}</p>
+                </div>
             {/if}
         </div>
 
@@ -68,9 +75,15 @@
                 type="button"
                 class="btn-secondary"
                 on:click={closeModal}
-                disabled={isInstalling}
+                disabled={isInstalling || isChecking}
             >
-                {isInstalling ? buttonInProgressText : 'Close'}
+                {#if isInstalling}
+                    {buttonInProgressText}
+                {:else if isChecking}
+                    Checking...
+                {:else}
+                    Close
+                {/if}
             </button>
         </div>
     </div>

@@ -13,7 +13,7 @@
         splitTranscriptSegment,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
-        switchDualModeTranscripts,
+        deactivateDualMode,
         updatePlayerCurrentSegmentIndex
     } from '$lib/stores/transcriptStore.js';
     import {
@@ -288,6 +288,15 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
+    /**
+     * Exits edit mode if it's currently active.
+     */
+    export async function exitEditModeIfActive() {
+        if (panelEditModeActive) {
+            await handleToggleEditMode();
+        }
+    }
+
     export async function enterManualEditMode() {
         console.log("[TranscriptionsView] enterManualEditMode called.");
         panelEditModeActive = true;
@@ -522,35 +531,31 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             console.log('[TranscriptionsView] Loading media via selectMedia.');
             selectMedia(item);
         } else if (item.file_type === 'transcript') {
+            // Deactivate dual mode if active when clicking a transcript item
             if (store.isDualModeActive) {
-                const currentProjectFiles = get(project).files;
-                const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
-                if (associatedMedia && get(transcriptStore).selectedMediaFile?.path !== associatedMedia.path) {
-                    selectMedia(associatedMedia, item.path);
-                } else {
-                    switchDualModeTranscripts(item.path);
-                }
+                console.log('[TranscriptionsView] Transcript clicked in Dual Mode, deactivating Dual Mode.');
+                await deactivateDualMode();
+            }
+
+            const currentProjectFiles = get(project).files;
+            console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
+            const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
+
+            if (associatedMedia) {
+                console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
+                selectMedia(associatedMedia, item.path);
             } else {
-                const currentProjectFiles = get(project).files;
-                console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
-                const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
+                console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
+                selectMedia(null);
+            }
 
-                if (associatedMedia) {
-                    console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
-                    selectMedia(associatedMedia, item.path);
-                } else {
-                    console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
-                    selectMedia(null);
-                }
-
-                try {
-                    await loadTranscriptFile(item.path);
-                    console.log('[TranscriptionsView] Transcript loaded successfully.');
-                } catch (error) {
-                    console.error('[TranscriptionsView] Error loading transcript:', error);
-                    message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
-                    return;
-                }
+            try {
+                await loadTranscriptFile(item.path);
+                console.log('[TranscriptionsView] Transcript loaded successfully.');
+            } catch (error) {
+                console.error('[TranscriptionsView] Error loading transcript:', error);
+                message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
+                return;
             }
         }
     }

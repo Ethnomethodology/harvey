@@ -11,9 +11,8 @@ use std::{
 use log::{info, warn, error, debug};
 use tauri::{AppHandle, Runtime};
 use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
-use crate::welcome::python_env::get_python_path;
+use crate::welcome::python_env::get_python_command;
 use uuid::Uuid;
 use html_escape::encode_text;
 use regex::Regex;
@@ -597,7 +596,6 @@ pub async fn export_transcript_to_docx<R: Runtime>(
     debug!("[export_transcript_to_docx] Writing generated HTML table to temp file: {}", temp_html_path.display());
     fs::write(&temp_html_path, &html_output)?;
 
-    let python_path = get_python_path()?;
     let script_path = app_handle.path()
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
@@ -617,11 +615,9 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
-    info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
+    info!("[export_transcript_to_docx] Executing Pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
 
-    let (mut rx, _child) = app_handle
-        .shell()
-        .command(python_path.to_string_lossy().to_string())
+    let (mut rx, _child) = get_python_command(&app_handle)?
         .args(&[script_path.to_string_lossy().to_string()])
         .args(&pandoc_args)
         .spawn()
@@ -1877,7 +1873,6 @@ pub async fn export_document_to_docx<R: Runtime>(
     debug!("[export_document_to_docx] Writing generated HTML to temp file: {}", temp_html_path.display());
     fs::write(&temp_html_path, &html_output)?;
 
-    let python_path = get_python_path()?;
     let script_path = app_handle.path()
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
@@ -1897,11 +1892,9 @@ pub async fn export_document_to_docx<R: Runtime>(
         pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
-    info!("[export_document_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
+    info!("[export_document_to_docx] Executing Pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
 
-    let (mut rx, _child) = app_handle
-        .shell()
-        .command(python_path.to_string_lossy().to_string())
+    let (mut rx, _child) = get_python_command(&app_handle)?
         .args(&[script_path.to_string_lossy().to_string()])
         .args(&pandoc_args)
         .spawn()

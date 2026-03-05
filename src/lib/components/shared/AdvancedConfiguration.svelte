@@ -16,7 +16,8 @@
         quantization_preference: 'int8', // Default to int8 as per user request for performance option
         faster_whisper_compute_type: 'int8',
         faster_whisper_beam_size: 5,
-        transcription_num_threads: 4 // Renamed for clarity in UI state
+        transcription_num_threads: 4, // Renamed for clarity in UI state
+        transcription_device_preference: 'auto'
     };
 
     let platformInfo = null; // Initialize as null to indicate loading
@@ -75,6 +76,7 @@
                 }
                 if (savedTranscriptionConfig.faster_whisper_beam_size !== undefined) config.faster_whisper_beam_size = savedTranscriptionConfig.faster_whisper_beam_size;
                 if (savedTranscriptionConfig.num_threads !== undefined) config.transcription_num_threads = savedTranscriptionConfig.num_threads;
+                if (savedTranscriptionConfig.device_preference !== undefined && savedTranscriptionConfig.device_preference !== null) config.transcription_device_preference = savedTranscriptionConfig.device_preference;
             }
 
             platformInfo = await invoke('get_platform_info');
@@ -107,7 +109,8 @@
             const transcriptionPayload = {
                 faster_whisper_compute_type: config.faster_whisper_compute_type,
                 faster_whisper_beam_size: parseInt(config.faster_whisper_beam_size),
-                num_threads: parseInt(config.transcription_num_threads)
+                num_threads: parseInt(config.transcription_num_threads),
+                device_preference: config.transcription_device_preference
             };
             await invoke('set_advanced_transcription_config', { newConfig: transcriptionPayload });
 
@@ -147,6 +150,7 @@
         config.faster_whisper_compute_type = 'int8';
         config.faster_whisper_beam_size = 5;
         config.transcription_num_threads = 4;
+        config.transcription_device_preference = 'auto';
         statusMessage = 'Transcription settings reset (Click Save to apply).';
         statusType = 'info';
     }
@@ -222,6 +226,11 @@
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <!-- General Settings -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
+                            <Dropdown options={deviceOptions} bind:value={config.transcription_device_preference} />
+                            <p class="text-[10px] text-gray-500">Auto will use GPU if available. 'CPU' bypasses GPU for both engines.</p>
+                        </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
                             <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" />

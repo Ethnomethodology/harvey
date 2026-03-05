@@ -56,6 +56,7 @@ pub struct FileMetadata {
     pub properties: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StandardAssetMetadata {
     pub metadata: FileMetadata,
@@ -489,6 +490,7 @@ pub struct HighlightMetadata {
     pub comments: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileLevelMetadata {
     pub file_name: String,
@@ -501,6 +503,7 @@ pub struct FileLevelMetadata {
     pub summary: String,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DocumentHighlightData {
     pub metadata: FileMetadata, // Changed type here

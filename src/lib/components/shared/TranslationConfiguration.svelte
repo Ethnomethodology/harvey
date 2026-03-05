@@ -3,15 +3,21 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import {
+		configStatus,
+		updateConfigStatus,
+		setSelectedTranslationEngineStore,
+		setHelsinkiModelsDownloaded,
+		setNllbModelsDownloaded
+	} from '$lib/stores/configStatusStore.js';
 	import {
 		downloadTranslationModel,
 		deleteTranslationModel,
         getLocalTranslationModels,
 		cancelTranslationModelDownload,
 		fetchAvailableModels,
-		getSelectedTranslationFamily,
-		setSelectedTranslationFamily,
+		getSelectedTranslationEngine,
+		setSelectedTranslationEngine,
 		isCTranslate2Installed,
         installFasterWhisperDependencies
 	} from '$lib/services/configureActions';
@@ -39,9 +45,20 @@
 	let modalLogs = [];
 	let isDownloading = false;
     let isInstallingDependencies = false;
+    let isChecking = false;
 
 	let selectedOption = 'selectLanguages'; // Default to selecting languages
-	let selectedFamily = 'helsinki';
+	$: selectedEngine = $configStatus.selected_translation_engine;
+
+    $: helsinkiDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'helsinki' || !m.family).length : 0;
+    $: nllbDownloadedCount = Array.isArray(downloadedModels) ? downloadedModels.filter(m => m.family === 'nllb').length : 0;
+
+    $: {
+        if ($configStatus.isInitialized) {
+            setHelsinkiModelsDownloaded(helsinkiDownloadedCount > 0);
+            setNllbModelsDownloaded(nllbDownloadedCount > 0);
+        }
+    }
 
 	// --- Marketplace / Search View State ---
 	let availableModelsList = [];
@@ -133,8 +150,8 @@
 			}
 		}
 
-		// Filter by family
-		baseList = baseList.filter(m => m.family === selectedFamily);
+		// Filter by engine/family
+		baseList = baseList.filter(m => m.family === selectedEngine);
 
 		// Filter by search query
 		if (searchQuery.trim() !== '') {
@@ -194,8 +211,9 @@
 		}
 	}
 
-	async function handleFamilyChange() {
-		await setSelectedTranslationFamily(selectedFamily);
+	async function handleEngineChange(newEngine) {
+        setSelectedTranslationEngineStore(newEngine);
+		await setSelectedTranslationEngine(newEngine);
 	}
 
 	async function handleRefreshModels() {
@@ -218,12 +236,19 @@
 
 	onMount(async () => {
 		configError = '';
+		
+		// If libraries aren't installed, don't even try to load local models
+		// as it will trigger a technical error message.
+		if (!$configStatus.python_libraries_installed) {
+			return;
+		}
+
 		try {
 			downloadedModels = await getLocalTranslationModels();
-			selectedFamily = await getSelectedTranslationFamily() || 'helsinki';
 			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {
-			configError = `Failed to load model configuration: ${e.message || e}`;
+			console.error('Failed to load model configuration:', e);
+			configError = `Failed to load model configuration: ${typeof e === 'string' ? e : (e.message || 'Unknown error')}`;
 		}
 
 		try {
@@ -232,23 +257,41 @@
 				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
+                isInstallingDependencies = false;
 				showLogModal = true;
 			});
 			unlistenLog = await listen('translation-download-log', (event) => {
 				const { model_name, log_line } = event.payload;
-				if (downloadStatus[model_name] === 'downloading') {
+                
+                // Detect installation activity to update spinner text
+                if (log_line.includes("CTranslate2") || log_line.includes("micromamba") || log_line.includes("Optimizing")) {
+                    isInstallingDependencies = true;
+                }
+
+				if (downloadStatus[model_name] === 'downloading' || isInstallingDependencies || model_name === "System") {
 					modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
 				}
 			});
 			unlistenComplete = await listen('translation-download-complete', async (event) => {
 				const downloadedModelName = event.payload;
 				downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
+				// Clear from local status tracking to let reactive derived handle it via downloadedModels
+				setTimeout(() => {
+					if (downloadStatus[downloadedModelName] === 'complete') {
+						const nextStatus = { ...downloadStatus };
+						delete nextStatus[downloadedModelName];
+						downloadStatus = nextStatus;
+					}
+				}, 1000);
+
 				try {
 					downloadedModels = await getLocalTranslationModels();
 					ct2Installed = await isCTranslate2Installed();
 					setTranslationModelsDownloaded(downloadedModels.length > 0);
 				} catch (e) { console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e); }
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${downloadedModelName}.` }];
+                isDownloading = false;
+                isInstallingDependencies = false;
 				if (modelName.trim() === downloadedModelName) {
 					modelName = '';
 				}
@@ -260,12 +303,19 @@
 				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
 				isDownloading = false;
+                isInstallingDependencies = false;
 			});
 
-			unlistenFinished = await listen('translation-download-finished', () => {
+			unlistenFinished = await listen('translation-download-finished', async () => {
 				console.log('Frontend: Received translation-download-finished event. Setting isDownloading to false.');
 				isDownloading = false;
-                updateConfigStatus(true);
+                isInstallingDependencies = false;
+                isChecking = true;
+                try {
+                    await updateConfigStatus(true);
+                } finally {
+                    isChecking = false;
+                }
 			});
 		} catch (err) {
 			console.error('Failed to attach download event listeners:', err);
@@ -282,7 +332,7 @@
 	});
 
 	async function handleDownload(targetModelId) {
-		if (isBusy) return;
+		if (isBusy || isDownloading || isInstallingDependencies) return;
 		if (!downloadLocation || downloadLocation.trim() === '') {
 			notificationStore.add('Please set a valid model download location first.', 'error');
 			return;
@@ -302,10 +352,22 @@
 
 		try {
 			modalLogs = [];
+            
+            // For Helsinki models, we might need to install CTranslate2
+            const willInstallDeps = family === 'helsinki' && !ct2Installed;
+            
+            if (willInstallDeps) {
+                isInstallingDependencies = true;
+            } else {
+                isDownloading = true;
+            }
+            showLogModal = true;
+
 			await downloadTranslationModel(null, null, downloadLocation, modelToDownload, family);
 		} catch (err) {
 			notificationStore.add(`Failed to start download for ${modelToDownload}: ${err.message || err}`, 'error');
 			isDownloading = false; 
+            isInstallingDependencies = false;
 		}
 	}
 
@@ -350,8 +412,13 @@
         try {
             await installFasterWhisperDependencies(); // This installs ctranslate2, faster-whisper, and sounddevice
             modalLogs = [...modalLogs, { id: uuidv4(), message: "Installation successful!" }];
-            await updateConfigStatus(true);
-            ct2Installed = await isCTranslate2Installed();
+            isChecking = true;
+            try {
+                await updateConfigStatus(true);
+                ct2Installed = await isCTranslate2Installed();
+            } finally {
+                isChecking = false;
+            }
         } catch (err) {
             modalLogs = [...modalLogs, { id: uuidv4(), message: `Installation failed: ${err}` }];
         } finally {
@@ -418,17 +485,17 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Translation Models</h3>
 		<div class="flex items-center">
-			{#if downloadedModels.length > 0}
-				<span class="text-sm font-medium text-green-600 dark:text-green-400">
-					{downloadedModels.length} {downloadedModels.length === 1 ? 'Model' : 'Models'} Downloaded
+			{#if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
+					{selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount} {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} {(selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400">No Models Downloaded</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
+	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 	{#if configError}
 		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
@@ -437,48 +504,48 @@
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
-			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Model Family</span>
+			<span class="text-sm font-semibold text-blue-800 dark:text-blue-300">Select Translation Engine</span>
 			<div class="flex space-x-2">
 				<button 
 					class="px-3 py-1 text-xs rounded-full border transition-all"
-					class:bg-blue-600={selectedFamily === 'helsinki'}
-					class:text-white={selectedFamily === 'helsinki'}
-					class:border-transparent={selectedFamily === 'helsinki'}
-					class:bg-white={selectedFamily !== 'helsinki'}
-					class:dark:bg-gray-800={selectedFamily !== 'helsinki'}
-					class:text-gray-600={selectedFamily !== 'helsinki'}
-					class:dark:text-gray-400={selectedFamily !== 'helsinki'}
-					class:border-gray-200={selectedFamily !== 'helsinki'}
-					class:dark:border-gray-700={selectedFamily !== 'helsinki'}
-					on:click={() => { selectedFamily = 'helsinki'; handleFamilyChange(); }}
+					class:bg-blue-600={selectedEngine === 'helsinki'}
+					class:text-white={selectedEngine === 'helsinki'}
+					class:border-transparent={selectedEngine === 'helsinki'}
+					class:bg-white={selectedEngine !== 'helsinki'}
+					class:dark:bg-gray-800={selectedEngine !== 'helsinki'}
+					class:text-gray-600={selectedEngine !== 'helsinki'}
+					class:dark:text-gray-400={selectedEngine !== 'helsinki'}
+					class:border-gray-200={selectedEngine !== 'helsinki'}
+					class:dark:border-gray-700={selectedEngine !== 'helsinki'}
+					on:click={() => handleEngineChange('helsinki')}
 				>
 					Helsinki-NLP
 				</button>
 				<button 
 					class="px-3 py-1 text-xs rounded-full border transition-all"
-					class:bg-blue-600={selectedFamily === 'nllb'}
-					class:text-white={selectedFamily === 'nllb'}
-					class:border-transparent={selectedFamily === 'nllb'}
-					class:bg-white={selectedFamily !== 'nllb'}
-					class:dark:bg-gray-800={selectedFamily !== 'nllb'}
-					class:text-gray-600={selectedFamily !== 'nllb'}
-					class:dark:text-gray-400={selectedFamily !== 'nllb'}
-					class:border-gray-200={selectedFamily !== 'nllb'}
-					class:dark:border-gray-700={selectedFamily !== 'nllb'}
-					on:click={() => { selectedFamily = 'nllb'; handleFamilyChange(); }}
+					class:bg-blue-600={selectedEngine === 'nllb'}
+					class:text-white={selectedEngine === 'nllb'}
+					class:border-transparent={selectedEngine === 'nllb'}
+					class:bg-white={selectedEngine !== 'nllb'}
+					class:dark:bg-gray-800={selectedEngine !== 'nllb'}
+					class:text-gray-600={selectedEngine !== 'nllb'}
+					class:dark:text-gray-400={selectedEngine !== 'nllb'}
+					class:border-gray-200={selectedEngine !== 'nllb'}
+					class:dark:border-gray-700={selectedEngine !== 'nllb'}
+					on:click={() => handleEngineChange('nllb')}
 				>
 					NLLB (Meta)
 				</button>
 			</div>
 		</div>
 		
-		{#if selectedFamily === 'helsinki'}
+		{#if selectedEngine === 'helsinki'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed mb-2">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common language pairs.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
 			</div>
 
-			{#if !ct2Installed}
+			{#if !ct2Installed && translationModelCount > 0}
 				<div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
 					<div class="flex items-center">
 						<svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -494,8 +561,8 @@
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
-				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Larger file size, slower on lower-end CPUs. Best with GPU.</p>
-                {#if !ct2Installed}
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Very heavy resource usage, large file size, and slower on CPUs. Best with GPU.</p>
+                {#if !ct2Installed && translationModelCount > 0}
                     <div class="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -541,7 +608,7 @@
 								bind:value={searchQuery}
 								class="input w-full"
 								style="padding-left: 2.25rem;"
-								placeholder={selectedFamily === 'helsinki' ? "Search languages (e.g. 'French', 'en-ja')..." : "Search NLLB models..."}
+								placeholder={selectedEngine === 'helsinki' ? "Search languages (e.g. 'French', 'en-ja')..." : "Search NLLB models..."}
 								autocomplete="off"
 								autocorrect="off"
 								autocapitalize="off"
@@ -679,7 +746,7 @@
 							autocomplete="off"
 							autocorrect="off"
 							class="input w-full"
-							placeholder={selectedFamily === 'helsinki' ? "e.g. Helsinki-NLP/opus-mt-en-jap" : "e.g. facebook/nllb-200-distilled-600M"}
+							placeholder={selectedEngine === 'helsinki' ? "e.g. Helsinki-NLP/opus-mt-en-jap" : "e.g. facebook/nllb-200-distilled-600M"}
 						/>
 					</div>
 					<button on:click={() => handleDownload(null)} class="btn-blue-small mb-0.5">

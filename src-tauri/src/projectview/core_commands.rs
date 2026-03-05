@@ -575,6 +575,7 @@ pub async fn add_file_to_existing_group(project_id: String, group_id: String, fi
 }
 // --- End Group Commands ---
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {
     old_media_stem: String,
@@ -583,6 +584,7 @@ struct MediaRenamedPayload {
     new_absolute_path: String,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Serialize)]
 struct ItemRenamedPayload {
     old_path: String,
@@ -669,7 +671,7 @@ fn parse_frame_rate_str(s_opt: Option<String>) -> Option<f32> {
     })
 }
 
-// Helper function to get document metadata path (ONLY for .harvey_metadata.json files, not SQLite based metadata)
+#[allow(dead_code)]
 fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, CommandError> {
     let doc_parent_dir = doc_path.parent().ok_or_else(|| {
         CommandError::from(format!(
@@ -688,6 +690,7 @@ fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, Comman
 }
 
 // Helper function to get media metadata path (for .metadata.json, specific to media assets if they still use it)
+#[allow(dead_code)]
 pub fn get_media_metadata_path(media_path: &Path) -> Result<PathBuf, CommandError> {
     let parent_dir = media_path.parent().ok_or_else(|| {
         CommandError::from(format!(
@@ -1410,6 +1413,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         Some(source_file_path_str.as_str()), // Pass as &str
         None, // No speaker names known at initial import by this function
         None, // language_code: Option<&str> - Not known at initial import
+        None, // initial_prompt
+        None, // hotwords
     ) {
         warn!(
             "[Backend Import] Failed to save media_transcript_data for project_id {}: {}. Error: {}",

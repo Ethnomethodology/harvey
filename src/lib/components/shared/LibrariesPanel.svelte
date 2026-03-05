@@ -13,6 +13,7 @@
 	let showInfo = false;
 	let installLogs = [];
 	let isInstalling = false;
+	let isChecking = false;
 	let unlistenLog;
     let unlistenFinished;
 	let isDeleting = false;
@@ -36,13 +37,19 @@
 	onMount(async () => {
         unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
-            await updateConfigStatus(true);
+            isChecking = true;
+            try {
+                await updateConfigStatus(true);
+            } finally {
+                isChecking = false;
+            }
         });
     });
 
 	async function handleInstall() {
 		showInstallModal = true;
 		isInstalling = true;
+		isChecking = false;
 		installLogs = [];
 
 		try {
@@ -148,7 +155,7 @@
 	</div>
 {/if}
 
-<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} title="Installation Logs" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
+<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} isChecking={isChecking} title="Installation Logs" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
 
 <style lang="postcss">
 	.btn-blue-small {

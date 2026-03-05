@@ -5,13 +5,14 @@ use std::fs;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use serde_json::{Value, json};
 use log::{info, error, debug, warn};
-use super::transcription_commands::save_transcript_json;
+use super::transcription_commands::{save_transcript_json, map_speaker_ids_to_names};
 use super::document_commands::save_document_and_update_xml;
 use crate::welcome::config::{read_config, get_default_download_location, CommandError};
 use dashmap::DashMap;
 use crate::TranslationCancellationState;
 use crate::transcription::TranslationEngine;
 use crate::transcription::python_engine::PythonTranslationEngine;
+use crate::projectview::shared_types::{ProjectXml, TranscriptSegment};
 
 
 // --- CancelGuard for ensuring cleanup ---
@@ -86,29 +87,21 @@ fn extract_plain_text_from_lexical(node: &Value) -> String {
 // Helper to create a simple Lexical JSON structure from plain text.
 fn create_lexical_with_text(text: &str) -> Value {
     json!({
-        "root": {
-            "type": "root",
-            "children": [{
-                "type": "paragraph",
-                "children": [{
-                    "type": "text",
-                    "text": text,
-                    "detail": 0,
-                    "format": 0,
-                    "mode": "normal",
-                    "style": "",
-                    "version": 1
-                }],
-                "direction": "ltr",
-                "format": "",
-                "indent": 0,
-                "version": 1
-            }],
-            "direction": "ltr",
-            "format": "",
-            "indent": 0,
-            "version": 1
-        }
+        "type": "paragraph",
+        "version": 1,
+        "children": [{
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": text,
+            "type": "extended-text",
+            "version": 1,
+            "highlightId": null
+        }],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0
     })
 }
 
@@ -156,13 +149,14 @@ fn apply_translations_recursive(node: &mut Value, translations: &mut std::vec::I
                 if let Some(new_text) = translations.next() {
                      if let Some(children) = node.get_mut("children") {
                          *children = json!([{ 
-                            "type": "text",
-                            "text": new_text,
                             "detail": 0,
                             "format": 0,
                             "mode": "normal",
                             "style": "",
-                            "version": 1
+                            "text": new_text,
+                            "type": "extended-text",
+                            "version": 1,
+                            "highlightId": null
                          }]);
                      }
                 }
@@ -306,8 +300,10 @@ async fn run_translation_process<R: Runtime>(
 ) -> Result<String, CommandError> {
     use crate::projectview::shared_utils;
 
-    let normalized_project_xml_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&project_xml_path)).to_string_lossy().to_string();
-    let normalized_file_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&file_path)).to_string_lossy().to_string();
+    let normalized_project_xml_path_buf = shared_utils::normalize_path_for_comparison(&PathBuf::from(&project_xml_path));
+    let normalized_project_xml_path = normalized_project_xml_path_buf.to_string_lossy().to_string();
+    let normalized_file_path_buf = shared_utils::normalize_path_for_comparison(&PathBuf::from(&file_path));
+    let normalized_file_path = normalized_file_path_buf.to_string_lossy().to_string();
 
     emit_translation_progress(&app_handle, &job_id, 5.0, "Preparing for translation...");
 
@@ -454,7 +450,7 @@ async fn run_translation_process<R: Runtime>(
     if mode == TranslationMode::Document {
         apply_translations_recursive(&mut lexical_json, &mut translations_iter);
     } else if mode == TranslationMode::Transcript {
-        // Transcript update logic (Col 4 only)
+        // Transcript update logic (Col 4 only by default, but we will handle speakers separately below if needed)
         if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
             if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
                 // Keep the header row (index 0) and only update data rows
@@ -463,9 +459,9 @@ async fn run_translation_process<R: Runtime>(
                         if cells.len() > 3 {
                             if let Some(text_cell) = cells.get_mut(3) {
                                 if let Some(translated_text) = translations_iter.next() {
-                                    let new_lexical_text = create_lexical_with_text(&translated_text);
-                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
-                                        text_cell["children"] = new_children.clone();
+                                    let new_lexical_paragraph = create_lexical_with_text(&translated_text);
+                                    if let Some(cell_children) = text_cell.get_mut("children") {
+                                        *cell_children = json!([new_lexical_paragraph]);
                                     }
                                 }
                             }
@@ -474,6 +470,71 @@ async fn run_translation_process<R: Runtime>(
                 }
             }
         }
+
+        // --- Handle Speaker Names for transcripts ---
+        // If the user added speaker names in 2nd language, we should use them here.
+        if let Some(project_base_dir) = normalized_project_xml_path_buf.parent() {
+            if let Ok((_type, media_id_opt, _rel)) = shared_utils::get_item_details(&normalized_file_path_buf, project_base_dir) {
+                if let Some(media_id) = media_id_opt {
+                    if let Ok(xml_content) = fs::read_to_string(&normalized_project_xml_path_buf) {
+                        if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                            if let Some(media_entry) = project_data.media_files.files.iter().find(|f| f.name == media_id) {
+                                if let Some(speakers) = &media_entry.speakers {
+                                    let mut translated_names_to_use = &speakers.names;
+                                    if let Some(ref trans_names) = speakers.translated_names {
+                                        if trans_names.iter().any(|n| !n.trim().is_empty()) {
+                                            translated_names_to_use = trans_names;
+                                        }
+                                    }
+                                    
+                                    // Apply these names to the Lexical table
+                                    if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
+                                        if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
+                                            for row in rows.iter_mut().skip(1) {
+                                                if let Some(cells) = row.get_mut("children").and_then(|c| c.as_array_mut()) {
+                                                    if let Some(speaker_cell) = cells.get_mut(2) {
+                                                        let current_speaker_name = extract_plain_text_from_lexical(speaker_cell);
+                                                        
+                                                        // Map current name back to generic ID or find its index in original names
+                                                        let mut segments = vec![TranscriptSegment {
+                                                            start_time: 0.0, end_time: 0.0, text: String::new(),
+                                                            speaker: current_speaker_name.clone()
+                                                        }];
+                                                        
+                                                        // We need to map generic IDs if present, or find by name.
+                                                        // Actually, map_speaker_ids_to_names handles generic IDs.
+                                                        map_speaker_ids_to_names(&mut segments, translated_names_to_use);
+                                                        
+                                                        // If it was already a name, we might need to find its index in original names
+                                                        if segments[0].speaker == current_speaker_name {
+                                                            if let Some(idx) = speakers.names.iter().position(|n| n == &current_speaker_name) {
+                                                                if let Some(trans_name) = translated_names_to_use.get(idx) {
+                                                                    if !trans_name.trim().is_empty() {
+                                                                        segments[0].speaker = trans_name.clone();
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        
+                                                        if segments[0].speaker != current_speaker_name {
+                                                            let new_lexical_paragraph = create_lexical_with_text(&segments[0].speaker);
+                                                            if let Some(cell_children) = speaker_cell.get_mut("children") {
+                                                                *cell_children = json!([new_lexical_paragraph]);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     } else if mode == TranslationMode::ImportedTranscript {
         // Imported Transcript update logic (Col 3 & 4)
         if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
@@ -485,18 +546,18 @@ async fn run_translation_process<R: Runtime>(
                             // Update Speaker (Col 3)
                             if let Some(speaker_cell) = cells.get_mut(2) {
                                 if let Some(translated_speaker) = translations_iter.next() {
-                                    let new_lexical_text = create_lexical_with_text(&translated_speaker);
-                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
-                                        speaker_cell["children"] = new_children.clone();
+                                    let new_lexical_paragraph = create_lexical_with_text(&translated_speaker);
+                                    if let Some(cell_children) = speaker_cell.get_mut("children") {
+                                        *cell_children = json!([new_lexical_paragraph]);
                                     }
                                 }
                             }
                             // Update Text (Col 4)
                             if let Some(text_cell) = cells.get_mut(3) {
                                 if let Some(translated_text) = translations_iter.next() {
-                                    let new_lexical_text = create_lexical_with_text(&translated_text);
-                                    if let Some(new_children) = new_lexical_text.pointer("/root/children") {
-                                        text_cell["children"] = new_children.clone();
+                                    let new_lexical_paragraph = create_lexical_with_text(&translated_text);
+                                    if let Some(cell_children) = text_cell.get_mut("children") {
+                                        *cell_children = json!([new_lexical_paragraph]);
                                     }
                                 }
                             }

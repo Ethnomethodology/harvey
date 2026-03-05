@@ -80,7 +80,7 @@ jobs:
           CC: clang
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
-          echo "The build.rs script will now build whisper.cpp from source. FFmpeg is sourced from Conda Forge."
+          echo "The build.rs script will now run."
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
       - name: Upload build artifact

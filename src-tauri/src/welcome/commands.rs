@@ -61,6 +61,7 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
     (path, is_translation || is_faster_whisper)
 }
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationDownloadProgress {
   model_name: String,
@@ -69,6 +70,7 @@ struct TranslationDownloadProgress {
   total_bytes: Option<u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationErrorPayload {
   model_name: String,
@@ -228,50 +230,16 @@ pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConf
 
 #[command]
 pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
-    let env_path = python_env::get_env_path()?;
-    
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await
+    python_env::check_package_installed(&app, "ctranslate2").await
 }
 
 #[command]
 pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Result<Vec<String>, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
-    let env_path = python_env::get_env_path()?;
-    
     let mut errors = Vec::new();
     let packages = vec!["faster_whisper", "sounddevice", "ctranslate2"];
 
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     for pkg in packages {
-        if let Some(err) = python_env::get_package_import_error(&shell, &python_path, pkg, &windows_path_env, &env_path).await? {
+        if let Some(err) = python_env::get_package_import_error(&app, pkg).await? {
             errors.push(format!("{}: {}", pkg, err));
         }
     }
@@ -280,28 +248,30 @@ pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Resul
 }
 
 #[command]
-pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    let python_path = python_env::get_python_path()?;
+pub async fn is_whisper_cpp_installed<R: Runtime>(_app: AppHandle<R>) -> Result<bool, CommandError> {
     let env_path = python_env::get_env_path()?;
-    
-    // Prepare Windows PATH once
-    let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
-        let env_bin_path = env_path.join("Library").join("bin");
-        if env_bin_path.exists() {
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            Some(format!("{};{}", env_bin_path.to_string_lossy(), existing_path))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
 
+    #[cfg(target_os = "windows")]
+    let (cli_path, stream_path) = (
+        env_path.join("Library").join("bin").join("whisper-cli.exe"),
+        env_path.join("Library").join("bin").join("whisper-stream.exe")
+    );
+
+    #[cfg(not(target_os = "windows"))]
+    let (cli_path, stream_path) = (
+        env_path.join("bin").join("whisper-cli"),
+        env_path.join("bin").join("whisper-stream")
+    );
+
+    Ok(cli_path.exists() && stream_path.exists())
+}
+
+#[command]
+pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     // Check for faster-whisper, sounddevice, and ctranslate2
-    let fw_installed = python_env::check_package_installed(&shell, &python_path, "faster_whisper", &windows_path_env, &env_path).await?;
-    let sd_installed = python_env::check_package_installed(&shell, &python_path, "sounddevice", &windows_path_env, &env_path).await?;
-    let ct2_installed = python_env::check_package_installed(&shell, &python_path, "ctranslate2", &windows_path_env, &env_path).await?;
+    let fw_installed = python_env::check_package_installed(&app, "faster_whisper").await?;
+    let sd_installed = python_env::check_package_installed(&app, "sounddevice").await?;
+    let ct2_installed = python_env::check_package_installed(&app, "ctranslate2").await?;
     
     let all_installed = fw_installed && sd_installed && ct2_installed;
     log::info!("Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}", fw_installed, sd_installed, ct2_installed, all_installed);
@@ -313,6 +283,12 @@ pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle
 pub async fn install_faster_whisper_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
     log::info!("CMD: install_faster_whisper_dependencies_command");
     python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None).await
+}
+
+#[command]
+pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+    log::info!("CMD: install_whisper_cpp_dependencies_command");
+    python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "installation-log", None).await
 }
 
 // --- Transcription Model Download Command (Faster-Whisper) ---
@@ -353,16 +329,9 @@ pub async fn download_faster_whisper_model_command(
     let python_path = python_env::get_python_path()?;
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
 
-    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
-    let token = if token_path.exists() {
-        fs::read_to_string(token_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
@@ -396,6 +365,7 @@ pub async fn download_faster_whisper_model_command(
     }
 
     if !success {
+        window.emit("transcription-download-finished", ()).unwrap();
         return Err(CommandError::Message("Transcription model download failed.".to_string()));
     }
 
@@ -421,14 +391,17 @@ pub async fn download_faster_whisper_model_command(
             Ok(_) => {
                 // Emit complete event ONLY after config is updated to avoid race conditions
                 window.emit("transcription-download-complete", &model_name).unwrap();
+                window.emit("transcription-download-finished", ()).unwrap();
                 Ok(())
             },
             Err(e) => {
                 log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
+                window.emit("transcription-download-finished", ()).unwrap();
                 Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
             }
         }
     } else {
+        window.emit("transcription-download-finished", ()).unwrap();
         Err(CommandError::Message("Transcription model download failed.".to_string()))
     }
 }
@@ -479,16 +452,9 @@ pub async fn download_translation_model_command(
     // 2. Download model weights
     let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
 
-    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
-    let token = if token_path.exists() {
-        fs::read_to_string(token_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
-
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, &token])
+        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
@@ -548,18 +514,35 @@ pub async fn download_translation_model_command(
         args.push(&quant_str);
     }
 
-    let output = app.shell()
+    let (mut rx_opt, _child_opt) = app.shell()
         .command(python_path.to_str().unwrap())
         .args(&args)
-        .output()
-        .await?;
+        .spawn()
+        .map_err(|e| format!("Failed to spawn optimization script: {}", e))?;
 
-    if output.status.success() {
-        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log::error!("Optimization failed: {}", stderr);
-        window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed (non-critical): {}", stderr) })).unwrap();
+    while let Some(event) = rx_opt.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::info!("[Optimization] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::error!("[Optimization Error] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization Error: {}", &line_str) })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimization complete." })).unwrap();
+                } else {
+                    log::error!("Optimization failed with code: {:?}", payload.code);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": format!("Optimization failed with code: {:?}", payload.code) })).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
     }
 
     window.emit("translation-download-complete", &model_name).unwrap();
@@ -705,11 +688,21 @@ pub async fn get_selected_transcription_engine() -> Result<Option<String>, Comma
     Ok(config.selected_transcription_engine)
 }
 
+#[tauri::command]
+pub async fn is_cuda_available_command<R: tauri::Runtime>(_app_handle: tauri::AppHandle<R>) -> bool {
+    use tauri_plugin_shell::ShellExt;
+    let shell = _app_handle.shell();
+    let strategy = super::python_env::get_pytorch_install_strategy(&shell).await;
+    strategy == super::python_env::PyTorchInstallStrategy::Gpu
+}
+
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct HuggingFaceApiResponse {
     siblings: Vec<HuggingFaceApiFile>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct HuggingFaceApiFile {
     rfilename: String,
@@ -1397,7 +1390,59 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     log::info!("Config updated.");
     Ok(())
 }
-#[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: download_model: {} -> {}", model_info.name, download_location); let model_name = model_info.name.clone(); let target_dir = PathBuf::from(&download_location); if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); } if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); } let cancel_flag = Arc::new(AtomicBool::new(false)); cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag)); log::info!("Cancel token stored for {}", model_name); let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await; if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); } match download_result { Ok(_) => { log::info!("Download success for {}", model_name); app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?; Ok(()) } Err(e) => { log::error!("Download error for {}: {}", model_name, e); let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err)); Err(e) } } }
+#[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> {
+    log::info!("CMD: download_model: {} -> {}", model_info.name, download_location);
+    let model_name = model_info.name.clone();
+    let target_dir = PathBuf::from(&download_location);
+
+    if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); }
+    if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); }
+
+    // Check if this model is a whisper.cpp model by looking at its family or name
+    let family = model_info.family.as_deref().unwrap_or("");
+    let is_whisper_cpp_model = family == "whisper-cpp" || (family.is_empty() && model_name.starts_with("ggml-"));
+
+    if is_whisper_cpp_model {
+        // Ensure whisper.cpp binary is installed via micromamba first
+        let is_installed = is_whisper_cpp_installed(app.clone()).await.unwrap_or(false);
+        if !is_installed {
+            log::info!("whisper.cpp not found in conda environment. Installing...");
+            let window = app.get_webview_window("main").unwrap();
+            window.emit("transcription-download-log", serde_json::json!({
+                "model_name": model_name.clone(),
+                "log_line": "Installing whisper.cpp dependencies via micromamba..."
+            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+
+            python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+
+            window.emit("transcription-download-log", serde_json::json!({
+                "model_name": model_name.clone(),
+                "log_line": "whisper.cpp installed successfully. Starting model download..."
+            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+        }
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag));
+    log::info!("Cancel token stored for {}", model_name);
+
+    let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await;
+
+    if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); }
+
+    match download_result {
+        Ok(_) => {
+            log::info!("Download success for {}", model_name);
+            app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Download error for {}: {}", model_name, e);
+            let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err));
+            Err(e)
+        }
+    }
+}
 async fn download_and_save_bin(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
@@ -1464,6 +1509,7 @@ async fn download_and_save_bin(
 
     let mut stream = response.bytes_stream();
     let mut downloaded: u64 = 0;
+    let mut last_percent = 0;
     let _ = app.emit("download-progress", &DownloadProgress {
         model_name: model_name.clone(),
         downloaded_bytes: 0,
@@ -1486,6 +1532,17 @@ async fn download_and_save_bin(
                     downloaded_bytes: downloaded,
                     total_bytes: total_size
                 });
+
+                if let Some(total) = total_size {
+                    let percent = (downloaded * 100 / total) as u32;
+                    if percent >= last_percent + 5 || percent == 100 {
+                        last_percent = percent;
+                        let _ = app.emit("transcription-download-log", serde_json::json!({
+                            "model_name": model_name.clone(),
+                            "log_line": format!("Downloading: {}%", percent)
+                        }));
+                    }
+                }
             }
             Err(e) => {
                 drop(dest_file);
@@ -1533,7 +1590,8 @@ async fn download_and_save_bin(
 
     // Emit completion event AFTER config update to avoid race conditions in frontend
     log::info!("Download success for {}", model_name);
-    app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-finished", ()).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
 
     Ok(())
 }
@@ -1594,10 +1652,19 @@ pub async fn fetch_available_models_command(app: AppHandle) -> Result<serde_json
          return Err(CommandError::from(format!("Script not found at: {:?}", script_path)));
     }
 
-    let python_path = python_env::get_python_path()?; 
+    let python_path = python_env::get_python_path()?;
+    
+    // Try internal python first, fall back to system if not exists (likely during wizard)
+    let cmd_binary = if python_path.exists() {
+        python_path.to_str().unwrap().to_string()
+    } else {
+        if cfg!(windows) { "python".to_string() } else { "python3".to_string() }
+    };
+
+    log::info!("Using python binary: {}", cmd_binary);
 
     let output = app.shell()
-        .command(python_path.to_str().unwrap())
+        .command(cmd_binary)
         .args(&[script_path.to_str().unwrap()])
         .output()
         .await

@@ -16,9 +16,8 @@ use crate::utils::canonicalize_path;
 use chrono::Utc; // Added for timestamping metadata
 use tauri::{AppHandle, Runtime};
 use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // For temp file uniqueness
-use crate::welcome::python_env::get_python_path;
+use crate::welcome::python_env::get_python_command;
 use log::{debug, error, info, warn};
 
 // Helper to convert HH:MM:SS to seconds
@@ -295,7 +294,6 @@ pub async fn import_word_transcript<R: Runtime>(
     let temp_html_filename = format!("temp_transcript_html_{}_{}.html", transcript_filename_stem, unique_id);
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 
-    let python_path = get_python_path()?;
     let script_path_raw = app_handle.path()
         .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
@@ -308,8 +306,8 @@ pub async fn import_word_transcript<R: Runtime>(
         "html".to_string(),
     ];
 
-    info!("[import_word_transcript] Pandoc CMD: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
-    let (mut rx, _child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+    info!("[import_word_transcript] Pandoc CMD: {} {}", script_path.display(), pandoc_args.join(" "));
+    let (mut rx, _child) = get_python_command(&app_handle)?
         .args(&[script_path.to_string_lossy().to_string()])
         .args(&pandoc_args)
         .spawn()

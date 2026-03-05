@@ -68,6 +68,8 @@ pub struct VerificationStatus {
     pub ctranslate2_verified: bool,
     #[serde(default)]
     pub faster_whisper_dependencies_verified: bool,
+    #[serde(default)]
+    pub whisper_cpp_verified: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -129,6 +131,8 @@ pub struct AdvancedTranscriptionConfig {
     pub faster_whisper_beam_size: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub num_threads: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_preference: Option<String>, // "auto", "cpu", "cuda", "mps"
 }
 
 #[derive(Debug, Serialize)]

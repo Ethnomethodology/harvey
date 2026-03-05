@@ -7,6 +7,10 @@
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
+	import { invoke } from '@tauri-apps/api/core';
+	import { project as projectMainStore } from '$lib/stores/projectStore.js';
+	import { open as openExternal } from '@tauri-apps/plugin-shell';
 
 	// Props
 	export let fileName = '';
@@ -23,6 +27,9 @@
 	let modalTranscriptionMode = 'automatic'; // Kept for store compatibility if needed, but UI uses modalTab
 	let modalTab = 'automatic'; // 'automatic' | 'manual'
 	let modalSelectedLanguage = 'auto';
+    let modalInitialPrompt = '';
+    let modalHotwords = '';
+    let showAdditionalParamsModal = false;
 
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
@@ -101,15 +108,17 @@
 		// Start time is now handled by store
 		if (modalTab === 'automatic') {
             const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel);
-            const family = selectedModelObj?.family || 'whisper-cpp';
+            const engine = selectedModelObj?.family || 'whisper-cpp';
 
 			dispatch('confirmStart', {
 				transcriptionMode: 'automatic',
 				selectedModel: modalSelectedModel,
-                selectedModelFamily: family,
+                selectedTranscriptionEngine: engine,
 				selectedLanguage: modalSelectedLanguage,
 				enableDiarization: modalEnableDiarization,
 				speakersConfig: modalSpeakersConfig,
+                initialPrompt: modalInitialPrompt,
+                hotwords: modalHotwords
 			});
 		} else {
 			dispatch('confirmStart', {
@@ -166,6 +175,9 @@
 			$transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTab = $transcriptStore.transcriptionMode || 'automatic'; // Initialize tab from store
+
+        modalInitialPrompt = $transcriptStore.initialPrompt || '';
+        modalHotwords = $transcriptStore.hotwords || '';
 
 		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
 		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
@@ -320,23 +332,57 @@
 							</div>
 						{:else if downloadedModelsList.length === 0}
 							<div
-								class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-md text-center space-y-3 my-4"
+								class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md text-center space-y-3 my-4"
 							>
-								<p class="text-blue-800 dark:text-blue-300 font-medium">No transcription models available.</p>
-                                <p class="text-xs text-blue-600 dark:text-blue-400 mt-1">Please download a model in the Configure screen.</p>
-                                <div class="flex justify-center mt-2">
+								<p class="text-yellow-800 dark:text-yellow-300 font-medium">No transcription models available.</p>
+                                <div class="flex items-center justify-center space-x-2">
+                                    <p class="text-xs text-yellow-700 dark:text-yellow-400">Please download a model in the</p>
 									<button
 										type="button"
 										on:click={handleOpenConfig}
-										class="flex items-center space-x-1 bg-blue-100 dark:bg-blue-800 px-3 py-1.5 rounded border border-blue-200 dark:border-blue-700 shadow-sm hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors text-blue-800 dark:text-blue-100 text-xs font-semibold"
+										class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
 									>
-										Configure
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+											class="w-4 h-4 text-yellow-500"
+										>
+											<path
+												d="M17.004 10.407c.138.435-.216.842-.672.842h-3.465a.75.75 0 0 1-.65-.375l-1.732-3c-.229-.396-.053-.907.393-1.004a5.252 5.252 0 0 1 6.126 3.537ZM8.12 8.464c.307-.338.838-.235 1.066.16l1.732 3a.75.75 0 0 1 0 .75l-1.732 3c-.229.397-.76.5-1.067.161A5.23 5.23 0 0 1 6.75 12a5.23 5.23 0 0 1 1.37-3.536ZM10.878 17.13c-.447-.098-.623-.608-.394-1.004l1.733-3.002a.75.75 0 0 1 .65-.375h3.465c.457 0 .81.407.672.842a5.252 5.252 0 0 1-6.126 3.539Z"
+											/>
+											<path
+												fill-rule="evenodd"
+												d="M21 12.75a.75.75 0 1 0 0-1.5h-.783a8.22 8.22 0 0 0-.237-1.357l.734-.267a.75.75 0 1 0-.513-1.41l-.735.268a8.24 8.24 0 0 0-.689-1.192l.6-.503a.75.75 0 1 0-.964-1.149l-.6.504a8.3 8.3 0 0 0-1.054-.885l.391-.678a.75.75 0 1 0-1.299-.75l-.39.676a8.188 8.188 0 0 0-1.295-.47l.136-.77a.75.75 0 0 0-1.477-.26l-.136.77a8.36 8.36 0 0 0-1.377 0l-.136-.77a.75.75 0 1 0-1.477.26l.136.77c-.448.121-.88.28-1.294.47l-.39-.676a.75.75 0 0 0-1.3.75l.392.678a8.29 8.29 0 0 0-1.054.885l-.6-.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L3.8 8.216a.75.75 0 1 0-.513 1.41l.735.267a8.222 8.222 0 0 0-.238 1.356h-.783a.75.75 0 0 0 0 1.5h.783c.042.464.122.917.238 1.356l-.735.268a8.24 8.24 0 0 0 .513 1.41l.735-.268c.197.417.428.816.69 1.191l-.6.504a.75.75 0 0 0 .963 1.15l.601-.505c.326.323.679.62 1.054.885l-.392.68a.75.75 0 0 0 1.3.75l.39-.679c.414.192.847.35 1.294.471l-.136.77a.75.75 0 0 0 1.477.261l.137-.772a8.332 8.332 0 0 0 1.376 0l.136.772a.75.75 0 1 0 1.477-.26l-.136-.771a8.19 8.19 0 0 0 1.294-.47l.391.677a.75.75 0 0 0 1.3-.75l-.393-.679a8.29 8.29 0 0 0 1.054-.885l.601.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L18.2 15.784a.75.75 0 1 0 .513-1.41l.735-.267a8.222 8.222 0 0 0 .237-1.356h.784Zm-2.657-3.06a6.744 6.744 0 0 0-1.19-2.053 6.784 6.784 0 0 0-1.82-1.51A6.705 6.705 0 0 0 12 5.25a6.8 6.8 0 0 0-1.225.11 6.7 6.7 0 0 0-2.15.793 6.784 6.784 0 0 0-2.952 3.489.76.76 0 0 1-.036.098A6.74 6.74 0 0 0 5.251 12a6.74 6.74 0 0 0 3.366 5.842l.009.005a6.704 6.704 0 0 0 2.18.798l.022.003a6.792 6.792 0 0 0 2.368-.004 6.704 6.704 0 0 0 2.205-.811 6.785 6.785 0 0 0 1.762-1.484l.009-.01.009-.01a6.743 6.743 0 0 0 1.18-2.066c.253-.707.39-1.469.39-2.263a6.74 6.74 0 0 0-.408-2.309Z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+										<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">Configure</span>
 									</button>
+                                    <p class="text-xs text-yellow-700 dark:text-yellow-400">screen.</p>
                                 </div>
 							</div>
 						{:else}
 							<div class="space-y-1">
-								<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+								<div class="flex items-center justify-between">
+									<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+									{#if modalSelectedModel}
+										{@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+										{#if selectedModelObj?.info_url}
+											<button 
+												class="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 focus:outline-none p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-1"
+												title="View on Hugging Face"
+												on:click|stopPropagation={() => openExternal(selectedModelObj.info_url)}
+											>
+												<span class="text-[10px]">Hugging Face</span>
+												<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
+													<path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
+													<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
+												</svg>
+											</button>
+										{/if}
+									{/if}
+								</div>
 								<Dropdown
 									containerClasses="w-full"
 									options={downloadedModelsList.map((m) => ({ value: m.name, label: `${m.name} (${m.family || 'whisper.cpp'})` }))}
@@ -344,6 +390,14 @@
 									placeholder="Select a Model"
 									disabled={downloadedModelsList.length === 0}
 								/>
+                                {#if modalSelectedModel}
+                                    {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+                                    {#if selectedModelObj?.description}
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 italic">
+                                            {selectedModelObj.description}
+                                        </p>
+                                    {/if}
+                                {/if}
 							</div>
 
 							<div class="space-y-1">
@@ -356,7 +410,7 @@
 								/>
 							</div>
 
-							<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3">
+							<div class="pt-2 space-y-3 border-t border-gray-200 dark:border-gray-700 mt-3">
 								<div class="flex justify-between items-center">
 									<div>
 										<strong>Speakers:</strong>
@@ -373,9 +427,7 @@
 										</p>
 									</div>
 								{/if}
-							</div>
 
-							<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
 								{#if $configStatus.diarization_model_downloaded}
 									<div class="flex items-center space-x-2">
 										<input
@@ -395,7 +447,7 @@
 									</div>
 									{#if modalEnableDiarization}
 										<p
-											class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black"
+											class="text-xs mt-1 ml-6 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black"
 										>
 											Note: Speaker identification can significantly increase transcription time.
 										</p>
@@ -433,6 +485,12 @@
 									</div>
 								{/if}
 							</div>
+
+                            <div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3 flex justify-center">
+                                <button type="button" class="btn-xs-secondary w-full" on:click={() => (showAdditionalParamsModal = true)}>
+                                    Edit Additional Parameters
+                                </button>
+                            </div>
 						{/if}
 					{:else}
 						<!-- MANUAL SETTINGS -->
@@ -653,6 +711,42 @@
 		}}
 		on:close={() => (showNestedSpeakersModal = false)}
 	/>
+{/if}
+
+{#if showAdditionalParamsModal}
+    <AdditionalParametersModal
+        bind:showModal={showAdditionalParamsModal}
+        currentEngine={downloadedModelsList.find(m => m.name === modalSelectedModel)?.family || 'whisper-cpp'}
+        initialPrompt={modalInitialPrompt}
+        hotwords={modalHotwords}
+        on:confirm={async (e) => {
+            modalInitialPrompt = e.detail.initialPrompt;
+            modalHotwords = e.detail.hotwords;
+
+            // 1. Update store
+            transcriptStore.update(ts => ({ ...ts, initialPrompt: modalInitialPrompt, hotwords: modalHotwords }));
+
+            // 2. Update DB
+            try {
+                const projectData = get(projectMainStore);
+                const relativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+                if (projectData && projectData.id && relativePath) {
+                    await invoke('save_media_additional_parameters', {
+                        projectId: projectData.id,
+                        assetRelativePath: relativePath,
+                        initialPrompt: modalInitialPrompt,
+                        hotwords: modalHotwords
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to save additional parameters immediately:", err);
+            }
+
+            showAdditionalParamsModal = false;
+        }}
+        on:close={() => (showAdditionalParamsModal = false)}
+    />
 {/if}
 
 <style>

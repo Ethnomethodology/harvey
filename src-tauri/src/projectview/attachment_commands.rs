@@ -1,7 +1,7 @@
 // src-tauri/src/projectview/attachment_commands.rs
 use tauri::AppHandle;
-use log::{debug, error, info, warn};
-use std::path::{Path, PathBuf};
+use log::{debug, info};
+use std::path::{PathBuf};
 use std::fs;
 use crate::projectview::db_handler;
 use crate::projectview::shared_types::{ProjectXml, FileMetadata};

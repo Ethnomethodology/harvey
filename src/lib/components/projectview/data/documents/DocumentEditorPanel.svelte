@@ -173,9 +173,9 @@
              editorJsonState = jsonString || '';
         }
     }
-    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps = false) {
         if (editorRef) {
-            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
+            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps);
         }
     }
     export function getTopVisibleRowInfo() {

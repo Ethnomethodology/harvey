@@ -49,6 +49,8 @@ pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
     pub language_code: Option<String>,
+    pub initial_prompt: Option<String>,
+    pub hotwords: Option<String>,
 }
 
 pub fn get_db_path() -> Result<PathBuf, CommandError> {
@@ -592,6 +594,8 @@ pub fn init_db() -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             language_code TEXT, -- New column for language code
+            initial_prompt TEXT, -- New column for initial prompt
+            hotwords TEXT, -- New column for hotwords
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
@@ -611,6 +615,27 @@ pub fn init_db() -> Result<(), CommandError> {
     if !lang_code_exists {
         info!("[DB] Adding language_code column to media_transcript_data table.");
         conn.execute("ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT", [])?;
+    }
+
+    // Migration for initial_prompt and hotwords
+    let mut stmt_check_prompt = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let prompt_exists = stmt_check_prompt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "initial_prompt"));
+
+    if !prompt_exists {
+        info!("[DB] Adding initial_prompt column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN initial_prompt TEXT", [])?;
+    }
+
+    let mut stmt_check_hotwords = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let hotwords_exists = stmt_check_hotwords
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "hotwords"));
+
+    if !hotwords_exists {
+        info!("[DB] Adding hotwords column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN hotwords TEXT", [])?;
     }
 
     // Trigger for media_transcript_data updated_at
@@ -925,6 +950,8 @@ pub fn save_media_transcript_data(
     original_import_path: Option<&str>,
     speaker_names: Option<&Vec<String>>,
     language_code: Option<&str>,
+    initial_prompt: Option<&str>,
+    hotwords: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
         "[DB] Saving media transcript data for project_id {}: {}",
@@ -940,12 +967,14 @@ pub fn save_media_transcript_data(
 
     let sql = "
         INSERT INTO media_transcript_data (
-            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code
-        ) VALUES (?1, ?2, ?3, ?4, ?5)
+            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code, initial_prompt, hotwords
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
             language_code = excluded.language_code,
+            initial_prompt = excluded.initial_prompt,
+            hotwords = excluded.hotwords,
             updated_at = CURRENT_TIMESTAMP;
     ";
 
@@ -957,6 +986,8 @@ pub fn save_media_transcript_data(
             to_sql_optional_str(original_import_path),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
             to_sql_optional_str(language_code),
+            to_sql_optional_str(initial_prompt),
+            to_sql_optional_str(hotwords),
         ],
     )?;
 
@@ -964,6 +995,60 @@ pub fn save_media_transcript_data(
         "[DB] Media transcript data saved successfully for project_id {}: {}",
         project_id, asset_relative_path
     );
+    Ok(())
+}
+
+pub fn update_media_additional_parameters(
+    project_id: &str,
+    asset_relative_path: &str,
+    initial_prompt: Option<&str>,
+    hotwords: Option<&str>,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Updating media additional parameters for project_id {}: {}",
+        project_id, asset_relative_path
+    );
+
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // We do an upsert but keep the existing values for other columns if they exist.
+    // The easiest way is INSERT ... ON CONFLICT DO UPDATE SET.
+    // However, if the row doesn't exist, we'll insert NULLs for other columns, which might be okay.
+    // Let's use standard UPDATE first. If the row doesn't exist, it does nothing.
+    // Typically, when a user sets these parameters, the media_transcript_data row should already exist
+    // because it's created during media import or transcript load.
+    // So we'll try an UPDATE. If no rows affected, we can do an INSERT.
+
+    let rows_affected = conn.execute(
+        "UPDATE media_transcript_data SET
+            initial_prompt = ?1,
+            hotwords = ?2,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE project_id = ?3 AND asset_relative_path = ?4",
+        params![
+            to_sql_optional_str(initial_prompt),
+            to_sql_optional_str(hotwords),
+            project_id,
+            asset_relative_path
+        ]
+    )?;
+
+    if rows_affected == 0 {
+        // If it doesn't exist, insert it.
+        conn.execute(
+            "INSERT INTO media_transcript_data (
+                project_id, asset_relative_path, initial_prompt, hotwords
+            ) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                project_id,
+                asset_relative_path,
+                to_sql_optional_str(initial_prompt),
+                to_sql_optional_str(hotwords)
+            ]
+        )?;
+    }
+
     Ok(())
 }
 
@@ -980,7 +1065,7 @@ pub fn load_media_transcript_data(
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare("
-        SELECT original_import_path, speaker_names_json, language_code
+        SELECT original_import_path, speaker_names_json, language_code, initial_prompt, hotwords
         FROM media_transcript_data
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -990,6 +1075,8 @@ pub fn load_media_transcript_data(
             original_import_path: row.get(0)?,
             speaker_names_json: row.get(1)?,
             language_code: row.get(2)?,
+            initial_prompt: row.get(3)?,
+            hotwords: row.get(4)?,
         })
     }).optional()?;
 
@@ -2368,6 +2455,8 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             original_import_path TEXT,
             speaker_names_json TEXT,
             language_code TEXT,
+            initial_prompt TEXT,
+            hotwords TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),

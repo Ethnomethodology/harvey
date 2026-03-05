@@ -3,12 +3,14 @@
   import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
+  import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   let isPanelOpen = false;
   let isModelInstalled = false;
   let isLoading = true;
   let isInstalling = false;
+  let isChecking = false;
   let error = '';
   let showInstallModal = false;
   let installLogs = [];
@@ -31,6 +33,7 @@
   async function handleInstall() {
     showInstallModal = true;
     isInstalling = true;
+    isChecking = false;
     installLogs = [];
     error = '';
 
@@ -40,13 +43,21 @@
       });
 
       await invoke('download_whisper_model');
-      await checkStatus();
+      isInstalling = false;
+      isChecking = true;
+      try {
+          await updateConfigStatus(true);
+          await checkStatus();
+      } finally {
+          isChecking = false;
+      }
     } catch (e) {
       console.error('Error installing Whisper model:', e);
       error = `Failed to install model: ${e.message || e}`;
       installLogs = [...installLogs, `Error: ${e.message || e}`];
-    } finally {
       isInstalling = false;
+      isChecking = false;
+    } finally {
       if (unlisten) {
         unlisten();
       }
@@ -115,7 +126,7 @@
   </div>
 {/if}
 
-<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} title="Whisper Model Installation" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
+<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} isChecking={isChecking} title="Whisper Model Installation" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
 
 <style lang="postcss">
   .btn-blue-small {

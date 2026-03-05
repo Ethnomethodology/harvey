@@ -48,13 +48,18 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	// Filter out translation models.
+	// Filter out translation models and other non-transcription models.
 	// Transcription models are those with NO family (whisper.cpp) OR family === 'faster-whisper' OR family === 'whisper-cpp'.
-	const transcriptionModels = Array.isArray(models) ? models.filter(model =>
-		(!model.family && !model.name.includes('/')) ||
-		model.family === 'faster-whisper' ||
-		model.family === 'whisper-cpp'
-	) : [];
+    // We also exclude models that contain 'paraphrase' as they are likely translation/helper models.
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => {
+        const family = model.family;
+        const name = model.name || '';
+        const isWhisperCpp = (!family && !name.includes('/')) || family === 'whisper-cpp';
+        const isFasterWhisper = family === 'faster-whisper';
+        const isParaphrase = name.includes('paraphrase');
+        
+        return (isWhisperCpp || isFasterWhisper) && !isParaphrase;
+    }) : [];
 	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
@@ -212,7 +217,7 @@ export async function downloadTranslationModel(from, to, downloadLocation, model
   }
 }
 
-export async function getSelectedTranslationFamily() {
+export async function getSelectedTranslationEngine() {
 	return await invoke('get_selected_translation_family');
 }
 
@@ -232,7 +237,7 @@ export async function getDependencyCheckErrors() {
 	return await invoke('get_dependency_check_errors');
 }
 
-export async function setSelectedTranslationFamily(family) {
+export async function setSelectedTranslationEngine(family) {
 
 	try {
 		await invoke('set_selected_translation_family', { family });
@@ -302,7 +307,15 @@ export async function fetchAvailableModels() {
 		return Array.isArray(models) ? models : [];
 	} catch (error) {
 		console.error("Error invoking fetch_available_models_command:", error);
-		throw new Error(`Failed to fetch available models: ${error?.message || error}`);
+		let errorMessage = "Unknown error";
+		if (typeof error === 'string') {
+			errorMessage = error;
+		} else if (error && typeof error === 'object') {
+			if (error.payload) errorMessage = error.payload;
+			else if (error.message) errorMessage = error.message;
+			else errorMessage = JSON.stringify(error);
+		}
+		throw new Error(`Failed to fetch available models: ${errorMessage}`);
 	}
 }
 

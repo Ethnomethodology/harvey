@@ -8,10 +8,16 @@ import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
 function normalizePath(path) {
-    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
-        return path.substring(4);
+    if (typeof path !== 'string') {
+        return path;
     }
-    return path;
+    // On Windows, paths may start with the `\\?\` prefix. This removes it.
+    let normalized = path.startsWith('\\\\?\\') ? path.substring(4) : path;
+
+    // Normalize backslashes to forward slashes for consistent path handling.
+    normalized = normalized.replace(/\\/g, '/');
+
+    return normalized;
 }
 
 
@@ -35,7 +41,7 @@ export const initialTranscriptState = {
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
-    selectedModelFamily: 'whisper-cpp',
+    selectedTranscriptionEngine: 'whisper-cpp',
     selectedLanguage: null,
     speakers: { count: 0, names: [], translatedNames: [] },
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -67,8 +73,13 @@ export const initialTranscriptState = {
         lastUsedSpeakerIndex: -1
     },
 
+    // Additional Parameters
+    initialPrompt: "",
+    hotwords: "",
+
     // Dual Transcript Mode
     isDualModeActive: loadDualModeState(),
+    showDualTranscriptModal: false,
     secondaryTranscriptPath: null,
     secondaryTranscriptSegments: [],
 
@@ -242,6 +253,8 @@ export function clearTranscriptState() {
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
                 speakers: { count: 0, names: [], translatedNames: [] },
+                initialPrompt: "",
+                hotwords: "",
                 activeMediaDuringTranscriptionStart: null,
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
@@ -253,8 +266,7 @@ export function clearTranscriptState() {
 
 export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
     const store = get(transcriptStore);
-    const isDualMode = store.isDualModeActive;
-
+    
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -272,6 +284,11 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
             await switchTranscript(transcriptPathToPrioritize);
         }
     } else {
+        // If a different media is selected, deactivate dual mode if it's active.
+        if (store.isDualModeActive) {
+            console.log('[TranscriptStore] Media changed, deactivating dual mode.');
+            await deactivateDualMode();
+        }
 
         const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
         const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
@@ -331,6 +348,27 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                 console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
             }
 
+            // Load additional parameters when media changes
+            let initialPrompt = "";
+            let hotwords = "";
+            if (newSelectedMedia && newSelectedMedia.relative_path) {
+                try {
+                    const projectData = get(projectMainStore);
+                    if (projectData && projectData.id) {
+                        const paramsRes = await invoke('load_media_additional_parameters', {
+                            projectId: projectData.id,
+                            assetRelativePath: newSelectedMedia.relative_path
+                        });
+                        if (paramsRes) {
+                            initialPrompt = paramsRes.initial_prompt || "";
+                            hotwords = paramsRes.hotwords || "";
+                        }
+                    }
+                } catch (err) {
+                    console.warn("[TranscriptStore] Failed to load additional parameters:", err);
+                }
+            }
+
             transcriptStore.update((ts) => {
                 const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
                 return {
@@ -345,6 +383,8 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
                         currentSegmentIndex: -1
                     },
                     speakers: speakersToLoad,
+                    initialPrompt: initialPrompt,
+                    hotwords: hotwords,
                     segments: [],
                     activeTranscript: null,
                     currentTranscriptPath: null,
@@ -361,19 +401,6 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
             } else {
                 
             }
-        }
-    }
-
-    if (isDualMode) {
-        const updatedStore = get(transcriptStore);
-        const associatedTranscripts = updatedStore.selectedMediaFile?.associated_transcripts || [];
-        const primaryTranscriptPath = updatedStore.currentTranscriptPath;
-        const otherTranscripts = associatedTranscripts.filter(t => t.path !== primaryTranscriptPath);
-
-        if (otherTranscripts.length > 0) {
-            await setSecondaryTranscript(otherTranscripts[0].path);
-        } else {
-            await setSecondaryTranscript(null);
         }
     }
 }
@@ -438,6 +465,7 @@ export function updatePlayerCurrentSegmentIndex(index) {
 }
 
 export function setTranscriptData(path, data, inferSpeakers = false) {
+    const normalizedInputPath = normalizePath(path);
     const newSegments = Array.isArray(data) ? data : [];
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
@@ -463,21 +491,21 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        const mediaFile = get(transcriptStore).selectedMediaFile;
+        const mediaFile = ts.selectedMediaFile;
         const projectRootPath = get(projectMainStore).projectRootPath;
 
-        let relativePathToMatch = path;
-        if (projectRootPath && path.startsWith(projectRootPath)) {
-            relativePathToMatch = path.substring(projectRootPath.length).replace(/^[\\/]/, '');
+        let relativePathToMatch = normalizedInputPath;
+        if (projectRootPath && normalizedInputPath.startsWith(projectRootPath)) {
+            relativePathToMatch = normalizedInputPath.substring(projectRootPath.length).replace(/^[\\/]/, '');
         }
 
         const transcriptInfo = mediaFile?.associated_transcripts?.find(t => {
             // Compare against relativePath if available, otherwise fallback to path
-            return t.relativePath === relativePathToMatch || t.path === path;
+            return t.relativePath === relativePathToMatch || t.path === normalizedInputPath;
         });
 
         if (!transcriptInfo) {
-            console.error(`[setTranscriptData] Could not find transcript info for path: ${path}. Current selectedMediaFile:`, mediaFile);
+            console.error(`[setTranscriptData] Could not find transcript info for path: ${normalizedInputPath}. Current selectedMediaFile:`, mediaFile);
             console.error(`[setTranscriptData] Available associated_transcripts:`, mediaFile?.associated_transcripts);
             // Clear transcript data if path is invalid or not found
             return {
@@ -490,24 +518,27 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        const langCode = transcriptInfo.language_code || (path.endsWith('.en.json') ? 'en' : 'original');
+        const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
         const isEnglish = langCode === 'en';
         const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
-        updateProjectStoreState({ statusMessage: `Media transcript loaded: ${path.split(/[\\/]/).pop()}` });
+        // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree
+        const targetPath = transcriptInfo.path;
 
-        const loadedSettings = loadManualSettingsForTranscript(path);
+        updateProjectStoreState({ statusMessage: `Media transcript loaded: ${targetPath.split(/[\\/]/).pop()}` });
+
+        const loadedSettings = loadManualSettingsForTranscript(targetPath);
 
         return {
             ...ts,
             segments: finalSegmentsForDisplay,
             activeTranscript: {
-                path: path,
+                path: targetPath,
                 language_code: langCode,
                 segments: newSegments, // Store raw, unmapped segments
             },
-			currentTranscriptPath: path,
+			currentTranscriptPath: targetPath,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -825,8 +856,8 @@ export function setSelectedModel(modelName) {
     transcriptStore.update((ts) => ({ ...ts, selectedModelName: modelName || null }));
 }
 
-export function setSelectedModelFamily(family) {
-    transcriptStore.update((ts) => ({ ...ts, selectedModelFamily: family || 'whisper-cpp' }));
+export function setSelectedTranscriptionEngine(engine) {
+    transcriptStore.update((ts) => ({ ...ts, selectedTranscriptionEngine: engine || 'whisper-cpp' }));
 }
 
 export function setSelectedLanguage(languageCode) {
@@ -1595,17 +1626,87 @@ export function setSpeakerConfig(newSpeakerConfig) {
 
 // --- Dual Transcript Mode Functions ---
 
-export async function switchDualModeTranscripts(newPrimaryPath) {
-    await switchTranscript(newPrimaryPath);
-    const store = get(transcriptStore);
-    const associatedTranscripts = store.selectedMediaFile?.associated_transcripts || [];
-    const otherTranscripts = associatedTranscripts.filter(t => t.path !== newPrimaryPath);
+export function setDualTranscriptModal(show) {
+    transcriptStore.update(ts => ({ ...ts, showDualTranscriptModal: !!show }));
+}
 
-    if (otherTranscripts.length > 0) {
-        await setSecondaryTranscript(otherTranscripts[0].path);
-    } else {
-        await setSecondaryTranscript(null);
+export async function activateDualMode(primaryPath, secondaryPath) {
+    console.log('[TranscriptStore] activateDualMode:', primaryPath, secondaryPath);
+    
+    // Set loading state or just proceed if loadTranscriptFile handles it
+    transcriptStore.update(ts => ({
+        ...ts,
+        showDualTranscriptModal: false
+    }));
+
+    try {
+        const projectService = await import('../services/projectService.js');
+        
+        // Use existing functions to load both. 
+        // These expect ABSOLUTE paths when called directly like this if the backend needs them.
+        await projectService.loadTranscriptFile(primaryPath);
+        await setSecondaryTranscript(secondaryPath);
+
+        // ONLY after successful load of BOTH, set dual mode active
+        transcriptStore.update(ts => ({
+            ...ts,
+            isDualModeActive: true
+        }));
+
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(true));
+        }
+    } catch (e) {
+        console.error('[TranscriptStore] Error activating dual mode:', e);
+        
+        // Extract a readable error message
+        let errorMsg = 'Unknown error';
+        if (typeof e === 'string') errorMsg = e;
+        else if (e instanceof Error) errorMsg = e.message;
+        else if (e && typeof e === 'object' && e.message) errorMsg = e.message;
+        
+        message(`Failed to activate dual mode: ${errorMsg}`, { title: 'Error', type: 'error' });
+        
+        // Ensure dual mode is OFF on failure
+        transcriptStore.update(ts => ({
+            ...ts,
+            isDualModeActive: false,
+            secondaryTranscriptPath: null,
+            secondaryTranscriptSegments: []
+        }));
     }
+}
+
+export async function deactivateDualMode() {
+    const store = get(transcriptStore);
+    if (store.transcriptDirty) {
+        // We should ideally attempt to save here as requested: "after saving changes (if there is anything to be saved)"
+        try {
+            const projectService = await import('../services/projectService.js');
+            await projectService.saveTranscriptData();
+        } catch (e) {
+            const confirmed = await confirm('Failed to save changes. Deactivate Dual Mode anyway? Changes will be lost.', { title: 'Save Failed', type: 'warning' });
+            if (!confirmed) return;
+        }
+    }
+
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(false));
+        } catch (error) {
+            console.error('[TranscriptStore] Error saving dual mode state to localStorage:', error);
+        }
+    }
+
+    transcriptStore.update(ts => ({
+        ...ts,
+        isDualModeActive: false,
+        secondaryTranscriptPath: null,
+        secondaryTranscriptSegments: [],
+        transcriptDirty: false, // Reset dirty after save/discard
+        transcriptUndoStack: [],
+        transcriptRedoStack: []
+    }));
 }
 
 export async function setSecondaryTranscript(path) {
@@ -1619,13 +1720,22 @@ export async function setSecondaryTranscript(path) {
     }
 
     const store = get(transcriptStore);
-    if (store.secondaryTranscriptPath === path) {
+    const normalizedInputPath = normalizePath(path);
+    
+    // Find the transcript info from the project tree to get the canonical normalized path
+    const transcriptInfo = store.selectedMediaFile?.associated_transcripts?.find(t => {
+        return t.path === normalizedInputPath || t.relativePath === normalizedInputPath;
+    });
+
+    const targetPath = transcriptInfo ? transcriptInfo.path : normalizedInputPath;
+
+    if (store.secondaryTranscriptPath === targetPath) {
         return; // Already selected
     }
 
     // Automatically switch the primary if the user selects the same one
-    if (store.currentTranscriptPath === path) {
-        const otherTranscripts = store.selectedMediaFile?.associated_transcripts?.filter(t => t.path !== path) || [];
+    if (store.currentTranscriptPath === targetPath) {
+        const otherTranscripts = store.selectedMediaFile?.associated_transcripts?.filter(t => t.path !== targetPath) || [];
         if (otherTranscripts.length > 0) {
             await switchTranscript(otherTranscripts[0].path);
         } else {
@@ -1637,8 +1747,7 @@ export async function setSecondaryTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const normalizedPath = normalizePath(path);
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: targetPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
 
         const primarySegments = get(transcriptStore).segments;
@@ -1650,11 +1759,11 @@ export async function setSecondaryTranscript(path) {
 
         transcriptStore.update(ts => ({
             ...ts,
-            secondaryTranscriptPath: path,
+            secondaryTranscriptPath: targetPath,
             secondaryTranscriptSegments: segments,
         }));
     } catch (e) {
-        console.error(`[TranscriptStore] Failed to load secondary transcript from ${path}:`, e);
+        console.error(`[TranscriptStore] Failed to load secondary transcript from ${targetPath}:`, e);
         updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}` });
         transcriptStore.update(ts => ({ ...ts, secondaryTranscriptPath: null, secondaryTranscriptSegments: [] }));
     }
@@ -1726,7 +1835,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             
             // Set start time if starting fresh, otherwise keep existing
-            const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
+            const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
 
             updatedState = {
                 ...ts,
@@ -1805,7 +1914,7 @@ export function clearTranslationStatus(finalStatusMessage = 'Ready', error = nul
             translationProgress: { percent: 0, message: '' },
             translationJobStatus: null,
             translationErrorMessage: null,
-            ranTranslationInBackground: false,
+            ranInBackground: false,
             showTranslateModal: false,
             translationStartTime: null,
         };

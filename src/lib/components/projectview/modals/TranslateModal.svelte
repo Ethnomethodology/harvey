@@ -7,7 +7,7 @@
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
-	import { getSelectedTranslationFamily } from '$lib/services/configureActions';
+	import { getSelectedTranslationEngine } from '$lib/services/configureActions';
 	import { message } from '@tauri-apps/plugin-dialog';
 
 	export let availableTranscripts = [];
@@ -20,7 +20,7 @@
 	let filteredModels = [];
 	let modelOptions = [];
 	let selectedModel = '';
-	let selectedFamily = 'helsinki';
+	let selectedEngine = 'helsinki';
 	let selectedSourceLanguage = 'auto';
 	let selectedTargetLanguage = 'en';
 	
@@ -131,7 +131,7 @@
 	}
 
 	$: {
-		filteredModels = localModels.filter(m => m.family === selectedFamily);
+		filteredModels = localModels.filter(m => m.family === selectedEngine);
 		if (filteredModels.length > 0) {
 			modelOptions = filteredModels.map(model => ({
 				value: model.name,
@@ -152,11 +152,12 @@
 
 	async function loadData() {
 		try {
-			[localModels, selectedFamily] = await Promise.all([
+			const [models, engine] = await Promise.all([
 				invoke('get_local_translation_models'),
-				getSelectedTranslationFamily()
+				getSelectedTranslationEngine()
 			]);
-			selectedFamily = selectedFamily || 'helsinki';
+            localModels = models;
+			selectedEngine = engine || 'helsinki';
 
 			// Smarter default for source language
 			const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
@@ -294,7 +295,7 @@
 							<div
 								class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-md text-center space-y-3 my-4"
 							>
-								<p class="text-blue-800 dark:text-blue-300 font-medium">No {selectedFamily === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available.</p>
+								<p class="text-blue-800 dark:text-blue-300 font-medium">No {selectedEngine === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available.</p>
 								<div class="flex items-center justify-center space-x-2">
 									<p class="text-xs text-blue-600 dark:text-blue-400">Please download a model in the</p>
 									<button

@@ -4,8 +4,10 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode, setDualTranscriptModal, deactivateDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
+	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
+	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
 	// --- Service Imports ---
 	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
@@ -19,10 +21,12 @@
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+	import DualTranscriptModal from '../modals/DualTranscriptModal.svelte';
 	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
+	import { AudioLines, Rows2 } from 'lucide-svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -124,10 +128,13 @@
 	
 
 	// --- Lifecycle ---
-	onMount(async () => { await loadConfiguration(); });
+	onMount(async () => { 
+		await updateConfigStatus();
+		await loadConfiguration(); 
+	});
 
 	// --- Event Handlers ---
-	function handleTranscribeClick() {
+	async function handleTranscribeClick() {
 		console.log('TopBar: Transcribe icon clicked');
 		if (!$transcriptStore.selectedMediaFile?.path) {
 			message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
@@ -138,7 +145,7 @@
 			message("Please select the audio language first.", { title: "No Language Selected", type: "warning" });
 			return;
 		}
-		requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
+		await requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
 	}
 
 	function openExportModal() {
@@ -214,10 +221,11 @@
  }
 	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
 	function openSpeakersModal() { isSpeakersModalOpen = true; }
-	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail;
- console.log("TopBar: Confirmed speakers:", count, names, secondNames);
- updateSpeakerConfig(count, names, secondNames);
- }
+	function handleSpeakersConfirm(event) {
+		const { count, names, translatedNames } = event.detail;
+		console.log("TopBar: Confirmed speakers:", count, names, translatedNames);
+		updateSpeakerConfig(count, names, translatedNames);
+	}
 	function handleMediaSelectionChange(selectedPath) {
 		if (!selectedPath) { return; }
 		const currentDropdownList = mediaFilesForDropdown;
@@ -291,7 +299,27 @@
 		// Modal closes itself on selection
 	}
 
-	
+	function cycleWaveformLayout() {
+		const layouts = ['none', 'horizontal', 'vertical'];
+		const currentIndex = layouts.indexOf($waveformLayoutStore);
+		const nextIndex = (currentIndex + 1) % layouts.length;
+		waveformLayoutStore.setLayout(layouts[nextIndex]);
+	}
+
+	async function handleDualModeToggle() {
+		if ($transcriptStore.isDualModeActive) {
+			// If already active, deactivate
+			await deactivateDualMode();
+		} else {
+			// If not active, check for media first
+			if (!$transcriptStore.selectedMediaFile?.path) {
+				message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
+				return;
+			}
+			// Open the selection modal
+			setDualTranscriptModal(true);
+		}
+	}
 
 </script>
 
@@ -349,7 +377,7 @@
 				</svg>
 				<span class="text-xs">Transcribing...</span>
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4" class:text-yellow-500={!$configStatus.transcription_models_downloaded}>
 					<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
 				</svg>
 				<span class="text-xs">Transcribe</span>
@@ -387,6 +415,16 @@
 		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
+
+		<!-- Dual Mode Toggle Button -->
+		<button 
+			on:click="{handleDualModeToggle}" 
+			class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+			title="Dual Transcript Mode"
+		>
+			<Rows2 size={16} strokeWidth={2} />
+		</button>
+
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
@@ -394,6 +432,17 @@
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
+		</button>
+
+		<!-- Waveform Toggle Button -->
+		<button 
+			on:click="{cycleWaveformLayout}" 
+			class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$waveformLayoutStore === 'none' ? 'bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600' : 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'}"
+			title="Toggle Waveform Panel ({$waveformLayoutStore})"
+		>
+			<div class="transition-transform duration-200" style="transform: rotate({$waveformLayoutStore === 'vertical' ? '90deg' : '0deg'})">
+				<AudioLines size={16} strokeWidth={2} />
+			</div>
 		</button>
 
 		<!-- Theme Toggle Button -->
@@ -417,7 +466,10 @@
 	currentLayoutKey="{$activeLayout}"
 	on:selectLayout="{handleLayoutSelected}"
 	on:close={() => isLayoutSettingsModalOpen = false}
+	hideWaveformOptions={true}
 />
+
+<DualTranscriptModal />
 
 <TranslateModal 
     availableTranscripts={transcriptsForModal}
