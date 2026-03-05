@@ -28,7 +28,7 @@ use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{Duration};
 use quick_xml;
 use regex::Regex;
-use crate::welcome::python_env::get_python_command;
+use crate::welcome::python_env::{get_python_command, get_env_path};
 use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
 use crate::transcription::whisper_cpp::WhisperCppEngine;
 use crate::transcription::faster_whisper::FasterWhisperEngine;
@@ -2579,10 +2579,46 @@ pub async fn start_live_transcription(
         "--audio-ctx".to_string(), "768".to_string(),
     ];
 
+    let env_path = get_env_path().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    let binary_path = env_path.join("Library").join("bin").join("whisper-stream.exe");
+    #[cfg(not(target_os = "windows"))]
+    let binary_path = env_path.join("bin").join("whisper-stream");
+
+    if !binary_path.exists() {
+        return Err("whisper-stream binary not found in the environment. Please ensure whisper.cpp is fully installed.".to_string());
+    }
+
+    let binary_path_str = binary_path.to_string_lossy().to_string();
+
     let mut command = app_handle
         .shell()
-        .sidecar("whisper-stream")
-        .expect("failed to create `whisper-stream` command");
+        .command(binary_path_str.clone());
+
+    // Set environment variables for dependencies
+    if cfg!(target_os = "windows") {
+        let env_bin_path = env_path.join("Library").join("bin");
+        if env_bin_path.exists() {
+            if let Ok(cleaned_env_path) = dunce::canonicalize(&env_bin_path) {
+                let env_path_str = cleaned_env_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("PATH") {
+                    command = command.env("PATH", format!("{};{}", env_path_str, existing_path));
+                } else {
+                    command = command.env("PATH", env_path_str.to_string());
+                }
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        let env_lib_path = env_path.join("lib");
+        if env_lib_path.exists() {
+            let env_lib_path_str = env_lib_path.to_string_lossy();
+            if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", env_lib_path_str, existing_path));
+            } else {
+                command = command.env("DYLD_LIBRARY_PATH", env_lib_path_str.to_string());
+            }
+        }
+    }
 
     if save_audio {
         let active_doc_path = PathBuf::from(&active_document_path);
@@ -2593,6 +2629,7 @@ pub async fn start_live_transcription(
         command = command.current_dir(attachments_dir);
     }
 
+    info!("[Live Transcription] Executing command '{}' with args: {:?}", binary_path_str, args);
     let (mut rx, whisper_child) = command.args(args).spawn().map_err(|e| e.to_string())?;
 
     *state.whisper_child.lock().await = Some(whisper_child);

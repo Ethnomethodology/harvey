@@ -252,12 +252,18 @@ pub async fn is_whisper_cpp_installed<R: Runtime>(_app: AppHandle<R>) -> Result<
     let env_path = python_env::get_env_path()?;
 
     #[cfg(target_os = "windows")]
-    let binary_path = env_path.join("Library").join("bin").join("whisper-cli.exe");
+    let (cli_path, stream_path) = (
+        env_path.join("Library").join("bin").join("whisper-cli.exe"),
+        env_path.join("Library").join("bin").join("whisper-stream.exe")
+    );
 
     #[cfg(not(target_os = "windows"))]
-    let binary_path = env_path.join("bin").join("whisper-cli");
+    let (cli_path, stream_path) = (
+        env_path.join("bin").join("whisper-cli"),
+        env_path.join("bin").join("whisper-stream")
+    );
 
-    Ok(binary_path.exists())
+    Ok(cli_path.exists() && stream_path.exists())
 }
 
 #[command]
