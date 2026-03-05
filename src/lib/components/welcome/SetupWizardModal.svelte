@@ -824,7 +824,7 @@
                                             <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name}</span>
                                             <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
                                             {#if model.name === 'ggml-base'}
-                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Recommended</span>
+                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Starter</span>
                                             {/if}
                                         </div>
                                         <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
@@ -862,7 +862,7 @@
                                             <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{model.name.split('/').pop()}</span>
                                             <span class="text-[10px] font-mono text-gray-500 bg-gray-100 dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">{model.size}</span>
                                             {#if model.name === 'Systran/faster-whisper-base'}
-                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Recommended</span>
+                                                <span class="text-[9px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Starter</span>
                                             {/if}
                                         </div>
                                         <p class="text-[11px] text-gray-500 line-clamp-1 italic mt-0.5">{model.description}</p>
@@ -930,7 +930,7 @@
             {:else if currentStep === 6}
                 <div in:fade>
                     <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">NLLB Models</h3>
-                    <p class="text-[11px] text-gray-500 mb-4 italic">One model supporting 200+ languages. Great for rare languages, but larger file size.</p>
+                    <p class="text-[11px] text-gray-500 mb-4 italic">One model supporting 200+ languages. Great for rare languages, but very heavy and requires significant disk space.</p>
                     <div class="relative mb-4">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input 
