@@ -304,7 +304,7 @@
 	});
 
 	async function handleDownload(model) {
-		if (isBusy) return;
+		if (isBusy || isDownloading || isInstallingDependencies) return;
 		if (!downloadLocation || downloadLocation.trim() === '') {
 			notificationStore.add('Please set a valid model download location first.', 'error');
 			return;
