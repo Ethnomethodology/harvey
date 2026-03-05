@@ -167,6 +167,13 @@
 
 	onMount(async () => {
 		configError = '';
+
+		// If libraries aren't installed, don't even try to load local models
+		// as it will trigger a technical error message.
+		if (!$configStatus.python_libraries_installed) {
+			return;
+		}
+
 		try {
 			const persistedEngine = await getSelectedTranscriptionEngine();
 			if (persistedEngine) {
@@ -176,7 +183,8 @@
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
 		} catch (e) {
-			configError = `Failed to load model configuration: ${e.message || e}`;
+			console.error('Failed to load model configuration:', e);
+			configError = `Failed to load model configuration: ${typeof e === 'string' ? e : (e.message || 'Unknown error')}`;
 		}
 
 		try {
