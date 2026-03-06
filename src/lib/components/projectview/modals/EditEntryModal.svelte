@@ -21,7 +21,8 @@
         Pencil,
         X,
         TextInitial,
-        Calendar as CalendarIcon
+        Calendar as CalendarIcon,
+        AlertCircle
     } from 'lucide-svelte';
 
     export let rowData = {};
@@ -198,7 +199,6 @@
                                         <Clock size={16} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                     </div>
                                 {:else}
-                                    <!-- Date & Time: Better UX using two adjacent inputs -->
                                     <div class="flex space-x-2">
                                         <div class="relative flex-1">
                                             <input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} 
@@ -220,10 +220,15 @@
                                         <input type="checkbox" bind:checked={editedData[col.field]} class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500" />
                                         <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                                     </label>
-                                {:else if colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect'}
-                                    <select id="field-{col.field}" bind:value={editedData[col.field]} multiple={colSchema.subType === 'Multiselect'}
-                                        class="input-base {errors[col.field] ? 'input-error' : ''} {colSchema.subType === 'Multiselect' ? 'h-32' : ''}">
-                                        {#if colSchema.subType !== 'Multiselect'}<option value="">Select option...</option>{/if}
+                                {:else if colSchema.subType === 'Multiselect'}
+                                    <select id="field-{col.field}" bind:value={editedData[col.field]} multiple
+                                        class="input-base h-32 {errors[col.field] ? 'input-error' : ''}">
+                                        {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
+                                    </select>
+                                {:else if colSchema.subType === 'Selectbox'}
+                                    <select id="field-{col.field}" bind:value={editedData[col.field]}
+                                        class="input-base {errors[col.field] ? 'input-error' : ''}">
+                                        <option value="">Select option...</option>
                                         {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
                                     </select>
                                 {:else if colSchema.subType === 'Project Link'}
