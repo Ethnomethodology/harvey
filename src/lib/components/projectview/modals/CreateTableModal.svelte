@@ -16,7 +16,7 @@
         'Numeric': ['Number', 'Currency', 'Percent'],
         'DateTime': ['Date', 'Date & Time', 'Time'],
         'Contact': ['Email', 'Phone', 'Hyperlink'],
-        'Misc': ['Selectbox', 'Checkbox', 'Tags', 'Project Link']
+        'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
     };
 
     const DATETIME_FORMATS = {
@@ -76,7 +76,7 @@
             schema[f.name] = {
                 type: f.type,
                 subType: f.subType,
-                options: (f.subType === 'Selectbox' || f.subType === 'Tags') ? f.options.split(',').map(o => o.trim()).filter(o => o !== '') : [],
+                options: (f.subType === 'Selectbox' || f.subType === 'Multiselect') ? f.options.split(',').map(o => o.trim()).filter(o => o !== '') : [],
                 required: f.required,
                 min: f.min !== '' ? parseFloat(f.min) : null,
                 max: f.max !== '' ? parseFloat(f.max) : null,
@@ -146,7 +146,7 @@
                                 <input type="checkbox" bind:checked={field.required} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
                             </td>
                             <td class="px-3 py-2">
-                                {#if field.subType === 'Selectbox' || field.subType === 'Tags'}
+                                {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
                                     <input type="text" bind:value={field.options} placeholder="Opt 1, Opt 2..." class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
                                 {:else if field.type === 'Numeric'}
                                     <div class="flex space-x-1">

@@ -895,10 +895,10 @@
             // 2. Load Schema
             tableSchema = await loadTableSchema(pathForTable) || {};
 
-            // 3. Transform Tags to arrays for UI consistency
+            // 3. Transform Multiselect to arrays for UI consistency
             tableData.forEach((row) => {
                 for (const field in tableSchema) {
-                    if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Tags') {
+                    if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Multiselect') {
                         if (typeof row[field] === 'string') {
                             row[field] = row[field].split(',').map(s => s.trim()).filter(Boolean);
                         } else if (!row[field]) {
