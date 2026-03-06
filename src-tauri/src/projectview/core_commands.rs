@@ -1115,6 +1115,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     waveform_data: meta_db.waveform_data,
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
+                    file_type: meta_db.file_type.unwrap_or_default(),
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &doc.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
             }
@@ -1167,6 +1168,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     waveform_data: meta_db.waveform_data,
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
+                    file_type: meta_db.file_type.unwrap_or_default(),
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &table.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
             }
@@ -1346,6 +1348,17 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     // --- Remove old .metadata.json file creation logic ---
     // The entire 'match get_media_metadata_path(...){...}' block has been removed.
 
+    let final_asset_type: String;
+    if video_codec.is_some() {
+        final_asset_type = "video".to_string();
+    } else if audio_codec.is_some() {
+        final_asset_type = "audio".to_string();
+    } else {
+        final_asset_type = source_path.extension()
+            .and_then(|s| s.to_str())
+            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+    }
+
     // --- Prepare and save metadata to SQLite database ---
     let file_metadata_for_db = FileMetadata {
         file_name: truncated_source_filename.clone(), // Use truncated filename
@@ -1367,18 +1380,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         waveform_data: None,
         language_code: None,
         properties: None,
+        file_type: final_asset_type.clone(),
     };
-
-    let final_asset_type: String;
-    if video_codec.is_some() {
-        final_asset_type = "video".to_string();
-    } else if audio_codec.is_some() {
-        final_asset_type = "audio".to_string();
-    } else {
-        final_asset_type = source_path.extension()
-            .and_then(|s| s.to_str())
-            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
-    }
 
     // destination_relative_path_for_xml is calculated before this block for XML update, use it as DB key
     // db_key_relative_path should use the truncated stem and truncated filename

@@ -1747,6 +1747,7 @@ export async function convertAndSaveTranscriptAsDoc() {
             original_import_path: null,
             speaker_names: null,
             waveform_data: null,
+            file_type: "document",
         };
 
         await invoke('update_asset_metadata_command', {
@@ -1848,6 +1849,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
             original_import_path: null,
             speaker_names: null,
             waveform_data: null,
+            file_type: "transcript",
         };
 
         await invoke('update_asset_metadata_command', {

@@ -213,6 +213,7 @@ pub async fn import_table_file(
         waveform_data: None,
         language_code: None,
         properties: None,
+        file_type: "table".to_string(),
     };
     debug!("[import_table_file] File metadata for DB created.");
 

@@ -594,6 +594,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             waveform_data: None,
             language_code: None,
             properties: None,
+            file_type: String::new(),
         };
 
         let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
@@ -625,6 +626,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 
         let mut trimmed_media_file_metadata_with_waveform = trimmed_media_file_metadata;
         trimmed_media_file_metadata_with_waveform.waveform_data = waveform_peaks;
+        trimmed_media_file_metadata_with_waveform.file_type = asset_type.clone();
 
         match db_handler::save_asset_metadata(
             &project_uuid_for_db,
@@ -895,8 +897,43 @@ pub async fn save_transcript_json(
          return Err(CommandError::from(format!("Media identifier '{}' not found in XML. Could not link saved transcript.", media_identifier)));
     }
 
+    // Get media entry relative path before closing the mutable borrow if needed, 
+    // but we need it for metadata lookup.
+    let media_entry_relative_path = project_data.media_files.files.iter().find(|f| f.name == media_identifier).unwrap().relative_path.clone();
+    let project_uuid_for_db = project_data.project_uuid.clone();
+
     save_project_xml(&normalized_project_xml_path_buf, &project_data)?;
     info!("[Backend Save Full Transcript JSON] Project XML updated.");
+
+    // Update asset_metadata for the saved transcript
+    let media_metadata = db_handler::load_asset_metadata(&project_uuid_for_db, &media_entry_relative_path)?;
+    let file_type = if let Some(meta) = media_metadata {
+        if meta.asset_type == "video" {
+            "video-transcript".to_string()
+        } else {
+            "audio-transcript".to_string()
+        }
+    } else {
+        "audio-transcript".to_string()
+    };
+
+    let transcript_abs_path = project_base_dir.join(&transcript_relative_path);
+    let transcript_metadata = FileMetadata {
+        file_name: transcript_filename.clone(),
+        file_path: transcript_abs_path.to_string_lossy().to_string(),
+        last_modified: chrono::Utc::now().to_rfc3339(),
+        file_type: file_type.clone(),
+        ..Default::default()
+    };
+
+    db_handler::save_asset_metadata(
+        &project_uuid_for_db,
+        &transcript_metadata,
+        &transcript_relative_path,
+        "transcript",
+        None
+    )?;
+
     Ok(())
 }
 
@@ -2812,6 +2849,7 @@ pub async fn stop_live_transcription(
                             waveform_data: metadata_from_db.waveform_data,
                             language_code: metadata_from_db.language_code,
                             properties: metadata_from_db.properties,
+                            file_type: metadata_from_db.file_type.unwrap_or_else(|| "document".to_string()),
                         };
 
                         if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
@@ -2845,6 +2883,7 @@ pub async fn stop_live_transcription(
                             waveform_data: None,
                             language_code: None,
                             properties: None,
+                            file_type: "document".to_string(),
                         };
 
                         let attachments_json_string = json!(audio_files).to_string();

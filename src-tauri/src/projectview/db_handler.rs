@@ -32,6 +32,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub waveform_data: Option<Vec<u8>>,
     pub language_code: Option<String>,
     pub properties: Option<String>,
+    pub file_type: Option<String>, // Added field
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -145,6 +146,7 @@ pub fn init_db() -> Result<(), CommandError> {
             waveform_data BLOB,
             language_code TEXT,
             properties TEXT,
+            file_type TEXT, -- Added field
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -152,6 +154,20 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized asset_metadata table definition with composite PK.");
+
+    // Check and add file_type column to asset_metadata if missing (for older schemas)
+    let mut stmt_check_file_type = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let file_type_column_exists = stmt_check_file_type
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "file_type"));
+    if !file_type_column_exists {
+        info!("[DB] Adding file_type column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
+        // Populate existing records
+        if let Err(e) = backfill_file_type(&conn) {
+            error!("[DB] Failed to backfill file_type: {}", e);
+        }
+    }
 
     // Check and add project_id column to asset_metadata if missing (for older schemas)
     // This simplified migration adds the column if it doesn't exist. It does not change PK for existing tables.
@@ -776,6 +792,80 @@ pub fn init_db() -> Result<(), CommandError> {
     Ok(())
 }
 
+fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
+    info!("[DB] Backfilling file_type column in asset_metadata table.");
+
+    // 1. Documents
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'document' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Documents/%' AND asset_relative_path NOT LIKE 'harvey_files/Documents/attachments/%'",
+        []
+    )?;
+
+    // 2. Tables
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'table' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Tables/%'",
+        []
+    )?;
+
+    // 3. Transcripts (Imported)
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'transcript' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Transcripts/%' AND asset_relative_path NOT LIKE 'harvey_files/Transcripts/attachments/%'",
+        []
+    )?;
+
+    // 4. Images
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'image' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Images/%'",
+        []
+    )?;
+
+    // 5. Media - Audio
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'audio' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/media/%' AND asset_type = 'audio'",
+        []
+    )?;
+
+    // 6. Media - Video
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'video' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/media/%' AND asset_type = 'video'",
+        []
+    )?;
+
+    // 7. Media - Transcripts (Generated)
+    // Heuristic: If it's in Media/<stem>/transcripts/ and ends in .json
+    // We join with the media file in the same stem to determine if it's audio-transcript or video-transcript.
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = (
+            SELECT CASE 
+                WHEN m.asset_type = 'video' THEN 'video-transcript'
+                ELSE 'audio-transcript'
+            END
+            FROM asset_metadata m
+            WHERE m.project_id = asset_metadata.project_id 
+              AND m.asset_relative_path LIKE 'harvey_files/Media/%/media/%'
+              AND substr(m.asset_relative_path, 20, instr(substr(m.asset_relative_path, 20), '/') - 1) = substr(asset_metadata.asset_relative_path, 20, instr(substr(asset_metadata.asset_relative_path, 20), '/') - 1)
+            LIMIT 1
+        )
+        WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/transcripts/%.json'",
+        []
+    )?;
+
+    // 8. Document Attachments
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'document-attachment' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Documents/attachments/%'",
+        []
+    )?;
+
+    // 9. Transcript Attachments
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'transcript-attachment' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Transcripts/attachments/%'",
+        []
+    )?;
+
+    info!("[DB] Finished backfilling file_type column.");
+    Ok(())
+}
+
 // --- Group Functions ---
 
 pub fn create_group(conn: &Connection, project_id: &str, group_id: &str, name: &str, description: Option<&str>) -> Result<(), CommandError> {
@@ -1256,8 +1346,8 @@ pub fn save_asset_metadata(
     custom_fields_json: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
-        "[DB] Saving asset metadata for project_id {}: {} (type: {})",
-        project_id, asset_relative_path, asset_type
+        "[DB] Saving asset metadata for project_id {}: {} (type: {}, file_type: {})",
+        project_id, asset_relative_path, asset_type, metadata.file_type
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -1277,8 +1367,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json, waveform_data, language_code, properties
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            original_import_path, speaker_names_json, waveform_data, language_code, properties, file_type
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -1293,14 +1383,15 @@ pub fn save_asset_metadata(
             bit_rate = excluded.bit_rate,
             audio_codec = excluded.audio_codec,
             video_codec = excluded.video_codec,
-            creation_time = excluded.creation_time,
+            creation_time = COALESCE(excluded.creation_time, creation_time),
             asset_type = excluded.asset_type,
             custom_fields_json = excluded.custom_fields_json,
-            original_import_path = excluded.original_import_path,
+            original_import_path = COALESCE(excluded.original_import_path, original_import_path),
             speaker_names_json = excluded.speaker_names_json,
             waveform_data = excluded.waveform_data,
             language_code = excluded.language_code,
             properties = excluded.properties,
+            file_type = COALESCE(NULLIF(excluded.file_type, ''), file_type),
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -1331,12 +1422,13 @@ pub fn save_asset_metadata(
             to_sql_optional_blob(metadata.waveform_data.as_deref()),
             to_sql_optional_str(metadata.language_code.as_deref()),
             to_sql_optional_str(metadata.properties.as_deref()),
+            metadata.file_type, // Parameter 24
         ],
     )?;
 
     info!(
-        "[DB] Asset metadata saved successfully for project_id {}: {} (type: {})",
-        project_id, asset_relative_path, asset_type
+        "[DB] Asset metadata saved successfully for project_id {}: {} (type: {}, file_type: {})",
+        project_id, asset_relative_path, asset_type, metadata.file_type
     );
     Ok(())
 }
@@ -1353,7 +1445,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
                creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
-               language_code, properties
+               language_code, properties, file_type
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1381,6 +1473,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             waveform_data: row.get(18)?,
             language_code: row.get(19)?,
             properties: row.get(20)?,
+            file_type: row.get(21)?,
         })
     }).optional()?;
 

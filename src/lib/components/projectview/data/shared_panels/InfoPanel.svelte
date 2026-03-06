@@ -202,6 +202,7 @@
                     width: result.width, height: result.height, frame_rate: result.frame_rate,
                     bit_rate: result.bit_rate, audio_codec: result.audio_codec, video_codec: result.video_codec,
                     creation_time: result.creation_time,
+                    file_type: result.file_type || '', // Load file_type
                     customFields: result.custom_fields_json ? (() => {
                         try {
                             const parsed = JSON.parse(result.custom_fields_json);
@@ -217,7 +218,8 @@
                 currentFileMetadata = {
                     file_name: baseName, file_path: assetRelativePathToLoad, db_absolute_file_path: absPath,
                     last_modified: new Date().toISOString(), title: '', description: '', summary: '', customFields: [],
-                    duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
+                    duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null,
+                    file_type: ''
                 };
             }
         } catch (error) {
@@ -227,7 +229,8 @@
             currentFileMetadata = { // Set default structure on error
                 file_name: baseNameOnError, file_path: assetRelativePathToLoad, db_absolute_file_path: absPathOnError,
                 last_modified: new Date().toISOString(), title: '', description: '', summary: '', customFields: [],
-                duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
+                duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null,
+                file_type: ''
             };
         }
         previousProcessedItemPath = assetRelativePathToLoad; // Crucial: update after attempt
@@ -549,6 +552,11 @@
                 <div class="mb-3">
                     <label for="filePathAbsolute" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
                     <span id="filePathAbsolute" class="text-gray-900 dark:text-gray-100 break-all block w-full border border-gray-300 dark:border-gray-800 px-1.5 py-1 bg-gray-50 dark:bg-gray-800 min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</span>
+                </div>
+
+                <div class="mb-3">
+                    <label for="fileTypeDisplay" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Type:</label>
+                    <span id="fileTypeDisplay" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-800 px-1.5 py-1 bg-gray-50 dark:bg-gray-800 min-h-[30px] break-words">{currentFileMetadata.file_type || 'N/A'}</span>
                 </div>
 
                 {#if currentFileMetadata.creation_time}

@@ -751,32 +751,79 @@
 
     function getAllProjectAssets() {
         const assets = [];
-        const categoryMap = {
-            'audio': 'Audios',
-            'document': 'Documents',
-            'image': 'Images',
-            'table': 'Tables',
-            'transcript': 'Transcripts',
-            'video': 'Videos'
-        };
+        const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac']);
+        const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
 
-        function traverse(nodes) {
+        function traverse(nodes, parentMediaCategory = null) {
             if (!Array.isArray(nodes)) return;
             nodes.forEach(node => {
-                if (node.path && node.file_type && node.file_type !== 'directory' && node.file_type !== 'directory_media_stem') {
-                    const category = categoryMap[node.file_type] || 'Other';
-                    assets.push({ 
-                        label: `${category} - ${node.name}`, 
-                        value: node.path,
-                        category: category // Store for sorting
-                    });
+                let currentMediaCategory = parentMediaCategory;
+                
+                if (node.file_type === 'directory_media_stem') {
+                    const findMediaFile = (n) => {
+                        if (n.file_type === 'media' && !n.is_directory) return n;
+                        if (n.children) {
+                            for (const child of n.children) {
+                                const found = findMediaFile(child);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    };
+                    const mediaFile = findMediaFile(node);
+                    if (mediaFile) {
+                        const ext = mediaFile.name.split('.').pop()?.toLowerCase() ?? '';
+                        if (VIDEO_EXTENSIONS.has(ext)) currentMediaCategory = 'Videos';
+                        else if (AUDIO_EXTENSIONS.has(ext)) currentMediaCategory = 'Audios';
+                    }
                 }
-                if (node.children) traverse(node.children);
+
+                if (node.path && node.file_type && node.file_type !== 'directory' && node.file_type !== 'directory_media_stem') {
+                    let category = '';
+                    const path = node.path.replaceAll('\\', '/');
+                    
+                    if (node.file_type === 'media') {
+                        const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
+                        if (VIDEO_EXTENSIONS.has(ext)) category = 'Videos';
+                        else if (AUDIO_EXTENSIONS.has(ext)) category = 'Audios';
+                    } else if (node.file_type === 'transcript') {
+                        category = currentMediaCategory || 'Transcripts';
+                    } else if (node.file_type === 'doc' || path.includes('/Documents/')) {
+                        category = 'Documents';
+                    } else if (node.file_type === 'table' || path.includes('/Tables/')) {
+                        category = 'Tables';
+                    } else if (node.file_type === 'image' || path.includes('/Images/')) {
+                        category = 'Images';
+                    } else if (node.file_type === 'imported_transcript' || path.includes('/Transcripts/')) {
+                        category = 'Transcripts';
+                    } else if (path.includes('/Media/')) {
+                         // Fallback for files in Media folder if not already set
+                         if (currentMediaCategory) category = currentMediaCategory;
+                         else {
+                            // Try to guess from path
+                            if (path.toLowerCase().includes('video')) category = 'Videos';
+                            else if (path.toLowerCase().includes('audio')) category = 'Audios';
+                            else category = 'Audios'; // Most common media
+                         }
+                    }
+
+                    if (category) {
+                        assets.push({ 
+                            label: `${category} - ${node.name}`, 
+                            value: node.path,
+                            category: category
+                        });
+                    }
+                }
+                
+                if (node.children) {
+                    traverse(node.children, currentMediaCategory);
+                }
             });
         }
+        
         traverse(get(project).files);
         
-        // Sort by category first, then by label
         return assets.sort((a, b) => {
             if (a.category !== b.category) {
                 return a.category.localeCompare(b.category);

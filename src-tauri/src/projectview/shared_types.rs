@@ -54,6 +54,8 @@ pub struct FileMetadata {
     pub language_code: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub properties: Option<String>,
+    #[serde(default)]
+    pub file_type: String, // New field: audio, video, document, table, image, transcript, audio-transcript, video-transcript
 }
 
 #[allow(dead_code)]
@@ -590,6 +592,7 @@ impl Default for FileMetadata {
             waveform_data: None,
             language_code: None,
             properties: None,
+            file_type: String::new(),
         }
     }
 }

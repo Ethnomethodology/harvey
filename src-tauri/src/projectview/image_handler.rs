@@ -84,10 +84,11 @@ fn register_project_image(
         video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
                 original_import_path: Some("screenshot".to_string()),
-                speaker_names: None,
-                waveform_data: None,
-                language_code: None,
-                properties: None,
+        speaker_names: None,
+        waveform_data: None,
+        language_code: None,
+        properties: None,
+        file_type: "image".to_string(),
     };
 
     let mut custom_fields_map = serde_json::Map::new();
@@ -356,6 +357,7 @@ pub async fn import_image_file(
                 waveform_data: None,
                 language_code: None,
                 properties: None,
+                file_type: "image".to_string(),
     };
 
     // relative_path_for_xml is already calculated and holds the image's relative path

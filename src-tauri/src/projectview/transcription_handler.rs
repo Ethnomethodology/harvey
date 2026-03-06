@@ -467,6 +467,7 @@ pub async fn import_word_transcript<R: Runtime>(
                 waveform_data: None,
                 language_code: None,
                 properties: None,
+        file_type: "transcript".to_string(),
     };
 
     let asset_relative_path_for_db = final_transcript_path
@@ -696,6 +697,9 @@ mod tests {
             original_import_path: None,
             speaker_names: None,
             waveform_data: None,
+            language_code: None,
+            properties: None,
+            file_type: "transcript".to_string(),
         };
 
         let asset_relative_path_for_db_str = final_transcript_path
@@ -713,8 +717,8 @@ mod tests {
                     project_id, asset_relative_path, file_name, file_path, last_modified, title,
                     description, summary, duration_seconds, width, height, frame_rate,
                     bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-                    original_import_path, speaker_names_json, waveform_data
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+                    original_import_path, speaker_names_json, waveform_data, language_code, properties, file_type
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
                 ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
                     file_name = excluded.file_name, file_path = excluded.file_path, last_modified = excluded.last_modified,
                     title = excluded.title, description = excluded.description, summary = excluded.summary,
@@ -725,6 +729,9 @@ mod tests {
                     original_import_path = excluded.original_import_path,
                     speaker_names_json = excluded.speaker_names_json,
                     waveform_data = excluded.waveform_data,
+                    language_code = excluded.language_code,
+                    properties = excluded.properties,
+                    file_type = excluded.file_type,
                     updated_at = CURRENT_TIMESTAMP;
             ";
              conn_test_db.execute(
@@ -751,6 +758,9 @@ mod tests {
                     db_handler::to_sql_optional_str(file_metadata_for_db_obj.original_import_path.as_deref()),
                     db_handler::to_sql_optional_str(None), // speaker_names_json
                     db_handler::to_sql_optional_blob(file_metadata_for_db_obj.waveform_data.as_deref()),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.language_code.as_deref()),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.properties.as_deref()),
+                    file_metadata_for_db_obj.file_type,
                 ],
             )?;
         }
@@ -774,7 +784,8 @@ mod tests {
              let mut stmt_load = conn_test_db.prepare("
                 SELECT file_name, file_path, last_modified, title, description, summary,
                        duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-                       creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data
+                       creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
+                       language_code, properties, file_type
                 FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2
             ")?;
             stmt_load.query_row(rusqlite::params!["test_uuid_db_xml", asset_relative_path_for_db_str], |row| {
@@ -786,6 +797,9 @@ mod tests {
                     video_codec: row.get(12)?, creation_time: row.get(13)?,
                     custom_fields_json: row.get(14)?, asset_type: row.get(15)?,
                     original_import_path: row.get(16)?, speaker_names_json: row.get(17)?, waveform_data: row.get(18)?,
+                    language_code: row.get(19)?,
+                    properties: row.get(20)?,
+                    file_type: row.get(21)?,
                 })
             }).optional()?
         };
