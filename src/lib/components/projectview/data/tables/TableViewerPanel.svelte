@@ -718,10 +718,12 @@
         invalidCells = newInvalidCells;
         tableHasValidationErrors = foundError;
         
-        const filename = tablePath.split(sep).pop() || tablePath.split('/').pop() || 'Table';
+        // Extract filename from path (handle both / and \ separators)
+        const filename = tablePath.split(/[\\/]/).pop() || 'Table';
+        
         if (tableHasValidationErrors) {
             project.update(p => ({ ...p, statusMessage: `${filename} contains validation errors.` }));
-        } else {
+        } else if (foundError === false && tabulatorInstance) {
             // Restore default message if errors cleared
             project.update(p => ({ ...p, statusMessage: `Ready: ${filename}` }));
         }
@@ -1135,6 +1137,9 @@
             }
 
             setLoadedTableHighlights(highlightsForStore);
+
+            const filename = pathForTable.split(/[\\/]/).pop() || 'Table';
+            project.update(p => ({ ...p, statusMessage: `Ready: ${filename}` }));
 
             await tick();
             if (!tableContainer) {
