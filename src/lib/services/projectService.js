@@ -2894,3 +2894,48 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
     await refreshProjectFiles(mediaPath);
     await loadTranscriptFile(newTranscriptPath);
 }
+
+/**
+ * Fetches and groups all project assets for link fields, using backend file_type categorization.
+ * Excludes attachments.
+ * @param {string} projectId 
+ * @returns {Promise<Array>}
+ */
+export async function getProjectAssetsForLink(projectId) {
+    try {
+        const rawAssets = await invoke('get_project_assets_for_link_command', { projectId });
+        
+        const categoryMap = {
+            'audio': 'Audios',
+            'video': 'Videos',
+            'audio-transcript': 'Audio Transcripts',
+            'video-transcript': 'Video Transcripts',
+            'transcript': 'Transcripts',
+            'imported_transcript': 'Transcripts',
+            'document': 'Documents',
+            'doc': 'Documents',
+            'pdf': 'Documents',
+            'table': 'Tables',
+            'image': 'Images'
+        };
+
+        const assets = rawAssets.map(node => {
+            let category = categoryMap[node.file_type] || 'Other';
+            return {
+                label: `${category} - ${node.name}`,
+                value: node.path,
+                category: category
+            };
+        });
+
+        return assets.sort((a, b) => {
+            if (a.category !== b.category) {
+                return a.category.localeCompare(b.category);
+            }
+            return a.label.localeCompare(b.label);
+        });
+    } catch (e) {
+        console.error('Failed to fetch project assets for link:', e);
+        return [];
+    }
+}

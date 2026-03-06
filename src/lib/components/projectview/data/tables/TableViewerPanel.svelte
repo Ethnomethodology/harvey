@@ -749,91 +749,18 @@
         return true; // Always return true to allow saving (soft validation)
     }
 
-    function getAllProjectAssets() {
-        const assets = [];
-        const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac']);
-        const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
-
-        function traverse(nodes, parentMediaCategory = null) {
-            if (!Array.isArray(nodes)) return;
-            nodes.forEach(node => {
-                let currentMediaCategory = parentMediaCategory;
-                
-                if (node.file_type === 'directory_media_stem') {
-                    const findMediaFile = (n) => {
-                        if (n.file_type === 'media' && !n.is_directory) return n;
-                        if (n.children) {
-                            for (const child of n.children) {
-                                const found = findMediaFile(child);
-                                if (found) return found;
-                            }
-                        }
-                        return null;
-                    };
-                    const mediaFile = findMediaFile(node);
-                    if (mediaFile) {
-                        const ext = mediaFile.name.split('.').pop()?.toLowerCase() ?? '';
-                        if (VIDEO_EXTENSIONS.has(ext)) currentMediaCategory = 'Videos';
-                        else if (AUDIO_EXTENSIONS.has(ext)) currentMediaCategory = 'Audios';
-                    }
-                }
-
-                if (node.path && node.file_type && node.file_type !== 'directory' && node.file_type !== 'directory_media_stem') {
-                    let category = '';
-                    const path = node.path.replaceAll('\\', '/');
-                    
-                    if (node.file_type === 'media') {
-                        const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-                        if (VIDEO_EXTENSIONS.has(ext)) category = 'Videos';
-                        else if (AUDIO_EXTENSIONS.has(ext)) category = 'Audios';
-                    } else if (node.file_type === 'transcript') {
-                        category = currentMediaCategory || 'Transcripts';
-                    } else if (node.file_type === 'doc' || path.includes('/Documents/')) {
-                        category = 'Documents';
-                    } else if (node.file_type === 'table' || path.includes('/Tables/')) {
-                        category = 'Tables';
-                    } else if (node.file_type === 'image' || path.includes('/Images/')) {
-                        category = 'Images';
-                    } else if (node.file_type === 'imported_transcript' || path.includes('/Transcripts/')) {
-                        category = 'Transcripts';
-                    } else if (path.includes('/Media/')) {
-                         // Fallback for files in Media folder if not already set
-                         if (currentMediaCategory) category = currentMediaCategory;
-                         else {
-                            // Try to guess from path
-                            if (path.toLowerCase().includes('video')) category = 'Videos';
-                            else if (path.toLowerCase().includes('audio')) category = 'Audios';
-                            else category = 'Audios'; // Most common media
-                         }
-                    }
-
-                    if (category) {
-                        assets.push({ 
-                            label: `${category} - ${node.name}`, 
-                            value: node.path,
-                            category: category
-                        });
-                    }
-                }
-                
-                if (node.children) {
-                    traverse(node.children, currentMediaCategory);
-                }
-            });
-        }
-        
-        traverse(get(project).files);
-        
-        return assets.sort((a, b) => {
-            if (a.category !== b.category) {
-                return a.category.localeCompare(b.category);
-            }
-            return a.label.localeCompare(b.label);
-        });
+    async function getAllProjectAssets() {
+        const currentProject = get(project);
+        if (!currentProject?.id) return [];
+        const { getProjectAssetsForLink } = await import('$lib/services/projectService.js');
+        return await getProjectAssetsForLink(currentProject.id);
     }
 
-    function generateColumns(data, headers, savedLayoutObj, schema) {
+    async function generateColumns(data, headers, savedLayoutObj, schema) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
+        
+        const projectAssetOptions = await getAllProjectAssets();
+        
         let dataColumnDefs = headers.map(header => {
             const colSchema = schema[header] || { type: 'Text', subType: 'Small Text' };
             const colDef = {
@@ -898,7 +825,7 @@
                 } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";
                     colDef.editorParams = {
-                        values: getAllProjectAssets()
+                        values: projectAssetOptions
                     };
                 }
             } else if (colSchema.type === 'Numeric') {
@@ -1155,11 +1082,14 @@
                 return;
             }
             let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
+            
+            const generatedColumns = await generateColumns(tableData, tableHeaders, savedLayout, tableSchema);
+
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 index: "harvey_internal_id",
                 layout: "fitData",
-                columns: generateColumns(tableData, tableHeaders, savedLayout, tableSchema),
+                columns: generatedColumns,
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,

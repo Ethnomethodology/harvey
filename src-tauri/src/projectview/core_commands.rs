@@ -1166,7 +1166,9 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 2. Sync Document Files
     for doc in &project_data.document_files.files {
         let rel_path = doc.relative_path.clone().replace("\\", "/");
-        let mut existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
+        let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
+
+
         
         if existing_meta.is_none() {
             info!("[Backend Sync] Creating missing metadata for document: {}", rel_path);
@@ -1226,7 +1228,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 3. Sync Table Files
     for table in &project_data.table_files.files {
         let rel_path = table.relative_path.clone().replace("\\", "/");
-        let mut existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
+        let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
 
         if existing_meta.is_none() {
             info!("[Backend Sync] Creating missing metadata for table: {}", rel_path);

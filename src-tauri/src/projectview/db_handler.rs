@@ -2858,3 +2858,38 @@ pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), Com
     )?;
     Ok(())
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectAssetLinkOption {
+    pub name: String,
+    pub path: String,
+    pub file_type: Option<String>,
+}
+
+pub fn get_project_assets_for_link(project_id: &str) -> Result<Vec<ProjectAssetLinkOption>, CommandError> {
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT file_name, asset_relative_path, file_type 
+         FROM asset_metadata 
+         WHERE project_id = ? 
+         AND (file_type NOT LIKE '%attachment%' OR file_type IS NULL)
+         ORDER BY file_type, file_name"
+    )?;
+
+    let asset_iter = stmt.query_map([project_id], |row| {
+        Ok(ProjectAssetLinkOption {
+            name: row.get(0)?,
+            path: row.get(1)?,
+            file_type: row.get(2)?,
+        })
+    })?;
+
+    let mut assets = Vec::new();
+    for asset in asset_iter {
+        assets.push(asset?);
+    }
+
+    Ok(assets)
+}
