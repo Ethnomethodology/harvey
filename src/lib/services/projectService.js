@@ -174,8 +174,11 @@ export async function loadHighlightsForFile(filePath, itemType) {
 
 export async function saveTableSchema(tablePath, schema) {
     if (!tablePath || !schema) return;
+    const normalizedPath = normalizePath(tablePath);
+    const { project } = await import('$lib/stores/projectStore.js');
+    const projectId = get(project).id;
     try {
-        await invoke('save_table_schema', { tablePathStr: tablePath, schema });
+        await invoke('save_table_schema', { projectId, tablePath: normalizedPath, schema });
     } catch (error) {
         console.error(`[ProjectService] Error saving table schema for ${tablePath}:`, error);
         throw error;
@@ -184,8 +187,12 @@ export async function saveTableSchema(tablePath, schema) {
 
 export async function loadTableSchema(tablePath) {
     if (!tablePath) return null;
+    const normalizedPath = normalizePath(tablePath);
+    const { project } = await import('$lib/stores/projectStore.js');
+    const projectId = get(project).id;
     try {
-        return await invoke('load_table_schema', { tablePathStr: tablePath });
+        const schema = await invoke('load_table_schema', { projectId, tablePath: normalizedPath });
+        return schema || {};
     } catch (error) {
         console.error(`[ProjectService] Error loading table schema for ${tablePath}:`, error);
         return null;

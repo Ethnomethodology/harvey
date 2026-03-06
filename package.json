@@ -42,7 +42,7 @@
     "@tiptap/extension-text-align": "^2.11.7",
     "@tiptap/pm": "^2.11.7",
     "lexical": "^0.30.0",
-    "lucide-svelte": "^0.503.0",
+    "lucide-svelte": "^0.577.0",
     "openseadragon": "^4.1.1",
     "pdfjs-dist": "^5.2.133",
     "svelte-dnd-action": "^0.9.69",

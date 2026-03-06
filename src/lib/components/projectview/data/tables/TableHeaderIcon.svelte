@@ -15,7 +15,7 @@
         Phone,
         CalendarClock,
         Link2,
-        Text
+        TextInitial
     } from 'lucide-svelte';
 
     export let colSchema = {};
@@ -52,7 +52,7 @@
         }
 
         if (type === 'Text') {
-            if (subType === 'Long Text') return Text;
+            if (subType === 'Long Text') return TextInitial;
         }
         
         return Type;

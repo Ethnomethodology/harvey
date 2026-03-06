@@ -18,7 +18,7 @@
         AlertCircle,
         X,
         Link2,
-        Text
+        TextInitial
     } from 'lucide-svelte';
 
     export let fieldName = '';
@@ -135,7 +135,7 @@
         }
 
         if (type === 'Text') {
-            if (subType === 'Long Text') return Text;
+            if (subType === 'Long Text') return TextInitial;
         }
         
         return TypeIcon;

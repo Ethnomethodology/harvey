@@ -19,7 +19,8 @@
         CalendarClock,
         Link2,
         Pencil,
-        X
+        X,
+        TextInitial
     } from 'lucide-svelte';
 
     export let rowData = {};
@@ -57,6 +58,10 @@
             if (subType === 'Phone') return Phone;
             if (subType === 'Hyperlink') return Link2;
             return Mail;
+        }
+
+        if (type === 'Text') {
+            if (subType === 'Long Text') return TextInitial;
         }
         
         return Type;

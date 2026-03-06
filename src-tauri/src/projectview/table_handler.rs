@@ -916,43 +916,41 @@ mod tests {
 }
 #[tauri::command]
 pub async fn save_table_schema(
-    table_path_str: String,
+    project_id: String,
+    table_path: String,
     schema: Value,
 ) -> Result<(), CommandError> {
-    info!("[save_table_schema] Saving schema for table: {}", table_path_str);
-    let table_path = PathBuf::from(&table_path_str);
-    let table_dir = table_path.parent().ok_or_else(|| CommandError::from("Invalid table path: no parent directory"))?;
+    // Normalize path: replace backslashes with forward slashes for cross-platform DB consistency
+    let normalized_path = table_path.replace("\\", "/");
+    info!("[save_table_schema] Saving schema for table: {} in project {}", normalized_path, project_id);
     
-    let schema_path = table_dir.join("schema.json");
     let schema_json = serde_json::to_string_pretty(&schema)
         .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
     
-    fs::write(&schema_path, schema_json)
-        .map_err(|e| CommandError::from(format!("Failed to write schema file: {}", e)))?;
+    db_handler::save_table_schema(&project_id, &normalized_path, &schema_json)?;
     
     Ok(())
 }
 
 #[tauri::command]
 pub async fn load_table_schema(
-    table_path_str: String,
+    project_id: String,
+    table_path: String,
 ) -> Result<Value, CommandError> {
-    debug!("[load_table_schema] Loading schema for table: {}", table_path_str);
-    let table_path = PathBuf::from(&table_path_str);
-    let table_dir = table_path.parent().ok_or_else(|| CommandError::from("Invalid table path: no parent directory"))?;
+    // Normalize path: replace backslashes with forward slashes for cross-platform DB consistency
+    let normalized_path = table_path.replace("\\", "/");
+    debug!("[load_table_schema] Loading schema for table: {} in project {}", normalized_path, project_id);
     
-    let schema_path = table_dir.join("schema.json");
-    if !schema_path.exists() {
-        return Ok(json!({}));
+    let schema_json_opt = db_handler::load_table_schema(&project_id, &normalized_path)?;
+    
+    match schema_json_opt {
+        Some(schema_json) => {
+            let schema: Value = serde_json::from_str(&schema_json)
+                .map_err(|e| CommandError::from(format!("Failed to parse schema JSON: {}", e)))?;
+            Ok(schema)
+        },
+        None => Ok(json!({})),
     }
-    
-    let schema_json = fs::read_to_string(&schema_path)
-        .map_err(|e| CommandError::from(format!("Failed to read schema file: {}", e)))?;
-    
-    let schema: Value = serde_json::from_str(&schema_json)
-        .map_err(|e| CommandError::from(format!("Failed to parse schema JSON: {}", e)))?;
-    
-    Ok(schema)
 }
 
 #[tauri::command]
@@ -996,14 +994,6 @@ pub async fn create_new_table(
     wtr.write_record(headers.iter().map(|_| ""))?;
     wtr.flush()?;
 
-    // Save schema if provided
-    if let Some(s) = schema {
-        let schema_path = folder_path.join("schema.json");
-        let schema_json = serde_json::to_string_pretty(&s)
-            .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
-        fs::write(schema_path, schema_json)?;
-    }
-
     // Update project XML
     let relative_path_for_xml = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
     project_data.table_files.files.push(TableEntryXml {
@@ -1018,6 +1008,14 @@ pub async fn create_new_table(
     let project_id_for_db = project_data.project_uuid.clone();
     if project_id_for_db.is_empty() {
         return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}).", xml_path.display())));
+    }
+
+    // Save schema to database if provided
+    if let Some(s) = schema {
+        let schema_json = serde_json::to_string(&s)
+            .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
+        let normalized_path = new_table_path.to_string_lossy().replace("\\", "/");
+        db_handler::save_table_schema(&project_id_for_db, &normalized_path, &schema_json)?;
     }
 
     let file_metadata_for_db = FileMetadata {

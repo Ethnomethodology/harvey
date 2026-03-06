@@ -329,6 +329,33 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized table_styles table.");
 
+    // table_schemas table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_schemas (
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            schema_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, table_path),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized table_schemas table.");
+
+    // Trigger for table_schemas updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_schemas_updated_at
+        AFTER UPDATE ON table_schemas
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_schemas SET updated_at = CURRENT_TIMESTAMP WHERE project_id = OLD.project_id AND table_path = OLD.table_path;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_table_schemas_updated_at trigger.");
+
     // Trigger for table_styles updated_at
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_table_styles_updated_at
@@ -2653,4 +2680,55 @@ mod get_highlights_by_tag_tests {
         let highlights = get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
         assert_eq!(highlights.len(), 0);
     }
+}
+
+pub fn save_table_schema(project_id: &str, table_path: &str, schema_json: &str) -> Result<(), CommandError> {
+    debug!("[DB] Saving table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "INSERT INTO table_schemas (project_id, table_path, schema_json)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(project_id, table_path) DO UPDATE SET
+             schema_json = excluded.schema_json,
+             updated_at = CURRENT_TIMESTAMP",
+        params![project_id, table_path, schema_json],
+    )?;
+    info!("[DB] Table schema saved successfully for project_id {}: {}", project_id, table_path);
+    Ok(())
+}
+
+pub fn load_table_schema(project_id: &str, table_path: &str) -> Result<Option<String>, CommandError> {
+    debug!("[DB] Loading table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        return Ok(None);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("
+        SELECT schema_json
+        FROM table_schemas
+        WHERE project_id = ?1 AND table_path = ?2
+    ")?;
+
+    let result = stmt.query_row(params![project_id, table_path], |row| {
+        row.get(0)
+    }).optional()?;
+
+    Ok(result)
+}
+
+pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    conn.execute(
+        "DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, table_path],
+    )?;
+    Ok(())
 }
