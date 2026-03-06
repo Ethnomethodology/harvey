@@ -15,12 +15,25 @@
         loadTableStyles,
         saveTableHighlights,
         loadTableHighlights,
-        loadTableSchema
+        loadTableSchema,
+        saveTableSchema
     } from '$lib/services/projectService.js';
     import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
+    import EditFieldModal from '$lib/components/projectview/modals/EditFieldModal.svelte';
+    import TableHeaderIcon from './TableHeaderIcon.svelte';
+    import TableIcon from './TableIcon.svelte';
+    import { 
+        Pencil, 
+        Undo2, 
+        Redo2, 
+        ChevronLeft, 
+        ChevronRight, 
+        MoreVertical 
+    } from 'lucide-svelte';
+    import { mount } from 'svelte';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -34,53 +47,6 @@
     let currentLoadedPath = null;
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
-
-    function getSubtypeIconHtml(colSchema) {
-        const type = colSchema.type;
-        const subType = colSchema.subType;
-        
-        let iconPath = '';
-        
-        if (subType === 'Checkbox') {
-            iconPath = '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'; // check-square
-        } else if (subType === 'Selectbox') {
-            iconPath = '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>'; // list
-        } else if (subType === 'Tags') {
-            iconPath = '<path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19"/><path d="M9.586 5.586A2 2 0 0 0 8.172 5H3a2 2 0 0 0-2 2v5.172a2 2 0 0 0 .586 1.414L8.293 20a2 2 0 0 0 2.828 0l5.586-5.586a2 2 0 0 0 0-2.828L9.586 5.586z"/><circle cx="4.5" cy="8.5" r=".5" fill="currentColor"/>'; // tags
-        } else if (subType === 'Project Link') {
-            iconPath = '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'; // link
-        } else if (type === 'Numeric') {
-            if (subType === 'Currency') {
-                iconPath = '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'; // dollar-sign
-            } else if (subType === 'Percent') {
-                iconPath = '<line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'; // percent
-            } else {
-                iconPath = '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>'; // hash
-            }
-        } else if (type === 'DateTime') {
-            if (subType === 'Date') {
-                iconPath = '<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>'; // calendar
-            } else if (subType === 'Time') {
-                iconPath = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'; // clock
-            } else {
-                iconPath = '<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14h6"/><path d="M15 11v6"/>'; // calendar-clock (simplified)
-            }
-        } else if (type === 'Contact') {
-            if (subType === 'Email') {
-                iconPath = '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'; // mail
-            } else if (subType === 'Phone') {
-                iconPath = '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.74 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'; // phone
-            }
-        } else {
-            iconPath = '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/>'; // type
-        }
-
-        return `<span class="inline-flex items-center mr-1.5 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide">
-                ${iconPath}
-            </svg>
-        </span>`;
-    }
 
     let tableReady = false;
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
@@ -211,7 +177,17 @@
         tableData = updatedData;
 
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
-        dataToSave.forEach(row => delete row.harvey_internal_id);
+        dataToSave.forEach(row => {
+            delete row.harvey_internal_id;
+            // Convert Tag arrays back to CSV strings for persistence
+            for (const field in tableSchema) {
+                if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Tags') {
+                    if (Array.isArray(row[field])) {
+                        row[field] = row[field].join(', ');
+                    }
+                }
+            }
+        });
 
         const columns = tabulatorInstance.getColumns();
         const orderedHeaders = columns
@@ -265,7 +241,7 @@
 
     function getColumnContextMenu(column) {
         const menu = [
-            { label: "Edit Field Label", action: (e, column) => openHeaderEditor(column) },
+            { label: "Edit Field", action: (e, column) => openFieldEditor(column) },
             { separator: true },
             { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
             { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
@@ -283,6 +259,63 @@
         menu.push({ separator: true });
         menu.push({ label: "Delete Field", action: (e, column) => deleteColumn(column) });
         return menu;
+    }
+
+    // ... (other functions)
+
+    let showEditFieldModal = false;
+    let editingFieldData = { name: '', schema: {} };
+
+    function openFieldEditor(column) {
+        const field = column.getField();
+        editingFieldData = { 
+            name: field, 
+            schema: tableSchema[field] || { type: 'Text', subType: 'Small Text' } 
+        };
+        showEditFieldModal = true;
+    }
+
+    async function handleSaveField(event) {
+        const { oldName, newName, schema } = event.detail;
+        if (!tablePath) return;
+
+        try {
+            // 1. If name changed, rename in backend and layout
+            if (oldName !== newName) {
+                await renameTableHeader(tablePath, oldName, newName);
+                
+                // Update local schema reference
+                tableSchema[newName] = { ...schema };
+                delete tableSchema[oldName];
+
+                // Update layout prefs if they exist
+                const projectBaseDir = get(project)?.baseDirectory;
+                if (projectBaseDir) {
+                    const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
+                    if (relativeTablePath) {
+                        let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
+                        if (savedLayout?.columns?.[oldName]) {
+                            savedLayout.columns[newName] = savedLayout.columns[oldName];
+                            delete savedLayout.columns[oldName];
+                            await saveTableLayoutPrefs(relativeTablePath, savedLayout);
+                        }
+                    }
+                }
+            } else {
+                // Just update schema
+                tableSchema[oldName] = { ...schema };
+            }
+
+            // 2. Save the updated schema
+            await saveTableSchema(tablePath, tableSchema);
+
+            // 3. Reload table to reflect structural and schema changes
+            await initializeTable(tablePath, null, true);
+        } catch (error) {
+            console.error("Failed to update field:", error);
+        } finally {
+            showEditFieldModal = false;
+        }
     }
 
     async function insertColumn(column, position) {
@@ -688,10 +721,16 @@
     function generateColumns(data, headers, savedLayoutObj, schema) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         let dataColumnDefs = headers.map(header => {
-            const colSchema = schema[header] || {};
-            const iconHtml = getSubtypeIconHtml(colSchema);
+            const colSchema = schema[header] || { type: 'Text', subType: 'Small Text' };
             const colDef = {
-                title: `<div class="flex items-center">${iconHtml}<span>${header}</span></div>`,
+                title: (() => {
+                    const container = document.createElement("div");
+                    mount(TableHeaderIcon, {
+                        target: container,
+                        props: { colSchema, header }
+                    });
+                    return container;
+                })(),
                 field: header,
                 headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
                 headerFilterPlaceholder: "Filter...",
@@ -707,21 +746,23 @@
             };
 
             // Set editor based on schema
-            if (colSchema.subType === 'Checkbox') {
-                colDef.editor = "tickCross";
-                colDef.formatter = "tickCross";
-                colDef.hozAlign = "center";
-            } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
-                colDef.editor = "list";
-                colDef.editorParams = {
-                    values: colSchema.options || [],
-                    multiselect: colSchema.subType === 'Tags'
-                };
-            } else if (colSchema.subType === 'Project Link') {
-                colDef.editor = "list";
-                colDef.editorParams = {
-                    values: getAllProjectAssets()
-                };
+            if (colSchema.type === 'Misc') {
+                if (colSchema.subType === 'Checkbox') {
+                    colDef.editor = "tickCross";
+                    colDef.formatter = "tickCross";
+                    colDef.hozAlign = "center";
+                } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
+                    colDef.editor = "list";
+                    colDef.editorParams = {
+                        values: colSchema.options || [],
+                        multiselect: colSchema.subType === 'Tags'
+                    };
+                } else if (colSchema.subType === 'Project Link') {
+                    colDef.editor = "list";
+                    colDef.editorParams = {
+                        values: getAllProjectAssets()
+                    };
+                }
             } else if (colSchema.type === 'Numeric') {
                 colDef.editor = "number";
                 if (colSchema.subType === 'Currency') {
@@ -737,7 +778,14 @@
                     colDef.editor = "textarea";
                     colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
                 } else {
-                    colDef.editor = colSchema.subType === 'Time' ? "time" : "date";
+                    colDef.editor = colSchema.subType === 'Time' ? "time" : (colSchema.subType === 'Date' ? "date" : "datetime");
+                }
+            } else if (colSchema.type === 'Text') {
+                if (colSchema.subType === 'Small Text') {
+                    colDef.editor = "input";
+                } else {
+                    colDef.editor = "textarea";
+                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
                 }
             } else {
                 colDef.editor = "textarea";
@@ -760,7 +808,7 @@
                     cellElement.classList.remove('highlighted-cell');
                 }
                 
-                if (colSchema.type === 'Text' || !colSchema.type) {
+                if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
                     cellElement.style.whiteSpace = "pre-wrap";
                 }
 
@@ -827,7 +875,20 @@
             // 2. Load Schema
             tableSchema = await loadTableSchema(pathForTable) || {};
 
-            // 3. Load Highlights/Styles
+            // 3. Transform Tags to arrays for UI consistency
+            tableData.forEach((row) => {
+                for (const field in tableSchema) {
+                    if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Tags') {
+                        if (typeof row[field] === 'string') {
+                            row[field] = row[field].split(',').map(s => s.trim()).filter(Boolean);
+                        } else if (!row[field]) {
+                            row[field] = [];
+                        }
+                    }
+                }
+            });
+
+            // 4. Load Highlights/Styles
             const loadedHighlightsOrStyles = await loadTableStyles(pathForTable);
 
             let highlightsForStore = [];
@@ -999,14 +1060,25 @@
                     hozAlign:"center",
                     formatter: function(cell) {
                         const rowNum = cell.getRow().getPosition(true);
-                        return `<div class="row-number-container group relative flex items-center justify-center h-full w-full">
-                            <span class="row-number-text group-hover:hidden">${rowNum}</span>
-                            <button class="edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors" title="Edit Entry">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
-                                </svg>
-                            </button>
-                        </div>`;
+                        const container = document.createElement("div");
+                        container.className = "row-number-container group relative flex items-center justify-center h-full w-full";
+                        
+                        const span = document.createElement("span");
+                        span.className = "row-number-text group-hover:hidden";
+                        span.textContent = rowNum;
+                        
+                        const button = document.createElement("button");
+                        button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
+                        button.title = "Edit Entry";
+                        
+                        mount(TableIcon, {
+                            target: button,
+                            props: { icon: Pencil, size: 14 }
+                        });
+                        
+                        container.appendChild(span);
+                        container.appendChild(button);
+                        return container;
                     },
                     cellClick: (e, cell) => {
                         if (e.target.closest('.edit-icon-placeholder')) {
@@ -1158,16 +1230,6 @@
         navigateToMatch(prevIndex);
     }
 
-    let showEditHeaderModal = false;
-    let editingHeader = { oldName: '', newName: '' };
-    let currentColumnComponent = null;
-
-    function openHeaderEditor(column) {
-        currentColumnComponent = column;
-        editingHeader = { oldName: column.getDefinition().field, newName: column.getDefinition().field };
-        showEditHeaderModal = true;
-    }
-
     onMount(() => {
         if (tablePath) initializeTable(tablePath);
         const undoBtn = document.getElementById("history-undo");
@@ -1213,59 +1275,15 @@
             tabulatorInstance.redraw(true);
         }, 100)();
     }
-
-    async function handleSaveHeader() {
-        if (!currentColumnComponent || !editingHeader.newName.trim()) return;
-        if (!tablePath) {
-            console.error("[TableViewerPanel] handleSaveHeader: tablePath is missing. Aborting save.");
-            showEditHeaderModal = false;
-            return;
-        }
-        const { oldName, newName } = editingHeader;
-        try {
-            await renameTableHeader(tablePath, oldName, newName);
-            const projectBaseDir = get(project)?.baseDirectory;
-            if (projectBaseDir) {
-                const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
-                if (relativeTablePath) {
-                    let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
-                    if (savedLayout?.columns?.[oldName]) {
-                        savedLayout.columns[newName] = savedLayout.columns[oldName];
-                        delete savedLayout.columns[oldName];
-                        await saveTableLayoutPrefs(relativeTablePath, savedLayout);
-                    }
-                }
-            }
-            await initializeTable(tablePath, null, true);
-        } catch (error) {
-            console.error("Failed to rename field label:", error);
-        } finally {
-            showEditHeaderModal = false;
-        }
-    }
 </script>
 
-{#if showEditHeaderModal}
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white dark:bg-gray-700 p-4 shadow-lg">
-        <h3 class="text-lg font-bold mb-4">Edit Field Label</h3>
-        <label for="header-name-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Field Name</label>
-        <input
-            id="header-name-input"
-            type="text"
-            bind:value={editingHeader.newName}
-            class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-        />
-        <div class="mt-4 flex justify-end space-x-2">
-            <button class="px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" on:click={() => showEditHeaderModal = false}>
-                Cancel
-            </button>
-            <button class="px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 text-white bg-blue-600 hover:bg-blue-700" on:click|preventDefault|stopPropagation={handleSaveHeader}>
-                Save
-            </button>
-        </div>
-    </div>
-</div>
+{#if showEditFieldModal}
+    <EditFieldModal
+        fieldName={editingFieldData.name}
+        colSchema={editingFieldData.schema}
+        on:save={handleSaveField}
+        on:cancel={() => showEditFieldModal = false}
+    />
 {/if}
 
 {#if showEditEntryModal}
@@ -1283,16 +1301,10 @@
      <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
         <div class="flex items-center space-x-2">
             <button id="history-undo" class="ui-button-icon" title="Undo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/>
-                    <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/>
-                </svg>
+                <Undo2 size={16} />
             </button>
             <button id="history-redo" class="ui-button-icon" title="Redo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
-                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
-                </svg>
+                <Redo2 size={16} />
             </button>
         </div>
          {#if !isLoading && !error}
@@ -1322,7 +1334,7 @@
               on:click={goToPreviousMatch}
               disabled={cellMatches.length === 0}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/></svg>
+              <ChevronLeft size={16} />
             </button>
             <span class="text-xs text-gray-500 dark:text-gray-400">
                 {#if cellMatches.length > 0}
@@ -1337,7 +1349,7 @@
               on:click={goToNextMatch}
               disabled={cellMatches.length === 0}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+              <ChevronRight size={16} />
             </button>
              <div class="relative">
                 <button
@@ -1345,9 +1357,7 @@
                   class="ui-button-icon"
                   on:click={() => showOptionsMenu = !showOptionsMenu}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                    <path d="M9.5 3a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                  </svg>
+                  <MoreVertical size={16} />
                 </button>
                 {#if showOptionsMenu}
                   <div
