@@ -1033,6 +1033,10 @@
         tableData = [];
 
         if (tabulatorInstance) {
+            if (addRowButtonEl) {
+                addRowButtonEl.remove();
+                addRowButtonEl = null;
+            }
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
