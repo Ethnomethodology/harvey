@@ -655,7 +655,15 @@ fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]
                         Value::Bool(b) => {
                             worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
                         },
-                        _ => {} // Handles null and other types as blank cells
+                        Value::Array(arr) => {
+                            // Join array elements with a comma for better presentation in Excel
+                            let joined = arr.iter().map(|v| match v {
+                                Value::String(s) => s.clone(),
+                                _ => v.to_string(),
+                            }).collect::<Vec<String>>().join(", ");
+                            worksheet.write_string(row_num as u32 + 1, col_num as u16, &joined)?;
+                        },
+                        _ => {} // Handles null as blank cells
                     }
                 }
             }
@@ -677,6 +685,13 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
                         Value::String(s) => s.to_string(),
                         Value::Number(n) => n.to_string(),
                         Value::Bool(b) => b.to_string(),
+                        Value::Array(arr) => {
+                            // Join array elements with a comma for better CSV presentation
+                            arr.iter().map(|item| match item {
+                                Value::String(s) => s.clone(),
+                                _ => item.to_string(),
+                            }).collect::<Vec<String>>().join(", ")
+                        },
                         Value::Null => "".to_string(),
                         _ => v.to_string(),
                     }
