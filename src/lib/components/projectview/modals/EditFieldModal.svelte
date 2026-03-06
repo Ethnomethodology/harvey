@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/modals/EditFieldModal.svelte -->
 <script>
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher } from 'svelte';
     import { 
         Type as TypeIcon, 
         Hash, 
@@ -50,30 +50,30 @@
         'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
     };
 
-    const dateFormats = [
-        { label: 'None', value: '' },
-        { label: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
-        { label: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
-        { label: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-        { label: 'MMMM DD, YYYY', value: 'MMMM DD, YYYY' },
-        { label: 'YYYY', value: 'YYYY' },
-        { label: 'MMMM', value: 'MMMM' },
-        { label: 'MMMM YYYY', value: 'MMMM YYYY' }
-    ];
-
-    const dateTimeFormats = [
-        { label: 'None', value: '' },
-        { label: 'YYYY-MM-DD HH:mm', value: 'YYYY-MM-DD HH:mm' },
-        { label: 'DD/MM/YYYY HH:mm', value: 'DD/MM/YYYY HH:mm' },
-        { label: 'MM/DD/YYYY hh:mm A', value: 'MM/DD/YYYY hh:mm A' }
-    ];
-
-    const timeFormats = [
-        { label: 'None', value: '' },
-        { label: 'HH:mm', value: 'HH:mm' },
-        { label: 'HH:mm:ss', value: 'HH:mm:ss' },
-        { label: 'hh:mm A', value: 'hh:mm A' }
-    ];
+    const dateTimeFormats = {
+        'Date': [
+            { label: 'Default', value: '' },
+            { label: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
+            { label: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
+            { label: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
+            { label: 'Full Date', value: 'MMMM DD, YYYY' },
+            { label: 'Year Only', value: 'YYYY' },
+            { label: 'Month Only', value: 'MMMM' },
+            { label: 'Month Year', value: 'MMMM YYYY' }
+        ],
+        'Date & Time': [
+            { label: 'Default', value: '' },
+            { label: 'ISO', value: 'YYYY-MM-DD HH:mm' },
+            { label: 'British', value: 'DD/MM/YYYY HH:mm' },
+            { label: 'American', value: 'MM/DD/YYYY hh:mm A' }
+        ],
+        'Time': [
+            { label: 'Default', value: '' },
+            { label: '24 Hour', value: 'HH:mm' },
+            { label: '24 Hour + Sec', value: 'HH:mm:ss' },
+            { label: '12 Hour', value: 'hh:mm A' }
+        ]
+    };
 
     const currencyOptions = [
         { label: 'USD ($) - US Dollar', value: 'USD', symbol: '$' },
@@ -85,17 +85,32 @@
         { label: 'AUD ($) - Australian Dollar', value: 'AUD', symbol: '$' },
         { label: 'CAD ($) - Canadian Dollar', value: 'CAD', symbol: '$' },
         { label: 'CHF (CHF) - Swiss Franc', value: 'CHF', symbol: 'CHF' },
-        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' }
+        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' },
+        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD', symbol: '$' },
+        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD', symbol: '$' },
+        { label: 'KRW (₩) - South Korean Won', value: 'KRW', symbol: '₩' },
+        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK', symbol: 'kr' },
+        { label: 'MXN ($) - Mexican Peso', value: 'MXN', symbol: '$' },
+        { label: 'RUB (₽) - Russian Ruble', value: 'RUB', symbol: '₽' },
+        { label: 'ZAR (R) - South African Rand', value: 'ZAR', symbol: 'R' },
+        { label: 'TRY (₺) - Turkish Lira', value: 'TRY', symbol: '₺' },
+        { label: 'BRL (R$) - Brazilian Real', value: 'BRL', symbol: 'R$' },
+        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD', symbol: 'NT$' },
+        { label: 'DKK (kr) - Danish Krone', value: 'DKK', symbol: 'kr' },
+        { label: 'PLN (zł) - Polish Zloty', value: 'PLN', symbol: 'zł' },
+        { label: 'THB (฿) - Thai Baht', value: 'THB', symbol: '฿' },
+        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR', symbol: 'Rp' },
+        { label: 'PHP (₱) - Philippine Peso', value: 'PHP', symbol: '₱' }
     ];
 
     let optionsText = (editedSchema.options || []).join(', ');
 
     function handleTypeChange() {
         editedSchema.subType = subTypes[editedSchema.type][0];
-        if (editedSchema.type !== 'Numeric') {
-            editedSchema.min = null;
-            editedSchema.max = null;
-        }
+        handleSubTypeChange();
+    }
+
+    function handleSubTypeChange() {
         if (editedSchema.type !== 'DateTime') {
             editedSchema.format = '';
         }
@@ -108,21 +123,18 @@
 
     function handleSave() {
         if (!editedName.trim()) {
-            alert('Field name cannot be empty');
+            alert('Field name cannot be empty.');
             return;
         }
-
-        if (editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect') {
-            editedSchema.options = optionsText.split(',').map(s => s.trim()).filter(Boolean);
+        
+        const finalSchema = { ...editedSchema };
+        if (finalSchema.subType === 'Selectbox' || finalSchema.subType === 'Multiselect') {
+            finalSchema.options = optionsText.split(',').map(o => o.trim()).filter(o => o !== '');
         } else {
-            editedSchema.options = [];
+            delete finalSchema.options;
         }
 
-        dispatch('save', { 
-            oldName: fieldName,
-            newName: editedName.trim(), 
-            schema: { ...editedSchema } 
-        });
+        dispatch('save', { oldName: fieldName, newName: editedName.trim(), schema: finalSchema });
     }
 
     function getIcon(type, subType) {
@@ -158,41 +170,39 @@
         
         return TypeIcon;
     }
-
 </script>
 
-<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-700">
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 rounded-t-lg">
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
-                <svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} size={20} class="mr-2 text-blue-500" />
-                Edit Field: {fieldName}
+<div class="fixed inset-0 z-[150] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-lg flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                <svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} class="mr-2 text-blue-500" size={20} />
+                Edit Field Settings
             </h3>
-            <button on:click={() => dispatch('cancel')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <X size={24} />
+            <button on:click={() => dispatch('cancel')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={20} />
             </button>
         </div>
 
-        <div class="p-6 overflow-y-auto space-y-6">
+        <!-- Content -->
+        <div class="p-6 overflow-y-auto space-y-5 max-h-[70vh]">
             <!-- Field Name -->
             <div class="space-y-1">
-                <label for="field-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    FIELD NAME <span class="text-red-500">*</span>
-                </label>
+                <label for="field-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">FIELD NAME</label>
                 <input
                     id="field-name"
                     type="text"
                     bind:value={editedName}
+                    placeholder="Enter field name"
                     class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                 />
             </div>
 
             <div class="grid grid-cols-2 gap-4">
-                <!-- Type -->
+                <!-- Type Selection -->
                 <div class="space-y-1">
-                    <label for="field-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        TYPE
-                    </label>
+                    <label for="field-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">DATA TYPE</label>
                     <select
                         id="field-type"
                         bind:value={editedSchema.type}
@@ -205,58 +215,51 @@
                     </select>
                 </div>
 
-                <!-- Sub-type -->
+                <!-- SubType Selection -->
                 <div class="space-y-1">
-                    <label for="field-subtype" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        SUB-TYPE
-                    </label>
+                    <label for="field-subtype" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">SUB-TYPE</label>
                     <select
                         id="field-subtype"
                         bind:value={editedSchema.subType}
+                        on:change={handleSubTypeChange}
                         class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                     >
                         {#each subTypes[editedSchema.type] || [] as st}
-                            <option value={st}>{st}</option>
+                            <option value={t}>{st}</option>
                         {/each}
                     </select>
                 </div>
             </div>
 
-            <!-- Required -->
-            <div class="flex items-center space-x-2">
+            <!-- Required Toggle -->
+            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
                 <input
                     id="field-required"
                     type="checkbox"
                     bind:checked={editedSchema.required}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
-                <label for="field-required" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    REQUIRED?
-                </label>
+                <label for="field-required" class="text-sm font-medium text-gray-700 dark:text-gray-300">This field is required</label>
             </div>
 
-            <!-- Constraints / Options -->
-            <div class="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-4">
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Constraints / Options</h4>
-                
+            <!-- Constraints Area -->
+            <div class="space-y-4 pt-2">
                 {#if editedSchema.type === 'Numeric'}
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1">
-                            <label for="field-min" class="block text-sm font-medium text-gray-700 dark:text-gray-300">MIN VALUE</label>
+                            <label for="field-min" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">MIN VALUE</label>
                             <input
                                 id="field-min"
                                 type="number"
-                                step="any"
                                 bind:value={editedSchema.min}
                                 class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                             />
                         </div>
                         <div class="space-y-1">
-                            <label for="field-max" class="block text-sm font-medium text-gray-700 dark:text-gray-300">MAX VALUE</label>
+                            <label for="field-max" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">MAX VALUE</label>
                             <input
                                 id="field-max"
                                 type="number"
-                                step="any"
                                 bind:value={editedSchema.max}
                                 class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                             />
@@ -278,71 +281,57 @@
                     {/if}
                 {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
                     <div class="space-y-1">
-                        <label for="field-options" class="block text-sm font-medium text-gray-700 dark:text-gray-300">OPTIONS (Comma separated)</label>
-                        <textarea
+                        <label for="field-options" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">OPTIONS (Comma separated)</label>
+                        <input
                             id="field-options"
+                            type="text"
                             bind:value={optionsText}
-                            rows="2"
-                            placeholder="Option 1, Option 2, Option 3"
+                            placeholder="Option 1, Option 2, Option 3..."
                             class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
-                        ></textarea>
+                        />
                     </div>
                 {:else if editedSchema.type === 'DateTime'}
                     <div class="space-y-1">
-                        <label for="field-format" class="block text-sm font-medium text-gray-700 dark:text-gray-300">FORMAT</label>
+                        <label for="field-format" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">DISPLAY FORMAT</label>
                         <select
                             id="field-format"
                             bind:value={editedSchema.format}
                             class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                         >
-                            {#if editedSchema.subType === 'Date'}
-                                {#each dateFormats as f}
-                                    <option value={f.value}>{f.label}</option>
-                                {/each}
-                            {:else if editedSchema.subType === 'Time'}
-                                {#each timeFormats as f}
-                                    <option value={f.value}>{f.label}</option>
-                                {/each}
-                            {:else if editedSchema.subType === 'Date & Time'}
-                                {#each dateTimeFormats as f}
-                                    <option value={f.value}>{f.label}</option>
-                                {/each}
-                            {:else}
-                                <option value="">Default (Browser Local)</option>
-                            {/if}
+                            {#each (dateTimeFormats[editedSchema.subType] || []) as f}
+                                <option value={f.value}>{f.label}</option>
+                            {/each}
                         </select>
                     </div>
-                {:else}
-                    <div class="text-sm text-gray-500 dark:text-gray-400 italic">No specific constraints for this sub-type.</div>
                 {/if}
-            </div>
 
-            <!-- Description -->
-            <div class="space-y-1">
-                <label for="field-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    DESCRIPTION
-                </label>
-                <textarea
-                    id="field-description"
-                    bind:value={editedSchema.description}
-                    rows="2"
-                    class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
-                ></textarea>
+                <!-- Description -->
+                <div class="space-y-1 pt-2">
+                    <label for="field-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">TOOLTIP / DESCRIPTION</label>
+                    <textarea
+                        id="field-desc"
+                        bind:value={editedSchema.description}
+                        rows="2"
+                        placeholder="Explain the purpose of this field..."
+                        class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
+                    ></textarea>
+                </div>
             </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+        <!-- Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end space-x-3 bg-gray-50 dark:bg-gray-800/50">
             <button
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none"
+                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                 on:click={() => dispatch('cancel')}
             >
                 Cancel
             </button>
             <button
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none shadow-sm transition-colors"
+                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 shadow-sm transition-colors"
                 on:click={handleSave}
             >
-                Save Field
+                Save Settings
             </button>
         </div>
     </div>
