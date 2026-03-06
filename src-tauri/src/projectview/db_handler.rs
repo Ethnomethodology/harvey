@@ -163,7 +163,13 @@ pub fn init_db() -> Result<(), CommandError> {
     if !file_type_column_exists {
         info!("[DB] Adding file_type column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
-        // Populate existing records
+    }
+
+    // Always check for records with missing file_type and attempt to backfill
+    let mut stmt_check_nulls = conn.prepare("SELECT COUNT(*) FROM asset_metadata WHERE file_type IS NULL OR file_type = ''")?;
+    let null_count: i64 = stmt_check_nulls.query_row([], |row| row.get(0))?;
+    if null_count > 0 {
+        info!("[DB] Found {} records with missing file_type. Backfilling...", null_count);
         if let Err(e) = backfill_file_type(&conn) {
             error!("[DB] Failed to backfill file_type: {}", e);
         }
@@ -797,68 +803,95 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 1. Documents
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'document' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Documents/%' AND asset_relative_path NOT LIKE 'harvey_files/Documents/attachments/%'",
+        "UPDATE asset_metadata SET file_type = 'document' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (
+             asset_type IN ('document', 'doc') 
+             OR file_name LIKE '%.pdf' OR file_name LIKE '%.docx' OR file_name LIKE '%.txt' OR file_name LIKE '%.rtf' OR file_name LIKE '%.md'
+             OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Documents/attachments/%')
+         )",
         []
     )?;
 
     // 2. Tables
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'table' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Tables/%'",
+        "UPDATE asset_metadata SET file_type = 'table' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'table' OR file_name LIKE '%.csv' OR file_name LIKE '%.xlsx')",
         []
     )?;
 
     // 3. Transcripts (Imported)
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'transcript' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Transcripts/%' AND asset_relative_path NOT LIKE 'harvey_files/Transcripts/attachments/%'",
+        "UPDATE asset_metadata SET file_type = 'transcript' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (
+             asset_type IN ('transcript', 'imported_transcript') 
+             OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
+         )",
         []
     )?;
 
     // 4. Images
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'image' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Images/%'",
+        "UPDATE asset_metadata SET file_type = 'image' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'image' OR file_name LIKE '%.png' OR file_name LIKE '%.jpg' OR file_name LIKE '%.jpeg' OR file_name LIKE '%.gif' OR file_name LIKE '%.bmp' OR file_name LIKE '%.webp')",
         []
     )?;
 
     // 5. Media - Audio
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'audio' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/media/%' AND asset_type = 'audio'",
+        "UPDATE asset_metadata SET file_type = 'audio' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'audio' OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma')",
         []
     )?;
 
     // 6. Media - Video
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'video' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/media/%' AND asset_type = 'video'",
+        "UPDATE asset_metadata SET file_type = 'video' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'video' OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv')",
         []
     )?;
 
     // 7. Media - Transcripts (Generated)
-    // Heuristic: If it's in Media/<stem>/transcripts/ and ends in .json
-    // We join with the media file in the same stem to determine if it's audio-transcript or video-transcript.
+    // Heuristic: If it's in Media folder and asset_type is transcript-related or it's in a transcripts subfolder
     conn.execute(
-        "UPDATE asset_metadata SET file_type = (
+        "UPDATE asset_metadata SET file_type = COALESCE((
             SELECT CASE 
-                WHEN m.asset_type = 'video' THEN 'video-transcript'
+                WHEN m.asset_type = 'video' OR m.file_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi' THEN 'video-transcript'
                 ELSE 'audio-transcript'
             END
             FROM asset_metadata m
             WHERE m.project_id = asset_metadata.project_id 
-              AND m.asset_relative_path LIKE 'harvey_files/Media/%/media/%'
-              AND substr(m.asset_relative_path, 20, instr(substr(m.asset_relative_path, 20), '/') - 1) = substr(asset_metadata.asset_relative_path, 20, instr(substr(asset_metadata.asset_relative_path, 20), '/') - 1)
+              AND (m.asset_type IN ('audio', 'video', 'media') OR m.file_type IN ('audio', 'video'))
+              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 20), '/') - 1) 
+                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20), '/') - 1)
             LIMIT 1
-        )
-        WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Media/%/transcripts/%.json'",
+        ), 'audio-transcript')
+        WHERE (file_type IS NULL OR file_type = '') 
+        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%')
+        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%')",
         []
     )?;
 
     // 8. Document Attachments
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'document-attachment' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Documents/attachments/%'",
+        "UPDATE asset_metadata SET file_type = 'document-attachment' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND asset_type = 'attachment' 
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/attachments/%')",
         []
     )?;
 
     // 9. Transcript Attachments
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'transcript-attachment' WHERE file_type IS NULL AND asset_relative_path LIKE 'harvey_files/Transcripts/attachments/%'",
+        "UPDATE asset_metadata SET file_type = 'transcript-attachment' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND asset_type = 'attachment' 
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%')",
         []
     )?;
 
