@@ -176,7 +176,7 @@
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {#each fields as field, i}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                             <td class="px-3 py-2">
                                 <input type="text" bind:value={field.name} placeholder="Name" class="w-full text-sm p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
                             </td>
@@ -272,7 +272,7 @@
 {/if}
 
 <style>
-    .dark .hover\:bg-gray-750:hover {
+    .dark .hover\:bg-gray-700:hover {
         background-color: rgba(55, 65, 81, 0.5);
     }
 </style>

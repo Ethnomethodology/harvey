@@ -292,7 +292,7 @@
         @apply px-5 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-500/30 shadow-lg shadow-blue-500/20 transition-all active:scale-95;
     }
     .btn-secondary {
-        @apply px-5 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition-all active:scale-95;
+        @apply px-5 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95;
     }
     .custom-scrollbar::-webkit-scrollbar {
         @apply w-1.5;
