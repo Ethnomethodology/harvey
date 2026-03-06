@@ -152,6 +152,21 @@
             editedData[field] = "";
         }
     }
+
+    // Helper to calculate padding for currency/percent prefixes/suffixes
+    function getNumericPadding(colSchema) {
+        let style = "";
+        if (colSchema.subType === 'Currency') {
+            const symbol = getCurrencySymbol(colSchema.currency);
+            // Base 1rem + ~0.55rem per character
+            const padding = 1 + (symbol.length * 0.55);
+            style += `padding-left: ${padding}rem; `;
+        }
+        if (colSchema.subType === 'Percent') {
+            style += "padding-right: 2rem; ";
+        }
+        return style;
+    }
 </script>
 
 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
