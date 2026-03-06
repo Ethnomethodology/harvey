@@ -313,4 +313,14 @@
     input[type="time"]::-webkit-calendar-picker-indicator {
         @apply opacity-0 absolute right-0 w-8 h-full cursor-pointer;
     }
+
+    /* Hide number input spin buttons to prevent overlap with icons/symbols */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    input[type="number"] {
+        -moz-appearance: textfield;
+    }
 </style>
