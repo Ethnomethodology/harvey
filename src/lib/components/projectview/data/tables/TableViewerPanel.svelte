@@ -793,13 +793,21 @@
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
                         if (val === null || val === undefined || val === "") return "";
+                        const currencyCode = (colSchema.currency || 'USD').toUpperCase();
                         try {
+                            // Try native formatting first (supports standard ISO codes)
                             return new Intl.NumberFormat('en-US', { 
                                 style: 'currency', 
-                                currency: colSchema.currency || 'USD' 
+                                currency: currencyCode
                             }).format(val);
                         } catch (e) {
-                            return val;
+                            // Fallback for custom/unsupported codes (e.g. "BTC", "XXX")
+                            const formattedNum = new Intl.NumberFormat('en-US', { 
+                                style: 'decimal',
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                            }).format(val);
+                            return `${currencyCode} ${formattedNum}`;
                         }
                     };
                 } else if (colSchema.subType === 'Percent') {

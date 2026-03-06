@@ -41,9 +41,25 @@
             'AUD': '$',
             'CAD': '$',
             'CHF': 'CHF',
-            'SGD': '$'
+            'SGD': '$',
+            'HKD': '$',
+            'NZD': '$',
+            'KRW': '₩',
+            'NOK': 'kr',
+            'MXN': '$',
+            'RUB': '₽',
+            'ZAR': 'R',
+            'TRY': '₺',
+            'BRL': 'R$',
+            'TWD': 'NT$',
+            'DKK': 'kr',
+            'PLN': 'zł',
+            'THB': '฿',
+            'IDR': 'Rp',
+            'PHP': '₱'
         };
-        return symbols[currencyCode] || '$';
+        if (symbols[currencyCode]) return symbols[currencyCode];
+        return currencyCode || 'XXX';
     }
 
     function getSubtypeIcon(colSchema) {

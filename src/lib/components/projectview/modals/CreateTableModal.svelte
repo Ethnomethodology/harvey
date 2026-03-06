@@ -9,7 +9,7 @@
 
     const dispatch = createEventDispatcher();
 
-    let fields = []; // { name, type, subType, options, required, min, max, description, format }
+    let fields = []; // { name, type, subType, options, required, min, max, description, format, currency, customCurrency }
 
     const FIELD_TYPES = {
         'Text': ['Small Text', 'Long Text'],
@@ -26,31 +26,32 @@
     };
 
     const currencyOptions = [
-        { label: 'USD ($) - US Dollar', value: 'USD', symbol: '$' },
-        { label: 'EUR (€) - Euro', value: 'EUR', symbol: '€' },
-        { label: 'GBP (£) - British Pound', value: 'GBP', symbol: '£' },
-        { label: 'JPY (¥) - Japanese Yen', value: 'JPY', symbol: '¥' },
-        { label: 'INR (₹) - Indian Rupee', value: 'INR', symbol: '₹' },
-        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY', symbol: '¥' },
-        { label: 'AUD ($) - Australian Dollar', value: 'AUD', symbol: '$' },
-        { label: 'CAD ($) - Canadian Dollar', value: 'CAD', symbol: '$' },
-        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF', symbol: 'CHF' },
-        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' },
-        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD', symbol: '$' },
-        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD', symbol: '$' },
-        { label: 'KRW (₩) - South Korean Won', value: 'KRW', symbol: '₩' },
-        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK', symbol: 'kr' },
-        { label: 'MXN ($) - Mexican Peso', value: 'MXN', symbol: '$' },
-        { label: 'RUB (₽) - Russian Ruble', value: 'RUB', symbol: '₽' },
-        { label: 'ZAR (R) - South African Rand', value: 'ZAR', symbol: 'R' },
-        { label: 'TRY (₺) - Turkish Lira', value: 'TRY', symbol: '₺' },
-        { label: 'BRL (R$) - Brazilian Real', value: 'BRL', symbol: 'R$' },
-        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD', symbol: 'NT$' },
-        { label: 'DKK (kr) - Danish Krone', value: 'DKK', symbol: 'kr' },
-        { label: 'PLN (zł) - Polish Zloty', value: 'PLN', symbol: 'zł' },
-        { label: 'THB (฿) - Thai Baht', value: 'THB', symbol: '฿' },
-        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR', symbol: 'Rp' },
-        { label: 'PHP (₱) - Philippine Peso', value: 'PHP', symbol: '₱' }
+        { label: 'USD ($) - US Dollar', value: 'USD' },
+        { label: 'EUR (€) - Euro', value: 'EUR' },
+        { label: 'GBP (£) - British Pound', value: 'GBP' },
+        { label: 'JPY (¥) - Japanese Yen', value: 'JPY' },
+        { label: 'INR (₹) - Indian Rupee', value: 'INR' },
+        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
+        { label: 'AUD ($) - Australian Dollar', value: 'AUD' },
+        { label: 'CAD ($) - Canadian Dollar', value: 'CAD' },
+        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
+        { label: 'SGD ($) - Singapore Dollar', value: 'SGD' },
+        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
+        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
+        { label: 'KRW (₩) - South Korean Won', value: 'KRW' },
+        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
+        { label: 'MXN ($) - Mexican Peso', value: 'MXN' },
+        { label: 'RUB (₽) - Russian Ruble', value: 'RUB' },
+        { label: 'ZAR (R) - South African Rand', value: 'ZAR' },
+        { label: 'TRY (₺) - Turkish Lira', value: 'TRY' },
+        { label: 'BRL (R$) - Brazilian Real', value: 'BRL' },
+        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
+        { label: 'DKK (kr) - Danish Krone', value: 'DKK' },
+        { label: 'PLN (zł) - Polish Zloty', value: 'PLN' },
+        { label: 'THB (฿) - Thai Baht', value: 'THB' },
+        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
+        { label: 'PHP (₱) - Philippine Peso', value: 'PHP' },
+        { label: 'Other (Custom Code)', value: 'OTHER' }
     ];
 
     function addField() {
@@ -64,7 +65,8 @@
             max: '',
             description: '',
             format: 'None',
-            currency: 'USD'
+            currency: 'USD',
+            customCurrency: 'XXX'
         }];
     }
 
@@ -113,7 +115,7 @@
                 format: f.format !== 'None' ? f.format : null
             };
             if (f.subType === 'Currency') {
-                schema[f.name].currency = f.currency || 'USD';
+                schema[f.name].currency = f.currency === 'OTHER' ? (f.customCurrency || 'XXX').toUpperCase().substring(0, 3) : f.currency;
             }
         });
 
@@ -187,11 +189,22 @@
                                             <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
                                         </div>
                                         {#if field.subType === 'Currency'}
-                                            <select bind:value={field.currency} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
-                                                {#each currencyOptions as opt}
-                                                    <option value={opt.value}>{opt.label}</option>
-                                                {/each}
-                                            </select>
+                                            <div class="flex flex-col space-y-1">
+                                                <select bind:value={field.currency} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
+                                                    {#each currencyOptions as opt}
+                                                        <option value={opt.value}>{opt.label}</option>
+                                                    {/each}
+                                                </select>
+                                                {#if field.currency === 'OTHER'}
+                                                    <input 
+                                                        type="text" 
+                                                        bind:value={field.customCurrency} 
+                                                        placeholder="Code (e.g. BTC)" 
+                                                        maxlength="3"
+                                                        class="w-full text-[10px] p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" 
+                                                    />
+                                                {/if}
+                                            </div>
                                         {/if}
                                     </div>
                                 {:else if field.type === 'DateTime'}

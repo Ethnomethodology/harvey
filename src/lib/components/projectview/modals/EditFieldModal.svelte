@@ -26,6 +26,35 @@
 
     const dispatch = createEventDispatcher();
 
+    const currencyOptions = [
+        { label: 'USD ($) - US Dollar', value: 'USD' },
+        { label: 'EUR (€) - Euro', value: 'EUR' },
+        { label: 'GBP (£) - British Pound', value: 'GBP' },
+        { label: 'JPY (¥) - Japanese Yen', value: 'JPY' },
+        { label: 'INR (₹) - Indian Rupee', value: 'INR' },
+        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
+        { label: 'AUD ($) - Australian Dollar', value: 'AUD' },
+        { label: 'CAD ($) - Canadian Dollar', value: 'CAD' },
+        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
+        { label: 'SGD ($) - Singapore Dollar', value: 'SGD' },
+        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
+        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
+        { label: 'KRW (₩) - South Korean Won', value: 'KRW' },
+        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
+        { label: 'MXN ($) - Mexican Peso', value: 'MXN' },
+        { label: 'RUB (₽) - Russian Ruble', value: 'RUB' },
+        { label: 'ZAR (R) - South African Rand', value: 'ZAR' },
+        { label: 'TRY (₺) - Turkish Lira', value: 'TRY' },
+        { label: 'BRL (R$) - Brazilian Real', value: 'BRL' },
+        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
+        { label: 'DKK (kr) - Danish Krone', value: 'DKK' },
+        { label: 'PLN (zł) - Polish Zloty', value: 'PLN' },
+        { label: 'THB (฿) - Thai Baht', value: 'THB' },
+        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
+        { label: 'PHP (₱) - Philippine Peso', value: 'PHP' },
+        { label: 'Other (Custom Code)', value: 'OTHER' }
+    ];
+
     let editedName = fieldName;
     let editedSchema = { 
         type: 'Text',
@@ -36,10 +65,16 @@
         options: [],
         description: '',
         format: '',
+        currency: 'USD',
         ...colSchema 
     };
 
     if (!editedSchema.subType) editedSchema.subType = 'Small Text';
+
+    // Handle custom currency display/initialization
+    let isOtherCurrency = editedSchema.subType === 'Currency' && !currencyOptions.find(o => o.value === editedSchema.currency && o.value !== 'OTHER');
+    let customCurrencyCode = isOtherCurrency ? editedSchema.currency : 'XXX';
+    let selectedCurrency = isOtherCurrency ? 'OTHER' : (editedSchema.currency || 'USD');
 
     const types = ['Text', 'Numeric', 'DateTime', 'Contact', 'Misc'];
     const subTypes = {
@@ -75,34 +110,6 @@
         ]
     };
 
-    const currencyOptions = [
-        { label: 'USD ($) - US Dollar', value: 'USD', symbol: '$' },
-        { label: 'EUR (€) - Euro', value: 'EUR', symbol: '€' },
-        { label: 'GBP (£) - British Pound', value: 'GBP', symbol: '£' },
-        { label: 'JPY (¥) - Japanese Yen', value: 'JPY', symbol: '¥' },
-        { label: 'INR (₹) - Indian Rupee', value: 'INR', symbol: '₹' },
-        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY', symbol: '¥' },
-        { label: 'AUD ($) - Australian Dollar', value: 'AUD', symbol: '$' },
-        { label: 'CAD ($) - Canadian Dollar', value: 'CAD', symbol: '$' },
-        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF', symbol: 'CHF' },
-        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' },
-        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD', symbol: '$' },
-        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD', symbol: '$' },
-        { label: 'KRW (₩) - South Korean Won', value: 'KRW', symbol: '₩' },
-        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK', symbol: 'kr' },
-        { label: 'MXN ($) - Mexican Peso', value: 'MXN', symbol: '$' },
-        { label: 'RUB (₽) - Russian Ruble', value: 'RUB', symbol: '₽' },
-        { label: 'ZAR (R) - South African Rand', value: 'ZAR', symbol: 'R' },
-        { label: 'TRY (₺) - Turkish Lira', value: 'TRY', symbol: '₺' },
-        { label: 'BRL (R$) - Brazilian Real', value: 'BRL', symbol: 'R$' },
-        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD', symbol: 'NT$' },
-        { label: 'DKK (kr) - Danish Krone', value: 'DKK', symbol: 'kr' },
-        { label: 'PLN (zł) - Polish Zloty', value: 'PLN', symbol: 'zł' },
-        { label: 'THB (฿) - Thai Baht', value: 'THB', symbol: '฿' },
-        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR', symbol: 'Rp' },
-        { label: 'PHP (₱) - Philippine Peso', value: 'PHP', symbol: '₱' }
-    ];
-
     let optionsText = (editedSchema.options || []).join(', ');
 
     function handleTypeChange() {
@@ -132,6 +139,10 @@
             finalSchema.options = optionsText.split(',').map(o => o.trim()).filter(o => o !== '');
         } else {
             delete finalSchema.options;
+        }
+
+        if (finalSchema.subType === 'Currency') {
+            finalSchema.currency = selectedCurrency === 'OTHER' ? customCurrencyCode.toUpperCase().substring(0, 3) : selectedCurrency;
         }
 
         dispatch('save', { oldName: fieldName, newName: editedName.trim(), schema: finalSchema });
@@ -189,7 +200,7 @@
         <div class="p-6 overflow-y-auto space-y-5 max-h-[70vh]">
             <!-- Field Name -->
             <div class="space-y-1">
-                <label for="field-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">FIELD NAME</label>
+                <label for="field-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">FIELD NAME</label>
                 <input
                     id="field-name"
                     type="text"
@@ -202,7 +213,7 @@
             <div class="grid grid-cols-2 gap-4">
                 <!-- Type Selection -->
                 <div class="space-y-1">
-                    <label for="field-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">DATA TYPE</label>
+                    <label for="field-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">DATA TYPE</label>
                     <select
                         id="field-type"
                         bind:value={editedSchema.type}
@@ -217,7 +228,7 @@
 
                 <!-- SubType Selection -->
                 <div class="space-y-1">
-                    <label for="field-subtype" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">SUB-TYPE</label>
+                    <label for="field-subtype" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">SUB-TYPE</label>
                     <select
                         id="field-subtype"
                         bind:value={editedSchema.subType}
@@ -225,7 +236,7 @@
                         class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
                     >
                         {#each subTypes[editedSchema.type] || [] as st}
-                            <option value={t}>{st}</option>
+                            <option value={st}>{st}</option>
                         {/each}
                     </select>
                 </div>
@@ -267,16 +278,27 @@
                     </div>
                     {#if editedSchema.subType === 'Currency'}
                         <div class="space-y-1">
-                            <label for="field-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300">CURRENCY / COUNTRY</label>
-                            <select
-                                id="field-currency"
-                                bind:value={editedSchema.currency}
-                                class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
-                            >
-                                {#each currencyOptions as opt}
-                                    <option value={opt.value}>{opt.label}</option>
-                                {/each}
-                            </select>
+                            <label for="field-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">CURRENCY / COUNTRY</label>
+                            <div class="space-y-2">
+                                <select
+                                    id="field-currency"
+                                    bind:value={selectedCurrency}
+                                    class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
+                                >
+                                    {#each currencyOptions as opt}
+                                        <option value={opt.value}>{opt.label}</option>
+                                    {/each}
+                                </select>
+                                {#if selectedCurrency === 'OTHER'}
+                                    <input 
+                                        type="text" 
+                                        bind:value={customCurrencyCode} 
+                                        placeholder="Enter 3-letter ISO Code (e.g. BTC)" 
+                                        maxlength="3"
+                                        class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
+                                    />
+                                {/if}
+                            </div>
                         </div>
                     {/if}
                 {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
