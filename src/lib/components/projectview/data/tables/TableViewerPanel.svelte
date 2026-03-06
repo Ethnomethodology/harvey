@@ -31,7 +31,8 @@
         Redo2, 
         ChevronLeft, 
         ChevronRight, 
-        MoreVertical 
+        MoreVertical,
+        Plus
     } from 'lucide-svelte';
     import { mount } from 'svelte';
 
@@ -889,6 +890,29 @@
         if (savedLayoutObj?.columns) {
             dataColumnDefs.sort((a, b) => (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity));
         }
+
+        // Add the "Add Field" column at the end
+        dataColumnDefs.push({
+            title: (() => {
+                const button = document.createElement("button");
+                button.className = "flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors";
+                button.title = "Add New Field";
+                mount(TableIcon, {
+                    target: button,
+                    props: { icon: Plus, size: 16 }
+                });
+                return button;
+            })(),
+            headerClick: (e, column) => {
+                insertColumn(column, 'before');
+            },
+            width: 40,
+            headerSort: false,
+            resizable: false,
+            frozen: false,
+            cssClass: "add-column-header"
+        });
+
         return dataColumnDefs;
     }
 
@@ -1142,6 +1166,13 @@
             });
             tabulatorInstance.on("tableBuilt", () => {
                 tableReady = true;
+                addFloatingAddRowButton();
+            });
+            tabulatorInstance.on("renderComplete", () => {
+                updateFloatingAddRowButtonPosition();
+            });
+            tabulatorInstance.on("scrollVertical", () => {
+                updateFloatingAddRowButtonPosition();
             });
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
@@ -1259,6 +1290,60 @@
 
         // Use Tabulator's built-in range selection to highlight the active cell
         tabulatorInstance.addRange(currentCell, currentCell);
+    }
+
+    let addRowButtonEl = null;
+
+    function addFloatingAddRowButton() {
+        if (!tableContainer || addRowButtonEl) return;
+        
+        addRowButtonEl = document.createElement("button");
+        addRowButtonEl.className = "absolute z-30 flex items-center justify-center w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md text-blue-500 hover:text-blue-600 transition-all hover:scale-110";
+        addRowButtonEl.style.left = "9px"; // Centered under the 50px width row number column
+        addRowButtonEl.title = "Add New Entry";
+        
+        mount(TableIcon, {
+            target: addRowButtonEl,
+            props: { icon: Plus, size: 18 }
+        });
+
+        addRowButtonEl.onclick = () => {
+            const rows = tabulatorInstance.getRows();
+            const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+            insertRow(lastRow, 'after');
+        };
+
+        tableContainer.appendChild(addRowButtonEl);
+        updateFloatingAddRowButtonPosition();
+    }
+
+    function updateFloatingAddRowButtonPosition() {
+        if (!tabulatorInstance || !addRowButtonEl) return;
+        
+        const rows = tabulatorInstance.getRows("active");
+        if (rows.length === 0) {
+            addRowButtonEl.style.top = "45px"; // Just below header
+            return;
+        }
+
+        const lastRow = rows[rows.length - 1];
+        const lastRowEl = lastRow.getElement();
+        const tableHeaderHeight = tableContainer.querySelector(".tabulator-header")?.offsetHeight || 0;
+        
+        // Position it just below the last row
+        const topPos = lastRowEl.offsetTop + lastRowEl.offsetHeight + tableHeaderHeight - tabulatorInstance.rowManager.element.scrollTop;
+        
+        addRowButtonEl.style.top = `${topPos + 5}px`;
+        
+        // Hide if it would be outside the visible area of the holder
+        const holderHeight = tableContainer.querySelector(".tabulator-tableholder")?.offsetHeight || 0;
+        if (topPos > holderHeight + tableHeaderHeight || topPos < tableHeaderHeight) {
+            addRowButtonEl.style.opacity = "0";
+            addRowButtonEl.style.pointerEvents = "none";
+        } else {
+            addRowButtonEl.style.opacity = "1";
+            addRowButtonEl.style.pointerEvents = "auto";
+        }
     }
 
     function goToNextMatch() {
@@ -1473,6 +1558,15 @@
      }
      :global(html.dark .tabulator-row:hover .tabulator-row-number-column) {
          background-color: #374151 !important;
+     }
+
+     :global(.add-column-header) {
+         border-left: 1px dashed #3b82f6 !important;
+         background-color: rgba(59, 130, 246, 0.05) !important;
+     }
+     :global(html.dark .add-column-header) {
+         border-left: 1px dashed #3b82f6 !important;
+         background-color: rgba(59, 130, 246, 0.1) !important;
      }
 
     .flex-grow {
