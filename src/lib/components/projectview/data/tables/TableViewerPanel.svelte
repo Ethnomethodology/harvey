@@ -60,6 +60,9 @@
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
+    let invalidCells = new Set(); // Stores cell keys "rowIndex-colField"
+    let tableHasValidationErrors = false;
+
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
         const hls = $project.currentTableHighlights;
@@ -689,102 +692,92 @@
         return editor;
     }
 
-    // Custom soft validator
-    function softValidator(cell, value, parameters) {
-        const colField = cell.getField();
-        const schema = tableSchema[colField];
-        if (!schema) return true;
+    function checkValidationErrors() {
+        if (!tabulatorInstance) return;
+        
+        const rows = tabulatorInstance.getRows();
+        let foundError = false;
+        const newInvalidCells = new Set();
 
-        let isValid = true;
-        let errorMsg = "";
+        rows.forEach(row => {
+            const rowIndex = row.getData().harvey_internal_id;
+            row.getCells().forEach(cell => {
+                const colField = cell.getField();
+                const value = cell.getValue();
+                const schema = tableSchema[colField];
+                if (schema && value !== null && value !== undefined && value !== "") {
+                    const isCellValid = performSoftValidation(value, schema);
+                    if (!isCellValid) {
+                        foundError = true;
+                        newInvalidCells.add(`${rowIndex}-${colField}`);
+                    }
+                }
+            });
+        });
+
+        invalidCells = newInvalidCells;
+        tableHasValidationErrors = foundError;
+        
+        const filename = tablePath.split(sep).pop() || tablePath.split('/').pop() || 'Table';
+        if (tableHasValidationErrors) {
+            project.update(p => ({ ...p, statusMessage: `${filename} contains validation errors.` }));
+        } else {
+            // Restore default message if errors cleared
+            project.update(p => ({ ...p, statusMessage: `Ready: ${filename}` }));
+        }
+        
+        tabulatorInstance.redraw(true);
+    }
+
+    function performSoftValidation(value, schema) {
+        if (!schema) return true;
         const type = schema.type;
         const subType = schema.subType;
 
-        // Check Required
         if (schema.required && (value === null || value === undefined || value === "")) {
-            isValid = false;
-            errorMsg = "Field is required";
-        } else if (value !== null && value !== undefined && value !== "") {
-            // Type Validations
+            return false;
+        } 
+        
+        if (value !== null && value !== undefined && value !== "") {
             if (type === 'Numeric') {
                 const num = parseFloat(value);
-                if (isNaN(num) || !isFinite(value)) {
-                    isValid = false;
-                    errorMsg = "Invalid number format";
-                } else {
-                    if (schema.min !== null && num < schema.min) {
-                        isValid = false;
-                        errorMsg = `Minimum value is ${schema.min}`;
-                    } else if (schema.max !== null && num > schema.max) {
-                        isValid = false;
-                        errorMsg = `Maximum value is ${schema.max}`;
-                    }
-                }
+                if (isNaN(num) || !isFinite(value)) return false;
+                if (schema.min !== null && num < schema.min) return false;
+                if (schema.max !== null && num > schema.max) return false;
             } else if (type === 'Contact' && subType === 'Email') {
-                isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-                if (!isValid) errorMsg = "Invalid email format";
+                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
             } else if (type === 'Contact' && subType === 'Phone') {
-                isValid = /^\+?[\d\s-]{7,20}$/.test(value);
-                if (!isValid) errorMsg = "Invalid phone format";
+                return /^\+?[\d\s-]{7,20}$/.test(value);
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (schema.format === 'HH:mm') {
-                        isValid = /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-                        errorMsg = "Invalid format (HH:mm)";
-                    } else if (schema.format === 'HH:mm:ss') {
-                        isValid = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
-                        errorMsg = "Invalid format (HH:mm:ss)";
-                    } else if (schema.format === 'hh:mm A') {
-                        isValid = /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
-                        errorMsg = "Invalid format (hh:mm AM/PM)";
-                    } else {
-                        isValid = /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
-                        errorMsg = "Invalid time format";
-                    }
+                    if (schema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+                    if (schema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
+                    if (schema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
+                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
                 } else if (subType === 'Date') {
-                    if (schema.format === 'YYYY-MM-DD') {
-                        isValid = /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
-                        errorMsg = "Invalid format (YYYY-MM-DD)";
-                    } else if (schema.format === 'DD/MM/YYYY') {
-                        isValid = /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
-                        errorMsg = "Invalid format (DD/MM/YYYY)";
-                    } else if (schema.format === 'MM/DD/YYYY') {
-                        isValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
-                        errorMsg = "Invalid format (MM/DD/YYYY)";
-                    } else if (schema.format === 'YYYY') {
-                        isValid = /^\d{4}$/.test(value);
-                        errorMsg = "Invalid format (YYYY)";
-                    } else if (schema.format === 'MMMM') {
-                        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-                        isValid = months.includes(value.toLowerCase());
-                        errorMsg = "Invalid format (Full Month Name)";
-                    } else if (schema.format === 'MMMM YYYY') {
+                    if (schema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
+                    if (schema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
+                    if (schema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
+                    if (schema.format === 'YYYY') return /^\d{4}$/.test(value);
+                    if (schema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase());
+                    if (schema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-                        isValid = parts.length === 2 && months.includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
-                        errorMsg = "Invalid format (Month YYYY)";
-                    } else {
-                        isValid = !isNaN(Date.parse(value));
-                        errorMsg = "Invalid date format";
+                        return parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
                     }
+                    return !isNaN(Date.parse(value));
                 } else {
-                    // Date & Time
-                    isValid = !isNaN(Date.parse(value));
-                    errorMsg = "Invalid date & time format";
+                    return !isNaN(Date.parse(value));
                 }
             }
         }
+        return true;
+    }
 
-        const element = cell.getElement();
-        if (!isValid) {
-            element.classList.add('invalid-cell');
-            element.title = errorMsg;
-        } else {
-            element.classList.remove('invalid-cell');
-            element.removeAttribute('title');
-        }
-
-        return true; // Always return true to allow saving (soft validation)
+    // Custom soft validator wrapper for Tabulator
+    function softValidator(cell, value, parameters) {
+        // Validation check is now handled by checkValidationErrors which redraws and triggers formatting
+        setTimeout(checkValidationErrors, 10);
+        return true; // Always allow editing
     }
 
     async function getAllProjectAssets() {
@@ -935,6 +928,13 @@
                     cellElement.classList.remove('highlighted-cell');
                 }
 
+                // Validation border
+                if (invalidCells.has(`${rowIndex}-${colField}`)) {
+                    cellElement.classList.add('invalid-cell');
+                } else {
+                    cellElement.classList.remove('invalid-cell');
+                }
+
                 // Primary duplicate highlighting
                 if (colField === currentPrimaryField && duplicateIds.has(rowIndex)) {
                     cellElement.classList.add('duplicate-primary-cell');
@@ -1015,7 +1015,11 @@
             headerSort: false,
             resizable: false,
             frozen: false,
-            cssClass: "add-column-header"
+            cssClass: "add-column-header",
+            formatter: (cell) => {
+                // Important: returning empty/standard to avoid custom row highlights applying here
+                return "";
+            }
         });
 
         return dataColumnDefs;
@@ -1284,6 +1288,7 @@
                 tableReady = true;
                 addFloatingAddRowButton();
                 detectDuplicates();
+                checkValidationErrors();
             });
             tabulatorInstance.on("renderComplete", () => {
                 updateFloatingAddRowButtonPosition();
@@ -1735,6 +1740,21 @@
         :global(html.dark .tabulator-cell.highlighted-cell) {
             color: #111827 !important;
         }
+        
+        /* Ensure the Add Field column doesn't inherit row highlight backgrounds */
+        :global(.tabulator-row .tabulator-cell.add-column-header) {
+            background-color: white !important;
+        }
+        :global(html.dark .tabulator-row .tabulator-cell.add-column-header) {
+            background-color: #030712 !important; /* gray-950 */
+        }
+        :global(.tabulator-row:hover .tabulator-cell.add-column-header) {
+            background-color: #f9fafb !important; /* gray-50 */
+        }
+        :global(html.dark .tabulator-row:hover .tabulator-cell.add-column-header) {
+            background-color: #111827 !important; /* gray-900 */
+        }
+
         :global(.search-match-highlight) {
             background-color: #ffdd77;
             font-weight: bold;
@@ -1744,10 +1764,9 @@
             color: #111827;
         }
         :global(.invalid-cell) {
-            box-shadow: inset 0 0 5px #ef4444 !important;
-            border: 1px solid #ef4444 !important;
+            box-shadow: inset 0 0 0 2px #ef4444 !important;
         }
         :global(.duplicate-primary-cell) {
-            border: 2px solid #ef4444 !important;
+            box-shadow: inset 0 0 0 2px #ef4444 !important;
         }
 </style>
