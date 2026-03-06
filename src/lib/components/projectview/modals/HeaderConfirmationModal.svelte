@@ -59,27 +59,45 @@
     $: availableFields = previewData?.fields || previewData?.headers || [];
 
 	$: if (showModal && availableFields.length > 0 && fields.length === 0) {
-		fields = availableFields.map((f, i) => ({
-			name: hasHeaders ? f : `Field ${i + 1}`,
-			type: 'Text',
-			subType: 'Small Text',
-			options: '',
-            required: false,
-            min: '',
-            max: '',
-            description: '',
-			format: 'None',
-            currency: 'USD',
-            customCurrency: 'XXX'
-		}));
+		fields = availableFields.map((f, i) => {
+            let name = `Field ${i + 1}`;
+            if (hasHeaders && previewData.data && previewData.data[0]) {
+                const val = previewData.data[0][f];
+                if (val != null && String(val).trim() !== '') {
+                    name = String(val).trim();
+                }
+            }
+            return {
+                name,
+                type: 'Text',
+                subType: 'Small Text',
+                options: '',
+                required: false,
+                min: '',
+                max: '',
+                description: '',
+                format: 'None',
+                currency: 'USD',
+                customCurrency: 'XXX'
+            };
+        });
 	}
 
 	// Update field names if hasHeaders changes
 	$: if (step === 1 && availableFields.length > 0 && fields.length > 0) {
-		fields = availableFields.map((f, i) => ({
-			...(fields[i] || {}),
-			name: hasHeaders ? f : `Field ${i + 1}`
-		}));
+		fields = availableFields.map((f, i) => {
+            let name = `Field ${i + 1}`;
+            if (hasHeaders && previewData.data && previewData.data[0]) {
+                const val = previewData.data[0][f];
+                if (val != null && String(val).trim() !== '') {
+                    name = String(val).trim();
+                }
+            }
+            return {
+                ...(fields[i] || {}),
+                name
+            };
+        });
 	}
 
 	function handleTypeChange(index) {
@@ -185,19 +203,23 @@
 					<table class="w-full text-xs text-left">
 						<thead class="bg-gray-100 dark:bg-gray-700 sticky top-0">
 							<tr>
-								{#each availableFields as _, i}
+								{#each availableFields as f, i}
 									<th class="px-3 py-2 font-semibold">
-										{hasHeaders ? availableFields[i] : `Field ${i + 1}`}
+										{#if hasHeaders && previewData.data && previewData.data[0] && previewData.data[0][f] != null && String(previewData.data[0][f]).trim() !== ''}
+                                            {String(previewData.data[0][f]).trim()}
+                                        {:else}
+                                            Field {i + 1}
+                                        {/if}
 									</th>
 								{/each}
 							</tr>
 						</thead>
 						<tbody>
-							{#each previewData.data.slice(0, 3) as row}
+							{#each (hasHeaders ? previewData.data.slice(1, 4) : previewData.data.slice(0, 3)) as row}
 								<tr class="border-t border-gray-200 dark:border-gray-700">
 									{#each availableFields as header}
 										<td class="px-3 py-2 whitespace-nowrap truncate max-w-[150px]">
-											{row[header]}
+											{row[header] != null ? row[header] : ''}
 										</td>
 									{/each}
 								</tr>
