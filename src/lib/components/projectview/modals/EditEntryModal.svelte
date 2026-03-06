@@ -21,7 +21,6 @@
         Pencil,
         X,
         TextInitial,
-        Calendar as CalendarIcon,
         AlertCircle
     } from 'lucide-svelte';
 
@@ -188,29 +187,37 @@
                             {#if colSchema.type === 'DateTime'}
                                 {#if colSchema.subType === 'Date'}
                                     <div class="relative">
+                                        <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+                                        </div>
                                         <input type="date" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                            class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
-                                        <CalendarIcon size={16} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                            class="input-base ps-10 {errors[col.field] ? 'input-error' : ''}" />
                                     </div>
                                 {:else if colSchema.subType === 'Time'}
                                     <div class="relative">
+                                        <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
+                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                                        </div>
                                         <input type="time" id="field-{col.field}" bind:value={editedData[col.field]} 
                                             class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
-                                        <Clock size={16} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                     </div>
                                 {:else}
                                     <div class="flex space-x-2">
                                         <div class="relative flex-1">
+                                            <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                                                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+                                            </div>
                                             <input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} 
                                                 on:input={(e) => handleDateTimeChange(col.field, 'date', e)}
-                                                class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
-                                            <CalendarIcon size={14} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                class="input-base ps-10 {errors[col.field] ? 'input-error' : ''}" />
                                         </div>
                                         <div class="relative w-32">
+                                            <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
+                                                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                                            </div>
                                             <input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} 
                                                 on:input={(e) => handleDateTimeChange(col.field, 'time', e)}
                                                 class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
-                                            <Clock size={14} class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                         </div>
                                     </div>
                                 {/if}
@@ -308,7 +315,7 @@
     .custom-scrollbar::-webkit-scrollbar-thumb {
         @apply bg-gray-300 dark:bg-gray-700 rounded-full;
     }
-    /* Hide native calendar icon to use Lucide one for consistent aesthetic */
+    /* Hide native calendar icon to use requested design */
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator {
         @apply opacity-0 absolute right-0 w-8 h-full cursor-pointer;
