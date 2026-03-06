@@ -266,6 +266,9 @@
 
     let showEditFieldModal = false;
     let editingFieldData = { name: '', schema: {} };
+    let isAddingNewField = false;
+    let newFieldPosition = 'after';
+    let newFieldTargetColumn = null;
 
     function openFieldEditor(column) {
         const field = column.getField();
@@ -281,69 +284,97 @@
         if (!tablePath) return;
 
         try {
-            // 1. If name changed, rename in backend and layout
-            if (oldName !== newName) {
-                await renameTableHeader(tablePath, oldName, newName);
-                
-                // Update local schema reference
+            if (isAddingNewField) {
+                // Handle new field addition
+                // 1. Update local schema
                 tableSchema[newName] = { ...schema };
-                delete tableSchema[oldName];
 
-                // Update layout prefs if they exist
-                const projectBaseDir = get(project)?.baseDirectory;
-                if (projectBaseDir) {
-                    const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
-                    if (relativeTablePath) {
-                        let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
-                        if (savedLayout?.columns?.[oldName]) {
-                            savedLayout.columns[newName] = savedLayout.columns[oldName];
-                            delete savedLayout.columns[oldName];
-                            await saveTableLayoutPrefs(relativeTablePath, savedLayout);
+                // 2. Prepare data with empty values for the new field
+                const updatedData = tabulatorInstance.getData();
+                updatedData.forEach(row => {
+                    row[newName] = "";
+                });
+
+                // 3. Determine ordered headers
+                const columns = tabulatorInstance.getColumns();
+                let orderedHeaders = columns
+                    .filter(c => c.getField())
+                    .map(c => c.getField());
+                
+                if (newFieldTargetColumn) {
+                    const targetField = newFieldTargetColumn.getField();
+                    const index = orderedHeaders.indexOf(targetField);
+                    if (index !== -1) {
+                        if (newFieldPosition === 'before') {
+                            orderedHeaders.splice(index, 0, newName);
+                        } else {
+                            orderedHeaders.splice(index + 1, 0, newName);
+                        }
+                    } else {
+                        orderedHeaders.push(newName);
+                    }
+                } else {
+                    orderedHeaders.push(newName);
+                }
+
+                // 4. Save data and schema
+                await saveTableData(tablePath, updatedData, orderedHeaders);
+                await saveTableSchema(tablePath, tableSchema);
+
+                // 5. Reload
+                await initializeTable(tablePath, null, true);
+            } else {
+                // Handle existing field rename/update
+                if (oldName !== newName) {
+                    await renameTableHeader(tablePath, oldName, newName);
+                    
+                    // Update local schema reference
+                    tableSchema[newName] = { ...schema };
+                    delete tableSchema[oldName];
+
+                    // Update layout prefs if they exist
+                    const projectBaseDir = get(project)?.baseDirectory;
+                    if (projectBaseDir) {
+                        const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
+                        if (relativeTablePath) {
+                            let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
+                            if (savedLayout?.columns?.[oldName]) {
+                                savedLayout.columns[newName] = savedLayout.columns[oldName];
+                                delete savedLayout.columns[oldName];
+                                await saveTableLayoutPrefs(relativeTablePath, savedLayout);
+                            }
                         }
                     }
+                } else {
+                    // Just update schema
+                    tableSchema[oldName] = { ...schema };
                 }
-            } else {
-                // Just update schema
-                tableSchema[oldName] = { ...schema };
+
+                // Save the updated schema
+                await saveTableSchema(tablePath, tableSchema);
+
+                // Reload table to reflect structural and schema changes
+                await initializeTable(tablePath, null, true);
             }
-
-            // 2. Save the updated schema
-            await saveTableSchema(tablePath, tableSchema);
-
-            // 3. Reload table to reflect structural and schema changes
-            await initializeTable(tablePath, null, true);
         } catch (error) {
-            console.error("Failed to update field:", error);
+            console.error("Failed to save field:", error);
         } finally {
             showEditFieldModal = false;
+            isAddingNewField = false;
+            newFieldTargetColumn = null;
         }
     }
 
     async function insertColumn(column, position) {
-        const newFieldName = getUniqueColumnName("NewField");
-        const newColumnDef = {
-            title: newFieldName,
-            field: newFieldName,
-            editor: "textarea",
-            headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+        isAddingNewField = true;
+        newFieldPosition = position;
+        newFieldTargetColumn = column;
+        
+        editingFieldData = {
+            name: getUniqueColumnName("NewField"),
+            schema: { type: 'Text', subType: 'Small Text' }
         };
-        try {
-            await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
-            await tabulatorInstance.updateColumnDefinition(newFieldName, {
-                headerContextMenu: getColumnContextMenu
-            });
-            const rows = tabulatorInstance.getRows();
-            rows.forEach(row => {
-                const cell = row.getCell(newFieldName);
-                if (cell) {
-                    cell.setValue("", true);
-                }
-            });
-            await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
-        } catch (err) {
-            console.error(`Error inserting field ${position} ${column.getField()}:`, err);
-        }
+        showEditFieldModal = true;
     }
 
     async function pasteColumn(column, position) {
@@ -674,7 +705,7 @@
                     }
                 } else if (subType === 'Date') {
                     if (schema.format === 'YYYY-MM-DD') {
-                        isValid = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value);
+                        isValid = /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
                         errorMsg = "Invalid format (YYYY-MM-DD)";
                     } else if (schema.format === 'DD/MM/YYYY') {
                         isValid = /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
@@ -918,7 +949,7 @@
                 return button;
             })(),
             headerClick: (e, column) => {
-                insertColumn(column, 'before');
+                insertColumn(column, 'after'); // Generic button at end
             },
             width: 40,
             headerSort: false,
@@ -1424,7 +1455,11 @@
         fieldName={editingFieldData.name}
         colSchema={editingFieldData.schema}
         on:save={handleSaveField}
-        on:cancel={() => showEditFieldModal = false}
+        on:cancel={() => {
+            showEditFieldModal = false;
+            isAddingNewField = false;
+            newFieldTargetColumn = null;
+        }}
     />
 {/if}
 
