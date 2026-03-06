@@ -173,6 +173,25 @@ pub fn init_db() -> Result<(), CommandError> {
         if let Err(e) = backfill_file_type(&conn) {
             error!("[DB] Failed to backfill file_type: {}", e);
         }
+    } else {
+        // Even if no nulls, run the correction logic to fix mislabeled video transcripts
+        debug!("[DB] Running file_type correction for video transcripts...");
+        let correction_sql = "
+            UPDATE asset_metadata SET file_type = 'video-transcript'
+            WHERE file_type = 'audio-transcript'
+            AND EXISTS (
+                SELECT 1 FROM asset_metadata m
+                WHERE m.project_id = asset_metadata.project_id
+                  AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+                  AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
+                      = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
+                  AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+            )
+            AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%';
+        ";
+        if let Err(e) = conn.execute(correction_sql, []) {
+            error!("[DB] Failed to run video-transcript correction: {}", e);
+        }
     }
 
     // Check and add project_id column to asset_metadata if missing (for older schemas)
@@ -892,6 +911,23 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
          WHERE (file_type IS NULL OR file_type = '') 
          AND asset_type = 'attachment' 
          AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%')",
+        []
+    )?;
+
+    // 10. Correction for mislabeled Video Transcripts
+    // If it's already labeled as audio-transcript but its parent media is a video, correct it.
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'video-transcript'
+         WHERE file_type = 'audio-transcript'
+         AND EXISTS (
+            SELECT 1 FROM asset_metadata m
+            WHERE m.project_id = asset_metadata.project_id
+              AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
+                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
+              AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+         )
+         AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'",
         []
     )?;
 

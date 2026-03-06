@@ -19,7 +19,7 @@ use quick_xml;
 use chrono::Utc;
 use super::db_handler::{self, delete_annotations_from_db};
 use super::shared_types::GroupData; // Added for group commands
-use rusqlite::Connection; // Added for opening DB connection in commands
+use rusqlite::{Connection, params}; // Added for opening DB connection in commands
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
@@ -1089,10 +1089,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
     // --- SYNC & SELF-HEALING: Ensure DB has metadata for all XML assets ---
     let project_id_sync = project_data.project_uuid.clone();
+    let mut current_xml_relative_paths = std::collections::HashSet::new();
 
     // 1. Sync Media Files
     for media_entry in &project_data.media_files.files {
         let rel_path = media_entry.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
             info!("[Backend Sync] Creating missing metadata for media: {}", rel_path);
             let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
@@ -1129,6 +1132,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         // Sync associated transcripts
         for transcript_entry in &media_entry.transcripts {
             let t_rel_path = transcript_entry.relative_path.clone().replace("\\", "/");
+            current_xml_relative_paths.insert(t_rel_path.clone());
+
             if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &t_rel_path) {
                 info!("[Backend Sync] Creating missing metadata for generated transcript: {}", t_rel_path);
                 let t_abs_path = project_base_dir.join(&t_rel_path).to_string_lossy().to_string();
@@ -1137,7 +1142,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 // Determine transcript type based on parent media
                 let media_rel_path = media_entry.relative_path.clone().replace("\\", "/");
                 let t_file_type = if let Ok(Some(m_meta)) = db_handler::load_asset_metadata(&project_id_sync, &media_rel_path) {
-                    if m_meta.asset_type == "video" { "video-transcript" } else { "audio-transcript" }
+                    let is_video = m_meta.asset_type == "video" || m_meta.file_type.as_deref() == Some("video");
+                    if is_video { "video-transcript" } else { "audio-transcript" }
                 } else { "audio-transcript" };
 
                 let t_file_meta = FileMetadata {
@@ -1166,9 +1172,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 2. Sync Document Files
     for doc in &project_data.document_files.files {
         let rel_path = doc.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
         let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
-
-
         
         if existing_meta.is_none() {
             info!("[Backend Sync] Creating missing metadata for document: {}", rel_path);
@@ -1228,6 +1233,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 3. Sync Table Files
     for table in &project_data.table_files.files {
         let rel_path = table.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
         let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
 
         if existing_meta.is_none() {
@@ -1313,6 +1319,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 4. Sync Imported Transcripts
     for transcript in &project_data.imported_transcript_files.files {
         let rel_path = transcript.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
             info!("[Backend Sync] Creating missing metadata for imported transcript: {}", rel_path);
             let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
@@ -1343,6 +1350,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     // 5. Sync Images
     for image in &project_data.image_files.files {
         let rel_path = image.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
             info!("[Backend Sync] Creating missing metadata for image: {}", rel_path);
             let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
@@ -1367,6 +1375,27 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 file_type: "image".to_string(),
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "image", None);
+        }
+    }
+
+    // 6. PRUNE: Remove metadata for files no longer in XML
+    // This handles the "ghost" items issue in the dropdown.
+    if let Ok(db_path) = db_handler::get_db_path() {
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            let mut stmt = conn.prepare("SELECT asset_relative_path FROM asset_metadata WHERE project_id = ?1")?;
+            let db_paths: Vec<String> = stmt.query_map(params![project_id_sync], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            
+            for db_path in db_paths {
+                // If it's an attachment, we don't prune it yet as they aren't explicitly in the main XML lists
+                if db_path.contains("/attachments/") { continue; }
+
+                if !current_xml_relative_paths.contains(&db_path) {
+                    info!("[Backend Prune] Removing stale metadata for: {} (project_id: {})", db_path, project_id_sync);
+                    let _ = db_handler::delete_asset_metadata(&project_id_sync, &db_path);
+                }
+            }
         }
     }
 
@@ -1851,7 +1880,11 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                             } else {
                                 info!("[Backend Delete] Deleted highlights for transcript {} during media deletion.", transcript.relative_path);
                             }
+                            // Delete transcript metadata from DB
+                            let _ = db_handler::delete_asset_metadata(&project_id_for_db, &transcript.relative_path);
                         }
+                        // Delete media file metadata from DB
+                        let _ = db_handler::delete_asset_metadata(&project_id_for_db, &media_entry.relative_path);
                     }
                 }
 
@@ -1892,6 +1925,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     warn!("[Backend Delete] Failed to delete highlights for transcript {} during transcript deletion: {}", item_relative_path, e);
                 } else {
                     info!("[Backend Delete] Deleted highlights for transcript {} during transcript deletion.", item_relative_path);
+                }
+
+                // Delete transcript metadata from DB
+                if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path) {
+                    warn!("[Backend Delete] Failed to delete asset metadata from DB for project_id {}, transcript {}: {}", project_id_for_db, item_relative_path, e);
+                } else {
+                    info!("[Backend Delete] Deleted asset metadata from DB for project_id {}, transcript {}", project_id_for_db, item_relative_path);
                 }
 
                 info!("[Backend Delete] Updating XML to remove transcript link for '{}' with path '{}'", media_stem, item_relative_path);

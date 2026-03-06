@@ -908,7 +908,8 @@ pub async fn save_transcript_json(
     // Update asset_metadata for the saved transcript
     let media_metadata = db_handler::load_asset_metadata(&project_uuid_for_db, &media_entry_relative_path)?;
     let file_type = if let Some(meta) = media_metadata {
-        if meta.asset_type == "video" {
+        let is_video = meta.asset_type == "video" || meta.file_type.as_deref() == Some("video");
+        if is_video {
             "video-transcript".to_string()
         } else {
             "audio-transcript".to_string()

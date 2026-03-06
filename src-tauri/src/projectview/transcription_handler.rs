@@ -446,7 +446,38 @@ pub async fn import_word_transcript<R: Runtime>(
         .map_err(|e| CommandError::from(format!("Failed to save transcript JSON to {}: {}", final_transcript_path.display(), e)))?;
     info!("[import_word_transcript] Saved standalone transcript to: {}", final_transcript_path.display());
 
+    // Read project_uuid from XML
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID: {}", e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[import_word_transcript] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
+    }
+
     // --- Save metadata to DB ---
+    // Try to determine if this transcript belongs to a video or audio by checking if its name matches any media stem
+    let mut file_type = "transcript".to_string();
+    if let Ok(assets) = db_handler::get_project_assets_for_link(&project_id_for_db) {
+        if let Some(matching_media) = assets.iter().find(|a| {
+            let is_media = a.file_type.as_deref() == Some("video") || a.file_type.as_deref() == Some("audio");
+            if !is_media { return false; }
+            
+            let media_filename = Path::new(&a.name).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            transcript_filename_stem == media_filename
+        }) {
+            file_type = if matching_media.file_type.as_deref() == Some("video") {
+                "video-transcript".to_string()
+            } else {
+                "audio-transcript".to_string()
+            };
+            info!("[import_word_transcript] Automatically matched transcript to media stem '{}', assigned type '{}'", transcript_filename_stem, file_type);
+        }
+    }
+
     let file_metadata_for_db = FileMetadata {
         file_name: new_transcript_filename.clone(), // Use final (potentially suffixed) truncated filename
         file_path: final_transcript_path.to_string_lossy().into_owned(),
@@ -462,12 +493,12 @@ pub async fn import_word_transcript<R: Runtime>(
         audio_codec: None,
         video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
-                original_import_path: None,
-                speaker_names: None,
-                waveform_data: None,
-                language_code: None,
-                properties: None,
-        file_type: "transcript".to_string(),
+        original_import_path: None,
+        speaker_names: None,
+        waveform_data: None,
+        language_code: None,
+        properties: None,
+        file_type,
     };
 
     let asset_relative_path_for_db = final_transcript_path
@@ -476,19 +507,6 @@ pub async fn import_word_transcript<R: Runtime>(
         .replace("\\", "/");
 
     let asset_type = "imported_transcript"; // Define asset type
-
-    // Read project_uuid from XML
-    // project_xml_path is already a PathBuf from the function arguments
-    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
-        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
-        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID: {}", e)))?;
-
-    let project_id_for_db = project_data_for_uuid.project_uuid;
-    if project_id_for_db.is_empty() {
-        error!("[import_word_transcript] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
-        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
-    }
 
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db, // Pass project_id

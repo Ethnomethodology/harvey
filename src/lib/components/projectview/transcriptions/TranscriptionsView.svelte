@@ -530,7 +530,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         if (item.file_type === 'media') {
             console.log('[TranscriptionsView] Loading media via selectMedia.');
             selectMedia(item);
-        } else if (item.file_type === 'transcript') {
+        } else if (item.file_type === 'transcript' || item.file_type === 'audio-transcript' || item.file_type === 'video-transcript') {
             // Deactivate dual mode if active when clicking a transcript item
             if (store.isDualModeActive) {
                 console.log('[TranscriptionsView] Transcript clicked in Dual Mode, deactivating Dual Mode.');
