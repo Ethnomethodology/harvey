@@ -387,18 +387,29 @@
 
     async function handleHeaderConfirmation(event) {
         const { hasHeaders, schema } = event.detail;
-        const { tablePath } = headerConfirmationData;
+        console.log(`[DataLeftPanel] handleHeaderConfirmation: hasHeaders = ${hasHeaders}, schema =`, schema);
+        showHeaderConfirmationModal = false;
+        
         try {
-            await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
-            if (schema) {
-                await saveTableSchema(tablePath, schema);
-            }
-            await refreshProjectFiles();
+            // First, set the headers flag in XML
+            await invoke('set_table_headers', {
+                tablePathStr: headerConfirmationData.tablePath,
+                hasHeaders: hasHeaders
+            });
 
-            dispatch('requestviewchange', { viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
+            // Then, save the schema if provided
+            if (schema && Object.keys(schema).length > 0) {
+                await saveTableSchema(headerConfirmationData.tablePath, schema);
+            }
+
+            await refreshProjectFiles();
+            // Automatically select and open the newly imported table
+            dispatch('requestviewchange', { viewType: 'tables', itemPath: headerConfirmationData.tablePath, hasHeaders: hasHeaders });
+            
+            message('Table imported and configured successfully.', { title: 'Import Success', type: 'info' });
         } catch (error) {
-            console.error(`[DataLeftPanel] Error setting table headers or schema:`, error);
-            await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
+            console.error('[DataLeftPanel] Error confirming headers/schema:', error);
+            message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
         }
     }
 

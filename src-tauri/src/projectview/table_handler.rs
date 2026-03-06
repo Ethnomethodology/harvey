@@ -229,16 +229,17 @@ pub async fn import_table_file(
     }
     info!("[import_table_file] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
-    // Always assume headers for the preview, the user will confirm.
+    // For preview, we always load WITHOUT assuming headers first
+    // This allows the user to see the first row and decide if it's a header or not.
     let preview_data = match original_source_extension.as_str() {
-        "csv" => load_csv_data(&final_table_path, true, Some(5)),
-        "xlsx" => load_xlsx_data(&final_table_path, true, Some(5)),
+        "csv" => load_csv_data(&final_table_path, false, Some(5)),
+        "xlsx" => load_xlsx_data(&final_table_path, false, Some(5)),
         _ => {
             error!("[import_table_file] Unsupported table extension for preview: {}", original_source_extension);
             return Err(CommandError::from(format!("Unsupported table extension for preview: {}", original_source_extension)))
         },
     }?;
-    debug!("[import_table_file] Preview data loaded.");
+    debug!("[import_table_file] Preview data loaded (no headers assumed).");
 
     Ok(json!({
         "table_path": final_table_path.to_string_lossy(),
@@ -338,7 +339,8 @@ pub async fn set_table_headers(
     }
 
     if !has_headers {
-        // If user says NO to headers, we write generated headers to the file and then treat it as having headers.
+        // If the user says the file DOES NOT have headers, we generate and write them.
+        // Once written, the file effectively HAS headers from our perspective.
         let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
         let loaded_data = match extension.as_str() {
             "csv" => load_csv_data(&table_path, false, None)?,
@@ -357,6 +359,10 @@ pub async fn set_table_headers(
             "xlsx" => save_xlsx_data_with_headers(&table_path, data, &headers)?,
             _ => unreachable!(),
         }
+    } else {
+        // If has_headers is true, it means the file ALREADY has headers.
+        // We don't need to rewrite the file, but we should make sure the XML reflects it.
+        // The load_table_data and delete_table_column already respect the has_headers flag.
     }
 
     // Now, update the XML. If the user said "no headers", we've added them, so the file *now* has headers.

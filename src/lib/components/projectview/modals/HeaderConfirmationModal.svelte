@@ -4,7 +4,7 @@
 	import { fade } from 'svelte/transition';
 
 	export let showModal = false;
-	export let previewData = { fields: [], data: [] };
+	export let previewData = { fields: [], headers: [], data: [] };
 	export let tablePath = '';
 
 	const dispatch = createEventDispatcher();
@@ -56,8 +56,10 @@
         { label: 'Other (Custom Code)', value: 'OTHER' }
     ];
 
-	$: if (showModal && previewData && previewData.fields && fields.length === 0) {
-		fields = previewData.fields.map((f, i) => ({
+    $: availableFields = previewData?.fields || previewData?.headers || [];
+
+	$: if (showModal && availableFields.length > 0 && fields.length === 0) {
+		fields = availableFields.map((f, i) => ({
 			name: hasHeaders ? f : `Field ${i + 1}`,
 			type: 'Text',
 			subType: 'Small Text',
@@ -73,9 +75,9 @@
 	}
 
 	// Update field names if hasHeaders changes
-	$: if (step === 1) {
-		fields = previewData.fields.map((f, i) => ({
-			...fields[i],
+	$: if (step === 1 && availableFields.length > 0 && fields.length > 0) {
+		fields = availableFields.map((f, i) => ({
+			...(fields[i] || {}),
 			name: hasHeaders ? f : `Field ${i + 1}`
 		}));
 	}
@@ -183,9 +185,9 @@
 					<table class="w-full text-xs text-left">
 						<thead class="bg-gray-100 dark:bg-gray-700 sticky top-0">
 							<tr>
-								{#each previewData.fields as _, i}
+								{#each availableFields as _, i}
 									<th class="px-3 py-2 font-semibold">
-										{hasHeaders ? previewData.fields[i] : `Field ${i + 1}`}
+										{hasHeaders ? availableFields[i] : `Field ${i + 1}`}
 									</th>
 								{/each}
 							</tr>
@@ -193,7 +195,7 @@
 						<tbody>
 							{#each previewData.data.slice(0, 3) as row}
 								<tr class="border-t border-gray-200 dark:border-gray-700">
-									{#each previewData.fields as header}
+									{#each availableFields as header}
 										<td class="px-3 py-2 whitespace-nowrap truncate max-w-[150px]">
 											{row[header]}
 										</td>
