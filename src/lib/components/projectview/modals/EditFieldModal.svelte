@@ -47,7 +47,7 @@
         'Numeric': ['Number', 'Currency', 'Percent'],
         'DateTime': ['Date', 'Date & Time', 'Time'],
         'Contact': ['Email', 'Phone', 'Hyperlink'],
-        'Misc': ['Selectbox', 'Checkbox', 'Tags', 'Project Link']
+        'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
     };
 
     const dateFormats = [
@@ -94,7 +94,7 @@
             return;
         }
 
-        if (editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Tags') {
+        if (editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect') {
             editedSchema.options = optionsText.split(',').map(s => s.trim()).filter(Boolean);
         } else {
             editedSchema.options = [];
@@ -111,7 +111,7 @@
         if (type === 'Misc') {
             if (subType === 'Checkbox') return CheckSquare;
             if (subType === 'Selectbox') return SquareMenu;
-            if (subType === 'Tags') return Tags;
+            if (subType === 'Multiselect') return Tags;
             if (subType === 'Project Link') return Link;
         }
         
@@ -244,7 +244,7 @@
                             />
                         </div>
                     </div>
-                {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Tags'}
+                {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
                     <div class="space-y-1">
                         <label for="field-options" class="block text-sm font-medium text-gray-700 dark:text-gray-300">OPTIONS (Comma separated)</label>
                         <textarea

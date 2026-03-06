@@ -37,7 +37,7 @@
         if (type === 'Misc') {
             if (subType === 'Checkbox') return CheckSquare;
             if (subType === 'Selectbox') return SquareMenu;
-            if (subType === 'Tags') return Tags;
+            if (subType === 'Multiselect') return Tags;
             if (subType === 'Project Link') return Link;
         }
         
@@ -69,9 +69,9 @@
 
     let editedData = { ...rowData };
     
-    // Ensure Tags fields are arrays for the multiple select
+    // Ensure Multiselect fields are arrays for the multiple select
     for (const field in schema) {
-        if (schema[field].type === 'Misc' && schema[field].subType === 'Tags' && typeof editedData[field] === 'string') {
+        if (schema[field].type === 'Misc' && schema[field].subType === 'Multiselect' && typeof editedData[field] === 'string') {
             editedData[field] = editedData[field].split(',').map(s => s.trim()).filter(Boolean);
         }
     }
@@ -203,8 +203,8 @@
                                         class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
                                     />
                                 </div>
-                            {:else if colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags'}
-                                {#if colSchema.subType === 'Tags'}
+                            {:else if colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect'}
+                                {#if colSchema.subType === 'Multiselect'}
                                     <select
                                         id="field-{col.field}"
                                         bind:value={editedData[col.field]}

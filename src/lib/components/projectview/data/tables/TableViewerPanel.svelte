@@ -179,9 +179,9 @@
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => {
             delete row.harvey_internal_id;
-            // Convert Tag arrays back to CSV strings for persistence
+            // Convert Multiselect arrays back to CSV strings for persistence
             for (const field in tableSchema) {
-                if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Tags') {
+                if (tableSchema[field].type === 'Misc' && tableSchema[field].subType === 'Multiselect') {
                     if (Array.isArray(row[field])) {
                         row[field] = row[field].join(', ');
                     }
@@ -766,11 +766,16 @@
                     colDef.headerHozAlign = "center";
                     colDef.width = 50;
                     colDef.resizable = false;
-                } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
+                } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
                     colDef.editor = "list";
                     colDef.editorParams = {
                         values: colSchema.options || [],
-                        multiselect: colSchema.subType === 'Tags'
+                        multiselect: colSchema.subType === 'Multiselect'
+                    };
+                    colDef.formatter = (cell) => {
+                        const val = cell.getValue();
+                        if (Array.isArray(val)) return val.join(', ');
+                        return val || "";
                     };
                 } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";

@@ -28,7 +28,7 @@
         if (type === 'Misc') {
             if (subType === 'Checkbox') return CheckSquare;
             if (subType === 'Selectbox') return SquareMenu;
-            if (subType === 'Tags') return Tags;
+            if (subType === 'Multiselect') return Tags;
             if (subType === 'Project Link') return Link;
         }
         
