@@ -751,17 +751,38 @@
 
     function getAllProjectAssets() {
         const assets = [];
+        const categoryMap = {
+            'audio': 'Audios',
+            'document': 'Documents',
+            'image': 'Images',
+            'table': 'Tables',
+            'transcript': 'Transcripts',
+            'video': 'Videos'
+        };
+
         function traverse(nodes) {
             if (!Array.isArray(nodes)) return;
             nodes.forEach(node => {
                 if (node.path && node.file_type && node.file_type !== 'directory' && node.file_type !== 'directory_media_stem') {
-                    assets.push({ label: node.name, value: node.path });
+                    const category = categoryMap[node.file_type] || 'Other';
+                    assets.push({ 
+                        label: `${category} - ${node.name}`, 
+                        value: node.path,
+                        category: category // Store for sorting
+                    });
                 }
                 if (node.children) traverse(node.children);
             });
         }
         traverse(get(project).files);
-        return assets.sort((a, b) => a.label.localeCompare(b.label));
+        
+        // Sort by category first, then by label
+        return assets.sort((a, b) => {
+            if (a.category !== b.category) {
+                return a.category.localeCompare(b.category);
+            }
+            return a.label.localeCompare(b.label);
+        });
     }
 
     function generateColumns(data, headers, savedLayoutObj, schema) {
