@@ -748,14 +748,24 @@
             // Set editor based on schema
             if (colSchema.type === 'Misc') {
                 if (colSchema.subType === 'Checkbox') {
-                    colDef.editor = "tickCross";
+                    colDef.editor = false; // Disable editor to prevent tickCross "cross" icons
                     colDef.formatter = (cell) => {
-                        const isChecked = cell.getValue() === true || cell.getValue() === 'true' || cell.getValue() === 1;
+                        const val = cell.getValue();
+                        const isChecked = val === true || val === 'true' || val === 1 || val === "1";
                         return `<div class="flex items-center justify-center h-full">
-                            <input type="checkbox" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded pointer-events-none" />
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer" onclick="event.preventDefault()" />
                         </div>`;
                     };
+                    colDef.cellClick = function(e, cell) {
+                        // Immediate toggle on single click
+                        const currentVal = cell.getValue();
+                        const isCurrentlyChecked = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === "1";
+                        cell.setValue(!isCurrentlyChecked);
+                    };
                     colDef.hozAlign = "center";
+                    colDef.headerHozAlign = "center";
+                    colDef.width = 50;
+                    colDef.resizable = false;
                 } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
                     colDef.editor = "list";
                     colDef.editorParams = {
