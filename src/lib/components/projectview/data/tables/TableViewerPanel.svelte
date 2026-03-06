@@ -947,6 +947,7 @@
                 insertColumn(column, 'after'); // Generic button at end
             },
             width: 40,
+            minWidth: 40,
             headerSort: false,
             resizable: false,
             frozen: false,
@@ -1199,6 +1200,7 @@
                         }
                     },
                     width: 50,
+                    minWidth: 40,
                     cssClass:"range-header-col tabulator-row-number-column"
                 },
                 clipboard: true,
