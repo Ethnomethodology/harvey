@@ -61,7 +61,7 @@
     $: Icon = getIcon();
 </script>
 
-<div class="flex items-center">
+<div class="flex items-center justify-center">
     <span class="inline-flex items-center mr-1.5 text-gray-400">
         <svelte:component this={Icon} size={14} strokeWidth={2} />
     </span>

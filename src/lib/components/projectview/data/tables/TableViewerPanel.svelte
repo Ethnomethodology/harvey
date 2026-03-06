@@ -1157,11 +1157,12 @@
                 columnDefaults: {
                     headerSort:false,
                     headerHozAlign:"center",
+                    headerVAlign:"middle",
                     editor:"textarea",
                     editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
                     resizable:"header",
-                    width:100,
-                    minWidth: 50,
+                    width:200,
+                    minWidth: 100,
                 },
                 rowHeader:{
                     resizable: false,
