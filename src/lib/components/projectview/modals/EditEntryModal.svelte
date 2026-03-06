@@ -7,12 +7,12 @@
         Type, 
         Hash, 
         CheckSquare, 
-        List, 
+        SquareMenu, 
         Tags, 
         Link, 
         DollarSign, 
         Percent, 
-        Calendar, 
+        CalendarDays, 
         Clock, 
         Mail, 
         Phone,
@@ -36,7 +36,7 @@
         
         if (type === 'Misc') {
             if (subType === 'Checkbox') return CheckSquare;
-            if (subType === 'Selectbox') return List;
+            if (subType === 'Selectbox') return SquareMenu;
             if (subType === 'Tags') return Tags;
             if (subType === 'Project Link') return Link;
         }
@@ -48,7 +48,7 @@
         }
         
         if (type === 'DateTime') {
-            if (subType === 'Date') return Calendar;
+            if (subType === 'Date') return CalendarDays;
             if (subType === 'Time') return Clock;
             return CalendarClock;
         }
