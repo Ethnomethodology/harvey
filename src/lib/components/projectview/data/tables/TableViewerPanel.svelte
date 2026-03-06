@@ -402,12 +402,18 @@
                 newRowData[column.getField()] = "";
             }
         });
+
+        // Calculate a new unique internal ID
+        const allData = tabulatorInstance.getData();
+        const maxId = allData.reduce((max, r) => Math.max(max, r.harvey_internal_id || 0), -1);
+        newRowData.harvey_internal_id = maxId + 1;
+
         try {
             const addedRow = await tabulatorInstance.addRow(newRowData, position === 'before', row);
 
             // Workaround for suspected backend bug: "dirty" a cell to ensure the new entry is saved.
             const cells = addedRow.getCells();
-            if (cells.length > 0) {
+            if (cells.length > 0 && cells[0].getField() !== 'harvey_internal_id') {
                 cells[0].setValue(" ", true); // Set a single space, suppress cellEdited event
             }
 
@@ -422,8 +428,16 @@
             alert("No entry data on clipboard.");
             return;
         }
+        
+        const newRowData = { ...tableClipboard.data };
+        
+        // Calculate a new unique internal ID
+        const allData = tabulatorInstance.getData();
+        const maxId = allData.reduce((max, r) => Math.max(max, r.harvey_internal_id || 0), -1);
+        newRowData.harvey_internal_id = maxId + 1;
+
         try {
-            await tabulatorInstance.addRow(tableClipboard.data, position === 'before', row);
+            await tabulatorInstance.addRow(newRowData, position === 'before', row);
             await saveTableChanges();
         } catch (err) {
             console.error("Error pasting entry:", err);
