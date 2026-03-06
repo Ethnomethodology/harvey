@@ -192,7 +192,7 @@
         const columns = tabulatorInstance.getColumns();
         const orderedHeaders = columns
             .filter(column => column.getField()) // Ensure we only get data fields
-            .map(column => column.getDefinition().title);
+            .map(column => column.getField());
 
         await saveTableData(tablePath, dataToSave, orderedHeaders);
     }
