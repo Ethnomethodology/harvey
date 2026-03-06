@@ -186,38 +186,39 @@
                         <div class="relative">
                             {#if colSchema.type === 'DateTime'}
                                 {#if colSchema.subType === 'Date'}
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+                                    <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
+                                        <div class="shrink-0 pl-3 flex items-center pointer-events-none">
+                                            <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
                                         </div>
                                         <input type="date" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                            class="input-base ps-10 {errors[col.field] ? 'input-error' : ''}" />
+                                            class="input-transparent grow pl-2" />
                                     </div>
                                 {:else if colSchema.subType === 'Time'}
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
-                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                                        </div>
+                                    <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
                                         <input type="time" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                            class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
+                                            class="input-transparent grow pl-3" />
+                                        <div class="shrink-0 pr-3 flex items-center pointer-events-none">
+                                            <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                                        </div>
                                     </div>
                                 {:else}
+                                    <!-- Date & Time -->
                                     <div class="flex space-x-2">
-                                        <div class="relative flex-1">
-                                            <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-                                                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+                                        <div class="flex-1 input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
+                                            <div class="shrink-0 pl-3 flex items-center pointer-events-none">
+                                                <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
                                             </div>
                                             <input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} 
                                                 on:input={(e) => handleDateTimeChange(col.field, 'date', e)}
-                                                class="input-base ps-10 {errors[col.field] ? 'input-error' : ''}" />
+                                                class="input-transparent grow pl-2" />
                                         </div>
-                                        <div class="relative w-32">
-                                            <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
-                                                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                                            </div>
+                                        <div class="w-36 input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
                                             <input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} 
                                                 on:input={(e) => handleDateTimeChange(col.field, 'time', e)}
-                                                class="input-base pr-10 {errors[col.field] ? 'input-error' : ''}" />
+                                                class="input-transparent grow pl-3" />
+                                            <div class="shrink-0 pr-3 flex items-center pointer-events-none">
+                                                <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                                            </div>
                                         </div>
                                     </div>
                                 {/if}
@@ -245,14 +246,14 @@
                                     </select>
                                 {/if}
                             {:else if colSchema.type === 'Numeric'}
-                                <div class="flex items-center rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all duration-200 {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
+                                <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
                                     {#if colSchema.subType === 'Currency'}
                                         <div class="shrink-0 pl-3 text-gray-400 text-sm font-bold select-none">
                                             {getCurrencySymbol(colSchema.currency)}
                                         </div>
                                     {/if}
                                     <input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                        class="block min-w-0 grow bg-transparent py-2.5 pr-3 pl-1.5 text-sm dark:text-gray-100 placeholder-gray-400 focus:outline-none" />
+                                        class="input-transparent grow px-2" />
                                     {#if colSchema.subType === 'Percent'}
                                         <div class="shrink-0 pr-3 text-gray-400 text-sm font-bold select-none">
                                             %
@@ -294,6 +295,12 @@
 </div>
 
 <style lang="postcss">
+    .input-container {
+        @apply flex items-center bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all duration-200;
+    }
+    .input-transparent {
+        @apply bg-transparent py-2.5 text-sm dark:text-gray-100 placeholder-gray-400 focus:outline-none;
+    }
     .input-base {
         @apply block w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm text-sm dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200;
     }
@@ -315,7 +322,7 @@
     .custom-scrollbar::-webkit-scrollbar-thumb {
         @apply bg-gray-300 dark:bg-gray-700 rounded-full;
     }
-    /* Hide native calendar icon to use requested design */
+    /* Native indicator styling */
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator {
         @apply opacity-0 absolute right-0 w-8 h-full cursor-pointer;
