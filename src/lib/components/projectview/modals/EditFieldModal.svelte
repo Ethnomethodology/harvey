@@ -75,6 +75,19 @@
         { label: 'hh:mm A', value: 'hh:mm A' }
     ];
 
+    const currencyOptions = [
+        { label: 'USD ($) - US Dollar', value: 'USD', symbol: '$' },
+        { label: 'EUR (€) - Euro', value: 'EUR', symbol: '€' },
+        { label: 'GBP (£) - British Pound', value: 'GBP', symbol: '£' },
+        { label: 'JPY (¥) - Japanese Yen', value: 'JPY', symbol: '¥' },
+        { label: 'INR (₹) - Indian Rupee', value: 'INR', symbol: '₹' },
+        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY', symbol: '¥' },
+        { label: 'AUD ($) - Australian Dollar', value: 'AUD', symbol: '$' },
+        { label: 'CAD ($) - Canadian Dollar', value: 'CAD', symbol: '$' },
+        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF', symbol: 'CHF' },
+        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' }
+    ];
+
     let optionsText = (editedSchema.options || []).join(', ');
 
     function handleTypeChange() {
@@ -85,6 +98,11 @@
         }
         if (editedSchema.type !== 'DateTime') {
             editedSchema.format = '';
+        }
+        if (editedSchema.subType === 'Currency') {
+            editedSchema.currency = editedSchema.currency || 'USD';
+        } else {
+            delete editedSchema.currency;
         }
     }
 
@@ -244,6 +262,20 @@
                             />
                         </div>
                     </div>
+                    {#if editedSchema.subType === 'Currency'}
+                        <div class="space-y-1">
+                            <label for="field-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300">CURRENCY / COUNTRY</label>
+                            <select
+                                id="field-currency"
+                                bind:value={editedSchema.currency}
+                                class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
+                            >
+                                {#each currencyOptions as opt}
+                                    <option value={opt.value}>{opt.label}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    {/if}
                 {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
                     <div class="space-y-1">
                         <label for="field-options" class="block text-sm font-medium text-gray-700 dark:text-gray-300">OPTIONS (Comma separated)</label>

@@ -774,7 +774,11 @@
                     };
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
-                        if (Array.isArray(val)) return val.join(', ');
+                        if (colSchema.subType === 'Multiselect' && Array.isArray(val)) {
+                            return `<div class="flex flex-wrap gap-1">
+                                ${val.map(v => `<span class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium rounded-full border border-blue-200 dark:border-blue-800/50 whitespace-nowrap">${v}</span>`).join('')}
+                            </div>`;
+                        }
                         return val || "";
                     };
                 } else if (colSchema.subType === 'Project Link') {
@@ -786,7 +790,18 @@
             } else if (colSchema.type === 'Numeric') {
                 colDef.editor = "number";
                 if (colSchema.subType === 'Currency') {
-                    colDef.formatter = "money";
+                    colDef.formatter = (cell) => {
+                        const val = cell.getValue();
+                        if (val === null || val === undefined || val === "") return "";
+                        try {
+                            return new Intl.NumberFormat('en-US', { 
+                                style: 'currency', 
+                                currency: colSchema.currency || 'USD' 
+                            }).format(val);
+                        } catch (e) {
+                            return val;
+                        }
+                    };
                 } else if (colSchema.subType === 'Percent') {
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();

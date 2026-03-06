@@ -25,6 +25,19 @@
         'Time': ['None', 'HH:mm', 'HH:mm:ss', 'hh:mm A']
     };
 
+    const currencyOptions = [
+        { label: 'USD ($) - US Dollar', value: 'USD', symbol: '$' },
+        { label: 'EUR (€) - Euro', value: 'EUR', symbol: '€' },
+        { label: 'GBP (£) - British Pound', value: 'GBP', symbol: '£' },
+        { label: 'JPY (¥) - Japanese Yen', value: 'JPY', symbol: '¥' },
+        { label: 'INR (₹) - Indian Rupee', value: 'INR', symbol: '₹' },
+        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY', symbol: '¥' },
+        { label: 'AUD ($) - Australian Dollar', value: 'AUD', symbol: '$' },
+        { label: 'CAD ($) - Canadian Dollar', value: 'CAD', symbol: '$' },
+        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF', symbol: 'CHF' },
+        { label: 'SGD ($) - Singapore Dollar', value: 'SGD', symbol: '$' }
+    ];
+
     function addField() {
         fields = [...fields, {
             name: `Field ${fields.length + 1}`,
@@ -35,7 +48,8 @@
             min: '',
             max: '',
             description: '',
-            format: 'None'
+            format: 'None',
+            currency: 'USD'
         }];
     }
 
@@ -83,6 +97,9 @@
                 description: f.description.trim(),
                 format: f.format !== 'None' ? f.format : null
             };
+            if (f.subType === 'Currency') {
+                schema[f.name].currency = f.currency || 'USD';
+            }
         });
 
         try {
@@ -149,9 +166,18 @@
                                 {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
                                     <input type="text" bind:value={field.options} placeholder="Opt 1, Opt 2..." class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
                                 {:else if field.type === 'Numeric'}
-                                    <div class="flex space-x-1">
-                                        <input type="number" bind:value={field.min} placeholder="Min" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
-                                        <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    <div class="flex flex-col space-y-1">
+                                        <div class="flex space-x-1">
+                                            <input type="number" bind:value={field.min} placeholder="Min" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
+                                            <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
+                                        </div>
+                                        {#if field.subType === 'Currency'}
+                                            <select bind:value={field.currency} class="w-full text-[10px] p-0.5 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
+                                                {#each currencyOptions as opt}
+                                                    <option value={opt.value}>{opt.label}</option>
+                                                {/each}
+                                            </select>
+                                        {/if}
                                     </div>
                                 {:else if field.type === 'DateTime'}
                                     <select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
