@@ -749,7 +749,12 @@
             if (colSchema.type === 'Misc') {
                 if (colSchema.subType === 'Checkbox') {
                     colDef.editor = "tickCross";
-                    colDef.formatter = "tickCross";
+                    colDef.formatter = (cell) => {
+                        const isChecked = cell.getValue() === true || cell.getValue() === 'true' || cell.getValue() === 1;
+                        return `<div class="flex items-center justify-center h-full">
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded pointer-events-none" />
+                        </div>`;
+                    };
                     colDef.hozAlign = "center";
                 } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Tags') {
                     colDef.editor = "list";
