@@ -56,6 +56,9 @@
     let editingEntryData = null;
     let editingEntryIndex = -1;
     let tableColumnsForModal = [];
+
+    let currentPrimaryField = null;
+    let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
@@ -200,6 +203,43 @@
 
     const debouncedSave = debounce(saveTableChanges, 750);
 
+    function detectDuplicates() {
+        if (!currentPrimaryField || !tabulatorInstance) {
+            duplicateIds = new Set();
+            return;
+        }
+
+        const data = tabulatorInstance.getData();
+        const valueMap = new Map(); // value -> [internal_ids]
+        
+        data.forEach(row => {
+            const val = String(row[currentPrimaryField] || "").trim();
+            if (val === "") return; // Skip empty
+            if (!valueMap.has(val)) {
+                valueMap.set(val, []);
+            }
+            valueMap.get(val).push(row.harvey_internal_id);
+        });
+
+        const newDuplicateIds = new Set();
+        let foundDuplicates = false;
+        valueMap.forEach((ids, val) => {
+            if (ids.length > 1) {
+                ids.forEach(id => newDuplicateIds.add(id));
+                foundDuplicates = true;
+            }
+        });
+
+        if (foundDuplicates && duplicateIds.size === 0) {
+            import('@tauri-apps/plugin-dialog').then(d => {
+                d.message(`Duplicate values found in primary field "${currentPrimaryField}". Duplicates are highlighted in red.`, { title: 'Duplicate Primary Key', type: 'warning' });
+            });
+        }
+
+        duplicateIds = newDuplicateIds;
+        tabulatorInstance.redraw(true);
+    }
+
     function getUniqueColumnName(baseName) {
         if (!tabulatorInstance) return baseName;
         let newName = baseName;
@@ -261,8 +301,6 @@
         menu.push({ label: "Delete Field", action: (e, column) => deleteColumn(column) });
         return menu;
     }
-
-    // ... (other functions)
 
     let showEditFieldModal = false;
     let editingFieldData = { name: '', schema: {} };
@@ -759,10 +797,13 @@
     async function generateColumns(data, headers, savedLayoutObj, schema) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         
+        currentPrimaryField = Object.keys(schema).find(key => schema[key].primary) || null;
         const projectAssetOptions = await getAllProjectAssets();
         
         let dataColumnDefs = headers.map(header => {
             const colSchema = schema[header] || { type: 'Text', subType: 'Small Text' };
+            const isPrimary = colSchema.primary === true;
+
             const colDef = {
                 title: (() => {
                     const container = document.createElement("div");
@@ -784,6 +825,7 @@
                 validator: softValidator,
                 headerContextMenu: getColumnContextMenu,
                 headerTooltip: colSchema.description || null,
+                frozen: isPrimary,
             };
 
             // Set editor based on schema
@@ -879,7 +921,8 @@
             // Apply custom styling/highlighting formatter logic
             const baseFormatter = colDef.formatter;
             colDef.formatter = (cell, formatterParams, onRendered) => {
-                const rowIndex = cell.getRow().getData().harvey_internal_id;
+                const rowData = cell.getRow().getData();
+                const rowIndex = rowData.harvey_internal_id;
                 const colField = cell.getField();
                 const cellKey = `cell-${rowIndex}-${colField}`;
                 const cellElement = cell.getElement();
@@ -890,6 +933,13 @@
                     cellElement.classList.add('highlighted-cell');
                 } else {
                     cellElement.classList.remove('highlighted-cell');
+                }
+
+                // Primary duplicate highlighting
+                if (colField === currentPrimaryField && duplicateIds.has(rowIndex)) {
+                    cellElement.classList.add('duplicate-primary-cell');
+                } else {
+                    cellElement.classList.remove('duplicate-primary-cell');
                 }
                 
                 if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
@@ -927,8 +977,22 @@
             }
             return colDef;
         });
+        
+        // Ensure primary field is first in data columns if frozen
+        if (currentPrimaryField) {
+            const primaryIdx = dataColumnDefs.findIndex(c => c.field === currentPrimaryField);
+            if (primaryIdx > 0) {
+                const [primaryCol] = dataColumnDefs.splice(primaryIdx, 1);
+                dataColumnDefs.unshift(primaryCol);
+            }
+        }
+
         if (savedLayoutObj?.columns) {
-            dataColumnDefs.sort((a, b) => (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity));
+            dataColumnDefs.sort((a, b) => {
+                if (a.frozen) return -1;
+                if (b.frozen) return 1;
+                return (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity)
+            });
         }
 
         // Add the "Add Field" column at the end
@@ -1084,6 +1148,8 @@
             }
             let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
             
+            // Reset duplicates state for new table
+            duplicateIds = new Set();
             const generatedColumns = await generateColumns(tableData, tableHeaders, savedLayout, tableSchema);
 
             tabulatorInstance = new Tabulator(tableContainer, {
@@ -1213,6 +1279,7 @@
             tabulatorInstance.on("tableBuilt", () => {
                 tableReady = true;
                 addFloatingAddRowButton();
+                detectDuplicates();
             });
             tabulatorInstance.on("renderComplete", () => {
                 updateFloatingAddRowButtonPosition();
@@ -1237,6 +1304,9 @@
 
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
+                if (cell.getField() === currentPrimaryField) {
+                    detectDuplicates();
+                }
                 const row = cell.getRow();
                 const rowData = row.getData();
                 const rowIndex = rowData.harvey_internal_id;
@@ -1455,6 +1525,7 @@
     <EditFieldModal
         fieldName={editingFieldData.name}
         colSchema={editingFieldData.schema}
+        currentPrimaryField={currentPrimaryField}
         on:save={handleSaveField}
         on:cancel={() => {
             showEditFieldModal = false;
@@ -1671,5 +1742,8 @@
         :global(.invalid-cell) {
             box-shadow: inset 0 0 5px #ef4444 !important;
             border: 1px solid #ef4444 !important;
+        }
+        :global(.duplicate-primary-cell) {
+            border: 2px solid #ef4444 !important;
         }
 </style>

@@ -9,7 +9,7 @@
 
     const dispatch = createEventDispatcher();
 
-    let fields = []; // { name, type, subType, options, required, min, max, description, format, currency, customCurrency }
+    let fields = []; // { name, type, subType, options, required, primary, min, max, description, format, currency, customCurrency }
 
     const FIELD_TYPES = {
         'Text': ['Small Text', 'Long Text'],
@@ -61,6 +61,7 @@
             subType: 'Small Text',
             options: '',
             required: false,
+            primary: false,
             min: '',
             max: '',
             description: '',
@@ -73,6 +74,17 @@
     function removeField(index) {
         if (fields.length > 1) {
             fields = fields.filter((_, i) => i !== index);
+        }
+    }
+
+    function handlePrimaryChange(index) {
+        if (fields[index].primary) {
+            fields = fields.map((f, i) => ({
+                ...f,
+                primary: i === index
+            }));
+            // If primary, it must be required
+            fields[index].required = true;
         }
     }
 
@@ -109,6 +121,7 @@
                 subType: f.subType,
                 options: (f.subType === 'Selectbox' || f.subType === 'Multiselect') ? f.options.split(',').map(o => o.trim()).filter(o => o !== '') : [],
                 required: f.required,
+                primary: f.primary || false,
                 min: f.min !== '' ? parseFloat(f.min) : null,
                 max: f.max !== '' ? parseFloat(f.max) : null,
                 description: f.description.trim(),
@@ -154,6 +167,7 @@
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Field Name</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sub-type</th>
+                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Primary</th>
                         <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Req?</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[150px]">Constraints / Options</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">Description</th>
@@ -177,7 +191,10 @@
                                 </select>
                             </td>
                             <td class="px-3 py-2 text-center">
-                                <input type="checkbox" bind:checked={field.required} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                                <input type="checkbox" bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                <input type="checkbox" bind:checked={field.required} disabled={field.primary} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
                             </td>
                             <td class="px-3 py-2">
                                 {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}

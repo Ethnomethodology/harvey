@@ -23,6 +23,7 @@
 
     export let fieldName = '';
     export let colSchema = {};
+    export let currentPrimaryField = null; // New prop to know if there's already a primary field
 
     const dispatch = createEventDispatcher();
 
@@ -60,6 +61,7 @@
         type: 'Text',
         subType: 'Small Text',
         required: false,
+        primary: false,
         min: null,
         max: null,
         options: [],
@@ -128,6 +130,12 @@
         }
     }
 
+    function handlePrimaryChange() {
+        if (editedSchema.primary) {
+            editedSchema.required = true;
+        }
+    }
+
     function handleSave() {
         if (!editedName.trim()) {
             alert('Field name cannot be empty.');
@@ -181,6 +189,9 @@
         
         return TypeIcon;
     }
+
+    // A field can be made primary ONLY if no other field is primary, or if it IS the current primary.
+    $: isPrimaryDisabled = currentPrimaryField && currentPrimaryField !== fieldName && !editedSchema.primary;
 </script>
 
 <div class="fixed inset-0 z-[150] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
@@ -242,15 +253,34 @@
                 </div>
             </div>
 
-            <!-- Required Toggle -->
-            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
-                <input
-                    id="field-required"
-                    type="checkbox"
-                    bind:checked={editedSchema.required}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label for="field-required" class="text-sm font-medium text-gray-700 dark:text-gray-300">This field is required</label>
+            <!-- Toggles Area -->
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Primary Toggle -->
+                <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800"
+                     class:opacity-50={isPrimaryDisabled}
+                     title={isPrimaryDisabled ? "Another field is already primary" : ""}>
+                    <input
+                        id="field-primary"
+                        type="checkbox"
+                        bind:checked={editedSchema.primary}
+                        on:change={handlePrimaryChange}
+                        disabled={isPrimaryDisabled}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <label for="field-primary" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">Primary Field</label>
+                </div>
+
+                <!-- Required Toggle -->
+                <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
+                    <input
+                        id="field-required"
+                        type="checkbox"
+                        bind:checked={editedSchema.required}
+                        disabled={editedSchema.primary}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <label for="field-required" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">Required</label>
+                </div>
             </div>
 
             <!-- Constraints Area -->
