@@ -152,21 +152,6 @@
             editedData[field] = "";
         }
     }
-
-    // Helper to calculate padding for currency/percent prefixes/suffixes
-    function getNumericPadding(colSchema) {
-        let style = "";
-        if (colSchema.subType === 'Currency') {
-            const symbol = getCurrencySymbol(colSchema.currency);
-            // Base 1rem + ~0.55rem per character
-            const padding = 1 + (symbol.length * 0.55);
-            style += `padding-left: ${padding}rem; `;
-        }
-        if (colSchema.subType === 'Percent') {
-            style += "padding-right: 2rem; ";
-        }
-        return style;
-    }
 </script>
 
 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
@@ -253,17 +238,17 @@
                                     </select>
                                 {/if}
                             {:else if colSchema.type === 'Numeric'}
-                                <div class="relative">
+                                <div class="flex items-center rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all duration-200 {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
                                     {#if colSchema.subType === 'Currency'}
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <span class="text-gray-400 text-sm font-bold">{getCurrencySymbol(colSchema.currency)}</span>
+                                        <div class="shrink-0 pl-3 text-gray-400 text-sm font-bold select-none">
+                                            {getCurrencySymbol(colSchema.currency)}
                                         </div>
                                     {/if}
                                     <input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                        class="input-base {colSchema.subType === 'Currency' ? 'pl-8' : ''} {colSchema.subType === 'Percent' ? 'pr-8' : ''} {errors[col.field] ? 'input-error' : ''}" />
+                                        class="block min-w-0 grow bg-transparent py-2.5 pr-3 pl-1.5 text-sm dark:text-gray-100 placeholder-gray-400 focus:outline-none" />
                                     {#if colSchema.subType === 'Percent'}
-                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                            <span class="text-gray-400 text-sm font-bold">%</span>
+                                        <div class="shrink-0 pr-3 text-gray-400 text-sm font-bold select-none">
+                                            %
                                         </div>
                                     {/if}
                                 </div>
@@ -312,7 +297,7 @@
         @apply px-5 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-500/30 shadow-lg shadow-blue-500/20 transition-all active:scale-95;
     }
     .btn-secondary {
-        @apply px-5 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95;
+        @apply px-5 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition-all active:scale-95;
     }
     .custom-scrollbar::-webkit-scrollbar {
         @apply w-1.5;
@@ -329,7 +314,7 @@
         @apply opacity-0 absolute right-0 w-8 h-full cursor-pointer;
     }
 
-    /* Hide number input spin buttons to prevent overlap with icons/symbols */
+    /* Hide number input spin buttons */
     input[type="number"]::-webkit-inner-spin-button,
     input[type="number"]::-webkit-outer-spin-button {
         -webkit-appearance: none;
