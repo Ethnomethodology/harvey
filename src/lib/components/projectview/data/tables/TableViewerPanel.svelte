@@ -2,7 +2,8 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { get, writable } from 'svelte/store';
-    import { TabulatorFull as Tabulator } from 'tabulator-tables';
+    import { TabulatorFull as Tabulator, HistoryModule } from 'tabulator-tables';
+    Tabulator.registerModule(HistoryModule);
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import {
         loadTableData,
@@ -2135,6 +2136,7 @@
             overflow: hidden;
             word-break: break-word;
             border-right: 1px solid #ddd;
+            min-height: 28px; /* Ensures blank inserted rows maintain at least one line of height */
         }
 
         :global(.tabulator-cell textarea) {
