@@ -226,12 +226,16 @@
                             {:else if colSchema.type === 'Numeric'}
                                 <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
                                     <Input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
-                                        {#if colSchema.subType === 'Currency'}
-                                            <span slot="left" class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
-                                        {/if}
-                                        {#if colSchema.subType === 'Percent'}
-                                            <span slot="right" class="text-gray-500 dark:text-gray-400 font-bold">%</span>
-                                        {/if}
+                                        <svelte:fragment slot="left">
+                                            {#if colSchema.subType === 'Currency'}
+                                                <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
+                                            {/if}
+                                        </svelte:fragment>
+                                        <svelte:fragment slot="right">
+                                            {#if colSchema.subType === 'Percent'}
+                                                <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
+                                            {/if}
+                                        </svelte:fragment>
                                     </Input>
                                 </div>
                             {:else if colSchema.type === 'Contact'}
