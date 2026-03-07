@@ -1819,12 +1819,6 @@
 
     onMount(() => {
         if (tablePath) initializeTable(tablePath);
-        const undoBtn = document.getElementById("history-undo");
-        const redoBtn = document.getElementById("history-redo");
-        const undo = () => tabulatorInstance?.undo();
-        const redo = () => tabulatorInstance?.redo();
-        undoBtn?.addEventListener("click", undo);
-        redoBtn?.addEventListener("click", redo);
 
         const handleKeyDown = (e) => {
             if (e.metaKey && e.key === 'c') {
@@ -1845,12 +1839,18 @@
 
 		return () => {
 			tabulatorInstance?.destroy();
-            undoBtn?.removeEventListener("click", undo);
-            redoBtn?.removeEventListener("click", redo);
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
 		}
     });
+
+    function undo() {
+        tabulatorInstance?.undo();
+    }
+
+    function redo() {
+        tabulatorInstance?.redo();
+    }
 
     $: if (tablePath && tablePath !== currentLoadedPath) {
         initializeTable(tablePath);
@@ -1892,12 +1892,12 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
      <div class="flex items-center justify-between h-12 px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-md">
         <div class="flex items-center gap-1">
-            <Button size="xs" color="alternative" id="history-undo" class="px-2">
+            <Button size="xs" color="alternative" id="history-undo" on:click={undo} class="px-2">
                 <Undo2 size={16} />
             </Button>
             <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
             
-            <Button size="xs" color="alternative" id="history-redo" class="px-2">
+            <Button size="xs" color="alternative" id="history-redo" on:click={redo} class="px-2">
                 <Redo2 size={16} />
             </Button>
             <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
@@ -1922,23 +1922,23 @@
                     class="w-64"
                 />
                 
-                <div class="flex items-center">
-                    <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
-                        <ChevronLeft size={16} />
-                    </Button>
-                    <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[80px] justify-center">
-                        {#if cellMatches.length > 0}
-                            {currentMatchIndex + 1} / {cellMatches.length}
-                        {:else if searchTerm}
-                            0 / 0
-                        {:else}
-                            Search
-                        {/if}
+                {#if searchTerm}
+                    <div class="flex items-center">
+                        <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
+                            <ChevronLeft size={16} />
+                        </Button>
+                        <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[60px] justify-center">
+                            {#if cellMatches.length > 0}
+                                {currentMatchIndex + 1} / {cellMatches.length}
+                            {:else}
+                                0 / 0
+                            {/if}
+                        </div>
+                        <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
+                            <ChevronRight size={16} />
+                        </Button>
                     </div>
-                    <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
-                        <ChevronRight size={16} />
-                    </Button>
-                </div>
+                {/if}
             </div>
 
             <div class="h-6 w-[1px] bg-gray-300 dark:bg-gray-700 mx-1"></div>
