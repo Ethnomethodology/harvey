@@ -794,9 +794,10 @@
 
     // Custom soft validator wrapper for Tabulator
     function softValidator(cell, value, parameters) {
-        // Validation check is now handled by checkValidationErrors which redraws and triggers formatting
-        setTimeout(checkValidationErrors, 10);
-        return true; // Always allow editing
+        // We always allow editing.
+        // Validation highlighting is triggered globally on cellEdited to prevent
+        // row reformatting from interrupting Tabulator's active edit/history cycle.
+        return true;
     }
 
     async function getAllProjectAssets() {
@@ -1652,6 +1653,8 @@
                 if (cell.getField() === currentPrimaryField) {
                     detectDuplicates();
                 }
+                checkValidationErrors(); // Check and update error outlines safely after edit is finished
+
                 const row = cell.getRow();
                 const rowData = row.getData();
                 const rowIndex = rowData.harvey_internal_id;
@@ -2136,7 +2139,7 @@
             overflow: hidden;
             word-break: break-word;
             border-right: 1px solid #ddd;
-            min-height: 28px; /* Ensures blank inserted rows maintain at least one line of height */
+            min-height: 38px; /* Ensures blank inserted rows exactly match text-filled rows (padding + line height) */
         }
 
         :global(.tabulator-cell textarea) {
