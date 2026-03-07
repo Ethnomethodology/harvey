@@ -1495,7 +1495,8 @@
             const generatedColumns = await generateColumns(tableData, tableHeaders, savedLayout, tableSchema);
 
             tabulatorInstance = new Tabulator(tableContainer, {
-                data: tableData,
+                data: JSON.parse(JSON.stringify(tableData)), // Decouple from Svelte 5 proxies
+                reactiveData: false,
                 index: "harvey_internal_id",
                 layout: "fitData",
                 columns: generatedColumns,
@@ -1871,6 +1872,8 @@
         const res = tabulatorInstance.undo();
         if (res) {
             debouncedSave();
+            checkValidationErrors();
+            detectDuplicates();
             reformatAllRows();
         }
     }
@@ -1880,6 +1883,8 @@
         const res = tabulatorInstance.redo();
         if (res) {
             debouncedSave();
+            checkValidationErrors();
+            detectDuplicates();
             reformatAllRows();
         }
     }
