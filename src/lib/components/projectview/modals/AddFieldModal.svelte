@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/modals/AddFieldModal.svelte -->
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { Input, Radio, Select } from 'flowbite-svelte';
   import { message } from '@tauri-apps/plugin-dialog';
   import { addDefinition } from '$lib/stores/customFieldStore.js';
 
@@ -124,8 +125,7 @@
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scope</label>
           <div class="mt-1 space-y-2">
             <div class="flex items-center">
-              <input id="scopeProject" name="scope" type="radio" bind:group={selectedScope} value={"project"}
-                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:focus:ring-blue-600">
+              <Radio id="scopeProject" name="scope" bind:group={selectedScope} value={"project"} class="text-blue-600">
               <label for="scopeProject" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                 Make available across the project
               </label>

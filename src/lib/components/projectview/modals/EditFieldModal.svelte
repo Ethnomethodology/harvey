@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/modals/EditFieldModal.svelte -->
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { Input, Select, Checkbox } from 'flowbite-svelte';
     import { 
         Type as TypeIcon, 
         Hash, 
@@ -212,13 +213,7 @@
             <!-- Field Name -->
             <div class="space-y-1">
                 <label for="field-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">FIELD NAME</label>
-                <input
-                    id="field-name"
-                    type="text"
-                    bind:value={editedName}
-                    placeholder="Enter field name"
-                    class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
-                />
+                <Input id="field-name" type="text" bind:value={editedName} placeholder="Enter field name" />
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -259,14 +254,7 @@
                 <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800"
                      class:opacity-50={isPrimaryDisabled}
                      title={isPrimaryDisabled ? "Another field is already primary" : ""}>
-                    <input
-                        id="field-primary"
-                        type="checkbox"
-                        bind:checked={editedSchema.primary}
-                        on:change={handlePrimaryChange}
-                        disabled={isPrimaryDisabled}
-                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:cursor-not-allowed"
-                    />
+                    <Checkbox id="field-primary" bind:checked={editedSchema.primary} on:change={handlePrimaryChange} disabled={isPrimaryDisabled} class="text-blue-600 cursor-pointer disabled:cursor-not-allowed" />
                     <label for="field-primary" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">Primary Field</label>
                 </div>
 
@@ -345,15 +333,11 @@
                 {:else if editedSchema.type === 'DateTime'}
                     <div class="space-y-1">
                         <label for="field-format" class="block text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider text-xs">DISPLAY FORMAT</label>
-                        <select
-                            id="field-format"
-                            bind:value={editedSchema.format}
-                            class="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:text-gray-100"
-                        >
-                            {#each (dateTimeFormats[editedSchema.subType] || []) as f}
+                        <Select id="field-format" bind:value={editedSchema.format} class="w-full">
+{#each (dateTimeFormats[editedSchema.subType] || []) as f}
                                 <option value={f.value}>{f.label}</option>
                             {/each}
-                        </select>
+</Select>
                     </div>
                 {/if}
 

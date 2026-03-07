@@ -3,6 +3,8 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
+    import { Input, Datepicker, Timepicker, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
+
     import { 
         Type, 
         Hash, 
@@ -190,13 +192,11 @@
                                         <div class="shrink-0 pl-3 flex items-center pointer-events-none">
                                             <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
                                         </div>
-                                        <input type="date" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                            class="input-transparent grow pl-2" />
+                                        <Datepicker id="field-{col.field}" bind:value={editedData[col.field]} />
                                     </div>
                                 {:else if colSchema.subType === 'Time'}
                                     <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
-                                        <input type="time" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                            class="input-transparent grow pl-3" />
+                                        <Timepicker id="field-{col.field}" bind:value={editedData[col.field]} />
                                         <div class="shrink-0 pr-3 flex items-center pointer-events-none">
                                             <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                                         </div>
@@ -208,14 +208,10 @@
                                             <div class="shrink-0 pl-3 flex items-center pointer-events-none">
                                                 <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
                                             </div>
-                                            <input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} 
-                                                on:input={(e) => handleDateTimeChange(col.field, 'date', e)}
-                                                class="input-transparent grow pl-2" />
+                                            <Datepicker value={(editedData[col.field] || "").split('T')[0] || ""} on:select={(e) => handleDateTimeChange(col.field, 'date', e)} />
                                         </div>
                                         <div class="w-36 input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
-                                            <input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} 
-                                                on:input={(e) => handleDateTimeChange(col.field, 'time', e)}
-                                                class="input-transparent grow pl-3" />
+                                            <Timepicker value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:change={(e) => handleDateTimeChange(col.field, 'time', e)} />
                                             <div class="shrink-0 pr-3 flex items-center pointer-events-none">
                                                 <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                                             </div>
@@ -225,25 +221,23 @@
                             {:else if colSchema.type === 'Misc'}
                                 {#if colSchema.subType === 'Checkbox'}
                                     <label class="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors">
-                                        <input type="checkbox" bind:checked={editedData[col.field]} class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500" />
+                                        <Checkbox bind:checked={editedData[col.field]} class="text-blue-600" />
                                         <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                                     </label>
                                 {:else if colSchema.subType === 'Multiselect'}
-                                    <select id="field-{col.field}" bind:value={editedData[col.field]} multiple
-                                        class="input-base h-32 {errors[col.field] ? 'input-error' : ''}">
+                                    <Select id="field-{col.field}" bind:value={editedData[col.field]} multiple class="w-full">
                                         {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
-                                    </select>
+                                    </Select>
                                 {:else if colSchema.subType === 'Selectbox'}
-                                    <select id="field-{col.field}" bind:value={editedData[col.field]}
-                                        class="input-base {errors[col.field] ? 'input-error' : ''}">
+                                    <Select id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
                                         <option value="">Select option...</option>
                                         {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
-                                    </select>
+                                    </Select>
                                 {:else if colSchema.subType === 'Project Link'}
-                                    <select id="field-{col.field}" bind:value={editedData[col.field]} class="input-base {errors[col.field] ? 'input-error' : ''}">
+                                    <Select id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
                                         <option value="">Select asset...</option>
                                         {#each projectAssets as asset}<option value={asset.value}>{asset.label}</option>{/each}
-                                    </select>
+                                    </Select>
                                 {/if}
                             {:else if colSchema.type === 'Numeric'}
                                 <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
@@ -252,8 +246,7 @@
                                             {getCurrencySymbol(colSchema.currency)}
                                         </div>
                                     {/if}
-                                    <input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                        class="input-transparent grow px-2" />
+                                    <Input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} class="bg-transparent border-0 ring-0 focus:ring-0 w-full p-0 text-gray-900 dark:text-white" />
                                     {#if colSchema.subType === 'Percent'}
                                         <div class="shrink-0 pr-3 text-gray-400 text-sm font-bold select-none">
                                             %
@@ -261,15 +254,11 @@
                                     {/if}
                                 </div>
                             {:else if colSchema.type === 'Contact'}
-                                <input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} 
-                                    id="field-{col.field}" bind:value={editedData[col.field]} 
-                                    class="input-base {errors[col.field] ? 'input-error' : ''}" />
+                                <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} id="field-{col.field}" bind:value={editedData[col.field]} />
                             {:else if colSchema.type === 'Text' && colSchema.subType === 'Small Text'}
-                                <input type="text" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                    class="input-base {errors[col.field] ? 'input-error' : ''}" />
+                                <Input type="text" id="field-{col.field}" bind:value={editedData[col.field]} />
                             {:else}
-                                <textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3"
-                                    class="input-base py-3 resize-none custom-scrollbar {errors[col.field] ? 'input-error' : ''}"></textarea>
+                                <Textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3" class="w-full resize-none" />
                             {/if}
                         </div>
                         
