@@ -3,7 +3,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { Input, Datepicker, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
+    import { Input, InputAddon, ButtonGroup, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
 
     import { 
         Type, 
@@ -165,8 +165,7 @@
                 </div>
                 <div>
                     <h3 class="text-lg font-bold text-gray-900 dark:text-white">Edit Entry</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Row index: {rowIndex + 1}</p>
-                </div>
+                    </div>
             </div>
             <button on:click={() => dispatch('cancel')} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
                 <X size={20} />
@@ -188,14 +187,14 @@
                         <div class="relative">
                             {#if colSchema.type === 'DateTime'}
                                 {#if colSchema.subType === 'Date'}
-                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Datepicker id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
+                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Input type="date" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
                                 {:else if colSchema.subType === 'Time'}
                                     <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Input type="time" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
                                 {:else}
                                     <!-- Date & Time -->
                                     <div class="flex space-x-2 w-full">
                                         <div class="flex-1 {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
-                                            <Datepicker value={(editedData[col.field] || "").split('T')[0] || ""} on:select={(e) => handleDateTimeChange(col.field, 'date', e)} class="w-full" />
+                                            <Input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} on:input={(e) => handleDateTimeChange(col.field, 'date', e)} class="w-full" />
                                         </div>
                                         <div class="w-36 {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
                                             <Input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:input={(e) => handleDateTimeChange(col.field, 'time', e)} class="w-full" />
@@ -225,18 +224,15 @@
                                 {/if}
                             {:else if colSchema.type === 'Numeric'}
                                 <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
-                                    <Input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
-                                        <svelte:fragment slot="left">
-                                            {#if colSchema.subType === 'Currency'}
-                                                <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
-                                            {/if}
-                                        </svelte:fragment>
-                                        <svelte:fragment slot="right">
-                                            {#if colSchema.subType === 'Percent'}
-                                                <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
-                                            {/if}
-                                        </svelte:fragment>
-                                    </Input>
+                                    <ButtonGroup class="w-full">
+                                        {#if colSchema.subType === 'Currency'}
+                                            <InputAddon>{getCurrencySymbol(colSchema.currency)}</InputAddon>
+                                        {/if}
+                                        <Input type="number" step="any" id="field-{col.field}" bind:value={editedData[col.field]} class="rounded-none {colSchema.subType === 'Currency' ? 'rounded-r-lg' : ''} {colSchema.subType === 'Percent' ? 'rounded-l-lg' : ''} {!colSchema.subType || (colSchema.subType !== 'Currency' && colSchema.subType !== 'Percent') ? 'rounded-lg' : ''} w-full" />
+                                        {#if colSchema.subType === 'Percent'}
+                                            <InputAddon>%</InputAddon>
+                                        {/if}
+                                    </ButtonGroup>
                                 </div>
                             {:else if colSchema.type === 'Contact'}
                                 <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} id="field-{col.field}" bind:value={editedData[col.field]} />
