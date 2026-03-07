@@ -1203,7 +1203,8 @@
                     colDef.editorParams = {
                         values: colSchema.options || [],
                         multiselect: colSchema.subType === 'Multiselect',
-                        clearable: true
+                        clearable: true,
+                        emptyValue: ""
                     };
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -1218,7 +1219,8 @@
                     colDef.editor = "list";
                     colDef.editorParams = {
                         values: projectAssetOptions,
-                        clearable: true
+                        clearable: true,
+                        emptyValue: ""
                     };
                 }
             } else if (colSchema.type === 'Numeric') {

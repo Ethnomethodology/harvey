@@ -389,9 +389,9 @@
                             {:else if colSchema.subType === 'Multiselect'}
                                 <MultiSelect items={(colSchema.options || []).map(o => ({name: o, value: o}))} bind:value={editedData[col.field]} placeholder="Select options..." />
                             {:else if colSchema.subType === 'Selectbox'}
-                                <Select items={(colSchema.options || []).map(o => ({name: o, value: o}))} bind:value={editedData[col.field]} placeholder="Select option..." color={errors[col.field] ? 'red' : 'base'} />
+                                <Select items={[{name: '-- None --', value: ''}, ...(colSchema.options || []).map(o => ({name: o, value: o}))]} bind:value={editedData[col.field]} placeholder="Select option..." color={errors[col.field] ? 'red' : 'base'} />
                             {:else if colSchema.subType === 'Project Link'}
-                                <Select items={projectAssets.map(a => ({name: a.label, value: a.value}))} bind:value={editedData[col.field]} placeholder="Select asset..." color={errors[col.field] ? 'red' : 'base'} />
+                                <Select items={[{name: '-- None --', value: ''}, ...projectAssets.map(a => ({name: a.label, value: a.value}))]} bind:value={editedData[col.field]} placeholder="Select asset..." color={errors[col.field] ? 'red' : 'base'} />
                             {/if}
                         {:else if colSchema.type === 'Numeric'}
                             <div class="relative group/input">
