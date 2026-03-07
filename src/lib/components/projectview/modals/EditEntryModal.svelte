@@ -149,30 +149,45 @@
     }
 
     function flowbiteDatepicker(node, { field, isDateTime = false }) {
-        const picker = new Datepicker(node, {
-            format: 'yyyy-mm-dd',
-            autohide: true,
-            orientation: 'auto',
-            todayBtn: true,
-            clearBtn: true,
-            container: 'body'
-        });
+        let picker = null;
+
+        const initPicker = () => {
+            if (picker) return;
+            picker = new Datepicker(node, {
+                format: 'yyyy-mm-dd',
+                autohide: true,
+                orientation: 'auto',
+                todayBtn: true,
+                clearBtn: true,
+                container: 'body'
+            });
+            // Ensure picker shows immediately when initialized
+            picker.show();
+        };
+
+        const destroyPicker = () => {
+            if (picker) {
+                picker.hide();
+                picker.destroy();
+                picker = null;
+            }
+        };
 
         const handleChange = (e) => {
+            if (!picker) return;
             const dateStr = picker.getDate('yyyy-mm-dd');
             if (isDateTime) {
                 handleDateTimeChange(field, 'date', dateStr);
             } else {
                 editedData[field] = dateStr;
             }
-            // Force hide on date pick
-            picker.hide();
+            // Auto-hide will hide it, but we can also destroy it
+            destroyPicker();
+            node.blur();
         };
 
         const handleOutsideClick = (event) => {
-            // Because Flowbite Datepicker container might change or composed path
-            // is not reliable, we check if the clicked target is within the input
-            // or any datepicker dropdown component.
+            if (!picker) return;
             const isClickInsideInput = node.contains(event.target) || node === event.target;
             
             let isClickInsidePicker = false;
@@ -181,20 +196,23 @@
             }
 
             if (!isClickInsideInput && !isClickInsidePicker) {
-                picker.hide();
+                destroyPicker();
                 node.blur(); // Ensure the input loses focus so clicking it again reopens the picker
             }
         };
 
+        node.addEventListener('focus', initPicker);
+        node.addEventListener('click', initPicker);
         node.addEventListener('changeDate', handleChange);
         document.addEventListener('mousedown', handleOutsideClick, true);
 
         return {
             destroy() {
+                node.removeEventListener('focus', initPicker);
+                node.removeEventListener('click', initPicker);
                 node.removeEventListener('changeDate', handleChange);
                 document.removeEventListener('mousedown', handleOutsideClick, true);
-                picker.hide();
-                picker.destroy();
+                destroyPicker();
             }
         };
     }
