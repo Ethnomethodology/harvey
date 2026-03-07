@@ -58,6 +58,10 @@
     let error = null;
     let currentLoadedPath = null;
 
+    let svelteUndoStack = [];
+    let svelteRedoStack = [];
+    let isUndoRedoActive = false; // Flag to prevent history tracking during undo/redo actions
+
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let tableReady = false;
@@ -477,7 +481,10 @@
 
     async function deleteRow(row) {
         try {
+            const rowData = row.getData();
+            const rowId = rowData.harvey_internal_id;
             await row.delete();
+            pushToHistory({ type: 'rowDelete', rowData, rowId });
             await saveTableChanges();
         } catch (err) {
             console.error("Error deleting entry:", err);
@@ -499,6 +506,7 @@
 
         try {
             const addedRow = await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            pushToHistory({ type: 'rowAdd', rowData: newRowData, rowId: newRowData.harvey_internal_id, position, relativeTo: row });
 
             // Workaround for suspected backend bug: "dirty" a cell to ensure the new entry is saved.
             const cells = addedRow.getCells();
@@ -527,6 +535,7 @@
 
         try {
             await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            pushToHistory({ type: 'rowAdd', rowData: newRowData, rowId: newRowData.harvey_internal_id, position, relativeTo: row });
             await saveTableChanges();
         } catch (err) {
             console.error("Error pasting entry:", err);
@@ -545,7 +554,22 @@
         if (tabulatorInstance) {
             const row = tabulatorInstance.getRow(rowIndex);
             if (row) {
+                const oldData = { ...row.getData() };
                 await row.update(rowData);
+
+                // Track modal edits in history by comparing fields
+                Object.keys(rowData).forEach(field => {
+                    if (field !== 'harvey_internal_id' && rowData[field] !== oldData[field]) {
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: rowIndex,
+                            field: field,
+                            oldValue: oldData[field],
+                            newValue: rowData[field]
+                        });
+                    }
+                });
+
                 debouncedSave();
             }
         }
@@ -1178,7 +1202,8 @@
                     colDef.editor = "list";
                     colDef.editorParams = {
                         values: colSchema.options || [],
-                        multiselect: colSchema.subType === 'Multiselect'
+                        multiselect: colSchema.subType === 'Multiselect',
+                        clearable: true
                     };
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -1192,7 +1217,8 @@
                 } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";
                     colDef.editorParams = {
-                        values: projectAssetOptions
+                        values: projectAssetOptions,
+                        clearable: true
                     };
                 }
             } else if (colSchema.type === 'Numeric') {
@@ -1649,6 +1675,19 @@
             tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
 
             tabulatorInstance.on("cellEdited", (cell) => {
+                if (!isUndoRedoActive) {
+                    const oldValue = cell.getOldValue();
+                    const newValue = cell.getValue();
+                    if (oldValue !== newValue) {
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: cell.getRow().getData().harvey_internal_id,
+                            field: cell.getField(),
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+                    }
+                }
                 debouncedSave();
                 if (cell.getField() === currentPrimaryField) {
                     detectDuplicates();
@@ -1876,26 +1915,63 @@
 		}
     });
 
-    function undo() {
+    function pushToHistory(action) {
+        if (isUndoRedoActive) return;
+        svelteUndoStack.push(action);
+        if (svelteUndoStack.length > 50) svelteUndoStack.shift(); // Keep last 50 actions
+        svelteRedoStack = []; // Clear redo stack on new action
+    }
+
+    async function applyHistoryAction(action, isUndo) {
         if (!tabulatorInstance) return;
-        const res = tabulatorInstance.undo();
-        if (res) {
+        isUndoRedoActive = true;
+        try {
+            if (action.type === 'cellEdit') {
+                const row = tabulatorInstance.getRow(action.rowId);
+                if (row) {
+                    const cell = row.getCell(action.field);
+                    if (cell) {
+                        cell.setValue(isUndo ? action.oldValue : action.newValue);
+                    }
+                }
+            } else if (action.type === 'rowAdd') {
+                if (isUndo) {
+                    const row = tabulatorInstance.getRow(action.rowId);
+                    if (row) await row.delete();
+                } else {
+                    await tabulatorInstance.addRow(action.rowData, action.position === 'before', action.relativeTo);
+                }
+            } else if (action.type === 'rowDelete') {
+                if (isUndo) {
+                    await tabulatorInstance.addRow(action.rowData); // Best effort restore
+                } else {
+                    const row = tabulatorInstance.getRow(action.rowId);
+                    if (row) await row.delete();
+                }
+            }
             debouncedSave();
             checkValidationErrors();
             detectDuplicates();
             reformatAllRows();
+        } catch (e) {
+            console.error("History action failed", e);
+        } finally {
+            isUndoRedoActive = false;
         }
     }
 
+    function undo() {
+        if (svelteUndoStack.length === 0) return;
+        const action = svelteUndoStack.pop();
+        svelteRedoStack.push(action);
+        applyHistoryAction(action, true);
+    }
+
     function redo() {
-        if (!tabulatorInstance) return;
-        const res = tabulatorInstance.redo();
-        if (res) {
-            debouncedSave();
-            checkValidationErrors();
-            detectDuplicates();
-            reformatAllRows();
-        }
+        if (svelteRedoStack.length === 0) return;
+        const action = svelteRedoStack.pop();
+        svelteUndoStack.push(action);
+        applyHistoryAction(action, false);
     }
 
     $: if (tablePath && tablePath !== currentLoadedPath) {
