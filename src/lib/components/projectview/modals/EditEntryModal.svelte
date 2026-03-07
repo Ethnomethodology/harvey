@@ -174,10 +174,15 @@
             // is not reliable, we check if the clicked target is within the input
             // or any datepicker dropdown component.
             const isClickInsideInput = node.contains(event.target) || node === event.target;
-            const isClickInsidePicker = event.target.closest('.datepicker-dropdown') || event.target.closest('.datepicker');
             
+            let isClickInsidePicker = false;
+            if (event.target instanceof Element) {
+                isClickInsidePicker = event.target.closest('.datepicker-dropdown') || event.target.closest('.datepicker');
+            }
+
             if (!isClickInsideInput && !isClickInsidePicker) {
                 picker.hide();
+                node.blur(); // Ensure the input loses focus so clicking it again reopens the picker
             }
         };
 
@@ -188,6 +193,7 @@
             destroy() {
                 node.removeEventListener('changeDate', handleChange);
                 document.removeEventListener('mousedown', handleOutsideClick, true);
+                picker.hide();
                 picker.destroy();
             }
         };

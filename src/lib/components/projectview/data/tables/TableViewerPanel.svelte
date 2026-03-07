@@ -807,12 +807,21 @@
 
     // Custom editors for Date, Time, and DateTime
     function dateEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.style.position = "relative";
+        container.style.width = "100%";
+        container.style.height = "100%";
+
         const editor = document.createElement("input");
         editor.setAttribute("type", "text");
         editor.style.padding = "4px";
         editor.style.width = "100%";
+        editor.style.height = "100%";
         editor.style.boxSizing = "border-box";
+        editor.style.border = "none";
         editor.value = cell.getValue() || "";
+
+        container.appendChild(editor);
 
         let picker;
 
@@ -828,28 +837,48 @@
             });
             picker.show(); // Ensure picker appears immediately
 
+            const finish = () => {
+                if (picker) {
+                    success(picker.getDate('yyyy-mm-dd') || editor.value);
+                    cleanup();
+                } else {
+                    cancel();
+                }
+            };
+
             editor.addEventListener('changeDate', (e) => {
-                success(picker.getDate('yyyy-mm-dd'));
+                // Don't finish yet, let them pick
             });
 
             // Handle outside click specifically for Tabulator inline
             const handleOutside = (e) => {
-                const isClickInsideInput = editor.contains(e.target) || editor === e.target;
-                const isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
-                if (picker && picker.active && !isClickInsideInput && !isClickInsidePicker) {
-                    picker.hide();
-                    cancel();
+                const isClickInsideContainer = container.contains(e.target) || container === e.target;
+
+                let isClickInsidePicker = false;
+                if (e.target instanceof Element) {
+                    isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
+                }
+
+                if (!isClickInsideContainer && !isClickInsidePicker) {
+                    finish();
                 }
             };
+
             document.addEventListener('mousedown', handleOutside, true);
 
-            editor.onremove = () => {
+            function cleanup() {
                 document.removeEventListener('mousedown', handleOutside, true);
-                if (picker) picker.destroy();
-            };
+                if (picker) {
+                    picker.hide();
+                    picker.destroy();
+                    picker = null;
+                }
+            }
+
+            editor.onremove = cleanup;
         });
 
-        return editor;
+        return container;
     }
 
     function timeEditor(cell, onRendered, success, cancel, editorParams) {
@@ -1062,9 +1091,14 @@
 
             const handleOutside = (e) => {
                 const isClickInsideContainer = container.contains(e.target) || container === e.target;
-                const isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
-                // Allow clicks on time dropdown to not trigger finish
-                const isClickInsideTimeDropdown = e.target.closest('.time-dropdown-container');
+
+                let isClickInsidePicker = false;
+                let isClickInsideTimeDropdown = false;
+
+                if (e.target instanceof Element) {
+                    isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
+                    isClickInsideTimeDropdown = e.target.closest('.time-dropdown-container');
+                }
 
                 if (!isClickInsideContainer && !isClickInsidePicker && !isClickInsideTimeDropdown) {
                     finish();
