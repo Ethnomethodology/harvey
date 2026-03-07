@@ -1824,6 +1824,18 @@
             if (e.metaKey && e.key === 'c') {
                 e.preventDefault();
                 tabulatorInstance?.copyToClipboard("range");
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                e.stopPropagation();
+                redo();
             }
         };
         tableContainer?.addEventListener('keydown', handleKeyDown);
@@ -1855,11 +1867,21 @@
     });
 
     function undo() {
-        tabulatorInstance?.undo();
+        if (!tabulatorInstance) return;
+        const res = tabulatorInstance.undo();
+        if (res) {
+            debouncedSave();
+            reformatAllRows();
+        }
     }
 
     function redo() {
-        tabulatorInstance?.redo();
+        if (!tabulatorInstance) return;
+        const res = tabulatorInstance.redo();
+        if (res) {
+            debouncedSave();
+            reformatAllRows();
+        }
     }
 
     $: if (tablePath && tablePath !== currentLoadedPath) {
@@ -1936,8 +1958,23 @@
                             }
                         }}
                         placeholder="Search table..."
-                        class="w-full text-xs border border-gray-300 dark:border-gray-600 pl-7 pr-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                        class="w-full text-xs border border-gray-300 dark:border-gray-600 pl-7 pr-6 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
                     />
+                    {#if searchTerm}
+                        <button
+                            class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                            on:click={() => {
+                                searchTerm = '';
+                                handleSearch();
+                                searchInputRef?.focus();
+                            }}
+                            title="Clear search"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    {/if}
                 </div>
 
                 {#if searchTerm}
@@ -1961,9 +1998,6 @@
                 <Dropdown placement="bottom-end">
                     <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
                         {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
-                    </DropdownItem>
-                    <DropdownItem on:click={() => tabulatorInstance?.download("csv", "table_export.csv")} class="text-xs py-1.5 px-3">
-                        Export as CSV
                     </DropdownItem>
                 </Dropdown>
               </div>
