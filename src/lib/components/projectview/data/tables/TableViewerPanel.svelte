@@ -847,7 +847,7 @@
             };
 
             editor.addEventListener('changeDate', (e) => {
-                // Don't finish yet, let them pick
+                finish(); // Close immediately on date pick
             });
 
             // Handle outside click specifically for Tabulator inline
