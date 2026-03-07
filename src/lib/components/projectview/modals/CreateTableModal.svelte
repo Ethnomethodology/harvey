@@ -3,7 +3,21 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { Plus, Trash2 } from 'lucide-svelte';
+    import { Plus, Trash2, Table as TableIcon } from 'lucide-svelte';
+    import { 
+        Input, 
+        Label, 
+        Select, 
+        Checkbox, 
+        Button, 
+        Table, 
+        TableHead, 
+        TableHeadCell, 
+        TableBody, 
+        TableBodyRow, 
+        TableBodyCell,
+        Tooltip
+    } from 'flowbite-svelte';
 
     export let showModal = false;
 
@@ -26,32 +40,32 @@
     };
 
     const currencyOptions = [
-        { label: 'USD ($) - US Dollar', value: 'USD' },
-        { label: 'EUR (€) - Euro', value: 'EUR' },
-        { label: 'GBP (£) - British Pound', value: 'GBP' },
-        { label: 'JPY (¥) - Japanese Yen', value: 'JPY' },
-        { label: 'INR (₹) - Indian Rupee', value: 'INR' },
-        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
-        { label: 'AUD ($) - Australian Dollar', value: 'AUD' },
-        { label: 'CAD ($) - Canadian Dollar', value: 'CAD' },
-        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
-        { label: 'SGD ($) - Singapore Dollar', value: 'SGD' },
-        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
-        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
-        { label: 'KRW (₩) - South Korean Won', value: 'KRW' },
-        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
-        { label: 'MXN ($) - Mexican Peso', value: 'MXN' },
-        { label: 'RUB (₽) - Russian Ruble', value: 'RUB' },
-        { label: 'ZAR (R) - South African Rand', value: 'ZAR' },
-        { label: 'TRY (₺) - Turkish Lira', value: 'TRY' },
-        { label: 'BRL (R$) - Brazilian Real', value: 'BRL' },
-        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
-        { label: 'DKK (kr) - Danish Krone', value: 'DKK' },
-        { label: 'PLN (zł) - Polish Zloty', value: 'PLN' },
-        { label: 'THB (฿) - Thai Baht', value: 'THB' },
-        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
-        { label: 'PHP (₱) - Philippine Peso', value: 'PHP' },
-        { label: 'Other (Custom Code)', value: 'OTHER' }
+        { name: 'USD ($) - US Dollar', value: 'USD' },
+        { name: 'EUR (€) - Euro', value: 'EUR' },
+        { name: 'GBP (£) - British Pound', value: 'GBP' },
+        { name: 'JPY (¥) - Japanese Yen', value: 'JPY' },
+        { name: 'INR (₹) - Indian Rupee', value: 'INR' },
+        { name: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
+        { name: 'AUD ($) - Australian Dollar', value: 'AUD' },
+        { name: 'CAD ($) - Canadian Dollar', value: 'CAD' },
+        { name: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
+        { name: 'SGD ($) - Singapore Dollar', value: 'SGD' },
+        { name: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
+        { name: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
+        { name: 'KRW (₩) - South Korean Won', value: 'KRW' },
+        { name: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
+        { name: 'MXN ($) - Mexican Peso', value: 'MXN' },
+        { name: 'RUB (₽) - Russian Ruble', value: 'RUB' },
+        { name: 'ZAR (R) - South African Rand', value: 'ZAR' },
+        { name: 'TRY (₺) - Turkish Lira', value: 'TRY' },
+        { name: 'BRL (R$) - Brazilian Real', value: 'BRL' },
+        { name: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
+        { name: 'DKK (kr) - Danish Krone', value: 'DKK' },
+        { name: 'PLN (zł) - Polish Zloty', value: 'PLN' },
+        { name: 'THB (฿) - Thai Baht', value: 'THB' },
+        { name: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
+        { name: 'PHP (₱) - Philippine Peso', value: 'PHP' },
+        { name: 'Other (Custom Code)', value: 'OTHER' }
     ];
 
     function addField() {
@@ -154,118 +168,108 @@
 </script>
 
 {#if showModal}
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-bold dark:text-white">Create New Table</h3>
+<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[90vh]">
+        <!-- Header -->
+        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <TableIcon size={20} class="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Create New Table</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Define your schema and data types</p>
+                </div>
+            </div>
+            <button on:click={closeModal} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
+                <Trash2 size={20} />
+            </button>
         </div>
 
-        <div class="flex-1 overflow-x-auto overflow-y-auto pr-2 border dark:border-gray-700 rounded-md">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
-                    <tr>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Field Name</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sub-type</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Primary</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Req?</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[150px]">Constraints / Options</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">Description</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        <div class="flex-1 overflow-auto p-0">
+            <Table hoverable={true} shadow={false} class="border-b border-gray-200 dark:border-gray-800">
+                <TableHead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
+                    <TableHeadCell class="w-[200px]">Field Name</TableHeadCell>
+                    <TableHeadCell>Type</TableHeadCell>
+                    <TableHeadCell>Sub-type</TableHeadCell>
+                    <TableHeadCell class="text-center">Primary</TableHeadCell>
+                    <TableHeadCell class="text-center">Req?</TableHeadCell>
+                    <TableHeadCell class="min-w-[150px]">Constraints</TableHeadCell>
+                    <TableHeadCell class="min-w-[250px]">Description</TableHeadCell>
+                    <TableHeadCell class="w-10"></TableHeadCell>
+                </TableHead>
+                <TableBody>
                     {#each fields as field, i}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                            <td class="px-3 py-2">
-                                <input type="text" bind:value={field.name} placeholder="Name" class="w-full text-sm p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
-                            </td>
-                            <td class="px-3 py-2">
-                                <select bind:value={field.type} on:change={() => handleTypeChange(i)} class="w-full text-sm p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
-                                    {#each Object.keys(FIELD_TYPES) as type}<option value={type}>{type}</option>{/each}
-                                </select>
-                            </td>
-                            <td class="px-3 py-2">
-                                <select bind:value={field.subType} on:change={() => handleSubTypeChange(i)} class="w-full text-sm p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
-                                    {#each FIELD_TYPES[field.type] as sub}<option value={sub}>{sub}</option>{/each}
-                                </select>
-                            </td>
-                            <td class="px-3 py-2 text-center">
-                                <input type="checkbox" bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
-                            </td>
-                            <td class="px-3 py-2 text-center">
-                                <input type="checkbox" bind:checked={field.required} disabled={field.primary} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
-                            </td>
-                            <td class="px-3 py-2">
+                        <TableBodyRow class="group">
+                            <TableBodyCell class="px-3 py-2">
+                                <Input size="sm" bind:value={field.name} placeholder="Name" />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2">
+                                <Select size="sm" items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} bind:value={field.type} on:change={() => handleTypeChange(i)} />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2">
+                                <Select size="sm" items={(FIELD_TYPES[field.type] || []).map(st => ({name: st, value: st}))} bind:value={field.subType} on:change={() => handleSubTypeChange(i)} />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2 text-center">
+                                <Checkbox bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2 text-center">
+                                <Checkbox bind:checked={field.required} disabled={field.primary} />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2">
                                 {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
-                                    <input type="text" bind:value={field.options} placeholder="Opt 1, Opt 2..." class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
                                 {:else if field.type === 'Numeric'}
-                                    <div class="flex flex-col space-y-1">
-                                        <div class="flex space-x-1">
-                                            <input type="number" bind:value={field.min} placeholder="Min" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
-                                            <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    <div class="flex flex-col gap-1">
+                                        <div class="flex gap-1">
+                                            <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
+                                            <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
                                         </div>
                                         {#if field.subType === 'Currency'}
-                                            <div class="flex flex-col space-y-1">
-                                                <select bind:value={field.currency} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
-                                                    {#each currencyOptions as opt}
-                                                        <option value={opt.value}>{opt.label}</option>
-                                                    {/each}
-                                                </select>
+                                            <div class="flex flex-col gap-1">
+                                                <Select size="sm" items={currencyOptions} bind:value={field.currency} />
                                                 {#if field.currency === 'OTHER'}
-                                                    <input 
-                                                        type="text" 
-                                                        bind:value={field.customCurrency} 
-                                                        placeholder="Code (e.g. BTC)" 
-                                                        maxlength="3"
-                                                        class="w-full text-[10px] p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" 
-                                                    />
+                                                    <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO Code" maxlength="3" />
                                                 {/if}
                                             </div>
                                         {/if}
                                     </div>
                                 {:else if field.type === 'DateTime'}
-                                    <select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none">
-                                        {#each DATETIME_FORMATS[field.subType] as fmt}<option value={fmt}>{fmt}</option>{/each}
-                                    </select>
+                                    <Select size="sm" items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} bind:value={field.format} />
                                 {:else}
-                                    <span class="text-xs text-gray-400">None</span>
+                                    <span class="text-xs text-gray-400 italic">None</span>
                                 {/if}
-                            </td>
-                            <td class="px-3 py-2">
-                                <input type="text" bind:value={field.description} placeholder="Purpose of this field" class="w-full text-sm p-1 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none" />
-                            </td>
-                            <td class="px-3 py-2 text-center">
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2">
+                                <Input size="sm" bind:value={field.description} placeholder="Purpose of this field" />
+                            </TableBodyCell>
+                            <TableBodyCell class="px-3 py-2 text-center">
                                 <button 
                                     on:click={() => removeField(i)}
-                                    class="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                     disabled={fields.length <= 1}
-                                    title="Remove Field"
                                 >
                                     <Trash2 size={16} />
                                 </button>
-                            </td>
-                        </tr>
+                                <Tooltip>Remove Field</Tooltip>
+                            </TableBodyCell>
+                        </TableBodyRow>
                     {/each}
-                </tbody>
-            </table>
+                </TableBody>
+            </Table>
             
-            <div class="p-3 bg-gray-50 dark:bg-gray-900 border-t dark:border-gray-700">
-                <button 
-                    on:click={addField}
-                    class="flex items-center space-x-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-md transition-colors shadow-sm"
-                >
+            <div class="p-6 bg-gray-50/50 dark:bg-gray-800/30">
+                <Button color="alternative" size="sm" on:click={addField} class="flex items-center gap-2">
                     <Plus size={16} />
-                    <span>Add Field</span>
-                </button>
+                    Add Field
+                </Button>
             </div>
         </div>
 
-        <div class="mt-6 flex justify-end space-x-2 border-t pt-4 dark:border-gray-700">
-            <button class="px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500" on:click={closeModal}>Cancel</button>
-            <button class="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all" on:click={handleSubmit}>
-                Create Table
-            </button>
+        <!-- Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+            <Button color="alternative" on:click={closeModal}>Cancel</Button>
+            <Button color="blue" on:click={handleSubmit}>Create Table</Button>
         </div>
     </div>
 </div>

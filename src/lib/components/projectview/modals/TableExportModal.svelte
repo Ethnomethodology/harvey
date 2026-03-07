@@ -4,7 +4,15 @@
 	import { open } from '@tauri-apps/plugin-dialog';
     import { documentDir } from '@tauri-apps/api/path';
 	import { invoke } from '@tauri-apps/api/core';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    import { 
+        Input, 
+        Label, 
+        Select, 
+        Button, 
+        Helper,
+        Badge
+    } from 'flowbite-svelte';
+    import { Download, FolderOpen, X } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let tablePath = '';
@@ -19,8 +27,8 @@
     let isExporting = false;
 
 	const exportFormats = [
-		{ value: 'xlsx', label: 'Excel (.xlsx)', disabled: false },
-		{ value: 'csv', label: 'CSV (.csv)', disabled: false },
+		{ name: 'Excel (.xlsx)', value: 'xlsx' },
+		{ name: 'CSV (.csv)', value: 'csv' },
 	];
 
 	const PATH_SEPARATOR = '/'; 
@@ -121,12 +129,6 @@
 		if (showModal && event.key === 'Escape') {
 			closeModal();
 		}
-        if (showModal && event.key === 'Enter' && !isExporting) {
-             const confirmButton = modalElement?.querySelector('.btn-primary');
-			 if (confirmButton && !confirmButton.disabled) {
-				 handleConfirm();
-			 }
-        }
 	}
 
 	onMount(() => {
@@ -141,7 +143,7 @@
 {#if showModal}
 	<div
 		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
@@ -149,67 +151,77 @@
 		tabindex="-1"
 	>
 		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
 			on:click|stopPropagation
 			role="document"
 		>
-			<h2 id="table-export-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5 truncate" title="{modalTitle}">
-				{modalTitle}
-			</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <Download size={20} class="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 id="table-export-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[250px]" title="{modalTitle}">
+                        Export Table
+                    </h3>
+                </div>
+                <button on:click={closeModal} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
+                    <X size={20} />
+                </button>
+            </div>
 
-			<div class="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-				<div>
-					<label for="table-export-filename" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Filename:</label>
-					<input
+			<div class="p-6 space-y-5">
+				<div class="space-y-2">
+					<Label for="table-export-filename">Filename</Label>
+					<Input
 						id="table-export-filename"
 						type="text"
 						bind:value={exportFileName}
-						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="e.g., MyTable"
 					/>
 				</div>
 
-				 <div>
-					<label for="table-export-format" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Format:</label>
-					<Dropdown
-						containerClasses="w-full"
-						options={exportFormats}
+				 <div class="space-y-2">
+					<Label for="table-export-format">Export Format</Label>
+					<Select
+						id="table-export-format"
+						items={exportFormats}
 						bind:value={exportFormat}
-						placeholder="Select a Format"
 					/>
-                    {#if exportFormat === 'xlsx'}
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Exports as an Excel spreadsheet.</p>
-                    {:else if exportFormat === 'csv'}
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Exports as a comma-separated values file.</p>
-                    {/if}
+                    <Helper class="italic">
+                        {#if exportFormat === 'xlsx'}
+                            Exports as an Excel spreadsheet (.xlsx)
+                        {:else if exportFormat === 'csv'}
+                            Exports as a comma-separated values file (.csv)
+                        {/if}
+                    </Helper>
 				</div>
 
-				<div>
-					<label for="table-export-directory" class="block font-medium text-gray-700 dark:text-gray-300 mb-1 pt-2">Export To:</label>
-					<div class="flex space-x-2">
-						<input
+				<div class="space-y-2">
+					<Label for="table-export-directory">Destination Directory</Label>
+					<div class="flex gap-2">
+						<Input
 							id="table-export-directory"
 							type="text"
 							bind:value={exportDirectory}
-							class="input-field flex-grow bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 cursor-not-allowed"
 							readonly
-							placeholder="Select directory..."
+							class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
 						/>
-						<button type="button" on:click={selectExportDirectory} class="btn-secondary flex-shrink-0 text-xs px-3 py-1.5">
-							Browse
-						</button>
+						<Button color="alternative" on:click={selectExportDirectory} class="px-3">
+							<FolderOpen size={18} />
+						</Button>
 					</div>
 				</div>
 			</div>
 
-			<div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600 mt-6">
-				<button type="button" on:click={closeModal} class="btn-secondary" disabled={isExporting}>
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+				<Button color="alternative" on:click={closeModal} disabled={isExporting}>
 					Cancel
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					color="blue"
 					on:click={handleConfirm}
-					class="btn-primary"
 					disabled={
 						!exportFileName || exportFileName.trim() === '' ||
 						!exportDirectory || exportDirectory.trim() === '' ||
@@ -221,29 +233,8 @@
                     {:else}
                         Export {exportFormat.toUpperCase()}
                     {/if}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style lang="postcss">
-	.btn-primary, .btn-secondary {
-		@apply px-4 py-2 rounded-md shadow-sm text-sm font-medium transition duration-150 ease-in-out;
-	}
-	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 dark:disabled:bg-gray-600;
-	}
-	 .btn-secondary {
-		@apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800;
-	}
-	.input-field {
-		@apply block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm;
-	}
-	 .dark .input-field {
-		 @apply bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400;
-	 }
-	 .dark .input-field:read-only {
-		 @apply bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed;
-	 }
-</style>

@@ -35,6 +35,16 @@
         Plus
     } from 'lucide-svelte';
     import { mount } from 'svelte';
+    import { 
+        Input, 
+        Button, 
+        Dropdown, 
+        DropdownItem, 
+        Tooltip,
+        Search,
+        Badge
+    } from 'flowbite-svelte';
+    import { Datepicker } from 'flowbite-datepicker';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -63,6 +73,12 @@
     let invalidCells = new Set(); // Stores cell keys "rowIndex-colField"
     let tableHasValidationErrors = false;
 
+    function reformatAllRows() {
+        if (tabulatorInstance && tableReady) {
+            tabulatorInstance.getRows().forEach(row => row.reformat());
+        }
+    }
+
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
         const hls = $project.currentTableHighlights;
@@ -84,9 +100,7 @@
         tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
         
         // Trigger a reformat of entries to apply new styles
-        if (tabulatorInstance && tableReady) {
-            tabulatorInstance.getRows().forEach(row => row.reformat());
-        }
+        reformatAllRows();
     }
 
     let searchTerm = '';
@@ -159,8 +173,8 @@
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
 
-        // Redraw entries to recalculate height after resize
-        tabulatorInstance.redraw(true);
+        // Use reformat instead of full redraw to avoid focus loss
+        reformatAllRows();
 
         const baseDirForSave = get(project)?.baseDirectory;
         const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
@@ -181,7 +195,9 @@
     async function saveTableChanges() {
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
-        tableData = updatedData;
+        
+        // DO NOT update tableData = updatedData; here. 
+        // Updating reactive tableData causes Tabulator to re-init/re-render, which steals focus.
 
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => {
@@ -240,7 +256,7 @@
         }
 
         duplicateIds = newDuplicateIds;
-        tabulatorInstance.redraw(true);
+        reformatAllRows();
     }
 
     function getUniqueColumnName(baseName) {
@@ -728,7 +744,7 @@
             project.update(p => ({ ...p, statusMessage: `Ready: ${filename}` }));
         }
         
-        tabulatorInstance.redraw(true);
+        reformatAllRows();
     }
 
     function performSoftValidation(value, schema) {
@@ -787,6 +803,207 @@
         if (!currentProject?.id) return [];
         const { getProjectAssetsForLink } = await import('$lib/services/projectService.js');
         return await getProjectAssetsForLink(currentProject.id);
+    }
+
+    // Custom editors for Date, Time, and DateTime
+    function dateEditor(cell, onRendered, success, cancel, editorParams) {
+        const editor = document.createElement("input");
+        editor.setAttribute("type", "text");
+        editor.style.padding = "4px";
+        editor.style.width = "100%";
+        editor.style.boxSizing = "border-box";
+        editor.value = cell.getValue() || "";
+
+        let picker;
+
+        onRendered(function() {
+            editor.focus();
+            picker = new Datepicker(editor, {
+                format: 'yyyy-mm-dd',
+                autohide: true,
+                orientation: 'auto',
+                todayBtn: true,
+                clearBtn: true,
+                container: 'body'
+            });
+            picker.show(); // Ensure picker appears immediately
+
+            editor.addEventListener('changeDate', (e) => {
+                success(picker.getDate('yyyy-mm-dd'));
+            });
+
+            // Handle outside click specifically for Tabulator inline
+            const handleOutside = (e) => {
+                const path = e.composedPath();
+                if (picker && picker.active && !path.includes(editor) && !path.includes(picker.pickerElement)) {
+                    picker.hide();
+                    cancel();
+                }
+            };
+            document.addEventListener('mousedown', handleOutside, true);
+
+            editor.onremove = () => {
+                document.removeEventListener('mousedown', handleOutside, true);
+                if (picker) picker.destroy();
+            };
+        });
+
+        return editor;
+    }
+
+    function timeEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.style.position = "relative";
+        container.style.width = "100%";
+        container.style.height = "100%";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = cell.getValue() || "00:00";
+        input.style.width = "100%";
+        input.style.height = "100%";
+        input.style.padding = "4px";
+        input.readOnly = true;
+        container.appendChild(input);
+
+        onRendered(() => {
+            const dropdownEl = document.createElement("div");
+            dropdownEl.className = "z-[10000] w-24 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden";
+            document.body.appendChild(dropdownEl);
+
+            const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+            const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+            const content = document.createElement("div");
+            content.className = "flex h-48";
+            
+            const hCol = document.createElement("div");
+            hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
+            hours.forEach(h => {
+                const btn = document.createElement("button");
+                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.startsWith(h) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.textContent = h;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const m = input.value.split(':')[1] || "00";
+                    input.value = `${h}:${m}`;
+                    updateSelected();
+                };
+                hCol.appendChild(btn);
+            });
+
+            const mCol = document.createElement("div");
+            mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
+            minutes.forEach(m => {
+                const btn = document.createElement("button");
+                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.endsWith(m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.textContent = m;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const h = input.value.split(':')[0] || "00";
+                    input.value = `${h}:${m}`;
+                    success(input.value);
+                    cleanup();
+                };
+                mCol.appendChild(btn);
+            });
+
+            function updateSelected() {
+                const [h, m] = input.value.split(':');
+                Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+            }
+
+            content.appendChild(hCol);
+            content.appendChild(mCol);
+            dropdownEl.appendChild(content);
+
+            const rect = input.getBoundingClientRect();
+            dropdownEl.style.position = "fixed";
+            dropdownEl.style.top = `${rect.bottom}px`;
+            dropdownEl.style.left = `${rect.left}px`;
+
+            function cleanup() {
+                document.removeEventListener('mousedown', handleOutside, true);
+                if (dropdownEl.parentNode) dropdownEl.parentNode.removeChild(dropdownEl);
+            }
+
+            function handleOutside(e) {
+                if (!dropdownEl.contains(e.target) && e.target !== input) {
+                    cancel();
+                    cleanup();
+                }
+            }
+
+            document.addEventListener('mousedown', handleOutside, true);
+        });
+
+        return container;
+    }
+
+    function datetimeEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.className = "flex items-center gap-1 w-full h-full p-1";
+        
+        const val = cell.getValue() || "";
+        let [datePart, timePart] = val.includes('T') ? val.split('T') : [val, "00:00"];
+        if (!datePart) datePart = "2026-03-07";
+
+        const dateInput = document.createElement("input");
+        dateInput.type = "text";
+        dateInput.value = datePart;
+        dateInput.className = "flex-1 min-w-0 h-full border-none p-0 text-xs";
+        
+        const timeInput = document.createElement("input");
+        timeInput.type = "text";
+        timeInput.value = timePart;
+        timeInput.className = "w-12 h-full border-none p-0 text-xs";
+        timeInput.readOnly = true;
+
+        container.appendChild(dateInput);
+        container.appendChild(timeInput);
+
+        let datePicker;
+
+        onRendered(() => {
+            dateInput.focus(); // Focus date input first
+            datePicker = new Datepicker(dateInput, {
+                format: 'yyyy-mm-dd',
+                autohide: true,
+                container: 'body'
+            });
+            datePicker.show(); // Show picker immediately
+
+            const finish = () => {
+                success(`${dateInput.value}T${timeInput.value}`);
+                cleanup();
+            };
+
+            dateInput.addEventListener('changeDate', () => {
+                // Don't finish yet, let them pick time
+            });
+
+            timeInput.onclick = (e) => {
+                e.stopPropagation();
+                // Simple implementation for now
+            };
+
+            const handleOutside = (e) => {
+                const path = e.composedPath();
+                if (!path.includes(container) && (!datePicker || !path.includes(datePicker.pickerElement))) {
+                    finish();
+                }
+            };
+
+            document.addEventListener('mousedown', handleOutside, true);
+
+            function cleanup() {
+                document.removeEventListener('mousedown', handleOutside, true);
+                if (datePicker) datePicker.destroy();
+            }
+        });
+
+        return container;
     }
 
     async function generateColumns(data, headers, savedLayoutObj, schema) {
@@ -895,11 +1112,12 @@
                     };
                 }
             } else if (colSchema.type === 'DateTime') {
-                if (colSchema.format) {
-                    colDef.editor = "textarea";
-                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                if (colSchema.subType === 'Time') {
+                    colDef.editor = timeEditor;
+                } else if (colSchema.subType === 'Date') {
+                    colDef.editor = dateEditor;
                 } else {
-                    colDef.editor = colSchema.subType === 'Time' ? "time" : (colSchema.subType === 'Date' ? "date" : "datetime");
+                    colDef.editor = datetimeEditor;
                 }
             } else if (colSchema.type === 'Text') {
                 if (colSchema.subType === 'Small Text') {
@@ -1358,7 +1576,7 @@
         });
         cellMatches = [];
         currentMatchIndex = -1;
-        tabulatorInstance.redraw(true); // Redraw to clear old highlights from formatter
+        reformatAllRows(); // Redraw to clear old highlights from formatter
 
         const term = searchTerm.trim().toLowerCase();
 
@@ -1390,8 +1608,8 @@
             });
         });
 
-        // Redraw the table to apply the search term highlighting via the formatter
-        tabulatorInstance.redraw(true);
+        // Use reformat instead of full redraw
+        reformatAllRows();
 
         if (cellMatches.length > 0) {
             navigateToMatch(0);
@@ -1530,7 +1748,7 @@
     $: if ($panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance) {
         // Debounce this to avoid excessive redraws during rapid toggling
         debounce(() => {
-            tabulatorInstance.redraw(true);
+            reformatAllRows();
         }, 100)();
     }
 </script>
@@ -1561,80 +1779,71 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
-     <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
-        <div class="flex items-center space-x-2">
-            <button id="history-undo" class="ui-button-icon" title="Undo">
+     <div class="flex items-center justify-between h-12 px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-md">
+        <div class="flex items-center gap-1">
+            <Button size="xs" color="alternative" id="history-undo" class="px-2">
                 <Undo2 size={16} />
-            </button>
-            <button id="history-redo" class="ui-button-icon" title="Redo">
+            </Button>
+            <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
+            
+            <Button size="xs" color="alternative" id="history-redo" class="px-2">
                 <Redo2 size={16} />
-            </button>
+            </Button>
+            <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
         </div>
+
          {#if !isLoading && !error}
-         <div class="flex items-center space-x-2">
-            <input
-              type="search"
-              bind:this={searchInputRef}
-              bind:value={searchTerm}
-              on:input={handleSearch}
-              on:keydown={e => {
-                  if (e.key === 'Enter') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      goToNextMatch();
-                  }
-              }}
-              placeholder="Search table..."
-              class="text-xs border border-gray-300 dark:border-gray-800 px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            >
-            <button
-              title="Previous Match"
-              class="ui-button-icon disabled:opacity-50 disabled:cursor-not-allowed"
-              on:click={goToPreviousMatch}
-              disabled={cellMatches.length === 0}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span class="text-xs text-gray-500 dark:text-gray-400">
-                {#if cellMatches.length > 0}
-                    {currentMatchIndex + 1} of {cellMatches.length}
-                {:else if searchTerm}
-                    0 of 0
-                {/if}
-            </span>
-            <button
-              title="Next Match"
-              class="ui-button-icon disabled:opacity-50 disabled:cursor-not-allowed"
-              on:click={goToNextMatch}
-              disabled={cellMatches.length === 0}
-            >
-              <ChevronRight size={16} />
-            </button>
+         <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1">
+                <Search
+                    size="sm"
+                    bind:this={searchInputRef}
+                    bind:value={searchTerm}
+                    on:input={handleSearch}
+                    on:keydown={e => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            goToNextMatch();
+                        }
+                    }}
+                    placeholder="Search table..."
+                    class="w-64"
+                />
+                
+                <div class="flex items-center">
+                    <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
+                        <ChevronLeft size={16} />
+                    </Button>
+                    <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[80px] justify-center">
+                        {#if cellMatches.length > 0}
+                            {currentMatchIndex + 1} / {cellMatches.length}
+                        {:else if searchTerm}
+                            0 / 0
+                        {:else}
+                            Search
+                        {/if}
+                    </div>
+                    <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
+                        <ChevronRight size={16} />
+                    </Button>
+                </div>
+            </div>
+
+            <div class="h-6 w-[1px] bg-gray-300 dark:bg-gray-700 mx-1"></div>
+
              <div class="relative">
-                <button
-                  title="More Options"
-                  class="ui-button-icon"
-                  on:click={() => showOptionsMenu = !showOptionsMenu}
-                >
+                <Button size="xs" color="alternative" id="table-options-btn" class="px-2">
                   <MoreVertical size={16} />
-                </button>
-                {#if showOptionsMenu}
-                  <div
-                    class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-20"
-                    on:mouseleave={() => showOptionsMenu = false}
-                  >
-                    <button
-                      class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      on:click={toggleFilters}
-                    >
-                      {areFiltersVisible ? 'Hide' : 'Show'} Filters
-                    </button>
-                  </div>
-                {/if}
+                </Button>
+                <Dropdown triggeredBy="#table-options-btn" placement="bottom-end">
+                    <DropdownItem on:click={toggleFilters}>
+                        {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
+                    </DropdownItem>
+                    <DropdownItem on:click={() => tabulatorInstance?.download("csv", "table_export.csv")}>
+                        Export as CSV
+                    </DropdownItem>
+                </Dropdown>
               </div>
          </div>
          {/if}

@@ -69,6 +69,8 @@
     "@wdio/spec-reporter": "^9.19.0",
     "autoprefixer": "^10.4.21",
     "electron": "^38.0.0",
+    "flowbite": "^2.5.2",
+    "flowbite-svelte": "^0.46.23",
     "mdsvex": "^0.12.6",
     "postcss": "^8.5.3",
     "postcss-load-config": "^5.1.0",

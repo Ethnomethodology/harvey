@@ -2,6 +2,22 @@
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
+    import { 
+        Input, 
+        Label, 
+        Select, 
+        Checkbox, 
+        Button, 
+        Table, 
+        TableHead, 
+        TableHeadCell, 
+        TableBody, 
+        TableBodyRow, 
+        TableBodyCell,
+        Radio,
+        Alert
+    } from 'flowbite-svelte';
+    import { Info } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let previewData = { fields: [], headers: [], data: [] };
@@ -28,32 +44,32 @@
 	};
 
     const currencyOptions = [
-        { label: 'USD ($) - US Dollar', value: 'USD' },
-        { label: 'EUR (€) - Euro', value: 'EUR' },
-        { label: 'GBP (£) - British Pound', value: 'GBP' },
-        { label: 'JPY (¥) - Japanese Yen', value: 'JPY' },
-        { label: 'INR (₹) - Indian Rupee', value: 'INR' },
-        { label: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
-        { label: 'AUD ($) - Australian Dollar', value: 'AUD' },
-        { label: 'CAD ($) - Canadian Dollar', value: 'CAD' },
-        { label: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
-        { label: 'SGD ($) - Singapore Dollar', value: 'SGD' },
-        { label: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
-        { label: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
-        { label: 'KRW (₩) - South Korean Won', value: 'KRW' },
-        { label: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
-        { label: 'MXN ($) - Mexican Peso', value: 'MXN' },
-        { label: 'RUB (₽) - Russian Ruble', value: 'RUB' },
-        { label: 'ZAR (R) - South African Rand', value: 'ZAR' },
-        { label: 'TRY (₺) - Turkish Lira', value: 'TRY' },
-        { label: 'BRL (R$) - Brazilian Real', value: 'BRL' },
-        { label: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
-        { label: 'DKK (kr) - Danish Krone', value: 'DKK' },
-        { label: 'PLN (zł) - Polish Zloty', value: 'PLN' },
-        { label: 'THB (฿) - Thai Baht', value: 'THB' },
-        { label: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
-        { label: 'PHP (₱) - Philippine Peso', value: 'PHP' },
-        { label: 'Other (Custom Code)', value: 'OTHER' }
+        { name: 'USD ($) - US Dollar', value: 'USD' },
+        { name: 'EUR (€) - Euro', value: 'EUR' },
+        { name: 'GBP (£) - British Pound', value: 'GBP' },
+        { name: 'JPY (¥) - Japanese Yen', value: 'JPY' },
+        { name: 'INR (₹) - Indian Rupee', value: 'INR' },
+        { name: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
+        { name: 'AUD ($) - Australian Dollar', value: 'AUD' },
+        { name: 'CAD ($) - Canadian Dollar', value: 'CAD' },
+        { name: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
+        { name: 'SGD ($) - Singapore Dollar', value: 'SGD' },
+        { name: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
+        { name: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
+        { name: 'KRW (₩) - South Korean Won', value: 'KRW' },
+        { name: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
+        { name: 'MXN ($) - Mexican Peso', value: 'MXN' },
+        { name: 'RUB (₽) - Russian Ruble', value: 'RUB' },
+        { name: 'ZAR (R) - South African Rand', value: 'ZAR' },
+        { name: 'TRY (₺) - Turkish Lira', value: 'TRY' },
+        { name: 'BRL (R$) - Brazilian Real', value: 'BRL' },
+        { name: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
+        { name: 'DKK (kr) - Danish Krone', value: 'DKK' },
+        { name: 'PLN (zł) - Polish Zloty', value: 'PLN' },
+        { name: 'THB (฿) - Thai Baht', value: 'THB' },
+        { name: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
+        { name: 'PHP (₱) - Philippine Peso', value: 'PHP' },
+        { name: 'Other (Custom Code)', value: 'OTHER' }
     ];
 
     $: availableFields = previewData?.fields || previewData?.headers || [];
@@ -193,157 +209,153 @@
 
 {#if showModal}
 	<div
-		class="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm p-4"
+		class="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 		transition:fade={{ duration: 150 }}
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
 	>
 		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-6xl flex flex-col text-gray-800 dark:text-gray-200 max-h-[90vh]"
+			class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[90vh]"
 			on:click|stopPropagation
 		>
-			<h2 class="text-xl font-bold mb-4">
-				{step === 1 ? 'Confirm Import Headers' : 'Define Field Types and Validations'}
-			</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <Info size={20} class="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                            {step === 1 ? 'Confirm Import Headers' : 'Define Field Types and Validations'}
+                        </h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            {step === 1 ? 'Step 1 of 2: Header detection' : 'Step 2 of 2: Schema definition'}
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-			{#if step === 1}
-				<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-					Confirm if the first row contains headers. Review the preview below.
-				</p>
+            <div class="flex-1 overflow-auto p-6">
+                {#if step === 1}
+                    <Alert color="blue" class="mb-6">
+                        Confirm if the first row contains headers. Review the preview below.
+                    </Alert>
 
-				<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto mb-4 bg-gray-50 dark:bg-gray-800">
-					<table class="w-full text-xs text-left">
-						<thead class="bg-gray-100 dark:bg-gray-700 sticky top-0">
-							<tr>
-								{#each availableFields as f, i}
-									<th class="px-3 py-2 font-semibold">
-										{#if hasHeaders && previewData.data && previewData.data[0] && previewData.data[0][f] != null && String(previewData.data[0][f]).trim() !== ''}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden mb-6 bg-white dark:bg-gray-800 shadow-sm">
+                        <Table hoverable={true} shadow={false}>
+                            <TableHead class="bg-gray-50 dark:bg-gray-900/50">
+                                {#each availableFields as f, i}
+                                    <TableHeadCell>
+                                        {#if hasHeaders && previewData.data && previewData.data[0] && previewData.data[0][f] != null && String(previewData.data[0][f]).trim() !== ''}
                                             {String(previewData.data[0][f]).trim()}
                                         {:else}
                                             Field {i + 1}
                                         {/if}
-									</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each (hasHeaders ? previewData.data.slice(1, 4) : previewData.data.slice(0, 3)) as row}
-								<tr class="border-t border-gray-200 dark:border-gray-700">
-									{#each availableFields as header}
-										<td class="px-3 py-2 whitespace-nowrap truncate max-w-[150px]">
-											{row[header] != null ? row[header] : ''}
-										</td>
-									{/each}
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+                                    </TableHeadCell>
+                                {/each}
+                            </TableHead>
+                            <TableBody>
+                                {#each (hasHeaders ? previewData.data.slice(1, 4) : previewData.data.slice(0, 3)) as row}
+                                    <TableBodyRow>
+                                        {#each availableFields as header}
+                                            <TableBodyCell class="truncate max-w-[150px]">
+                                                {row[header] != null ? row[header] : ''}
+                                            </TableBodyCell>
+                                        {/each}
+                                    </TableBodyRow>
+                                {/each}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-				<div class="space-y-2 mb-6">
-					<label class="flex items-center p-3 border rounded-lg cursor-pointer {hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}">
-						<input type="radio" bind:group={hasHeaders} value={true} class="h-4 w-4 text-blue-600">
-						<div class="ml-3">
-							<p class="text-sm font-medium">Yes, the first row is the header.</p>
-						</div>
-					</label>
-					<label class="flex items-center p-3 border rounded-lg cursor-pointer {!hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}">
-						<input type="radio" bind:group={hasHeaders} value={false} class="h-4 w-4 text-blue-600">
-						<div class="ml-3">
-							<p class="text-sm font-medium">No, treat the first row as data.</p>
-						</div>
-					</label>
-				</div>
-			{:else}
-				<div class="flex-1 overflow-y-auto mb-4 border dark:border-gray-700 rounded">
-					<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-						<thead class="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-							<tr>
-								<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Field</th>
-								<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-								<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sub-type</th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Primary</th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Req?</th>
-								<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[150px]">Options / Constraints</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Description</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-							{#each fields as field, i}
-								<tr>
-									<td class="px-3 py-2 text-sm font-medium truncate max-w-[150px]">{field.name}</td>
-									<td class="px-3 py-2">
-										<select bind:value={field.type} on:change={() => handleTypeChange(i)} class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
-											{#each Object.keys(FIELD_TYPES) as type}<option value={type}>{type}</option>{/each}
-										</select>
-									</td>
-									<td class="px-3 py-2">
-										<select bind:value={field.subType} on:change={() => handleSubTypeChange(i)} class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
-											{#each FIELD_TYPES[field.type] as sub}<option value={sub}>{sub}</option>{/each}
-										</select>
-									</td>
-                                    <td class="px-3 py-2 text-center">
-                                        <input type="checkbox" bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
-                                    </td>
-                                    <td class="px-3 py-2 text-center">
-                                        <input type="checkbox" bind:checked={field.required} disabled={field.primary} class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
-                                    </td>
-									<td class="px-3 py-2">
-										{#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
-											<input type="text" bind:value={field.options} placeholder="Options (comma separated)" class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
-										{:else if field.type === 'Numeric'}
-                                            <div class="flex flex-col space-y-1">
-                                                <div class="flex space-x-1">
-                                                    <input type="number" bind:value={field.min} placeholder="Min" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600" />
-                                                    <input type="number" bind:value={field.max} placeholder="Max" class="w-1/2 text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600" />
-                                                </div>
-                                                {#if field.subType === 'Currency'}
-                                                    <div class="flex flex-col space-y-1">
-                                                        <select bind:value={field.currency} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600">
-                                                            {#each currencyOptions as opt}
-                                                                <option value={opt.value}>{opt.label}</option>
-                                                            {/each}
-                                                        </select>
-                                                        {#if field.currency === 'OTHER'}
-                                                            <input 
-                                                                type="text" 
-                                                                bind:value={field.customCurrency} 
-                                                                placeholder="Code (e.g. BTC)" 
-                                                                maxlength="3"
-                                                                class="w-full text-[10px] p-1 rounded border dark:bg-gray-700 dark:border-gray-600" 
-                                                            />
-                                                        {/if}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="p-4 border rounded-xl cursor-pointer transition-all {hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = true}>
+                            <Radio bind:group={hasHeaders} value={true} name="headers-radio">
+                                <span class="font-bold">Yes, the first row is the header.</span>
+                                <p class="text-xs text-gray-500 mt-1">Use values from the first row as field names.</p>
+                            </Radio>
+                        </div>
+                        <div class="p-4 border rounded-xl cursor-pointer transition-all {!hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = false}>
+                            <Radio bind:group={hasHeaders} value={false} name="headers-radio">
+                                <span class="font-bold">No, treat the first row as data.</span>
+                                <p class="text-xs text-gray-500 mt-1">Generate generic field names (Field 1, Field 2, etc.).</p>
+                            </Radio>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
+                        <Table hoverable={true} shadow={false}>
+                            <TableHead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
+                                <TableHeadCell class="w-[150px]">Field</TableHeadCell>
+                                <TableHeadCell>Type</TableHeadCell>
+                                <TableHeadCell>Sub-type</TableHeadCell>
+                                <TableHeadCell class="text-center">Primary</TableHeadCell>
+                                <TableHeadCell class="text-center">Req?</TableHeadCell>
+                                <TableHeadCell class="min-w-[150px]">Options / Constraints</TableHeadCell>
+                                <TableHeadCell class="min-w-[200px]">Description</TableHeadCell>
+                            </TableHead>
+                            <TableBody>
+                                {#each fields as field, i}
+                                    <TableBodyRow>
+                                        <TableBodyCell class="font-bold truncate max-w-[150px]">{field.name}</TableBodyCell>
+                                        <TableBodyCell>
+                                            <Select size="sm" bind:value={field.type} items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} on:change={() => handleTypeChange(i)} />
+                                        </TableBodyCell>
+                                        <TableBodyCell>
+                                            <Select size="sm" bind:value={field.subType} items={FIELD_TYPES[field.type].map(st => ({name: st, value: st}))} on:change={() => handleSubTypeChange(i)} />
+                                        </TableBodyCell>
+                                        <TableBodyCell class="text-center">
+                                            <Checkbox bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} />
+                                        </TableBodyCell>
+                                        <TableBodyCell class="text-center">
+                                            <Checkbox bind:checked={field.required} disabled={field.primary} />
+                                        </TableBodyCell>
+                                        <TableBodyCell>
+                                            {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
+                                                <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
+                                            {:else if field.type === 'Numeric'}
+                                                <div class="flex flex-col gap-1">
+                                                    <div class="flex gap-1">
+                                                        <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
+                                                        <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
                                                     </div>
-                                                {/if}
-                                            </div>
-										{:else if field.type === 'DateTime'}
-											<select bind:value={field.format} class="w-full text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600">
-												{#each DATETIME_FORMATS[field.subType] as fmt}<option value={fmt}>{fmt}</option>{/each}
-											</select>
-                                        {/if}
-									</td>
-                                    <td class="px-3 py-2">
-                                        <input type="text" bind:value={field.description} placeholder="Tooltip text" class="text-xs p-1 rounded border dark:bg-gray-700 dark:border-gray-600 w-full">
-                                    </td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
+                                                    {#if field.subType === 'Currency'}
+                                                        <div class="flex flex-col gap-1">
+                                                            <Select size="sm" items={currencyOptions} bind:value={field.currency} />
+                                                            {#if field.currency === 'OTHER'}
+                                                                <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO" maxlength="3" />
+                                                            {/if}
+                                                        </div>
+                                                    {/if}
+                                                </div>
+                                            {:else if field.type === 'DateTime'}
+                                                <Select size="sm" bind:value={field.format} items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} />
+                                            {/if}
+                                        </TableBodyCell>
+                                        <TableBodyCell>
+                                            <Input size="sm" bind:value={field.description} placeholder="Tooltip text" />
+                                        </TableBodyCell>
+                                    </TableBodyRow>
+                                {/each}
+                            </TableBody>
+                        </Table>
+                    </div>
+                {/if}
+            </div>
 
-			<div class="flex justify-between mt-auto pt-4 border-t dark:border-gray-700">
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
 				<div>
 					{#if step === 2}
-						<button on:click={() => step = 1} class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:opacity-80">Back</button>
+						<Button color="alternative" on:click={() => step = 1}>Back</Button>
 					{/if}
 				</div>
-				<div class="space-x-2">
-					<button on:click={closeModal} class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:opacity-80">Cancel</button>
-					<button on:click={step === 1 ? goToStep2 : handleConfirm} class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+				<div class="flex gap-3">
+					<Button color="alternative" on:click={closeModal}>Cancel</Button>
+					<Button color="blue" on:click={step === 1 ? goToStep2 : handleConfirm}>
 						{step === 1 ? 'Next: Define Field Types' : 'Confirm and Import'}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>
