@@ -42,7 +42,7 @@
     "@tiptap/extension-text-align": "^2.11.7",
     "@tiptap/pm": "^2.11.7",
     "flowbite": "^4.0.1",
-    "flowbite-svelte": "^0.46.23",
+    "flowbite-svelte": "^1.31.0",
     "lexical": "^0.30.0",
     "lucide-svelte": "^0.577.0",
     "openseadragon": "^4.1.1",

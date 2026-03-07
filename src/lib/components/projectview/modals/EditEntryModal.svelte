@@ -3,7 +3,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { Input, InputAddon, ButtonGroup, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
+    import { Input, Datepicker, Timepicker, InputAddon, ButtonGroup, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
 
     import { 
         Type, 
@@ -187,38 +187,33 @@
                         <div class="relative">
                             {#if colSchema.type === 'DateTime'}
                                 {#if colSchema.subType === 'Date'}
-                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Input type="date" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
+                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Datepicker id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
                                 {:else if colSchema.subType === 'Time'}
-                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Input type="time" id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
+                                    <div class="w-full {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}"><Timepicker id="field-{col.field}" bind:value={editedData[col.field]} class="w-full" /></div>
                                 {:else}
                                     <!-- Date & Time -->
                                     <div class="flex space-x-2 w-full">
                                         <div class="flex-1 {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
-                                            <Input type="date" value={(editedData[col.field] || "").split('T')[0] || ""} on:input={(e) => handleDateTimeChange(col.field, 'date', e)} class="w-full" />
+                                            <Datepicker value={(editedData[col.field] || "").split('T')[0] || ""} on:change={(e) => handleDateTimeChange(col.field, 'date', e)} class="w-full" />
                                         </div>
                                         <div class="w-36 {errors[col.field] ? 'ring-2 ring-red-500 rounded-lg' : ''}">
-                                            <Input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:input={(e) => handleDateTimeChange(col.field, 'time', e)} class="w-full" />
+                                            <Timepicker value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:change={(e) => handleDateTimeChange(col.field, 'time', e)} class="w-full" />
                                         </div>
                                     </div>
                                 {/if}
                             {:else if colSchema.type === 'Misc'}
                                 {#if colSchema.subType === 'Checkbox'}
-                                    <label class="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors">
-                                        <Checkbox bind:checked={editedData[col.field]} class="text-blue-600" />
-                                        <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
-                                    </label>
+                                    <div class="flex items-center"><Checkbox bind:checked={editedData[col.field]} class="text-blue-600" /></div>
                                 {:else if colSchema.subType === 'Multiselect'}
                                     <Select id="field-{col.field}" bind:value={editedData[col.field]} multiple class="w-full">
                                         {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
                                     </Select>
                                 {:else if colSchema.subType === 'Selectbox'}
                                     <Select id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
-                                        <option value="">Select option...</option>
                                         {#each colSchema.options || [] as opt}<option value={opt}>{opt}</option>{/each}
                                     </Select>
                                 {:else if colSchema.subType === 'Project Link'}
-                                    <Select id="field-{col.field}" bind:value={editedData[col.field]} class="w-full">
-                                        <option value="">Select asset...</option>
+                                    <Select id="field-{col.field}" bind:value={editedData[col.field]} placeholder="Select asset..." class="w-full">
                                         {#each projectAssets as asset}<option value={asset.value}>{asset.label}</option>{/each}
                                     </Select>
                                 {/if}
