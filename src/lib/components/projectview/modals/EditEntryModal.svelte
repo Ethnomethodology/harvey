@@ -174,7 +174,7 @@
             // is not reliable, we check if the clicked target is within the input
             // or any datepicker dropdown component.
             const isClickInsideInput = node.contains(event.target) || node === event.target;
-            const isClickInsidePicker = event.target.closest('.datepicker');
+            const isClickInsidePicker = event.target.closest('.datepicker-dropdown') || event.target.closest('.datepicker');
             
             if (!isClickInsideInput && !isClickInsidePicker) {
                 picker.hide();

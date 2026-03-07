@@ -835,7 +835,7 @@
             // Handle outside click specifically for Tabulator inline
             const handleOutside = (e) => {
                 const isClickInsideInput = editor.contains(e.target) || editor === e.target;
-                const isClickInsidePicker = e.target.closest('.datepicker');
+                const isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
                 if (picker && picker.active && !isClickInsideInput && !isClickInsidePicker) {
                     picker.hide();
                     cancel();
@@ -931,12 +931,13 @@
 
             function handleOutside(e) {
                 if (!dropdownEl.contains(e.target) && e.target !== input) {
-                    cancel();
+                    success(input.value);
                     cleanup();
                 }
             }
 
             document.addEventListener('mousedown', handleOutside, true);
+            dropdownEl.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus loss on cell
         });
 
         return container;
@@ -1048,6 +1049,8 @@
                 timeDropdownEl.style.position = "fixed";
                 timeDropdownEl.style.top = `${rect.bottom}px`;
                 timeDropdownEl.style.left = `${rect.left}px`;
+
+                timeDropdownEl.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus loss on cell
             };
 
             function cleanupTimeDropdown() {
@@ -1059,7 +1062,7 @@
 
             const handleOutside = (e) => {
                 const isClickInsideContainer = container.contains(e.target) || container === e.target;
-                const isClickInsidePicker = e.target.closest('.datepicker');
+                const isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
                 // Allow clicks on time dropdown to not trigger finish
                 const isClickInsideTimeDropdown = e.target.closest('.time-dropdown-container');
 
