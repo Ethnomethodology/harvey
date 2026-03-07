@@ -1822,6 +1822,11 @@
         if (tablePath) initializeTable(tablePath);
 
         const handleKeyDown = (e) => {
+            // Ignore custom shortcuts if user is typing in an input/textarea so native text undo/redo works
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
             if (e.metaKey && e.key === 'c') {
                 e.preventDefault();
                 tabulatorInstance?.copyToClipboard("range");
