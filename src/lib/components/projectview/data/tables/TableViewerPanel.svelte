@@ -834,8 +834,9 @@
 
             // Handle outside click specifically for Tabulator inline
             const handleOutside = (e) => {
-                const path = e.composedPath();
-                if (picker && picker.active && !path.includes(editor) && !path.includes(picker.pickerElement)) {
+                const isClickInsideInput = editor.contains(e.target) || editor === e.target;
+                const isClickInsidePicker = e.target.closest('.datepicker');
+                if (picker && picker.active && !isClickInsideInput && !isClickInsidePicker) {
                     picker.hide();
                     cancel();
                 }
@@ -983,14 +984,86 @@
                 // Don't finish yet, let them pick time
             });
 
+            let timeDropdownEl = null;
+
             timeInput.onclick = (e) => {
                 e.stopPropagation();
-                // Simple implementation for now
+                if (timeDropdownEl) {
+                    cleanupTimeDropdown();
+                    return;
+                }
+
+                timeDropdownEl = document.createElement("div");
+                timeDropdownEl.className = "time-dropdown-container z-[10000] w-24 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden";
+                document.body.appendChild(timeDropdownEl);
+
+                const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+                const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+                const content = document.createElement("div");
+                content.className = "flex h-48";
+
+                const hCol = document.createElement("div");
+                hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
+                hours.forEach(h => {
+                    const btn = document.createElement("button");
+                    btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${timeInput.value.startsWith(h) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                    btn.textContent = h;
+                    btn.onclick = (ev) => {
+                        ev.stopPropagation();
+                        const m = timeInput.value.split(':')[1] || "00";
+                        timeInput.value = `${h}:${m}`;
+                        updateSelected();
+                    };
+                    hCol.appendChild(btn);
+                });
+
+                const mCol = document.createElement("div");
+                mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
+                minutes.forEach(m => {
+                    const btn = document.createElement("button");
+                    btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${timeInput.value.endsWith(m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                    btn.textContent = m;
+                    btn.onclick = (ev) => {
+                        ev.stopPropagation();
+                        const h = timeInput.value.split(':')[0] || "00";
+                        timeInput.value = `${h}:${m}`;
+                        updateSelected();
+                        cleanupTimeDropdown();
+                    };
+                    mCol.appendChild(btn);
+                });
+
+                function updateSelected() {
+                    const [h, m] = timeInput.value.split(':');
+                    Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                    Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                }
+
+                content.appendChild(hCol);
+                content.appendChild(mCol);
+                timeDropdownEl.appendChild(content);
+
+                const rect = timeInput.getBoundingClientRect();
+                timeDropdownEl.style.position = "fixed";
+                timeDropdownEl.style.top = `${rect.bottom}px`;
+                timeDropdownEl.style.left = `${rect.left}px`;
             };
 
+            function cleanupTimeDropdown() {
+                if (timeDropdownEl && timeDropdownEl.parentNode) {
+                    timeDropdownEl.parentNode.removeChild(timeDropdownEl);
+                }
+                timeDropdownEl = null;
+            }
+
             const handleOutside = (e) => {
-                const path = e.composedPath();
-                if (!path.includes(container) && (!datePicker || !path.includes(datePicker.pickerElement))) {
+                const isClickInsideContainer = container.contains(e.target) || container === e.target;
+                const isClickInsidePicker = e.target.closest('.datepicker');
+                // Allow clicks on time dropdown to not trigger finish
+                const isClickInsideTimeDropdown = e.target.closest('.time-dropdown-container');
+
+                if (!isClickInsideContainer && !isClickInsidePicker && !isClickInsideTimeDropdown) {
                     finish();
                 }
             };
@@ -1000,6 +1073,7 @@
             function cleanup() {
                 document.removeEventListener('mousedown', handleOutside, true);
                 if (datePicker) datePicker.destroy();
+                cleanupTimeDropdown();
             }
         });
 
