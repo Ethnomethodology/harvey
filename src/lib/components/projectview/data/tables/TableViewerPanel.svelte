@@ -1836,11 +1836,21 @@
         };
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
+        // Prevent Tabulator from stealing arrow keys when editing text inputs/textareas
+        const handleEditorArrowKeys = (e) => {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    e.stopPropagation();
+                }
+            }
+        };
+        tableContainer?.addEventListener('keydown', handleEditorArrowKeys, true); // use capture
 
 		return () => {
 			tabulatorInstance?.destroy();
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
+            tableContainer?.removeEventListener('keydown', handleEditorArrowKeys, true);
 		}
     });
 
@@ -1890,68 +1900,69 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
-     <div class="flex items-center justify-between h-12 px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-md">
+     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
-            <Button size="xs" color="alternative" id="history-undo" on:click={undo} class="px-2">
-                <Undo2 size={16} />
-            </Button>
+            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
+                <Undo2 size={14} />
+            </button>
             <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
             
-            <Button size="xs" color="alternative" id="history-redo" on:click={redo} class="px-2">
-                <Redo2 size={16} />
-            </Button>
+            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
+                <Redo2 size={14} />
+            </button>
             <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
         </div>
 
          {#if !isLoading && !error}
-         <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1">
-                <Search
-                    size="sm"
-                    bind:this={searchInputRef}
-                    bind:value={searchTerm}
-                    on:input={handleSearch}
-                    on:keydown={e => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            goToNextMatch();
-                        }
-                    }}
-                    placeholder="Search table..."
-                    class="w-64"
-                />
-                
+         <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 relative">
+                <!-- Using native input to seamlessly match toolbar height styles -->
+                <div class="relative w-48">
+                    <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                        <svg class="w-3 h-3 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                        </svg>
+                    </div>
+                    <input
+                        type="text"
+                        bind:this={searchInputRef}
+                        bind:value={searchTerm}
+                        on:input={handleSearch}
+                        on:keydown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                goToNextMatch();
+                            }
+                        }}
+                        placeholder="Search table..."
+                        class="w-full text-xs border border-gray-300 dark:border-gray-600 pl-7 pr-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                    />
+                </div>
+
                 {#if searchTerm}
-                    <div class="flex items-center">
-                        <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
-                            <ChevronLeft size={16} />
-                        </Button>
-                        <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[60px] justify-center">
-                            {#if cellMatches.length > 0}
-                                {currentMatchIndex + 1} / {cellMatches.length}
-                            {:else}
-                                0 / 0
-                            {/if}
-                        </div>
-                        <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
-                            <ChevronRight size={16} />
-                        </Button>
+                    <div class="flex items-center gap-[1px]">
+                        <button on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="mini-toolbar-button" title="Previous Match">
+                            <ChevronLeft size={14} />
+                        </button>
+                        <button on:click={goToNextMatch} disabled={cellMatches.length === 0} class="mini-toolbar-button" title="Next Match">
+                            <ChevronRight size={14} />
+                        </button>
                     </div>
                 {/if}
             </div>
 
-            <div class="h-6 w-[1px] bg-gray-300 dark:bg-gray-700 mx-1"></div>
+            <div class="separator mx-0.5"></div>
 
              <div class="relative">
-                <Button size="xs" color="alternative" id="table-options-btn" class="px-2">
-                  <MoreVertical size={16} />
-                </Button>
-                <Dropdown triggeredBy="#table-options-btn" placement="bottom-end">
-                    <DropdownItem on:click={toggleFilters}>
+                <button class="mini-toolbar-button" title="Options">
+                  <MoreVertical size={14} />
+                </button>
+                <Dropdown placement="bottom-end">
+                    <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
                         {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
                     </DropdownItem>
-                    <DropdownItem on:click={() => tabulatorInstance?.download("csv", "table_export.csv")}>
+                    <DropdownItem on:click={() => tabulatorInstance?.download("csv", "table_export.csv")} class="text-xs py-1.5 px-3">
                         Export as CSV
                     </DropdownItem>
                 </Dropdown>
@@ -2023,6 +2034,46 @@
          border-left: 1px dashed #3b82f6 !important;
          background-color: rgba(59, 130, 246, 0.1) !important;
      }
+
+    .toolbar button.mini-toolbar-button {
+      @apply p-1.5 rounded inline-flex items-center justify-center
+             focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+             dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
+             text-xs disabled:opacity-50 disabled:cursor-not-allowed;
+      color: var(--ui-icon-color);
+      border: 1px solid var(--ui-select-border);
+      background-color: transparent;
+      margin-right: 2px;
+      line-height: 1.2;
+      min-height: 24px;
+    }
+
+    .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: var(--ui-icon-hover-bg);
+        border-color: var(--ui-select-border);
+    }
+
+    html.dark .toolbar button.mini-toolbar-button {
+        color: #e5e5e5;
+        border: 1px solid #404040;
+        background-color: transparent;
+    }
+
+    html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: #404040;
+        border-color: #404040;
+    }
+
+    .separator {
+      width: 1px;
+      height: 1.25rem;
+      background-color: var(--ui-select-border);
+      margin: 0 0.25rem;
+    }
+
+    html.dark .separator {
+        background-color: #404040;
+    }
 
     .flex-grow {
         position: relative;
