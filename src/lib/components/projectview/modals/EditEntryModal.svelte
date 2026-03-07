@@ -3,7 +3,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { Input, Datepicker, Timepicker, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
+    import { Input, Datepicker, Select, Textarea, Checkbox, Helper } from 'flowbite-svelte';
 
     import { 
         Type, 
@@ -196,7 +196,7 @@
                                     </div>
                                 {:else if colSchema.subType === 'Time'}
                                     <div class="input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
-                                        <Timepicker id="field-{col.field}" bind:value={editedData[col.field]} />
+                                        <Input type="time" id="field-{col.field}" bind:value={editedData[col.field]} />
                                         <div class="shrink-0 pr-3 flex items-center pointer-events-none">
                                             <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                                         </div>
@@ -211,7 +211,7 @@
                                             <Datepicker value={(editedData[col.field] || "").split('T')[0] || ""} on:select={(e) => handleDateTimeChange(col.field, 'date', e)} />
                                         </div>
                                         <div class="w-36 input-container {errors[col.field] ? 'border-red-500 ring-2 ring-red-500/10' : ''}">
-                                            <Timepicker value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:change={(e) => handleDateTimeChange(col.field, 'time', e)} />
+                                            <Input type="time" value={(editedData[col.field] || "").split('T')[1] || "00:00"} on:input={(e) => handleDateTimeChange(col.field, 'time', e)} />
                                             <div class="shrink-0 pr-3 flex items-center pointer-events-none">
                                                 <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                                             </div>

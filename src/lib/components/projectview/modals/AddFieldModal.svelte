@@ -125,7 +125,7 @@
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scope</label>
           <div class="mt-1 space-y-2">
             <div class="flex items-center">
-              <Radio id="scopeProject" name="scope" bind:group={selectedScope} value={"project"} class="text-blue-600">
+              <Radio id="scopeProject" name="scope" bind:group={selectedScope} value={"project"} class="text-blue-600" />
               <label for="scopeProject" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                 Make available across the project
               </label>
