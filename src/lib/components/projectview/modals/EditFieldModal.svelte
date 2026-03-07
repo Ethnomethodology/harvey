@@ -225,6 +225,7 @@
                 <Input
                     id="field-name"
                     type="text"
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                     bind:value={editedName}
                     placeholder="Enter field name"
                 />
@@ -291,6 +292,7 @@
                             <Input
                                 id="field-min"
                                 type="number"
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 bind:value={editedSchema.min}
                             />
                         </div>
@@ -299,6 +301,7 @@
                             <Input
                                 id="field-max"
                                 type="number"
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 bind:value={editedSchema.max}
                             />
                         </div>
@@ -315,6 +318,7 @@
                                 {#if selectedCurrency === 'OTHER'}
                                     <Input 
                                         type="text" 
+                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                         bind:value={customCurrencyCode} 
                                         placeholder="Enter 3-letter ISO Code (e.g. BTC)" 
                                         maxlength="3"
@@ -329,6 +333,7 @@
                         <Input
                             id="field-options"
                             type="text"
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                             bind:value={optionsText}
                             placeholder="Option 1, Option 2, Option 3..."
                         />
@@ -349,6 +354,7 @@
                     <Label for="field-desc" class="mb-2">TOOLTIP / DESCRIPTION</Label>
                     <Textarea
                         id="field-desc"
+                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                         bind:value={editedSchema.description}
                         rows="2"
                         placeholder="Explain the purpose of this field..."

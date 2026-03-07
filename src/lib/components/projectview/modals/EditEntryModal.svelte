@@ -276,6 +276,7 @@
                                         <input 
                                             use:flowbiteDatepicker={{field: col.field}}
                                             type="text" 
+                                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                             value={editedData[col.field] || ""} 
                                             placeholder="Select date"
                                             class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500 ring-red-500' : ''}"
@@ -292,6 +293,7 @@
                                         <input 
                                             id="time_input_{sanitizeId(col.field)}"
                                             type="text" 
+                                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                             bind:value={editedData[col.field]} 
                                             placeholder="00:00"
                                             class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500' : ''}" 
@@ -330,6 +332,7 @@
                                                 <input 
                                                     use:flowbiteDatepicker={{field: col.field, isDateTime: true}}
                                                     type="text" 
+                                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                                     value={(editedData[col.field] || "").split('T')[0] || ""} 
                                                     class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-8 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                     on:keydown={(e) => e.preventDefault()}
@@ -347,6 +350,7 @@
                                                 <input 
                                                     id="dt_time_input_{sanitizeId(col.field)}"
                                                     type="text" 
+                                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                                     value={(editedData[col.field] || "").split('T')[1] || "00:00"} 
                                                     class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 pe-7 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                     on:keydown={(e) => e.preventDefault()}
@@ -402,6 +406,7 @@
                                 {/if}
                                 <input 
                                     type="number" 
+                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                     step="any" 
                                     id="field-{col.field}" 
                                     bind:value={editedData[col.field]} 
@@ -416,6 +421,7 @@
                         {:else if colSchema.type === 'Contact'}
                             <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} 
                                 id="field-{col.field}" bind:value={editedData[col.field]} 
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 color={errors[col.field] ? 'red' : 'base'}>
                                 <svelte:fragment slot="left">
                                     {#if colSchema.subType === 'Email'}
@@ -429,9 +435,11 @@
                             </Input>
                         {:else if colSchema.type === 'Text' && colSchema.subType === 'Small Text'}
                             <Input type="text" id="field-{col.field}" bind:value={editedData[col.field]} 
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 color={errors[col.field] ? 'red' : 'base'} />
                         {:else}
                             <Textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3"
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 color={errors[col.field] ? 'red' : 'base'} class="resize-none" />
                         {/if}
 

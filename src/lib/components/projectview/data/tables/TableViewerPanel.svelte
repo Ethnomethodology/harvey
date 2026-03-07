@@ -840,6 +840,10 @@
 
         const editor = document.createElement("input");
         editor.setAttribute("type", "text");
+        editor.setAttribute("autocomplete", "off");
+        editor.setAttribute("autocorrect", "off");
+        editor.setAttribute("autocapitalize", "off");
+        editor.setAttribute("spellcheck", "false");
         editor.style.padding = "4px";
         editor.style.width = "100%";
         editor.style.height = "100%";
@@ -915,6 +919,10 @@
 
         const input = document.createElement("input");
         input.type = "text";
+        input.setAttribute("autocomplete", "off");
+        input.setAttribute("autocorrect", "off");
+        input.setAttribute("autocapitalize", "off");
+        input.setAttribute("spellcheck", "false");
         input.value = cell.getValue() || "00:00";
         input.style.width = "100%";
         input.style.height = "100%";
@@ -1008,11 +1016,19 @@
 
         const dateInput = document.createElement("input");
         dateInput.type = "text";
+        dateInput.setAttribute("autocomplete", "off");
+        dateInput.setAttribute("autocorrect", "off");
+        dateInput.setAttribute("autocapitalize", "off");
+        dateInput.setAttribute("spellcheck", "false");
         dateInput.value = datePart;
         dateInput.className = "flex-1 min-w-0 h-full border-none p-0 text-xs";
         
         const timeInput = document.createElement("input");
         timeInput.type = "text";
+        timeInput.setAttribute("autocomplete", "off");
+        timeInput.setAttribute("autocorrect", "off");
+        timeInput.setAttribute("autocapitalize", "off");
+        timeInput.setAttribute("spellcheck", "false");
         timeInput.value = timePart;
         timeInput.className = "w-12 h-full border-none p-0 text-xs";
         timeInput.readOnly = true;
@@ -1200,11 +1216,19 @@
                     colDef.resizable = false;
                 } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
                     colDef.editor = "list";
+
+                    let values = colSchema.options || [];
+                    if (colSchema.subType === 'Selectbox') {
+                        // Use an explicit None option instead of the clearable cross, which reverts in Tabulator
+                        values = [
+                            { label: '-- None --', value: '' },
+                            ...values.map(o => ({ label: o, value: o }))
+                        ];
+                    }
+
                     colDef.editorParams = {
-                        values: colSchema.options || [],
+                        values: values,
                         multiselect: colSchema.subType === 'Multiselect',
-                        clearable: true,
-                        emptyValue: ""
                     };
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -1218,9 +1242,10 @@
                 } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";
                     colDef.editorParams = {
-                        values: projectAssetOptions,
-                        clearable: true,
-                        emptyValue: ""
+                        values: [
+                            { label: '-- None --', value: '' },
+                            ...projectAssetOptions
+                        ]
                     };
                 }
             } else if (colSchema.type === 'Numeric') {
@@ -1263,13 +1288,14 @@
             } else if (colSchema.type === 'Text') {
                 if (colSchema.subType === 'Small Text') {
                     colDef.editor = "input";
+                    colDef.editorParams = { elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 } else {
                     colDef.editor = "textarea";
-                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 }
             } else {
                 colDef.editor = "textarea";
-                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
             }
 
             // Apply custom styling/highlighting formatter logic
