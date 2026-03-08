@@ -1698,6 +1698,17 @@
                 } else {
                     colDef.editor = datetimeEditor;
                 }
+                
+                // Add formatter to ensure UI display matches the desired format
+                colDef.formatter = (cell) => {
+                    const val = cell.getValue();
+                    if (!val) return "";
+                    const dateObj = parseDate(val, colSchema);
+                    if (dateObj) {
+                        return formatDate(dateObj, colSchema);
+                    }
+                    return val;
+                };
             } else if (colSchema.type === 'Text') {
                 if (colSchema.subType === 'Small Text') {
                     colDef.editor = "input";
@@ -1855,6 +1866,33 @@
         });
 
         return dataColumnDefs;
+    }
+
+    export async function getExportData() {
+        if (!tabulatorInstance) return null;
+        
+        const data = tabulatorInstance.getData();
+        const headers = tabulatorInstance.getColumns().filter(c => c.getField()).map(c => c.getField());
+        
+        // Deep copy data to avoid mutating the original
+        const formattedData = JSON.parse(JSON.stringify(data));
+        
+        formattedData.forEach(row => {
+            for (const field in tableSchema) {
+                const schema = tableSchema[field];
+                if (schema.type === 'DateTime') {
+                    const val = row[field];
+                    if (val) {
+                        const dateObj = parseDate(val, schema);
+                        if (dateObj) {
+                            row[field] = formatDate(dateObj, schema);
+                        }
+                    }
+                }
+            }
+        });
+        
+        return { data: formattedData, headers };
     }
 
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
