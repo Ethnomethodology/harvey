@@ -34,7 +34,8 @@
         MoreVertical,
         Plus,
         ExternalLink,
-        Check
+        Check,
+        Mail
     } from 'lucide-svelte';
     import { mount } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
@@ -144,6 +145,32 @@
         setTimeout(() => {
             showUrlPopover = false;
             isUrlCopied = false;
+        }, 2000);
+    }
+
+    let showEmailPopover = false;
+    let popoverEmail = '';
+    let popoverEmailX = 0;
+    let popoverEmailY = 0;
+    let isEmailCopied = false;
+
+    async function handleOpenEmail() {
+        if (!popoverEmail) return;
+        try {
+            await openUrl('mailto:' + popoverEmail.trim());
+            showEmailPopover = false;
+        } catch (e) {
+            console.error("Failed to open email client:", e);
+        }
+    }
+
+    function handleCopyEmail() {
+        if (!popoverEmail) return;
+        navigator.clipboard.writeText(popoverEmail);
+        isEmailCopied = true;
+        setTimeout(() => {
+            showEmailPopover = false;
+            isEmailCopied = false;
         }, 2000);
     }
 
@@ -1241,7 +1268,7 @@
                 }
 
                 if (colSchema.type === 'Contact' && colSchema.subType === 'Hyperlink' && value) {
-                    cellElement.classList.add('hyperlink-cell');
+                    cellElement.classList.add('interactive-contact-cell');
                     // Add the value directly to the element dataset for the global click handler to access
                     cellElement.dataset.urlValue = value;
                     return `
@@ -1249,6 +1276,19 @@
                             <span class="truncate mr-2">${outputValue}</span>
                             <div class="hyperlink-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (colSchema.type === 'Contact' && colSchema.subType === 'Email' && value) {
+                    cellElement.classList.add('interactive-contact-cell');
+                    cellElement.dataset.emailValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="email-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Email Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                             </div>
                         </div>
                     `;
@@ -1799,22 +1839,44 @@
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
         const handleTableClick = (e) => {
-            const iconContainer = e.target.closest('.hyperlink-icon-container');
-            if (iconContainer) {
+            const urlIconContainer = e.target.closest('.hyperlink-icon-container');
+            const emailIconContainer = e.target.closest('.email-icon-container');
+
+            if (urlIconContainer) {
                 e.preventDefault();
                 e.stopPropagation();
-                const cellElement = iconContainer.closest('.tabulator-cell');
+                const cellElement = urlIconContainer.closest('.tabulator-cell');
                 if (cellElement && cellElement.dataset.urlValue) {
-                    const rect = iconContainer.getBoundingClientRect();
+                    const rect = urlIconContainer.getBoundingClientRect();
                     popoverUrl = cellElement.dataset.urlValue;
                     popoverX = rect.left + window.scrollX - 60; // offset a bit to center the popover
                     popoverY = rect.bottom + window.scrollY + 5;
                     showUrlPopover = true;
+                    showEmailPopover = false;
                     isUrlCopied = false;
                 }
-            } else if (showUrlPopover && !e.target.closest('.url-popover-container')) {
-                // Close popover if clicked outside
-                showUrlPopover = false;
+            } else if (emailIconContainer) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cellElement = emailIconContainer.closest('.tabulator-cell');
+                if (cellElement && cellElement.dataset.emailValue) {
+                    const rect = emailIconContainer.getBoundingClientRect();
+                    popoverEmail = cellElement.dataset.emailValue;
+                    popoverEmailX = rect.left + window.scrollX - 60; // offset a bit to center the popover
+                    popoverEmailY = rect.bottom + window.scrollY + 5;
+                    showEmailPopover = true;
+                    showUrlPopover = false;
+                    isEmailCopied = false;
+                }
+            } else {
+                if (showUrlPopover && !e.target.closest('.url-popover-container')) {
+                    // Close URL popover if clicked outside
+                    showUrlPopover = false;
+                }
+                if (showEmailPopover && !e.target.closest('.email-popover-container')) {
+                    // Close Email popover if clicked outside
+                    showEmailPopover = false;
+                }
             }
         };
         document.addEventListener('click', handleTableClick);
@@ -1948,6 +2010,21 @@
                         <Check size={14} class="text-green-500" /> Copied
                     {:else}
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy
+                    {/if}
+                </button>
+            </div>
+        {/if}
+
+        {#if showEmailPopover}
+            <div class="email-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverEmailX}px; top: {popoverEmailY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenEmail}>
+                    <Mail size={14} /> Send Email
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleCopyEmail}>
+                    {#if isEmailCopied}
+                        <Check size={14} class="text-green-500" /> Copied
+                    {:else}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy Email
                     {/if}
                 </button>
             </div>
@@ -2087,7 +2164,7 @@
             box-shadow: inset 0 0 0 2px #ef4444 !important;
         }
 
-        :global(.tabulator-cell.hyperlink-cell:hover .hyperlink-icon-container) {
+        :global(.tabulator-cell.interactive-contact-cell:hover .hyperlink-icon-container, .tabulator-cell.interactive-contact-cell:hover .email-icon-container) {
             display: flex !important;
         }
 </style>
