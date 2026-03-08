@@ -1361,9 +1361,11 @@
                         }
                     } else if (baseFormatter === 'progress' || baseFormatter === 'star') {
                         // Use Tabulator's built-in formatters explicitly for these advanced types
-                        const builtInFormatter = Tabulator.moduleBindings.format.formatters[baseFormatter] || cell.getTable().modules.format.getFormatter(baseFormatter);
+                        const formatModule = cell.getTable().modules.format;
+                        const builtInFormatter = formatModule.formatters[baseFormatter] || Tabulator.moduleBindings.format.formatters[baseFormatter];
                         if (builtInFormatter) {
-                            value = builtInFormatter(cell, formatterParams, onRendered);
+                            // Bind 'this' to formatModule to prevent 'this.sanitizeHTML is undefined' errors in native formatters
+                            value = builtInFormatter.call(formatModule, cell, formatterParams, onRendered);
                             isHtmlElement = value instanceof HTMLElement;
                         }
                     }

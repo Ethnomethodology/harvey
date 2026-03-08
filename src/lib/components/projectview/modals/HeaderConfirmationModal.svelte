@@ -31,7 +31,7 @@
 
 	const FIELD_TYPES = {
 		'Text': ['Small Text', 'Long Text'],
-		'Numeric': ['Number', 'Currency', 'Percent'],
+		'Numeric': ['Number', 'Currency', 'Percent', 'Progress', 'Rating'],
 		'DateTime': ['Date', 'Date & Time', 'Time'],
 		'Contact': ['Email', 'Phone', 'Hyperlink'],
 		'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
