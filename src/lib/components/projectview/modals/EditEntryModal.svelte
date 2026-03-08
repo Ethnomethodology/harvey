@@ -22,8 +22,10 @@
         X,
         TextInitial,
         AlertCircle,
-        Calendar
+        Calendar,
+        Star
     } from 'lucide-svelte';
+    import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
         Input, 
         Label, 
@@ -70,6 +72,8 @@
         if (type === 'Numeric') {
             if (subType === 'Currency') return DollarSign;
             if (subType === 'Percent') return Percent;
+            if (subType === 'Progress') return ProgressIcon;
+            if (subType === 'Rating') return Star;
             return Hash;
         }
         if (type === 'DateTime') {

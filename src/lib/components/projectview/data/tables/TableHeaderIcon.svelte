@@ -15,8 +15,10 @@
         Phone,
         CalendarClock,
         Link2,
-        TextInitial
+        TextInitial,
+        Star
     } from 'lucide-svelte';
+    import ProgressIcon from './icons/ProgressIcon.svelte';
 
     export let colSchema = {};
     export let header = '';
@@ -35,6 +37,8 @@
         if (type === 'Numeric') {
             if (subType === 'Currency') return DollarSign;
             if (subType === 'Percent') return Percent;
+            if (subType === 'Progress') return ProgressIcon;
+            if (subType === 'Rating') return Star;
             return Hash;
         }
         

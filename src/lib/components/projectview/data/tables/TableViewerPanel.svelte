@@ -1312,7 +1312,7 @@
 
             // Apply custom styling/highlighting formatter logic
             const baseFormatter = colDef.formatter;
-            colDef.formatter = (cell, formatterParams, onRendered) => {
+            colDef.formatter = function(cell, formatterParams, onRendered) {
                 const rowData = cell.getRow().getData();
                 const rowIndex = rowData.harvey_internal_id;
                 const colField = cell.getField();
@@ -1349,7 +1349,7 @@
                 let value = cell.getValue();
                 let isHtmlElement = false;
                 if (typeof baseFormatter === 'function') {
-                    value = baseFormatter(cell, formatterParams, onRendered);
+                    value = baseFormatter.call(this, cell, formatterParams, onRendered);
                     isHtmlElement = value instanceof HTMLElement;
                 } else if (typeof baseFormatter === 'string') {
                     if (baseFormatter === 'tickCross') {
@@ -1361,12 +1361,16 @@
                         }
                     } else if (baseFormatter === 'progress' || baseFormatter === 'star') {
                         // Use Tabulator's built-in formatters explicitly for these advanced types
+                        // Tabulator 6 exposes formatters via moduleBindings or getFormatter()
                         const formatModule = cell.getTable().modules.format;
-                        const builtInFormatter = formatModule.formatters[baseFormatter] || Tabulator.moduleBindings.format.formatters[baseFormatter];
+                        const builtInFormatter = Tabulator.moduleBindings?.format?.formatters?.[baseFormatter] || (formatModule && typeof formatModule.getFormatter === 'function' ? formatModule.getFormatter(baseFormatter) : null);
+
                         if (builtInFormatter) {
-                            // Bind 'this' to formatModule to prevent 'this.sanitizeHTML is undefined' errors in native formatters
-                            value = builtInFormatter.call(formatModule, cell, formatterParams, onRendered);
+                            value = builtInFormatter.call(formatModule || this, cell, formatterParams, onRendered);
                             isHtmlElement = value instanceof HTMLElement;
+                        } else {
+                            // Fallback if Tabulator's internal API is obfuscated in this version
+                            return cell.getValue();
                         }
                     }
                 }

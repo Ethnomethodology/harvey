@@ -18,8 +18,10 @@
         AlertCircle,
         X,
         Link2,
-        TextInitial
+        TextInitial,
+        Star
     } from 'lucide-svelte';
+    import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
         Input, 
         Label, 
@@ -177,7 +179,8 @@
         if (type === 'Numeric') {
             if (subType === 'Currency') return DollarSign;
             if (subType === 'Percent') return Percent;
-            if (subType === 'Progress') return Hash; // You can change this to a progress icon if available
+            if (subType === 'Progress') return ProgressIcon;
+            if (subType === 'Rating') return Star;
             return Hash;
         }
         
