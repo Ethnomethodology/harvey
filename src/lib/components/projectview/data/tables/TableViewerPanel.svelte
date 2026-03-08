@@ -802,7 +802,12 @@
                     new URL(value);
                     return true;
                 } catch (e) {
-                    return false;
+                    try {
+                        new URL('https://' + value);
+                        return true;
+                    } catch (e2) {
+                        return false;
+                    }
                 }
             } else if (type === 'Contact' && subType === 'Phone') {
                 return /^\+?[\d\s-]{7,20}$/.test(value);
