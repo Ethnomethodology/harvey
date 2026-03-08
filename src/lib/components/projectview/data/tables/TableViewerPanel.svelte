@@ -1382,14 +1382,34 @@
                         const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
                         colDef.formatterParams = { min, max };
                         colDef.editorParams = { min, max };
-                        colDef.tooltip = (cell) => `${cell.getValue() || 0}%`;
+                        colDef.tooltip = (e, cell) => {
+                            try {
+                                const comp = (cell && typeof cell.getValue === 'function') ? cell : (e && typeof e.getValue === 'function' ? e : null);
+                                if (comp) {
+                                    return `${comp.getValue() || 0} / ${max}`;
+                                }
+                            } catch (err) {
+                                console.error("[TableViewerPanel] Progress tooltip error:", err);
+                            }
+                            return "";
+                        };
                     } else if (colSchema.subType === 'Rating') {
                         colDef.editor = ratingEditor;
                         colDef.formatter = "star";
                         const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
                         colDef.formatterParams = { stars };
                         colDef.editorParams = { stars };
-                        colDef.tooltip = (cell) => `${cell.getValue() || 0} / ${stars} Stars`;
+                        colDef.tooltip = (e, cell) => {
+                            try {
+                                const comp = (cell && typeof cell.getValue === 'function') ? cell : (e && typeof e.getValue === 'function' ? e : null);
+                                if (comp) {
+                                    return `${comp.getValue() || 0} / ${stars} Stars`;
+                                }
+                            } catch (err) {
+                                console.error("[TableViewerPanel] Rating tooltip error:", err);
+                            }
+                            return "";
+                        };
                         // Force edit on single click rather than waiting for double-click
                         colDef.cellClick = function(e, cell) { 
                             if (!e || !e.target) {

@@ -418,9 +418,9 @@
                                         {min} {max} step="1" 
                                         bind:value={editedData[col.field]} 
                                         style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
+                                        title="{val} / {max}"
                                         class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" 
                                     />
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">{val}</span>
                                 </div>
                             {:else if colSchema.subType === 'Rating'}
                                 <div class="flex items-center gap-1 h-10">
