@@ -3,7 +3,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { Plus, Trash2, Table as TableIcon } from 'lucide-svelte';
+    import { Plus, Trash2, X, Table as TableIcon } from 'lucide-svelte';
     import { 
         Input, 
         Label, 
@@ -182,7 +182,7 @@
                 </div>
             </div>
             <button on:click={closeModal} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
-                <Trash2 size={20} />
+                <X size={20} />
             </button>
         </div>
 
