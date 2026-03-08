@@ -408,9 +408,18 @@
                                     <span class="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">{editedData[col.field] || 0}</span>
                                 </div>
                             {:else if colSchema.subType === 'Rating'}
-                                <div class="flex items-center gap-2 h-10">
-                                    <input type="range" min="0" max={colSchema.max || 5} step="1" bind:value={editedData[col.field]} class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-8 text-center">{editedData[col.field] || 0}</span>
+                                <div class="flex items-center gap-1 h-10">
+                                    {#each Array(colSchema.max || 5) as _, i}
+                                        <button
+                                            type="button"
+                                            class="focus:outline-none transition-colors"
+                                            on:click={() => editedData[col.field] = i + 1}
+                                        >
+                                            <svg class="w-6 h-6 {(editedData[col.field] || 0) > i ? 'text-yellow-400 dark:text-yellow-300' : 'text-gray-300 dark:text-gray-600'}" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
+                                    {/each}
                                 </div>
                             {:else}
                                 <div class="relative group/input">

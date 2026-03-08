@@ -831,6 +831,101 @@
         return await getProjectAssetsForLink(currentProject.id);
     }
 
+    // Custom editors for Progress and Rating
+    function progressEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.className = "flex items-center w-full h-full px-2";
+
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = editorParams.min || 0;
+        input.max = editorParams.max || 100;
+        input.step = "1";
+        input.value = cell.getValue() || input.min;
+        input.className = "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700";
+
+        container.appendChild(input);
+
+        onRendered(() => {
+            input.focus();
+        });
+
+        const saveVal = () => {
+            success(input.value);
+        };
+
+        // Save immediately on change (mouse up after dragging) or blur
+        input.addEventListener('change', saveVal);
+        input.addEventListener('blur', saveVal);
+
+        // Stop Tabulator from intercepting drag events
+        input.addEventListener('mousedown', e => e.stopPropagation());
+        input.addEventListener('touchstart', e => e.stopPropagation());
+
+        return container;
+    }
+
+    function ratingEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.className = "flex items-center justify-center w-full h-full gap-0.5 cursor-pointer";
+
+        const maxStars = editorParams.stars || 5;
+        let currentValue = cell.getValue() || 0;
+
+        const stars = [];
+
+        const renderStars = (hoverValue) => {
+            const val = hoverValue !== null ? hoverValue : currentValue;
+            stars.forEach((svg, i) => {
+                const filled = i < val;
+                svg.innerHTML = `<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                if (filled) {
+                    svg.classList.add("text-yellow-400", "dark:text-yellow-300");
+                    svg.classList.remove("text-gray-300", "dark:text-gray-600");
+                } else {
+                    svg.classList.remove("text-yellow-400", "dark:text-yellow-300");
+                    svg.classList.add("text-gray-300", "dark:text-gray-600");
+                }
+            });
+        };
+
+        for (let i = 0; i < maxStars; i++) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", "0 0 24 24");
+            svg.setAttribute("width", "16");
+            svg.setAttribute("height", "16");
+            svg.className = "transition-colors duration-150";
+
+            svg.addEventListener("mouseenter", () => renderStars(i + 1));
+            svg.addEventListener("click", (e) => {
+                e.stopPropagation();
+                currentValue = i + 1;
+                renderStars(null);
+                success(currentValue);
+            });
+
+            stars.push(svg);
+            container.appendChild(svg);
+        }
+
+        container.addEventListener("mouseleave", () => renderStars(null));
+
+        // Initial render
+        renderStars(null);
+
+        onRendered(() => {
+            // Focus container to allow blur detection
+            container.tabIndex = 0;
+            container.focus();
+        });
+
+        container.addEventListener('blur', () => {
+            cancel();
+        });
+
+        return container;
+    }
+
     // Custom editors for Date, Time, and DateTime
     function dateEditor(cell, onRendered, success, cancel, editorParams) {
         const container = document.createElement("div");
@@ -1251,17 +1346,20 @@
             } else if (colSchema.type === 'Numeric') {
                 colDef.editor = "number";
                 if (colSchema.subType === 'Progress') {
-                    colDef.editor = "progress";
+                    colDef.editor = progressEditor;
                     colDef.formatter = "progress";
                     const min = typeof colSchema.min === 'number' ? colSchema.min : 0;
                     const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
                     colDef.formatterParams = { min, max };
                     colDef.editorParams = { min, max };
                 } else if (colSchema.subType === 'Rating') {
-                    colDef.editor = "star";
+                    colDef.editor = ratingEditor;
                     colDef.formatter = "star";
                     const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
                     colDef.formatterParams = { stars };
+                    colDef.editorParams = { stars };
+                    // Force edit on single click rather than waiting for double-click
+                    colDef.cellClick = function(e, cell) { cell.edit(true); };
                 } else if (colSchema.subType === 'Currency') {
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -2275,6 +2373,12 @@
             word-break: break-word;
             border-right: 1px solid #ddd;
             min-height: 38px; /* Ensures blank inserted rows exactly match text-filled rows (padding + line height) */
+        }
+
+        /* Fix Tabulator Star Formatter SVG stacking */
+        :global(.tabulator-cell svg) {
+            display: inline-block;
+            vertical-align: middle;
         }
 
         :global(.tabulator-cell textarea) {
