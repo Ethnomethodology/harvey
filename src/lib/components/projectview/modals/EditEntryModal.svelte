@@ -107,7 +107,56 @@
     function validateField(field, value) {
         const colSchema = schema[field];
         if (!colSchema) return null;
-        if (colSchema.required && (value === null || value === undefined || value === "")) return "Field is required";
+        
+        const type = colSchema.type;
+        const subType = colSchema.subType;
+        const isBlank = value === null || value === undefined || (typeof value === 'string' && value.trim() === "") || (Array.isArray(value) && value.length === 0);
+
+        if (colSchema.required && isBlank) {
+            return "Field is required";
+        } 
+        
+        if (!isBlank) {
+            if (type === 'Numeric') {
+                const num = parseFloat(value);
+                if (isNaN(num) || !isFinite(value)) return "Must be a valid number";
+                if (colSchema.min !== null && colSchema.min !== undefined && num < colSchema.min) return `Value must be at least ${colSchema.min}`;
+                if (colSchema.max !== null && colSchema.max !== undefined && num > colSchema.max) return `Value must be at most ${colSchema.max}`;
+            } else if (type === 'Contact' && subType === 'Email') {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Invalid email format";
+            } else if (type === 'Contact' && subType === 'Phone') {
+                if (!/^\+?[\d\s-]{7,20}$/.test(value)) return "Invalid phone format";
+            } else if (type === 'DateTime') {
+                if (subType === 'Time') {
+                    if (colSchema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return "Invalid time format (HH:mm)";
+                    if (colSchema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return "Invalid time format (HH:mm:ss)";
+                    if (colSchema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return "Invalid time format (hh:mm AM/PM)";
+                    if (!/^([01]\d|2[0-3]):?([0-5]\d)/.test(value)) return "Invalid time format";
+                } else if (subType === 'Date') {
+                    if (colSchema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return "Invalid date format (YYYY-MM-DD)";
+                    if (colSchema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return "Invalid date format (DD/MM/YYYY)";
+                    if (colSchema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return "Invalid date format (MM/DD/YYYY)";
+                    if (colSchema.format === 'YYYY' && !/^\d{4}$/.test(value)) return "Invalid year format (YYYY)";
+                    if (colSchema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return "Invalid month name";
+                    if (colSchema.format === 'MMMM YYYY') {
+                        const parts = value.split(' ');
+                        const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        if (!valid) return "Invalid Month YYYY format";
+                    }
+                    if (isNaN(Date.parse(value))) return "Invalid date";
+                } else {
+                    if (isNaN(Date.parse(value))) return "Invalid date/time";
+                }
+            } else if (type === 'Misc') {
+                if (subType === 'Selectbox' && Array.isArray(colSchema.options)) {
+                    if (!colSchema.options.includes(value)) return `Value must be one of: ${colSchema.options.join(', ')}`;
+                } else if (subType === 'Multiselect' && Array.isArray(colSchema.options)) {
+                    const vals = Array.isArray(value) ? value : String(value).split(',').map(s => s.trim()).filter(Boolean);
+                    const invalidVals = vals.filter(v => !colSchema.options.includes(v));
+                    if (invalidVals.length > 0) return `Invalid options selected: ${invalidVals.join(', ')}`;
+                }
+            }
+        }
         return null;
     }
 
@@ -136,7 +185,7 @@
 
     function handleDateTimeChange(field, type, val) {
         let currentVal = editedData[field] || "";
-        let datePart = "2026-03-07"; 
+        let datePart = new Date().toISOString().split('T')[0]; 
         let timePart = "00:00";
 
         if (currentVal.includes('T')) {
@@ -184,7 +233,11 @@
 
         const handleChange = (e) => {
             if (!picker) return;
-            const dateStr = picker.getDate('yyyy-mm-dd');
+            const d = picker.getDate();
+            let dateStr = node.value;
+            if (d instanceof Date && !isNaN(d)) {
+                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
             if (isDateTime) {
                 handleDateTimeChange(field, 'date', dateStr);
             } else {

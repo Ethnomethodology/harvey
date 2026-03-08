@@ -75,7 +75,7 @@
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
-    let invalidCells = new Set(); // Stores cell keys "rowIndex-colField"
+    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
     let tableHasValidationErrors = false;
 
     function reformatAllRows() {
@@ -738,7 +738,7 @@
         
         const rows = tabulatorInstance.getRows();
         let foundError = false;
-        const newInvalidCells = new Set();
+        const newInvalidCells = new Map();
 
         rows.forEach(row => {
             const rowIndex = row.getData().harvey_internal_id;
@@ -746,11 +746,11 @@
                 const colField = cell.getField();
                 const value = cell.getValue();
                 const schema = tableSchema[colField];
-                if (schema && value !== null && value !== undefined && value !== "") {
-                    const isCellValid = performSoftValidation(value, schema);
-                    if (!isCellValid) {
+                if (schema) {
+                    const validation = performSoftValidation(value, schema);
+                    if (!validation.valid) {
                         foundError = true;
-                        newInvalidCells.add(`${rowIndex}-${colField}`);
+                        newInvalidCells.set(`${rowIndex}-${colField}`, validation.message);
                     }
                 }
             });
@@ -773,47 +773,59 @@
     }
 
     function performSoftValidation(value, schema) {
-        if (!schema) return true;
+        if (!schema) return { valid: true };
         const type = schema.type;
         const subType = schema.subType;
 
-        if (schema.required && (value === null || value === undefined || value === "")) {
-            return false;
+        const isBlank = value === null || value === undefined || (typeof value === 'string' && value.trim() === "") || (Array.isArray(value) && value.length === 0);
+
+        if (schema.required && isBlank) {
+            return { valid: false, message: "Field is required" };
         } 
         
-        if (value !== null && value !== undefined && value !== "") {
+        if (!isBlank) {
             if (type === 'Numeric') {
                 const num = parseFloat(value);
-                if (isNaN(num) || !isFinite(value)) return false;
-                if (schema.min !== null && num < schema.min) return false;
-                if (schema.max !== null && num > schema.max) return false;
+                if (isNaN(num) || !isFinite(value)) return { valid: false, message: "Must be a valid number" };
+                if (schema.min !== null && schema.min !== undefined && num < schema.min) return { valid: false, message: `Value must be at least ${schema.min}` };
+                if (schema.max !== null && schema.max !== undefined && num > schema.max) return { valid: false, message: `Value must be at most ${schema.max}` };
             } else if (type === 'Contact' && subType === 'Email') {
-                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { valid: false, message: "Invalid email format" };
             } else if (type === 'Contact' && subType === 'Phone') {
-                return /^\+?[\d\s-]{7,20}$/.test(value);
+                if (!/^\+?[\d\s-]{7,20}$/.test(value)) return { valid: false, message: "Invalid phone format" };
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (schema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-                    if (schema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
-                    if (schema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
-                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
+                    if (schema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return { valid: false, message: "Invalid time format (HH:mm)" };
+                    if (schema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return { valid: false, message: "Invalid time format (HH:mm:ss)" };
+                    if (schema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return { valid: false, message: "Invalid time format (hh:mm AM/PM)" };
+                    if (!/^([01]\d|2[0-3]):?([0-5]\d)/.test(value)) return { valid: false, message: "Invalid time format" };
                 } else if (subType === 'Date') {
-                    if (schema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
-                    if (schema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
-                    if (schema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
-                    if (schema.format === 'YYYY') return /^\d{4}$/.test(value);
-                    if (schema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase());
+                    if (schema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return { valid: false, message: "Invalid date format (YYYY-MM-DD)" };
+                    if (schema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return { valid: false, message: "Invalid date format (DD/MM/YYYY)" };
+                    if (schema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return { valid: false, message: "Invalid date format (MM/DD/YYYY)" };
+                    if (schema.format === 'YYYY' && !/^\d{4}$/.test(value)) return { valid: false, message: "Invalid year format (YYYY)" };
+                    if (schema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return { valid: false, message: "Invalid month name" };
                     if (schema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        return parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        if (!valid) return { valid: false, message: "Invalid Month YYYY format" };
                     }
-                    return !isNaN(Date.parse(value));
+                    // Final generic check if format specific checks were skipped or passed
+                    if (isNaN(Date.parse(value))) return { valid: false, message: "Invalid date" };
                 } else {
-                    return !isNaN(Date.parse(value));
+                    if (isNaN(Date.parse(value))) return { valid: false, message: "Invalid date/time" };
+                }
+            } else if (type === 'Misc') {
+                if (subType === 'Selectbox' && Array.isArray(schema.options)) {
+                    if (!schema.options.includes(value)) return { valid: false, message: `Value must be one of: ${schema.options.join(', ')}` };
+                } else if (subType === 'Multiselect' && Array.isArray(schema.options)) {
+                    const vals = Array.isArray(value) ? value : String(value).split(',').map(s => s.trim()).filter(Boolean);
+                    const invalidVals = vals.filter(v => !schema.options.includes(v));
+                    if (invalidVals.length > 0) return { valid: false, message: `Invalid options selected: ${invalidVals.join(', ')}` };
                 }
             }
         }
-        return true;
+        return { valid: true };
     }
 
     // Custom soft validator wrapper for Tabulator
@@ -983,7 +995,12 @@
 
             const finish = () => {
                 if (picker) {
-                    success(picker.getDate('yyyy-mm-dd') || editor.value);
+                    const d = picker.getDate();
+                    let dateStr = editor.value;
+                    if (d instanceof Date && !isNaN(d)) {
+                        dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    }
+                    success(dateStr);
                     cleanup();
                 } else {
                     cancel();
@@ -1126,7 +1143,7 @@
         
         const val = cell.getValue() || "";
         let [datePart, timePart] = val.includes('T') ? val.split('T') : [val, "00:00"];
-        if (!datePart) datePart = "2026-03-07";
+        if (!datePart) datePart = new Date().toISOString().split('T')[0];
 
         const dateInput = document.createElement("input");
         dateInput.type = "text";
@@ -1162,7 +1179,14 @@
             datePicker.show(); // Show picker immediately
 
             const finish = () => {
-                success(`${dateInput.value}T${timeInput.value}`);
+                let dateStr = dateInput.value;
+                if (datePicker) {
+                    const d = datePicker.getDate();
+                    if (d instanceof Date && !isNaN(d)) {
+                        dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    }
+                }
+                success(`${dateStr}T${timeInput.value}`);
                 cleanup();
             };
 
@@ -1508,17 +1532,28 @@
                 }
 
                 // Validation border
-                if (invalidCells.has(`${rowIndex}-${colField}`)) {
+                const validationError = invalidCells.get(`${rowIndex}-${colField}`);
+                if (validationError) {
                     cellElement.classList.add('invalid-cell');
+                    cellElement.title = validationError;
                 } else {
                     cellElement.classList.remove('invalid-cell');
+                    // If this cell previously had an error (we can check if title matches any known error or just clear if no error now)
+                    // In Tabulator, cell elements are often reused, so clearing title when no error is safer.
+                    if (!duplicateIds.has(rowIndex) || colField !== currentPrimaryField) {
+                        cellElement.title = "";
+                    }
                 }
 
                 // Primary duplicate highlighting
                 if (colField === currentPrimaryField && duplicateIds.has(rowIndex)) {
                     cellElement.classList.add('duplicate-primary-cell');
-                } else {
+                    cellElement.title = "Duplicate value in primary field";
+                } else if (colField === currentPrimaryField) {
                     cellElement.classList.remove('duplicate-primary-cell');
+                    if (cellElement.title === "Duplicate value in primary field") {
+                        cellElement.title = "";
+                    }
                 }
                 
                 if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
