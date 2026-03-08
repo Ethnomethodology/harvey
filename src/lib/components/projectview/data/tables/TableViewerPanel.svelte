@@ -32,9 +32,12 @@
         ChevronLeft, 
         ChevronRight, 
         MoreVertical,
-        Plus
+        Plus,
+        ExternalLink,
+        Check
     } from 'lucide-svelte';
     import { mount } from 'svelte';
+    import { openUrl } from '@tauri-apps/plugin-opener';
     import { 
         Input, 
         Button, 
@@ -113,6 +116,32 @@
 
     let showOptionsMenu = false;
     let areFiltersVisible = false; // Start with the assumption that filters are hidden
+
+    let showUrlPopover = false;
+    let popoverUrl = '';
+    let popoverX = 0;
+    let popoverY = 0;
+    let isUrlCopied = false;
+
+    async function handleOpenUrl() {
+        if (!popoverUrl) return;
+        try {
+            await openUrl(popoverUrl);
+            showUrlPopover = false;
+        } catch (e) {
+            console.error("Failed to open URL:", e);
+        }
+    }
+
+    function handleCopyUrl() {
+        if (!popoverUrl) return;
+        navigator.clipboard.writeText(popoverUrl);
+        isUrlCopied = true;
+        setTimeout(() => {
+            showUrlPopover = false;
+            isUrlCopied = false;
+        }, 2000);
+    }
 
     function scrollToHighlight(id) {
         if (!id || !tabulatorInstance) return;
@@ -764,6 +793,13 @@
                 if (schema.max !== null && num > schema.max) return false;
             } else if (type === 'Contact' && subType === 'Email') {
                 return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            } else if (type === 'Contact' && subType === 'Hyperlink') {
+                try {
+                    new URL(value);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
             } else if (type === 'Contact' && subType === 'Phone') {
                 return /^\+?[\d\s-]{7,20}$/.test(value);
             } else if (type === 'DateTime') {
@@ -1119,6 +1155,8 @@
                 } else {
                     colDef.editor = datetimeEditor;
                 }
+            } else if (colSchema.type === 'Contact' && colSchema.subType === 'Hyperlink') {
+                colDef.editor = "input";
             } else if (colSchema.type === 'Text') {
                 if (colSchema.subType === 'Small Text') {
                     colDef.editor = "input";
@@ -1182,12 +1220,28 @@
                 }
 
                 const term = searchTerm.trim();
+                let outputValue = value;
                 if (term && value !== null && value !== undefined && typeof value === 'string') {
                     const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                     const regex = new RegExp(`(${escapedTerm})`, 'gi');
-                    return String(value).replace(regex, '<span class="search-match-highlight">$1</span>');
+                    outputValue = String(value).replace(regex, '<span class="search-match-highlight">$1</span>');
                 }
-                return value;
+
+                if (colSchema.type === 'Contact' && colSchema.subType === 'Hyperlink' && value) {
+                    cellElement.classList.add('hyperlink-cell');
+                    // Add the value directly to the element dataset for the global click handler to access
+                    cellElement.dataset.urlValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="hyperlink-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return outputValue;
             };
 
             if (savedLayoutObj?.columns?.[header]) {
@@ -1731,6 +1785,26 @@
         };
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
+        const handleTableClick = (e) => {
+            const iconContainer = e.target.closest('.hyperlink-icon-container');
+            if (iconContainer) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cellElement = iconContainer.closest('.tabulator-cell');
+                if (cellElement && cellElement.dataset.urlValue) {
+                    const rect = iconContainer.getBoundingClientRect();
+                    popoverUrl = cellElement.dataset.urlValue;
+                    popoverX = rect.left + window.scrollX - 60; // offset a bit to center the popover
+                    popoverY = rect.bottom + window.scrollY + 5;
+                    showUrlPopover = true;
+                    isUrlCopied = false;
+                }
+            } else if (showUrlPopover && !e.target.closest('.url-popover-container')) {
+                // Close popover if clicked outside
+                showUrlPopover = false;
+            }
+        };
+        document.addEventListener('click', handleTableClick);
 
 		return () => {
 			tabulatorInstance?.destroy();
@@ -1738,6 +1812,7 @@
             redoBtn?.removeEventListener("click", redo);
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
+            document.removeEventListener('click', handleTableClick);
 		}
     });
 
@@ -1850,6 +1925,21 @@
     </div>
 
     <div class="flex-grow overflow-auto min-h-0 relative">
+        {#if showUrlPopover}
+            <div class="url-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverX}px; top: {popoverY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenUrl}>
+                    <ExternalLink size={14} /> Open in browser
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleCopyUrl}>
+                    {#if isUrlCopied}
+                        <Check size={14} class="text-green-500" /> Copied
+                    {:else}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy
+                    {/if}
+                </button>
+            </div>
+        {/if}
+
         {#if isLoading}
             <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 z-10">Loading table data...</div>
         {:else if error}
@@ -1982,5 +2072,9 @@
         }
         :global(.duplicate-primary-cell) {
             box-shadow: inset 0 0 0 2px #ef4444 !important;
+        }
+
+        :global(.tabulator-cell.hyperlink-cell:hover .hyperlink-icon-container) {
+            display: flex !important;
         }
 </style>
