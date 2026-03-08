@@ -398,26 +398,38 @@
                                 <Select items={[{name: '-- None --', value: ''}, ...projectAssets.map(a => ({name: a.label, value: a.value}))]} bind:value={editedData[col.field]} placeholder="Select asset..." color={errors[col.field] ? 'red' : 'base'} />
                             {/if}
                         {:else if colSchema.type === 'Numeric'}
-                            <div class="relative group/input">
-                                {#if colSchema.subType === 'Currency'}
-                                    <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
-                                        <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
-                                    </div>
-                                {/if}
-                                <input 
-                                    type="number" 
-                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                    step="any" 
-                                    id="field-{col.field}" 
-                                    bind:value={editedData[col.field]} 
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {colSchema.subType === 'Currency' ? 'ps-10' : ''} {colSchema.subType === 'Percent' ? 'pe-10' : ''} {errors[col.field] ? 'border-red-500' : ''}"
-                                />
-                                {#if colSchema.subType === 'Percent'}
-                                    <div class="absolute inset-y-0 end-0 flex items-center pe-3.5 pointer-events-none">
-                                        <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
-                                    </div>
-                                {/if}
-                            </div>
+                            {#if colSchema.subType === 'Progress'}
+                                <div class="flex items-center gap-3 h-10">
+                                    <input type="range" min={colSchema.min || 0} max={colSchema.max || 100} step="1" bind:value={editedData[col.field]} class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">{editedData[col.field] || 0}</span>
+                                </div>
+                            {:else if colSchema.subType === 'Rating'}
+                                <div class="flex items-center gap-2 h-10">
+                                    <input type="range" min="0" max={colSchema.max || 5} step="1" bind:value={editedData[col.field]} class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-8 text-center">{editedData[col.field] || 0}</span>
+                                </div>
+                            {:else}
+                                <div class="relative group/input">
+                                    {#if colSchema.subType === 'Currency'}
+                                        <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
+                                            <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
+                                        </div>
+                                    {/if}
+                                    <input
+                                        type="number"
+                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                        step="any"
+                                        id="field-{col.field}"
+                                        bind:value={editedData[col.field]}
+                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {colSchema.subType === 'Currency' ? 'ps-10' : ''} {colSchema.subType === 'Percent' ? 'pe-10' : ''} {errors[col.field] ? 'border-red-500' : ''}"
+                                    />
+                                    {#if colSchema.subType === 'Percent'}
+                                        <div class="absolute inset-y-0 end-0 flex items-center pe-3.5 pointer-events-none">
+                                            <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
                         {:else if colSchema.type === 'Contact'}
                             <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} 
                                 id="field-{col.field}" bind:value={editedData[col.field]} 

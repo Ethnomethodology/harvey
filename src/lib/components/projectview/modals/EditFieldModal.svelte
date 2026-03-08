@@ -91,7 +91,7 @@
     const types = ['Text', 'Numeric', 'DateTime', 'Contact', 'Misc'].map(t => ({name: t, value: t}));
     const subTypes = {
         'Text': ['Small Text', 'Long Text'],
-        'Numeric': ['Number', 'Currency', 'Percent'],
+        'Numeric': ['Number', 'Currency', 'Percent', 'Progress', 'Rating'],
         'DateTime': ['Date', 'Date & Time', 'Time'],
         'Contact': ['Email', 'Phone', 'Hyperlink'],
         'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
@@ -177,6 +177,7 @@
         if (type === 'Numeric') {
             if (subType === 'Currency') return DollarSign;
             if (subType === 'Percent') return Percent;
+            if (subType === 'Progress') return Hash; // You can change this to a progress icon if available
             return Hash;
         }
         
@@ -288,7 +289,7 @@
                 {#if editedSchema.type === 'Numeric'}
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1">
-                            <Label for="field-min" class="mb-2">MIN VALUE</Label>
+                            <Label for="field-min" class="mb-2">{editedSchema.subType === 'Rating' ? 'MIN STARS' : 'MIN VALUE'}</Label>
                             <Input
                                 id="field-min"
                                 type="number"
@@ -297,7 +298,7 @@
                             />
                         </div>
                         <div class="space-y-1">
-                            <Label for="field-max" class="mb-2">MAX VALUE</Label>
+                            <Label for="field-max" class="mb-2">{editedSchema.subType === 'Rating' ? 'MAX STARS' : 'MAX VALUE'}</Label>
                             <Input
                                 id="field-max"
                                 type="number"
@@ -351,7 +352,7 @@
 
                 <!-- Description -->
                 <div class="space-y-1 pt-2">
-                    <Label for="field-desc" class="mb-2">TOOLTIP / DESCRIPTION</Label>
+                    <Label for="field-desc" class="mb-2">DESCRIPTION</Label>
                     <Textarea
                         id="field-desc"
                         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"

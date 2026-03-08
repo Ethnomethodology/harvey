@@ -1250,7 +1250,19 @@
                 }
             } else if (colSchema.type === 'Numeric') {
                 colDef.editor = "number";
-                if (colSchema.subType === 'Currency') {
+                if (colSchema.subType === 'Progress') {
+                    colDef.editor = "progress";
+                    colDef.formatter = "progress";
+                    const min = typeof colSchema.min === 'number' ? colSchema.min : 0;
+                    const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
+                    colDef.formatterParams = { min, max };
+                    colDef.editorParams = { min, max };
+                } else if (colSchema.subType === 'Rating') {
+                    colDef.editor = "star";
+                    colDef.formatter = "star";
+                    const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
+                    colDef.formatterParams = { stars };
+                } else if (colSchema.subType === 'Currency') {
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
                         if (val === null || val === undefined || val === "") return "";
@@ -1335,8 +1347,10 @@
 
                 // Call base formatter if it exists
                 let value = cell.getValue();
+                let isHtmlElement = false;
                 if (typeof baseFormatter === 'function') {
                     value = baseFormatter(cell, formatterParams, onRendered);
+                    isHtmlElement = value instanceof HTMLElement;
                 } else if (typeof baseFormatter === 'string') {
                     if (baseFormatter === 'tickCross') {
                         const icon = value === true || value === 'true' || value === 1 ? '✔' : '✖';
@@ -1345,7 +1359,18 @@
                         if (value !== null && value !== undefined && value !== "") {
                             value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
                         }
+                    } else if (baseFormatter === 'progress' || baseFormatter === 'star') {
+                        // Use Tabulator's built-in formatters explicitly for these advanced types
+                        const builtInFormatter = Tabulator.moduleBindings.format.formatters[baseFormatter] || cell.getTable().modules.format.getFormatter(baseFormatter);
+                        if (builtInFormatter) {
+                            value = builtInFormatter(cell, formatterParams, onRendered);
+                            isHtmlElement = value instanceof HTMLElement;
+                        }
                     }
+                }
+
+                if (isHtmlElement) {
+                    return value; // Do not attempt to string-replace on DOM nodes
                 }
 
                 const term = searchTerm.trim();
