@@ -746,7 +746,7 @@
         
         const rows = tabulatorInstance.getRows();
         let foundError = false;
-        const newInvalidCells = new Set();
+        const newInvalidCells = new Map(); // Store message instead of just a boolean flag
 
         rows.forEach(row => {
             const rowIndex = row.getData().harvey_internal_id;
@@ -754,11 +754,11 @@
                 const colField = cell.getField();
                 const value = cell.getValue();
                 const schema = tableSchema[colField];
-                if (schema && value !== null && value !== undefined && value !== "") {
-                    const isCellValid = performSoftValidation(value, schema);
-                    if (!isCellValid) {
+                if (schema) {
+                    const validationResult = performSoftValidationDetailed(value, schema);
+                    if (!validationResult.valid) {
                         foundError = true;
-                        newInvalidCells.add(`${rowIndex}-${colField}`);
+                        newInvalidCells.set(`${rowIndex}-${colField}`, validationResult.message);
                     }
                 }
             });
@@ -780,60 +780,56 @@
         reformatAllRows();
     }
 
-    function performSoftValidation(value, schema) {
-        if (!schema) return true;
+    function performSoftValidationDetailed(value, schema) {
+        if (!schema) return { valid: true };
         const type = schema.type;
         const subType = schema.subType;
 
         if (schema.required && (value === null || value === undefined || value === "")) {
-            return false;
+            return { valid: false, message: 'This field is required.' };
         } 
         
         if (value !== null && value !== undefined && value !== "") {
             if (type === 'Numeric') {
                 const num = parseFloat(value);
-                if (isNaN(num) || !isFinite(value)) return false;
-                if (schema.min !== null && num < schema.min) return false;
-                if (schema.max !== null && num > schema.max) return false;
+                if (isNaN(num) || !isFinite(value)) return { valid: false, message: 'Must be a valid number.' };
+                if (schema.min !== null && num < schema.min) return { valid: false, message: `Value cannot be less than ${schema.min}.` };
+                if (schema.max !== null && num > schema.max) return { valid: false, message: `Value cannot be greater than ${schema.max}.` };
             } else if (type === 'Contact' && subType === 'Email') {
-                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { valid: false, message: 'Must be a valid email address.' };
             } else if (type === 'Contact' && subType === 'Hyperlink') {
-                try {
-                    new URL(value);
-                    return true;
-                } catch (e) {
-                    try {
-                        new URL('https://' + value);
-                        return true;
-                    } catch (e2) {
-                        return false;
-                    }
-                }
+                if (!/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i.test(value)) return { valid: false, message: 'Must be a valid URL.' };
             } else if (type === 'Contact' && subType === 'Phone') {
-                return /^\+?[\d\s-]{7,20}$/.test(value);
+                if (!/^\+?[\d\s-]{7,20}$/.test(value)) return { valid: false, message: 'Must be a valid phone number.' };
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (schema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-                    if (schema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
-                    if (schema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
-                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
+                    if (schema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return { valid: false, message: 'Must match format HH:mm.' };
+                    if (schema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return { valid: false, message: 'Must match format HH:mm:ss.' };
+                    if (schema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return { valid: false, message: 'Must match format hh:mm A.' };
+                    if (!/^([01]\d|2[0-3]):?([0-5]\d)$/.test(value)) return { valid: false, message: 'Must be a valid time.' };
                 } else if (subType === 'Date') {
-                    if (schema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
-                    if (schema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
-                    if (schema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
-                    if (schema.format === 'YYYY') return /^\d{4}$/.test(value);
-                    if (schema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase());
+                    if (schema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value)) return { valid: false, message: 'Must match format YYYY-MM-DD.' };
+                    if (schema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return { valid: false, message: 'Must match format DD/MM/YYYY.' };
+                    if (schema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return { valid: false, message: 'Must match format MM/DD/YYYY.' };
+                    if (schema.format === 'YYYY' && !/^\d{4}$/.test(value)) return { valid: false, message: 'Must be a valid 4-digit year.' };
+                    if (schema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return { valid: false, message: 'Must be a valid month name.' };
                     if (schema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        return parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        if (!(parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]))) {
+                            return { valid: false, message: 'Must match format MMMM YYYY.' };
+                        }
                     }
-                    return !isNaN(Date.parse(value));
+                    if (isNaN(Date.parse(value))) return { valid: false, message: 'Must be a valid date.' };
                 } else {
-                    return !isNaN(Date.parse(value));
+                    if (isNaN(Date.parse(value))) return { valid: false, message: 'Must be a valid date and time.' };
                 }
             }
         }
-        return true;
+        return { valid: true };
+    }
+
+    function performSoftValidation(value, schema) {
+        return performSoftValidationDetailed(value, schema).valid;
     }
 
     // Custom soft validator wrapper for Tabulator
@@ -1226,6 +1222,14 @@
                             value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
                         }
                     }
+                }
+
+                // Append validation error message to cell attribute
+                if (invalidCells.has(`${rowIndex}-${colField}`)) {
+                    const errorMsg = invalidCells.get(`${rowIndex}-${colField}`);
+                    if (errorMsg) cellElement.setAttribute('title', errorMsg);
+                } else {
+                    cellElement.removeAttribute('title');
                 }
 
                 const term = searchTerm.trim();

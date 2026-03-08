@@ -99,6 +99,45 @@
         const colSchema = schema[field];
         if (!colSchema) return null;
         if (colSchema.required && (value === null || value === undefined || value === "")) return "Field is required";
+
+        if (value !== null && value !== undefined && value !== "") {
+            const type = colSchema.type;
+            const subType = colSchema.subType;
+            if (type === 'Numeric') {
+                const num = parseFloat(value);
+                if (isNaN(num) || !isFinite(value)) return 'Must be a valid number.';
+                if (colSchema.min !== null && num < colSchema.min) return `Value cannot be less than ${colSchema.min}.`;
+                if (colSchema.max !== null && num > colSchema.max) return `Value cannot be greater than ${colSchema.max}.`;
+            } else if (type === 'Contact' && subType === 'Email') {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Must be a valid email address.';
+            } else if (type === 'Contact' && subType === 'Hyperlink') {
+                if (!/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i.test(value)) return 'Must be a valid URL.';
+            } else if (type === 'Contact' && subType === 'Phone') {
+                if (!/^\+?[\d\s-]{7,20}$/.test(value)) return 'Must be a valid phone number.';
+            } else if (type === 'DateTime') {
+                if (subType === 'Time') {
+                    if (colSchema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return 'Must match format HH:mm.';
+                    if (colSchema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return 'Must match format HH:mm:ss.';
+                    if (colSchema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return 'Must match format hh:mm A.';
+                    if (!/^([01]\d|2[0-3]):?([0-5]\d)$/.test(value)) return 'Must be a valid time.';
+                } else if (subType === 'Date') {
+                    if (colSchema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value)) return 'Must match format YYYY-MM-DD.';
+                    if (colSchema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return 'Must match format DD/MM/YYYY.';
+                    if (colSchema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return 'Must match format MM/DD/YYYY.';
+                    if (colSchema.format === 'YYYY' && !/^\d{4}$/.test(value)) return 'Must be a valid 4-digit year.';
+                    if (colSchema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return 'Must be a valid month name.';
+                    if (colSchema.format === 'MMMM YYYY') {
+                        const parts = value.split(' ');
+                        if (!(parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]))) {
+                            return 'Must match format MMMM YYYY.';
+                        }
+                    }
+                    if (isNaN(Date.parse(value))) return 'Must be a valid date.';
+                } else {
+                    if (isNaN(Date.parse(value))) return 'Must be a valid date and time.';
+                }
+            }
+        }
         return null;
     }
 
