@@ -186,7 +186,7 @@
     let popoverProjectLinkY = 0;
 
     let revealButtonLabel = 'Show in Finder';
-    import { getOsType } from '$lib/services/systemService.js';
+    import { type as getOsType } from '@tauri-apps/plugin-os';
 
     onMount(async () => {
         try {
