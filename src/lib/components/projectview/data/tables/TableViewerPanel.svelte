@@ -126,7 +126,11 @@
     async function handleOpenUrl() {
         if (!popoverUrl) return;
         try {
-            await openUrl(popoverUrl);
+            let targetUrl = popoverUrl.trim();
+            if (!targetUrl.toLowerCase().startsWith('http://') && !targetUrl.toLowerCase().startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+            }
+            await openUrl(targetUrl);
             showUrlPopover = false;
         } catch (e) {
             console.error("Failed to open URL:", e);
