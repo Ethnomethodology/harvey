@@ -397,17 +397,20 @@
     // Rolling Timepicker constants
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
     const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+    const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
     function selectTimePart(field, part, val, isDateTime = false) {
         const colSchema = schema[field] || {};
         const format = colSchema.format || '';
         const timePartFormat = isDateTime ? (format.split(/[T ]/).slice(1).join(' ') || 'HH:mm') : (format || 'HH:mm');
+        const hasSeconds = format.includes(':ss');
         
         let currentTimeStr = isDateTime ? (formatDate(parseDate(editedData[field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: timePartFormat })) : editedData[field];
         let d = parseDate(currentTimeStr, { ...colSchema, subType: 'Time', format: timePartFormat }) || new Date();
         
         if (part === 'h') d.setHours(parseInt(val));
         if (part === 'm') d.setMinutes(parseInt(val));
+        if (part === 's') d.setSeconds(parseInt(val));
         
         const newTimeStr = formatDate(d, { ...colSchema, subType: 'Time', format: timePartFormat });
 
@@ -467,6 +470,11 @@
                                         />
                                     </div>
                                 {:else if colSchema.subType === 'Time'}
+                                    {@const hasSeconds = (colSchema.format || '').includes(':ss')}
+                                    {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
+                                    {@const curH = currentD.getHours().toString().padStart(2, '0')}
+                                    {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
+                                    {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
                                     <div class="relative max-w-[12rem]">
                                         <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
                                             <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
@@ -482,12 +490,12 @@
                                             class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500' : ''}" 
                                             on:keydown={(e) => e.preventDefault()}
                                         />
-                                        <Dropdown triggeredBy="#time_input_{sanitizeId(col.field)}" class="w-24 p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                        <Dropdown triggeredBy="#time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                             <div class="flex h-64">
                                                 <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
                                                     {#each hours as h}
                                                         <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
                                                             on:click={() => selectTimePart(col.field, 'h', h)}
                                                         >{h}</button>
                                                     {/each}
@@ -496,15 +504,31 @@
                                                 <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
                                                     {#each minutes as m}
                                                         <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
                                                             on:click={() => selectTimePart(col.field, 'm', m)}
                                                         >{m}</button>
                                                     {/each}
                                                 </div>
+                                                {#if hasSeconds}
+                                                    <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                                    <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
+                                                        {#each seconds as s}
+                                                            <button 
+                                                                class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                                on:click={() => selectTimePart(col.field, 's', s)}
+                                                            >{s}</button>
+                                                        {/each}
+                                                    </div>
+                                                {/if}
                                             </div>
                                         </Dropdown>
                                     </div>
                                 {:else}
+                                    {@const hasSeconds = (colSchema.format || '').includes(':ss')}
+                                    {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
+                                    {@const curH = currentD.getHours().toString().padStart(2, '0')}
+                                    {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
+                                    {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
                                     <div class="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                         <div class="space-y-1.5">
                                             <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Date</Label>
@@ -538,12 +562,12 @@
                                                     class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 pe-7 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                     on:keydown={(e) => e.preventDefault()}
                                                 />
-                                                <Dropdown triggeredBy="#dt_time_input_{sanitizeId(col.field)}" class="w-24 p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                                <Dropdown triggeredBy="#dt_time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                                     <div class="flex h-64">
                                                         <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
                                                             {#each hours as h}
                                                                 <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
                                                                     on:click={() => selectTimePart(col.field, 'h', h, true)}
                                                                 >{h}</button>
                                                             {/each}
@@ -552,11 +576,22 @@
                                                         <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
                                                             {#each minutes as m}
                                                                 <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
                                                                     on:click={() => selectTimePart(col.field, 'm', m, true)}
                                                                 >{m}</button>
                                                             {/each}
                                                         </div>
+                                                        {#if hasSeconds}
+                                                            <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                                            <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
+                                                                {#each seconds as s}
+                                                                    <button 
+                                                                        class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                                        on:click={() => selectTimePart(col.field, 's', s, true)}
+                                                                    >{s}</button>
+                                                                {/each}
+                                                            </div>
+                                                        {/if}
                                                     </div>
                                                 </Dropdown>
                                             </div>

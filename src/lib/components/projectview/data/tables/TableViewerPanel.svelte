@@ -1162,6 +1162,8 @@
 
         const field = cell.getField();
         const schema = tableSchema[field] || {};
+        const format = schema.format || '';
+        const hasSeconds = format.includes(':ss');
 
         const input = document.createElement("input");
         input.type = "text";
@@ -1178,11 +1180,12 @@
 
         onRendered(() => {
             const dropdownEl = document.createElement("div");
-            dropdownEl.className = "z-[10000] w-24 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden";
+            dropdownEl.className = `z-[10000] ${hasSeconds ? 'w-36' : 'w-24'} bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden`;
             document.body.appendChild(dropdownEl);
 
             const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
             const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+            const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
             const content = document.createElement("div");
             content.className = "flex h-48";
@@ -1191,14 +1194,12 @@
             hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
             hours.forEach(h => {
                 const btn = document.createElement("button");
-                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.startsWith(h) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
                 btn.textContent = h;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const currentParts = input.value.split(':');
-                    const m = currentParts.length > 1 ? currentParts[1].substring(0, 2) : "00";
-                    const d = new Date();
-                    d.setHours(parseInt(h), parseInt(m), 0);
+                    const d = parseDate(input.value, schema) || new Date();
+                    d.setHours(parseInt(h));
                     input.value = formatDate(d, schema);
                     updateSelected();
                 };
@@ -1209,28 +1210,63 @@
             mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
             minutes.forEach(m => {
                 const btn = document.createElement("button");
-                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.includes(':' + m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
                 btn.textContent = m;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const currentParts = input.value.split(':');
-                    const h = currentParts.length > 0 ? currentParts[0].slice(-2) : "00";
-                    const d = new Date();
-                    d.setHours(parseInt(h), parseInt(m), 0);
+                    const d = parseDate(input.value, schema) || new Date();
+                    d.setMinutes(parseInt(m));
                     input.value = formatDate(d, schema);
-                    success(input.value);
-                    cleanup();
+                    if (!hasSeconds) {
+                        success(input.value);
+                        cleanup();
+                    } else {
+                        updateSelected();
+                    }
                 };
                 mCol.appendChild(btn);
             });
 
-            function updateSelected() {
-                // ... (existing updateSelected logic, maybe simplified)
-            }
-
             content.appendChild(hCol);
             content.appendChild(mCol);
+
+            if (hasSeconds) {
+                const sCol = document.createElement("div");
+                sCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700";
+                seconds.forEach(s => {
+                    const btn = document.createElement("button");
+                    btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
+                    btn.textContent = s;
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const d = parseDate(input.value, schema) || new Date();
+                        d.setSeconds(parseInt(s));
+                        input.value = formatDate(d, schema);
+                        success(input.value);
+                        cleanup();
+                    };
+                    sCol.appendChild(btn);
+                });
+                content.appendChild(sCol);
+            }
+
+            function updateSelected() {
+                const d = parseDate(input.value, schema);
+                if (!d) return;
+                const h = d.getHours().toString().padStart(2, '0');
+                const m = d.getMinutes().toString().padStart(2, '0');
+                const s = d.getSeconds().toString().padStart(2, '0');
+
+                Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                if (hasSeconds) {
+                    const sCol = content.children[2];
+                    Array.from(sCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === s));
+                }
+            }
+
             dropdownEl.appendChild(content);
+            updateSelected();
 
             const rect = input.getBoundingClientRect();
             dropdownEl.style.position = "fixed";
@@ -1250,7 +1286,7 @@
             }
 
             document.addEventListener('mousedown', handleOutside, true);
-            dropdownEl.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus loss on cell
+            dropdownEl.addEventListener('mousedown', (e) => e.preventDefault());
         });
 
         return container;
@@ -1263,11 +1299,12 @@
         const field = cell.getField();
         const schema = tableSchema[field] || {};
         const format = schema.format || '';
+        const hasSeconds = format.includes(':ss');
 
         const val = cell.getValue() || "";
         const dateObj = parseDate(val, schema) || new Date();
         const datePart = formatDate(dateObj, { ...schema, subType: 'Date', format: format.split(/[T ]/)[0] });
-        const timePart = formatDate(dateObj, { ...schema, subType: 'Time', format: format.split(/[T ]/)[1] || '' });
+        const timePart = formatDate(dateObj, { ...schema, subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') || 'HH:mm' });
 
         const dateInput = document.createElement("input");
         dateInput.type = "text";
@@ -1285,7 +1322,7 @@
         timeInput.setAttribute("autocapitalize", "off");
         timeInput.setAttribute("spellcheck", "false");
         timeInput.value = timePart;
-        timeInput.className = "w-16 h-full border-none p-0 text-xs";
+        timeInput.className = `${hasSeconds ? 'w-20' : 'w-16'} h-full border-none p-0 text-xs`;
         timeInput.readOnly = true;
 
         container.appendChild(dateInput);
@@ -1294,13 +1331,13 @@
         let datePicker;
 
         onRendered(() => {
-            dateInput.focus(); // Focus date input first
+            dateInput.focus();
             datePicker = new Datepicker(dateInput, {
                 format: (format.split(/[T ]/)[0] || 'YYYY-MM-DD').toLowerCase(),
                 autohide: true,
                 container: 'body'
             });
-            datePicker.show(); // Show picker immediately
+            datePicker.show();
 
             const finish = () => {
                 let dStr = dateInput.value;
@@ -1315,9 +1352,7 @@
                 cleanup();
             };
 
-            dateInput.addEventListener('changeDate', () => {
-                // Don't finish yet, let them pick time
-            });
+            dateInput.addEventListener('changeDate', () => {});
 
             let timeDropdownEl = null;
 
@@ -1329,11 +1364,12 @@
                 }
 
                 timeDropdownEl = document.createElement("div");
-                timeDropdownEl.className = "time-dropdown-container z-[10000] w-24 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden";
+                timeDropdownEl.className = `time-dropdown-container z-[10000] ${hasSeconds ? 'w-36' : 'w-24'} bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden`;
                 document.body.appendChild(timeDropdownEl);
 
                 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
                 const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+                const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
                 const content = document.createElement("div");
                 content.className = "flex h-48";
@@ -1346,9 +1382,11 @@
                     btn.textContent = h;
                     btn.onclick = (ev) => {
                         ev.stopPropagation();
-                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: format.split(/[T ]/)[1] || '' }) || new Date();
+                        const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
                         currentT.setHours(parseInt(h));
-                        timeInput.value = formatDate(currentT, { subType: 'Time', format: format.split(/[T ]/)[1] || '' });
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                        updateSelected();
                     };
                     hCol.appendChild(btn);
                 });
@@ -1361,24 +1399,67 @@
                     btn.textContent = m;
                     btn.onclick = (ev) => {
                         ev.stopPropagation();
-                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: format.split(/[T ]/)[1] || '' }) || new Date();
+                        const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
                         currentT.setMinutes(parseInt(m));
-                        timeInput.value = formatDate(currentT, { subType: 'Time', format: format.split(/[T ]/)[1] || '' });
-                        cleanupTimeDropdown();
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                        if (!hasSeconds) {
+                            cleanupTimeDropdown();
+                        } else {
+                            updateSelected();
+                        }
                     };
                     mCol.appendChild(btn);
                 });
 
                 content.appendChild(hCol);
                 content.appendChild(mCol);
+
+                if (hasSeconds) {
+                    const sCol = document.createElement("div");
+                    sCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700";
+                    seconds.forEach(s => {
+                        const btn = document.createElement("button");
+                        btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
+                        btn.textContent = s;
+                        btn.onclick = (ev) => {
+                            ev.stopPropagation();
+                            const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                            const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
+                            currentT.setSeconds(parseInt(s));
+                            timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                            cleanupTimeDropdown();
+                        };
+                        sCol.appendChild(btn);
+                    });
+                    content.appendChild(sCol);
+                }
+
+                function updateSelected() {
+                    const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                    const d = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat });
+                    if (!d) return;
+                    const h = d.getHours().toString().padStart(2, '0');
+                    const m = d.getMinutes().toString().padStart(2, '0');
+                    const s = d.getSeconds().toString().padStart(2, '0');
+
+                    Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                    Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                    if (hasSeconds) {
+                        const sCol = content.children[2];
+                        Array.from(sCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === s));
+                    }
+                }
+
                 timeDropdownEl.appendChild(content);
+                updateSelected();
 
                 const rect = timeInput.getBoundingClientRect();
                 timeDropdownEl.style.position = "fixed";
                 timeDropdownEl.style.top = `${rect.bottom}px`;
                 timeDropdownEl.style.left = `${rect.left}px`;
 
-                timeDropdownEl.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus loss on cell
+                timeDropdownEl.addEventListener('mousedown', (e) => e.preventDefault());
             };
 
             function cleanupTimeDropdown() {
@@ -1390,7 +1471,6 @@
 
             const handleOutside = (e) => {
                 const isClickInsideContainer = container.contains(e.target) || container === e.target;
-
                 let isClickInsidePicker = false;
                 let isClickInsideTimeDropdown = false;
 
