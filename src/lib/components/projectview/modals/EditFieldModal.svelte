@@ -101,26 +101,25 @@
 
     const dateTimeFormats = {
         'Date': [
-            { name: 'Default', value: '' },
+            { name: 'Default (YYYY-MM-DD)', value: '' },
             { name: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
             { name: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
             { name: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-            { name: 'Full Date', value: 'MMMM DD, YYYY' },
-            { name: 'Year Only', value: 'YYYY' },
-            { name: 'Month Only', value: 'MMMM' },
-            { name: 'Month Year', value: 'MMMM YYYY' }
+            { name: 'YYYY', value: 'YYYY' },
+            { name: 'MMMM', value: 'MMMM' },
+            { name: 'MMMM YYYY', value: 'MMMM YYYY' }
         ],
         'Date & Time': [
-            { name: 'Default', value: '' },
-            { name: 'ISO', value: 'YYYY-MM-DD HH:mm' },
-            { name: 'British', value: 'DD/MM/YYYY HH:mm' },
-            { name: 'American', value: 'MM/DD/YYYY hh:mm A' }
+            { name: 'Default (YYYY-MM-DD HH:mm)', value: '' },
+            { name: 'YYYY-MM-DD HH:mm', value: 'YYYY-MM-DD HH:mm' },
+            { name: 'DD/MM/YYYY HH:mm', value: 'DD/MM/YYYY HH:mm' },
+            { name: 'MM/DD/YYYY hh:mm A', value: 'MM/DD/YYYY hh:mm A' }
         ],
         'Time': [
-            { name: 'Default', value: '' },
-            { name: '24 Hour', value: 'HH:mm' },
-            { name: '24 Hour + Sec', value: 'HH:mm:ss' },
-            { name: '12 Hour', value: 'hh:mm A' }
+            { name: 'Default (HH:mm)', value: '' },
+            { name: 'HH:mm', value: 'HH:mm' },
+            { name: 'HH:mm:ss', value: 'HH:mm:ss' },
+            { name: 'hh:mm A', value: 'hh:mm A' }
         ]
     };
 

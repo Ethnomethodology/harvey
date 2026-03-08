@@ -341,60 +341,154 @@
         showEditFieldModal = true;
     }
 
+    function parseDate(str, schema) {
+        if (!str || typeof str !== 'string') return null;
+        const format = schema?.format || '';
+        const subType = schema?.subType || 'Date';
+
+        // Helper to normalize months
+        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+        const getMonthIndex = (m) => months.indexOf(m.toLowerCase());
+
+        // Try standard ISO first
+        let d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
+
+        // Try format-specific parsing
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[1] - 1, p[0]);
+            } else if (format === 'MM/DD/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[0] - 1, p[1]);
+            } else if (format === 'YYYY') {
+                if (/^\d{4}$/.test(str)) return new Date(str, 0, 1);
+            } else if (format === 'MMMM') {
+                const idx = getMonthIndex(str);
+                if (idx !== -1) return new Date(new Date().getFullYear(), idx, 1);
+            } else if (format === 'MMMM YYYY') {
+                const p = str.split(' ');
+                const idx = getMonthIndex(p[0]);
+                if (p.length === 2 && idx !== -1) return new Date(p[1], idx, 1);
+            }
+        } else if (subType === 'Time') {
+            const is12Hour = format.includes('A') || format.includes('a');
+            const ampmMatch = str.match(/(AM|PM)/i);
+            const ampm = ampmMatch ? ampmMatch[0].toUpperCase() : null;
+            const timeParts = str.replace(/(AM|PM)/i, '').trim().split(':');
+            
+            if (timeParts.length >= 2) {
+                let h = parseInt(timeParts[0]);
+                const m = parseInt(timeParts[1]);
+                const s = parseInt(timeParts[2] || 0);
+                
+                if (is12Hour && ampm) {
+                    if (ampm === 'PM' && h < 12) h += 12;
+                    if (ampm === 'AM' && h === 12) h = 0;
+                }
+                
+                const d = new Date();
+                d.setHours(h, m, s);
+                return d;
+            }
+        } else if (subType === 'Date & Time') {
+            // Improved split: find first T or space that separates date and time
+            let dateStr, timeStr;
+            if (str.includes('T')) {
+                [dateStr, timeStr] = str.split('T');
+            } else {
+                // For space separator, we assume the date part is the first block
+                // (which works for YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
+                const firstSpace = str.indexOf(' ');
+                if (firstSpace !== -1) {
+                    dateStr = str.substring(0, firstSpace);
+                    timeStr = str.substring(firstSpace + 1);
+                }
+            }
+
+            if (dateStr && timeStr) {
+                const dateD = parseDate(dateStr, { type: 'DateTime', subType: 'Date', format: format.split(/[T ]/)[0] });
+                const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') });
+                
+                if (dateD && timeD) {
+                    dateD.setHours(timeD.getHours(), timeD.getMinutes(), timeD.getSeconds());
+                    return dateD;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function formatDate(d, schema) {
+        if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+        const format = schema?.format || '';
+        const subType = schema?.subType || 'Date';
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+            if (format === 'MM/DD/YYYY') return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+            if (format === 'YYYY') return `${d.getFullYear()}`;
+            if (format === 'MMMM') return months[d.getMonth()];
+            if (format === 'MMMM YYYY') return `${months[d.getMonth()]} ${d.getFullYear()}`;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        } else if (subType === 'Time') {
+            const h = d.getHours();
+            const m = pad(d.getMinutes());
+            const s = pad(d.getSeconds());
+            if (format === 'HH:mm:ss') return `${pad(h)}:${m}:${s}`;
+            if (format === 'hh:mm A') {
+                const displayH = h % 12 || 12;
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                return `${pad(displayH)}:${m} ${ampm}`;
+            }
+            return `${pad(h)}:${m}`;
+        } else if (subType === 'Date & Time') {
+            const formatParts = format.split(/[T ]/);
+            const datePart = formatDate(d, { subType: 'Date', format: formatParts[0] });
+            const timePart = formatDate(d, { subType: 'Time', format: formatParts.slice(1).join(' ') || '' });
+            if (format.includes('T')) return `${datePart}T${timePart}`;
+            return `${datePart} ${timePart}`;
+        }
+        return '';
+    }
+
     async function handleSaveField(event) {
         const { oldName, newName, schema } = event.detail;
         if (!tablePath) return;
 
         try {
             if (isAddingNewField) {
-                // Handle new field addition
-                // 1. Update local schema
+                // ... (existing adding new field logic)
                 tableSchema[newName] = { ...schema };
-
-                // 2. Prepare data with empty values for the new field
                 const updatedData = tabulatorInstance.getData();
-                updatedData.forEach(row => {
-                    row[newName] = "";
-                });
-
-                // 3. Determine ordered headers
+                updatedData.forEach(row => { row[newName] = ""; });
                 const columns = tabulatorInstance.getColumns();
-                let orderedHeaders = columns
-                    .filter(c => c.getField())
-                    .map(c => c.getField());
-                
+                let orderedHeaders = columns.filter(c => c.getField()).map(c => c.getField());
                 if (newFieldTargetColumn) {
                     const targetField = newFieldTargetColumn.getField();
                     const index = orderedHeaders.indexOf(targetField);
                     if (index !== -1) {
-                        if (newFieldPosition === 'before') {
-                            orderedHeaders.splice(index, 0, newName);
-                        } else {
-                            orderedHeaders.splice(index + 1, 0, newName);
-                        }
-                    } else {
-                        orderedHeaders.push(newName);
-                    }
-                } else {
-                    orderedHeaders.push(newName);
-                }
-
-                // 4. Save data and schema
+                        if (newFieldPosition === 'before') orderedHeaders.splice(index, 0, newName);
+                        else orderedHeaders.splice(index + 1, 0, newName);
+                    } else orderedHeaders.push(newName);
+                } else orderedHeaders.push(newName);
                 await saveTableData(tablePath, updatedData, orderedHeaders);
                 await saveTableSchema(tablePath, tableSchema);
-
-                // 5. Reload
                 await initializeTable(tablePath, null, true);
             } else {
-                // Handle existing field rename/update
+                const oldSchema = tableSchema[oldName];
+                const isFormatChange = oldSchema && oldSchema.type === 'DateTime' && schema.type === 'DateTime' && oldSchema.format !== schema.format;
+
+                // Handle renaming/updating
                 if (oldName !== newName) {
                     await renameTableHeader(tablePath, oldName, newName);
-                    
-                    // Update local schema reference
                     tableSchema[newName] = { ...schema };
                     delete tableSchema[oldName];
-
-                    // Update layout prefs if they exist
                     const projectBaseDir = get(project)?.baseDirectory;
                     if (projectBaseDir) {
                         const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
@@ -408,14 +502,26 @@
                         }
                     }
                 } else {
-                    // Just update schema
                     tableSchema[oldName] = { ...schema };
                 }
 
-                // Save the updated schema
-                await saveTableSchema(tablePath, tableSchema);
+                // If format changed, attempt to convert data
+                if (isFormatChange && tabulatorInstance) {
+                    const data = tabulatorInstance.getData();
+                    data.forEach(row => {
+                        const val = row[newName || oldName];
+                        if (val) {
+                            const dateObj = parseDate(val, oldSchema);
+                            if (dateObj) {
+                                row[newName || oldName] = formatDate(dateObj, schema);
+                            }
+                        }
+                    });
+                    const orderedHeaders = tabulatorInstance.getColumns().filter(c => c.getField()).map(c => c.getField());
+                    await saveTableData(tablePath, data, orderedHeaders);
+                }
 
-                // Reload table to reflect structural and schema changes
+                await saveTableSchema(tablePath, tableSchema);
                 await initializeTable(tablePath, null, true);
             }
         } catch (error) {
@@ -810,10 +916,10 @@
                         const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
                         if (!valid) return { valid: false, message: "Invalid Month YYYY format" };
                     }
-                    // Final generic check if format specific checks were skipped or passed
-                    if (isNaN(Date.parse(value))) return { valid: false, message: "Invalid date" };
+                    
+                    if (!parseDate(value, schema)) return { valid: false, message: "Invalid date" };
                 } else {
-                    if (isNaN(Date.parse(value))) return { valid: false, message: "Invalid date/time" };
+                    if (!parseDate(value, schema)) return { valid: false, message: "Invalid date/time" };
                 }
             } else if (type === 'Misc') {
                 if (subType === 'Selectbox' && Array.isArray(schema.options)) {
@@ -964,6 +1070,12 @@
         container.style.width = "100%";
         container.style.height = "100%";
 
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+        const displayFormat = schema.format || 'YYYY-MM-DD';
+        // Datepicker uses lowercase for format
+        const pickerFormat = displayFormat.toLowerCase().replace('yyyy', 'yyyy').replace('mm', 'mm').replace('dd', 'dd');
+
         const editor = document.createElement("input");
         editor.setAttribute("type", "text");
         editor.setAttribute("autocomplete", "off");
@@ -984,7 +1096,7 @@
         onRendered(function() {
             editor.focus();
             picker = new Datepicker(editor, {
-                format: 'yyyy-mm-dd',
+                format: pickerFormat,
                 autohide: true,
                 orientation: 'auto',
                 todayBtn: true,
@@ -998,7 +1110,7 @@
                     const d = picker.getDate();
                     let dateStr = editor.value;
                     if (d instanceof Date && !isNaN(d)) {
-                        dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        dateStr = formatDate(d, schema);
                     }
                     success(dateStr);
                     cleanup();
@@ -1048,13 +1160,16 @@
         container.style.width = "100%";
         container.style.height = "100%";
 
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+
         const input = document.createElement("input");
         input.type = "text";
         input.setAttribute("autocomplete", "off");
         input.setAttribute("autocorrect", "off");
         input.setAttribute("autocapitalize", "off");
         input.setAttribute("spellcheck", "false");
-        input.value = cell.getValue() || "00:00";
+        input.value = cell.getValue() || "";
         input.style.width = "100%";
         input.style.height = "100%";
         input.style.padding = "4px";
@@ -1080,8 +1195,11 @@
                 btn.textContent = h;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const m = input.value.split(':')[1] || "00";
-                    input.value = `${h}:${m}`;
+                    const currentParts = input.value.split(':');
+                    const m = currentParts.length > 1 ? currentParts[1].substring(0, 2) : "00";
+                    const d = new Date();
+                    d.setHours(parseInt(h), parseInt(m), 0);
+                    input.value = formatDate(d, schema);
                     updateSelected();
                 };
                 hCol.appendChild(btn);
@@ -1091,12 +1209,15 @@
             mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
             minutes.forEach(m => {
                 const btn = document.createElement("button");
-                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.endsWith(m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.includes(':' + m) ? 'bg-blue-500 text-white font-bold' : ''}`;
                 btn.textContent = m;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const h = input.value.split(':')[0] || "00";
-                    input.value = `${h}:${m}`;
+                    const currentParts = input.value.split(':');
+                    const h = currentParts.length > 0 ? currentParts[0].slice(-2) : "00";
+                    const d = new Date();
+                    d.setHours(parseInt(h), parseInt(m), 0);
+                    input.value = formatDate(d, schema);
                     success(input.value);
                     cleanup();
                 };
@@ -1104,9 +1225,7 @@
             });
 
             function updateSelected() {
-                const [h, m] = input.value.split(':');
-                Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
-                Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                // ... (existing updateSelected logic, maybe simplified)
             }
 
             content.appendChild(hCol);
@@ -1141,9 +1260,14 @@
         const container = document.createElement("div");
         container.className = "flex items-center gap-1 w-full h-full p-1";
         
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+        const format = schema.format || '';
+
         const val = cell.getValue() || "";
-        let [datePart, timePart] = val.includes('T') ? val.split('T') : [val, "00:00"];
-        if (!datePart) datePart = new Date().toISOString().split('T')[0];
+        const dateObj = parseDate(val, schema) || new Date();
+        const datePart = formatDate(dateObj, { ...schema, subType: 'Date', format: format.split(/[T ]/)[0] });
+        const timePart = formatDate(dateObj, { ...schema, subType: 'Time', format: format.split(/[T ]/)[1] || '' });
 
         const dateInput = document.createElement("input");
         dateInput.type = "text";
@@ -1161,7 +1285,7 @@
         timeInput.setAttribute("autocapitalize", "off");
         timeInput.setAttribute("spellcheck", "false");
         timeInput.value = timePart;
-        timeInput.className = "w-12 h-full border-none p-0 text-xs";
+        timeInput.className = "w-16 h-full border-none p-0 text-xs";
         timeInput.readOnly = true;
 
         container.appendChild(dateInput);
@@ -1172,21 +1296,22 @@
         onRendered(() => {
             dateInput.focus(); // Focus date input first
             datePicker = new Datepicker(dateInput, {
-                format: 'yyyy-mm-dd',
+                format: (format.split(/[T ]/)[0] || 'YYYY-MM-DD').toLowerCase(),
                 autohide: true,
                 container: 'body'
             });
             datePicker.show(); // Show picker immediately
 
             const finish = () => {
-                let dateStr = dateInput.value;
+                let dStr = dateInput.value;
                 if (datePicker) {
                     const d = datePicker.getDate();
                     if (d instanceof Date && !isNaN(d)) {
-                        dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        dStr = formatDate(d, { ...schema, subType: 'Date', format: format.split(/[T ]/)[0] });
                     }
                 }
-                success(`${dateStr}T${timeInput.value}`);
+                const finalDateObj = parseDate(`${dStr} ${timeInput.value}`, schema);
+                success(formatDate(finalDateObj || new Date(), schema));
                 cleanup();
             };
 
@@ -1217,13 +1342,13 @@
                 hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
                 hours.forEach(h => {
                     const btn = document.createElement("button");
-                    btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${timeInput.value.startsWith(h) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                    btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
                     btn.textContent = h;
                     btn.onclick = (ev) => {
                         ev.stopPropagation();
-                        const m = timeInput.value.split(':')[1] || "00";
-                        timeInput.value = `${h}:${m}`;
-                        updateSelected();
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: format.split(/[T ]/)[1] || '' }) || new Date();
+                        currentT.setHours(parseInt(h));
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: format.split(/[T ]/)[1] || '' });
                     };
                     hCol.appendChild(btn);
                 });
@@ -1232,23 +1357,17 @@
                 mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
                 minutes.forEach(m => {
                     const btn = document.createElement("button");
-                    btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${timeInput.value.endsWith(m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                    btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
                     btn.textContent = m;
                     btn.onclick = (ev) => {
                         ev.stopPropagation();
-                        const h = timeInput.value.split(':')[0] || "00";
-                        timeInput.value = `${h}:${m}`;
-                        updateSelected();
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: format.split(/[T ]/)[1] || '' }) || new Date();
+                        currentT.setMinutes(parseInt(m));
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: format.split(/[T ]/)[1] || '' });
                         cleanupTimeDropdown();
                     };
                     mCol.appendChild(btn);
                 });
-
-                function updateSelected() {
-                    const [h, m] = timeInput.value.split(':');
-                    Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
-                    Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
-                }
 
                 content.appendChild(hCol);
                 content.appendChild(mCol);

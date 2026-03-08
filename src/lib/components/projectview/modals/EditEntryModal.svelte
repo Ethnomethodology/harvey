@@ -90,6 +90,122 @@
         return Type;
     }
 
+    function parseDate(str, colSchema) {
+        if (!str || typeof str !== 'string') return null;
+        const format = colSchema?.format || '';
+        const subType = colSchema?.subType || 'Date';
+
+        // Helper to normalize months
+        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+        const getMonthIndex = (m) => months.indexOf(m.toLowerCase());
+
+        // Try standard ISO first
+        let d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
+
+        // Try format-specific parsing
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[1] - 1, p[0]);
+            } else if (format === 'MM/DD/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[0] - 1, p[1]);
+            } else if (format === 'YYYY') {
+                if (/^\d{4}$/.test(str)) return new Date(str, 0, 1);
+            } else if (format === 'MMMM') {
+                const idx = getMonthIndex(str);
+                if (idx !== -1) return new Date(new Date().getFullYear(), idx, 1);
+            } else if (format === 'MMMM YYYY') {
+                const p = str.split(' ');
+                const idx = getMonthIndex(p[0]);
+                if (p.length === 2 && idx !== -1) return new Date(p[1], idx, 1);
+            }
+        } else if (subType === 'Time') {
+            const is12Hour = format.includes('A') || format.includes('a');
+            const ampmMatch = str.match(/(AM|PM)/i);
+            const ampm = ampmMatch ? ampmMatch[0].toUpperCase() : null;
+            const timeParts = str.replace(/(AM|PM)/i, '').trim().split(':');
+            
+            if (timeParts.length >= 2) {
+                let h = parseInt(timeParts[0]);
+                const m = parseInt(timeParts[1]);
+                const s = parseInt(timeParts[2] || 0);
+                
+                if (is12Hour && ampm) {
+                    if (ampm === 'PM' && h < 12) h += 12;
+                    if (ampm === 'AM' && h === 12) h = 0;
+                }
+                
+                const d = new Date();
+                d.setHours(h, m, s);
+                return d;
+            }
+        } else if (subType === 'Date & Time') {
+            // Improved split: find first T or space that separates date and time
+            let dateStr, timeStr;
+            if (str.includes('T')) {
+                [dateStr, timeStr] = str.split('T');
+            } else {
+                // For space separator, we assume the date part is the first block
+                // (which works for YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
+                const firstSpace = str.indexOf(' ');
+                if (firstSpace !== -1) {
+                    dateStr = str.substring(0, firstSpace);
+                    timeStr = str.substring(firstSpace + 1);
+                }
+            }
+
+            if (dateStr && timeStr) {
+                const dateD = parseDate(dateStr, { type: 'DateTime', subType: 'Date', format: format.split(/[T ]/)[0] });
+                const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') });
+                
+                if (dateD && timeD) {
+                    dateD.setHours(timeD.getHours(), timeD.getMinutes(), timeD.getSeconds());
+                    return dateD;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function formatDate(d, colSchema) {
+        if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+        const format = colSchema?.format || '';
+        const subType = colSchema?.subType || 'Date';
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+            if (format === 'MM/DD/YYYY') return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+            if (format === 'YYYY') return `${d.getFullYear()}`;
+            if (format === 'MMMM') return months[d.getMonth()];
+            if (format === 'MMMM YYYY') return `${months[d.getMonth()]} ${d.getFullYear()}`;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        } else if (subType === 'Time') {
+            const h = d.getHours();
+            const m = pad(d.getMinutes());
+            const s = pad(d.getSeconds());
+            if (format === 'HH:mm:ss') return `${pad(h)}:${m}:${s}`;
+            if (format === 'hh:mm A') {
+                const displayH = h % 12 || 12;
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                return `${pad(displayH)}:${m} ${ampm}`;
+            }
+            return `${pad(h)}:${m}`;
+        } else if (subType === 'Date & Time') {
+            const formatParts = format.split(/[T ]/);
+            const datePart = formatDate(d, { subType: 'Date', format: formatParts[0] });
+            const timePart = formatDate(d, { subType: 'Time', format: formatParts.slice(1).join(' ') || '' });
+            if (format.includes('T')) return `${datePart}T${timePart}`;
+            return `${datePart} ${timePart}`;
+        }
+        return '';
+    }
+
     let editedData = { ...rowData };
     for (const field in schema) {
         if (schema[field].type === 'Misc' && schema[field].subType === 'Multiselect' && typeof editedData[field] === 'string') {
@@ -143,9 +259,9 @@
                         const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
                         if (!valid) return "Invalid Month YYYY format";
                     }
-                    if (isNaN(Date.parse(value))) return "Invalid date";
+                    if (!parseDate(value, colSchema)) return "Invalid date";
                 } else {
-                    if (isNaN(Date.parse(value))) return "Invalid date/time";
+                    if (!parseDate(value, colSchema)) return "Invalid date/time";
                 }
             } else if (type === 'Misc') {
                 if (subType === 'Selectbox' && Array.isArray(colSchema.options)) {
@@ -184,35 +300,34 @@
     });
 
     function handleDateTimeChange(field, type, val) {
-        let currentVal = editedData[field] || "";
-        let datePart = new Date().toISOString().split('T')[0]; 
-        let timePart = "00:00";
+        const colSchema = schema[field] || {};
+        let currentDateObj = parseDate(editedData[field], colSchema) || new Date();
 
-        if (currentVal.includes('T')) {
-            [datePart, timePart] = currentVal.split('T');
-        } else if (currentVal.includes(' ')) {
-             [datePart, timePart] = currentVal.split(' ');
-        } else if (/^\d{4}-\d{2}-\d{2}$/.test(currentVal)) {
-            datePart = currentVal;
+        if (type === 'date') {
+            const dateParts = parseDate(val, { ...colSchema, subType: 'Date', format: colSchema.format?.split(/[T ]/)[0] || 'YYYY-MM-DD' });
+            if (dateParts) {
+                currentDateObj.setFullYear(dateParts.getFullYear(), dateParts.getMonth(), dateParts.getDate());
+            }
+        } else if (type === 'time') {
+            const timeParts = parseDate(val, { ...colSchema, subType: 'Time', format: colSchema.format?.split(/[T ]/).slice(1).join(' ') || 'HH:mm' });
+            if (timeParts) {
+                currentDateObj.setHours(timeParts.getHours(), timeParts.getMinutes(), timeParts.getSeconds());
+            }
         }
 
-        if (type === 'date') datePart = val;
-        if (type === 'time') timePart = val;
-
-        if (datePart) {
-            editedData[field] = `${datePart}T${timePart || "00:00"}`;
-        } else {
-            editedData[field] = "";
-        }
+        editedData[field] = formatDate(currentDateObj, colSchema);
     }
 
     function flowbiteDatepicker(node, { field, isDateTime = false }) {
         let picker = null;
+        const colSchema = schema[field] || {};
+        const format = colSchema.format || '';
+        const datePartFormat = (isDateTime ? (format.split(/[T ]/)[0] || 'YYYY-MM-DD') : (format || 'YYYY-MM-DD')).toLowerCase();
 
         const initPicker = () => {
             if (picker) return;
             picker = new Datepicker(node, {
-                format: 'yyyy-mm-dd',
+                format: datePartFormat,
                 autohide: true,
                 orientation: 'auto',
                 todayBtn: true,
@@ -236,7 +351,7 @@
             const d = picker.getDate();
             let dateStr = node.value;
             if (d instanceof Date && !isNaN(d)) {
-                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                dateStr = formatDate(d, { ...colSchema, subType: 'Date', format: isDateTime ? format.split(/[T ]/)[0] : format });
             }
             if (isDateTime) {
                 handleDateTimeChange(field, 'date', dateStr);
@@ -284,16 +399,22 @@
     const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
     function selectTimePart(field, part, val, isDateTime = false) {
-        let currentVal = (isDateTime ? (editedData[field] || "").split('T')[1] : editedData[field]) || "00:00";
-        let [h, m] = currentVal.split(':');
-        if (part === 'h') h = val;
-        if (part === 'm') m = val;
-        const newTime = `${h}:${m}`;
+        const colSchema = schema[field] || {};
+        const format = colSchema.format || '';
+        const timePartFormat = isDateTime ? (format.split(/[T ]/).slice(1).join(' ') || 'HH:mm') : (format || 'HH:mm');
+        
+        let currentTimeStr = isDateTime ? (formatDate(parseDate(editedData[field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: timePartFormat })) : editedData[field];
+        let d = parseDate(currentTimeStr, { ...colSchema, subType: 'Time', format: timePartFormat }) || new Date();
+        
+        if (part === 'h') d.setHours(parseInt(val));
+        if (part === 'm') d.setMinutes(parseInt(val));
+        
+        const newTimeStr = formatDate(d, { ...colSchema, subType: 'Time', format: timePartFormat });
 
         if (isDateTime) {
-            handleDateTimeChange(field, 'time', newTime);
+            handleDateTimeChange(field, 'time', newTimeStr);
         } else {
-            editedData[field] = newTime;
+            editedData[field] = newTimeStr;
         }
     }
 </script>
@@ -366,7 +487,7 @@
                                                 <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
                                                     {#each hours as h}
                                                         <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {(editedData[col.field] || '').startsWith(h) ? 'bg-blue-500 text-white font-bold' : 'text-gray-700 dark:text-gray-300'}"
+                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
                                                             on:click={() => selectTimePart(col.field, 'h', h)}
                                                         >{h}</button>
                                                     {/each}
@@ -375,7 +496,7 @@
                                                 <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
                                                     {#each minutes as m}
                                                         <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {(editedData[col.field] || '').endsWith(m) ? 'bg-blue-500 text-white font-bold' : 'text-gray-700 dark:text-gray-300'}"
+                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
                                                             on:click={() => selectTimePart(col.field, 'm', m)}
                                                         >{m}</button>
                                                     {/each}
@@ -395,7 +516,7 @@
                                                     use:flowbiteDatepicker={{field: col.field, isDateTime: true}}
                                                     type="text" 
                                                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                                    value={(editedData[col.field] || "").split('T')[0] || ""} 
+                                                    value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Date', format: (colSchema.format || '').split(/[T ]/)[0] })} 
                                                     class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-8 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                     on:keydown={(e) => e.preventDefault()}
                                                 />
@@ -413,7 +534,7 @@
                                                     id="dt_time_input_{sanitizeId(col.field)}"
                                                     type="text" 
                                                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                                    value={(editedData[col.field] || "").split('T')[1] || "00:00"} 
+                                                    value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: (colSchema.format || '').split(/[T ]/).slice(1).join(' ') })} 
                                                     class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 pe-7 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                                     on:keydown={(e) => e.preventDefault()}
                                                 />
@@ -422,7 +543,7 @@
                                                         <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
                                                             {#each hours as h}
                                                                 <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {((editedData[col.field] || '').split('T')[1] || '').startsWith(h) ? 'bg-blue-500 text-white font-bold' : 'text-gray-700 dark:text-gray-300'}"
+                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
                                                                     on:click={() => selectTimePart(col.field, 'h', h, true)}
                                                                 >{h}</button>
                                                             {/each}
@@ -431,7 +552,7 @@
                                                         <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
                                                             {#each minutes as m}
                                                                 <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {((editedData[col.field] || '').split('T')[1] || '').endsWith(m) ? 'bg-blue-500 text-white font-bold' : 'text-gray-700 dark:text-gray-300'}"
+                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30"
                                                                     on:click={() => selectTimePart(col.field, 'm', m, true)}
                                                                 >{m}</button>
                                                             {/each}
@@ -619,4 +740,3 @@
         box-shadow: 0 0 2px rgba(0,0,0,0.3);
     }
 </style>
-
