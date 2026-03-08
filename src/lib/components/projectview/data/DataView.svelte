@@ -231,7 +231,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
+                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={forwardEvent} />
                  {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}

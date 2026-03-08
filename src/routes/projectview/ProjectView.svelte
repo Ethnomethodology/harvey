@@ -1125,6 +1125,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 						on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
 						on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}
 						on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+						on:requestviewchange={handleRequestOpenTab}
 					 />
 				{:else if selectedTab === 'tags'}
 					<TagsView

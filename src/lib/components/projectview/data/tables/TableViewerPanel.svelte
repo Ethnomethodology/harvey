@@ -35,10 +35,13 @@
         Plus,
         ExternalLink,
         Check,
-        Mail
+        Mail,
+        FolderSearch,
+        FolderOpen
     } from 'lucide-svelte';
-    import { mount } from 'svelte';
+    import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
+    import { invoke } from '@tauri-apps/api/core';
     import { 
         Input, 
         Button, 
@@ -52,6 +55,8 @@
 
     export let tablePath = '';
     export let hasHeaders = true;
+
+    const dispatch = createEventDispatcher();
 
     let tableContainer;
     let tabulatorInstance = null;
@@ -172,6 +177,60 @@
             showEmailPopover = false;
             isEmailCopied = false;
         }, 2000);
+    }
+
+    let showProjectLinkPopover = false;
+    let popoverProjectLink = '';
+    let popoverProjectLinkCategory = '';
+    let popoverProjectLinkX = 0;
+    let popoverProjectLinkY = 0;
+
+    let revealButtonLabel = 'Show in Finder';
+    import { getOsType } from '$lib/services/systemService.js';
+
+    onMount(async () => {
+        try {
+            const currentOs = await getOsType();
+            if (currentOs === 'windows') revealButtonLabel = 'Reveal in Explorer';
+            else if (currentOs === 'macos') revealButtonLabel = 'Reveal in Finder';
+            else revealButtonLabel = 'Open File Location';
+        } catch (e) {
+            console.error("Error getting OS type:", e);
+        }
+    });
+
+    async function handleRevealProjectLink() {
+        if (!popoverProjectLink) return;
+        try {
+            await invoke('locate_in_finder', { path: popoverProjectLink });
+            showProjectLinkPopover = false;
+        } catch (e) {
+            console.error("Failed to reveal project link in file manager:", e);
+        }
+    }
+
+    async function handleOpenProjectLink() {
+        if (!popoverProjectLink) return;
+        const category = popoverProjectLinkCategory;
+        let viewType = 'document';
+
+        if (category === 'Audios' || category === 'Videos') {
+            viewType = 'media';
+        } else if (category === 'Audio Transcripts' || category === 'Video Transcripts' || category === 'Transcripts') {
+            viewType = 'transcript';
+        } else if (category === 'Tables') {
+            viewType = 'table';
+        } else if (category === 'Images') {
+            viewType = 'image';
+        }
+
+        dispatch('requestviewchange', {
+            tabName: 'data',
+            loadNotePath: popoverProjectLink,
+            viewType: viewType,
+            originalDocType: category // approximate for `handleInspect` compat
+        });
+        showProjectLinkPopover = false;
     }
 
     function scrollToHighlight(id) {
@@ -1294,6 +1353,19 @@
                     `;
                 }
 
+                if (colSchema.type === 'Misc' && colSchema.subType === 'Project Link' && value) {
+                    cellElement.classList.add('interactive-contact-cell');
+                    cellElement.dataset.projectLinkValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="project-link-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.5 5.96A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v5.22"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 return outputValue;
             };
 
@@ -1838,9 +1910,10 @@
         };
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
-        const handleTableClick = (e) => {
+        const handleTableClick = async (e) => {
             const urlIconContainer = e.target.closest('.hyperlink-icon-container');
             const emailIconContainer = e.target.closest('.email-icon-container');
+            const projectLinkIconContainer = e.target.closest('.project-link-icon-container');
 
             if (urlIconContainer) {
                 e.preventDefault();
@@ -1853,6 +1926,7 @@
                     popoverY = rect.bottom + window.scrollY + 5;
                     showUrlPopover = true;
                     showEmailPopover = false;
+                    showProjectLinkPopover = false;
                     isUrlCopied = false;
                 }
             } else if (emailIconContainer) {
@@ -1866,16 +1940,36 @@
                     popoverEmailY = rect.bottom + window.scrollY + 5;
                     showEmailPopover = true;
                     showUrlPopover = false;
+                    showProjectLinkPopover = false;
                     isEmailCopied = false;
+                }
+            } else if (projectLinkIconContainer) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cellElement = projectLinkIconContainer.closest('.tabulator-cell');
+                if (cellElement && cellElement.dataset.projectLinkValue) {
+                    const rect = projectLinkIconContainer.getBoundingClientRect();
+                    popoverProjectLink = cellElement.dataset.projectLinkValue;
+                    popoverProjectLinkX = rect.left + window.scrollX - 60; // offset a bit to center the popover
+                    popoverProjectLinkY = rect.bottom + window.scrollY + 5;
+
+                    const projectAssets = await getAllProjectAssets();
+                    const asset = projectAssets.find(a => a.value === popoverProjectLink);
+                    popoverProjectLinkCategory = asset ? asset.category : '';
+
+                    showProjectLinkPopover = true;
+                    showEmailPopover = false;
+                    showUrlPopover = false;
                 }
             } else {
                 if (showUrlPopover && !e.target.closest('.url-popover-container')) {
-                    // Close URL popover if clicked outside
                     showUrlPopover = false;
                 }
                 if (showEmailPopover && !e.target.closest('.email-popover-container')) {
-                    // Close Email popover if clicked outside
                     showEmailPopover = false;
+                }
+                if (showProjectLinkPopover && !e.target.closest('.project-link-popover-container')) {
+                    showProjectLinkPopover = false;
                 }
             }
         };
@@ -2011,6 +2105,17 @@
                     {:else}
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy
                     {/if}
+                </button>
+            </div>
+        {/if}
+
+        {#if showProjectLinkPopover}
+            <div class="project-link-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverProjectLinkX}px; top: {popoverProjectLinkY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenProjectLink}>
+                    <FolderOpen size={14} /> Open File
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleRevealProjectLink}>
+                    <FolderSearch size={14} /> {revealButtonLabel}
                 </button>
             </div>
         {/if}
@@ -2164,7 +2269,7 @@
             box-shadow: inset 0 0 0 2px #ef4444 !important;
         }
 
-        :global(.tabulator-cell.interactive-contact-cell:hover .hyperlink-icon-container, .tabulator-cell.interactive-contact-cell:hover .email-icon-container) {
+        :global(.tabulator-cell.interactive-contact-cell:hover .hyperlink-icon-container, .tabulator-cell.interactive-contact-cell:hover .email-icon-container, .tabulator-cell.interactive-contact-cell:hover .project-link-icon-container) {
             display: flex !important;
         }
 </style>
