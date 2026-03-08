@@ -95,6 +95,11 @@
         if (schema[field].type === 'Misc' && schema[field].subType === 'Multiselect' && typeof editedData[field] === 'string') {
             editedData[field] = editedData[field].split(',').map(s => s.trim()).filter(Boolean);
         }
+        if (schema[field].type === 'Numeric' && schema[field].subType === 'Progress') {
+            if (editedData[field] === undefined || editedData[field] === null || editedData[field] === "") {
+                editedData[field] = schema[field].min ?? 0;
+            }
+        }
     }
 
     let errors = {};
@@ -403,9 +408,19 @@
                             {/if}
                         {:else if colSchema.type === 'Numeric'}
                             {#if colSchema.subType === 'Progress'}
+                                {@const min = colSchema.min ?? 0}
+                                {@const max = colSchema.max ?? 100}
+                                {@const val = editedData[col.field] ?? min}
+                                {@const percentage = ((val - min) / (max - min)) * 100}
                                 <div class="flex items-center gap-3 h-10">
-                                    <input type="range" min={colSchema.min || 0} max={colSchema.max || 100} step="1" bind:value={editedData[col.field]} class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">{editedData[col.field] || 0}</span>
+                                    <input 
+                                        type="range" 
+                                        {min} {max} step="1" 
+                                        bind:value={editedData[col.field]} 
+                                        style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
+                                        class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" 
+                                    />
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">{val}</span>
                                 </div>
                             {:else if colSchema.subType === 'Rating'}
                                 <div class="flex items-center gap-1 h-10">
@@ -518,6 +533,37 @@
     /* Hide the native date icon to let the Flowbite one shine */
     input[type="date"]::-webkit-calendar-picker-indicator {
         @apply opacity-0 absolute inset-0 cursor-pointer;
+    }
+
+    /* Progress Editor Styling */
+    .progress-range {
+        -webkit-appearance: none;
+        background: #e5e7eb;
+        height: 6px !important;
+        border-radius: 3px;
+        outline: none;
+        margin: 0;
+        padding: 0;
+    }
+    .progress-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        margin-top: -4px; /* Center thumb on track */
+    }
+    .progress-range::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 0 2px rgba(0,0,0,0.3);
     }
 </style>
 

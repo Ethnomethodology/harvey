@@ -835,14 +835,27 @@
     function progressEditor(cell, onRendered, success, cancel, editorParams) {
         const container = document.createElement("div");
         container.className = "flex items-center w-full h-full px-2";
+        container.style.minHeight = "24px";
+
+        const min = editorParams.min ?? 0;
+        const max = editorParams.max ?? 100;
+        const initialVal = cell.getValue() ?? min;
 
         const input = document.createElement("input");
         input.type = "range";
-        input.min = editorParams.min || 0;
-        input.max = editorParams.max || 100;
+        input.min = min;
+        input.max = max;
         input.step = "1";
-        input.value = cell.getValue() || input.min;
-        input.className = "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700";
+        input.value = initialVal;
+        
+        const updateGradient = (v) => {
+            const percentage = ((v - min) / (max - min)) * 100;
+            input.style.background = `linear-gradient(to right, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%)`;
+        };
+
+        input.className = "progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700";
+        input.style.width = "100%";
+        updateGradient(initialVal);
 
         container.appendChild(input);
 
@@ -851,10 +864,10 @@
         });
 
         const saveVal = () => {
-            success(input.value);
+            success(parseFloat(input.value));
         };
 
-        // Save immediately on change (mouse up after dragging) or blur
+        input.addEventListener('input', () => updateGradient(input.value));
         input.addEventListener('change', saveVal);
         input.addEventListener('blur', saveVal);
 
@@ -919,9 +932,15 @@
             container.focus();
         });
 
-        container.addEventListener('blur', () => {
-            cancel();
-        });
+        const saveVal = () => {
+            success(currentValue);
+        };
+
+        container.addEventListener('blur', saveVal);
+
+        // Stop Tabulator from intercepting drag/click events
+        container.addEventListener('mousedown', e => e.stopPropagation());
+        container.addEventListener('touchstart', e => e.stopPropagation());
 
         return container;
     }
@@ -1303,13 +1322,24 @@
                         // Immediate toggle on single click
                         const currentVal = cell.getValue();
                         const isCurrentlyChecked = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === "1";
-                        cell.setValue(!isCurrentlyChecked);
+                        const newVal = !isCurrentlyChecked;
+                        cell.setValue(newVal);
+
+                        // Manually trigger history and save
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: cell.getRow().getData().harvey_internal_id,
+                            field: cell.getField(),
+                            oldValue: currentVal,
+                            newValue: newVal
+                        });
+                        debouncedSave();
                     };
                     colDef.hozAlign = "center";
                     colDef.headerHozAlign = "center";
                     colDef.width = 50;
                     colDef.resizable = false;
-                } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
+                    } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
                     colDef.editor = "list";
 
                     let values = colSchema.options || [];
@@ -1334,7 +1364,7 @@
                         }
                         return val || "";
                     };
-                } else if (colSchema.subType === 'Project Link') {
+                    } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";
                     colDef.editorParams = {
                         values: [
@@ -1342,24 +1372,54 @@
                             ...projectAssetOptions
                         ]
                     };
-                }
-            } else if (colSchema.type === 'Numeric') {
-                colDef.editor = "number";
-                if (colSchema.subType === 'Progress') {
-                    colDef.editor = progressEditor;
-                    colDef.formatter = "progress";
-                    const min = typeof colSchema.min === 'number' ? colSchema.min : 0;
-                    const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
-                    colDef.formatterParams = { min, max };
-                    colDef.editorParams = { min, max };
-                } else if (colSchema.subType === 'Rating') {
-                    colDef.editor = ratingEditor;
-                    colDef.formatter = "star";
-                    const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
-                    colDef.formatterParams = { stars };
-                    colDef.editorParams = { stars };
-                    // Force edit on single click rather than waiting for double-click
-                    colDef.cellClick = function(e, cell) { cell.edit(true); };
+                    }
+                    } else if (colSchema.type === 'Numeric') {
+                    colDef.editor = "number";
+                    if (colSchema.subType === 'Progress') {
+                        colDef.editor = progressEditor;
+                        colDef.formatter = "progress";
+                        const min = typeof colSchema.min === 'number' ? colSchema.min : 0;
+                        const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
+                        colDef.formatterParams = { min, max };
+                        colDef.editorParams = { min, max };
+                        colDef.tooltip = (cell) => `${cell.getValue() || 0}%`;
+                    } else if (colSchema.subType === 'Rating') {
+                        colDef.editor = ratingEditor;
+                        colDef.formatter = "star";
+                        const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
+                        colDef.formatterParams = { stars };
+                        colDef.editorParams = { stars };
+                        colDef.tooltip = (cell) => `${cell.getValue() || 0} / ${stars} Stars`;
+                        // Force edit on single click rather than waiting for double-click
+                        colDef.cellClick = function(e, cell) { 
+                            if (!e || !e.target) {
+                                cell.edit(true);
+                                return;
+                            }
+                            // Optimization: if they click a star in the formatter directly, set it immediately
+                            const star = e.target.closest('svg');
+                            if (star) {
+                                const allStars = Array.from(cell.getElement().querySelectorAll('svg'));
+                                const index = allStars.indexOf(star);
+                                if (index !== -1) {
+                                    const newVal = index + 1;
+                                    const oldVal = cell.getValue();
+                                    if (newVal !== oldVal) {
+                                        cell.setValue(newVal);
+                                        pushToHistory({
+                                            type: 'cellEdit',
+                                            rowId: cell.getRow().getData().harvey_internal_id,
+                                            field: cell.getField(),
+                                            oldValue: oldVal,
+                                            newValue: newVal
+                                        });
+                                        debouncedSave();
+                                    }
+                                    return;
+                                }
+                            }
+                            cell.edit(true); 
+                        };
                 } else if (colSchema.subType === 'Currency') {
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -1416,6 +1476,8 @@
                 const colField = cell.getField();
                 const cellKey = `cell-${rowIndex}-${colField}`;
                 const cellElement = cell.getElement();
+                if (!cellElement) return cell.getValue();
+
                 const cellColor = tableStyles.cellStyles[cellKey];
                 
                 cellElement.style.backgroundColor = cellColor || "";
@@ -2432,5 +2494,36 @@
         }
         :global(.duplicate-primary-cell) {
             box-shadow: inset 0 0 0 2px #ef4444 !important;
+        }
+
+        /* Progress Editor Styling */
+        :global(.progress-range) {
+            -webkit-appearance: none;
+            background: #e5e7eb;
+            height: 6px !important;
+            border-radius: 3px;
+            outline: none;
+            margin: 0;
+            padding: 0;
+        }
+        :global(.progress-range::-webkit-slider-thumb) {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+            margin-top: -4px; /* Center thumb on track */
+        }
+        :global(.progress-range::-moz-range-thumb) {
+            width: 14px;
+            height: 14px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
 </style>
