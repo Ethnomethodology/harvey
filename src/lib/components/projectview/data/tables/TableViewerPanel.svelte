@@ -149,7 +149,7 @@
         let allHaveStyle = true;
         cellsToModify.forEach(cell => {
             // Exclude fields that shouldn't be styled
-            const field = cell.getField();
+            const field = cell.getColumn().getField();
             const schema = tableSchema[field];
             if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
                 return; // Skip these
@@ -166,7 +166,7 @@
         const targetStyleState = !allHaveStyle;
 
         cellsToModify.forEach(cell => {
-            const field = cell.getField();
+            const field = cell.getColumn().getField();
             const schema = tableSchema[field];
             if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
                 return;
@@ -1027,7 +1027,7 @@
             const row = cell.getRow();
             const rowData = row.getData();
             const rowIndex = rowData.harvey_internal_id;
-            const colField = cell.getField();
+            const colField = cell.getColumn().getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
             
             // Remove existing highlight for this cell
