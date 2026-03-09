@@ -202,7 +202,13 @@
     async function handleRevealProjectLink() {
         if (!popoverProjectLink) return;
         try {
-            await invoke('locate_in_finder', { projectXmlPath: popoverProjectLink });
+            const proj = get(project);
+            let absolutePath = popoverProjectLink;
+            // If the path is relative, prepend the base directory
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && proj?.baseDirectory) {
+                absolutePath = `${proj.baseDirectory}/${absolutePath}`;
+            }
+            await invoke('locate_in_finder', { projectXmlPath: absolutePath });
             showProjectLinkPopover = false;
         } catch (e) {
             console.error("Failed to reveal project link in file manager:", e);
