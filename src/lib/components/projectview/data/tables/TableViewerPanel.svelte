@@ -2101,19 +2101,10 @@
                 />
                 
                 <div class="flex items-center">
-                    <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
+                    <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0" title="Previous match">
                         <ChevronLeft size={16} />
                     </Button>
-                    <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[80px] justify-center">
-                        {#if cellMatches.length > 0}
-                            {currentMatchIndex + 1} / {cellMatches.length}
-                        {:else if searchTerm}
-                            0 / 0
-                        {:else}
-                            Search
-                        {/if}
-                    </div>
-                    <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
+                    <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none" title="Next match">
                         <ChevronRight size={16} />
                     </Button>
                 </div>
