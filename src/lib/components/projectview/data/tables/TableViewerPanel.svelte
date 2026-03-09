@@ -2301,7 +2301,33 @@
             }
         });
         
-        return { data: formattedData, headers };
+        // Extract style information for export
+        const stylesMap = {};
+        if (tableStyles && tableStyles.cellStyles) {
+            // Re-map internal id -> string index based on current order if needed,
+            // but our backend export uses the raw data array which might not match `harvey_internal_id` 1:1 if sorted.
+            // Let's attach styles directly to the formatted data to ensure it matches.
+
+            formattedData.forEach((row, rowIndex) => {
+                const internalId = row.harvey_internal_id;
+                headers.forEach((field, colIndex) => {
+                    const cellKey = `cell-${internalId}-${field}`;
+                    if (tableStyles.cellStyles[cellKey]) {
+                        const s = tableStyles.cellStyles[cellKey];
+                        // Using row,col coordinates for Rust to easily look up
+                        const coordKey = `${rowIndex},${colIndex}`;
+                        stylesMap[coordKey] = {
+                            color: s.color || null,
+                            bold: !!s.bold,
+                            italic: !!s.italic,
+                            underline: !!s.underline
+                        };
+                    }
+                });
+            });
+        }
+
+        return { data: formattedData, headers, styles: stylesMap };
     }
 
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {

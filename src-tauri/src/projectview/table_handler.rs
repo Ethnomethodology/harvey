@@ -637,12 +637,24 @@ pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>, hea
 }
 
 fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]) -> Result<(), CommandError> {
+    save_xlsx_data_with_headers_and_styles(path, data, headers, None)
+}
+
+fn save_xlsx_data_with_headers_and_styles(
+    path: &Path,
+    data: Vec<Value>,
+    headers: &[String],
+    styles: Option<serde_json::Map<String, Value>>
+) -> Result<(), CommandError> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
+    let mut header_format = rust_xlsxwriter::Format::new();
+    header_format = header_format.set_bold();
+
     // Write headers
     for (col_num, header) in headers.iter().enumerate() {
-        worksheet.write_string(0, col_num as u16, header)?;
+        worksheet.write_string_with_format(0, col_num as u16, header, &header_format)?;
     }
 
     // Write data rows
@@ -650,27 +662,61 @@ fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]
         if let Some(row_map) = row_value.as_object() {
             for (col_num, header) in headers.iter().enumerate() {
                 if let Some(cell_value) = row_map.get(header) {
+                    let mut cell_format = rust_xlsxwriter::Format::new();
+                    cell_format = cell_format.set_text_wrap(); // Preserve newlines
+
+                    if let Some(ref style_map) = styles {
+                        let coord_key = format!("{},{}", row_num, col_num);
+                        if let Some(style_val) = style_map.get(&coord_key) {
+                            if let Some(style_obj) = style_val.as_object() {
+                                if let Some(is_bold) = style_obj.get("bold").and_then(|v| v.as_bool()) {
+                                    if is_bold { cell_format = cell_format.set_bold(); }
+                                }
+                                if let Some(is_italic) = style_obj.get("italic").and_then(|v| v.as_bool()) {
+                                    if is_italic { cell_format = cell_format.set_italic(); }
+                                }
+                                if let Some(is_underline) = style_obj.get("underline").and_then(|v| v.as_bool()) {
+                                    if is_underline { cell_format = cell_format.set_underline(rust_xlsxwriter::FormatUnderline::Single); }
+                                }
+                                if let Some(color_val) = style_obj.get("color").and_then(|v| v.as_str()) {
+                                    if !color_val.is_empty() {
+                                        // Strip # if it exists
+                                        let clean_color = if color_val.starts_with('#') {
+                                            &color_val[1..]
+                                        } else {
+                                            color_val
+                                        };
+                                        if let Ok(color_num) = u32::from_str_radix(clean_color, 16) {
+                                            cell_format = cell_format.set_background_color(rust_xlsxwriter::Color::RGB(color_num));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     match cell_value {
                         Value::String(s) => {
-                            worksheet.write_string(row_num as u32 + 1, col_num as u16, s)?;
+                            worksheet.write_string_with_format(row_num as u32 + 1, col_num as u16, s, &cell_format)?;
                         },
                         Value::Number(n) => {
                             if let Some(float_val) = n.as_f64() {
-                                worksheet.write_number(row_num as u32 + 1, col_num as u16, float_val)?;
+                                worksheet.write_number_with_format(row_num as u32 + 1, col_num as u16, float_val, &cell_format)?;
                             }
                         },
                         Value::Bool(b) => {
-                            worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
+                            worksheet.write_boolean_with_format(row_num as u32 + 1, col_num as u16, *b, &cell_format)?;
                         },
                         Value::Array(arr) => {
-                            // Join array elements with a comma for better presentation in Excel
                             let joined = arr.iter().map(|v| match v {
                                 Value::String(s) => s.clone(),
                                 _ => v.to_string(),
                             }).collect::<Vec<String>>().join(", ");
-                            worksheet.write_string(row_num as u32 + 1, col_num as u16, &joined)?;
+                            worksheet.write_string_with_format(row_num as u32 + 1, col_num as u16, &joined, &cell_format)?;
                         },
-                        _ => {} // Handles null as blank cells
+                        _ => {
+                            worksheet.write_blank(row_num as u32 + 1, col_num as u16, &cell_format)?;
+                        }
                     }
                 }
             }
@@ -1083,6 +1129,7 @@ pub async fn export_formatted_table_to_csv(
 pub async fn export_formatted_table_to_xlsx(
     data: Vec<Value>,
     headers: Vec<String>,
+    styles: Option<serde_json::Map<String, Value>>,
     output_path_str: String,
 ) -> Result<String, CommandError> {
     info!("[export_formatted_table_to_xlsx] Exporting formatted table to: {}", output_path_str);
@@ -1092,7 +1139,7 @@ pub async fn export_formatted_table_to_xlsx(
         fs::create_dir_all(parent)?;
     }
 
-    save_xlsx_data_with_headers(output_path, data, &headers)?;
+    save_xlsx_data_with_headers_and_styles(output_path, data, &headers, styles)?;
     
     Ok(output_path_str)
 }

@@ -108,9 +108,9 @@
             if (getExportData) {
                 const formattedDataObj = await getExportData();
                 if (formattedDataObj) {
-                    const { data, headers } = formattedDataObj;
+                    const { data, headers, styles } = formattedDataObj;
                     if (exportFormat === 'xlsx') {
-                        await invoke('export_formatted_table_to_xlsx', { data, headers, outputPathStr: fullExportPath });
+                        await invoke('export_formatted_table_to_xlsx', { data, headers, styles, outputPathStr: fullExportPath });
                     } else if (exportFormat === 'csv') {
                         await invoke('export_formatted_table_to_csv', { data, headers, outputPathStr: fullExportPath });
                     }
