@@ -240,16 +240,27 @@
                 popoverProjectLinkX = rect.left;
                 popoverProjectLinkY = rect.bottom + window.scrollY;
                 
-                // Find category - resolve path to absolute for robust matching
+                // Find category - resolve path safely, handling both relative and absolute paths
                 const proj = get(project);
-                let absolutePath = path;
-                if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && proj?.baseDirectory) {
-                    const cleanRelative = path.replace(/^\/+/, '');
-                    absolutePath = `${proj.baseDirectory}/${cleanRelative}`;
-                }
-                const normalizedSearchPath = absolutePath.replace(/\\/g, '/');
+                const normalizedSearchPath = path.replace(/\\/g, '/');
+
+                const asset = projectAssetOptions.find(a => {
+                    const aNormalized = a.value.replace(/\\/g, '/');
+                    if (aNormalized === normalizedSearchPath) return true;
+
+                    // If one is absolute and the other is relative, try to resolve a.value to absolute
+                    if (proj?.baseDirectory) {
+                        const baseDir = proj.baseDirectory.replace(/\\/g, '/');
+                        const aAbsolute = `${baseDir}/${aNormalized.replace(/^\/+/, '')}`;
+                        const searchAbsolute = normalizedSearchPath.startsWith('/') || normalizedSearchPath.includes(':')
+                            ? normalizedSearchPath
+                            : `${baseDir}/${normalizedSearchPath.replace(/^\/+/, '')}`;
+
+                        return aAbsolute === searchAbsolute;
+                    }
+                    return false;
+                });
                 
-                const asset = projectAssetOptions.find(a => a.value.replace(/\\/g, '/') === normalizedSearchPath);
                 popoverProjectLinkCategory = asset ? asset.category : 'Other';
                 
                 showProjectLinkPopover = true;
