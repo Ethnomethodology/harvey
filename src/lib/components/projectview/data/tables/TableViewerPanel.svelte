@@ -259,11 +259,11 @@
             mediaNode = findMediaByTranscriptPathRecursive(proj.files, popoverProjectLink);
 
             if (mediaNode) {
-                // Dispatch event to open the parent media file in the Transcriptions tab
-                // then select the specific transcript
-                dispatch('requestTranscriptionTabWithMediaAndDialog', {
-                    mediaFile: mediaNode,
-                    transcriptPathToLoad: popoverProjectLink
+                dispatch('requestviewchange', {
+                    tabName: 'data',
+                    loadNotePath: popoverProjectLink,
+                    viewType: viewType,
+                    originalDocType: originalDocType
                 });
                 showProjectLinkPopover = false;
                 return;

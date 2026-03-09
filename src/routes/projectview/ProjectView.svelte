@@ -783,8 +783,13 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                     return null;
                 }
                 const mediaNode = findMediaByTranscriptPathRecursive(proj.files, path);
-                if (mediaNode) prepareMediaNoteView(mediaNode.path);
-                else prepareDocumentView(path, 'documents');
+                if (mediaNode) {
+                    prepareMediaNoteView(mediaNode.path);
+                    // Override the active transcript so the requested one opens specifically
+                    project.update(p => ({ ...p, activeTranscriptPathInDataTab: path }));
+                } else {
+                    prepareDocumentView(path, 'documents');
+                }
             } else {
                 const ext = path.split('.').pop()?.toLowerCase();
                 let type = 'documents';
