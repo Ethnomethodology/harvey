@@ -38,6 +38,13 @@
     let documentViewRef;
     let importedTranscriptViewRef;
 
+    export async function getExportData() {
+        if (tableViewRef) {
+            return await tableViewRef.getExportData();
+        }
+        return null;
+    }
+
     export function triggerImageExport() {
         if (imageViewRef) {
             imageViewRef.triggerExport();

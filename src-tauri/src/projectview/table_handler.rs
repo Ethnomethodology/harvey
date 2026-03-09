@@ -1062,6 +1062,42 @@ pub async fn create_new_table(
 }
 
 #[tauri::command]
+pub async fn export_formatted_table_to_csv(
+    data: Vec<Value>,
+    headers: Vec<String>,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_formatted_table_to_csv] Exporting formatted table to: {}", output_path_str);
+    
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_csv_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}
+
+#[tauri::command]
+pub async fn export_formatted_table_to_xlsx(
+    data: Vec<Value>,
+    headers: Vec<String>,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_formatted_table_to_xlsx] Exporting formatted table to: {}", output_path_str);
+    
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_xlsx_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}
+
+#[tauri::command]
 pub async fn export_table_to_csv(
     table_path_str: String,
     output_path_str: String,

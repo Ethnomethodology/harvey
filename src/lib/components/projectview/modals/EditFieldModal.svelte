@@ -18,8 +18,10 @@
         AlertCircle,
         X,
         Link2,
-        TextInitial
+        TextInitial,
+        Star
     } from 'lucide-svelte';
+    import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
         Input, 
         Label, 
@@ -91,7 +93,7 @@
     const types = ['Text', 'Numeric', 'DateTime', 'Contact', 'Misc'].map(t => ({name: t, value: t}));
     const subTypes = {
         'Text': ['Small Text', 'Long Text'],
-        'Numeric': ['Number', 'Currency', 'Percent'],
+        'Numeric': ['Number', 'Currency', 'Percent', 'Progress', 'Rating'],
         'DateTime': ['Date', 'Date & Time', 'Time'],
         'Contact': ['Email', 'Phone', 'Hyperlink'],
         'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
@@ -99,26 +101,25 @@
 
     const dateTimeFormats = {
         'Date': [
-            { name: 'Default', value: '' },
+            { name: 'Default (YYYY-MM-DD)', value: '' },
             { name: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
             { name: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
             { name: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-            { name: 'Full Date', value: 'MMMM DD, YYYY' },
-            { name: 'Year Only', value: 'YYYY' },
-            { name: 'Month Only', value: 'MMMM' },
-            { name: 'Month Year', value: 'MMMM YYYY' }
+            { name: 'YYYY', value: 'YYYY' },
+            { name: 'MMMM', value: 'MMMM' },
+            { name: 'MMMM YYYY', value: 'MMMM YYYY' }
         ],
         'Date & Time': [
-            { name: 'Default', value: '' },
-            { name: 'ISO', value: 'YYYY-MM-DD HH:mm' },
-            { name: 'British', value: 'DD/MM/YYYY HH:mm' },
-            { name: 'American', value: 'MM/DD/YYYY hh:mm A' }
+            { name: 'Default (YYYY-MM-DD HH:mm)', value: '' },
+            { name: 'YYYY-MM-DD HH:mm', value: 'YYYY-MM-DD HH:mm' },
+            { name: 'DD/MM/YYYY HH:mm', value: 'DD/MM/YYYY HH:mm' },
+            { name: 'MM/DD/YYYY hh:mm A', value: 'MM/DD/YYYY hh:mm A' }
         ],
         'Time': [
-            { name: 'Default', value: '' },
-            { name: '24 Hour', value: 'HH:mm' },
-            { name: '24 Hour + Sec', value: 'HH:mm:ss' },
-            { name: '12 Hour', value: 'hh:mm A' }
+            { name: 'Default (HH:mm)', value: '' },
+            { name: 'HH:mm', value: 'HH:mm' },
+            { name: 'HH:mm:ss', value: 'HH:mm:ss' },
+            { name: 'hh:mm A', value: 'hh:mm A' }
         ]
     };
 
@@ -177,6 +178,8 @@
         if (type === 'Numeric') {
             if (subType === 'Currency') return DollarSign;
             if (subType === 'Percent') return Percent;
+            if (subType === 'Progress') return ProgressIcon;
+            if (subType === 'Rating') return Star;
             return Hash;
         }
         
@@ -225,6 +228,7 @@
                 <Input
                     id="field-name"
                     type="text"
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                     bind:value={editedName}
                     placeholder="Enter field name"
                 />
@@ -287,18 +291,20 @@
                 {#if editedSchema.type === 'Numeric'}
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1">
-                            <Label for="field-min" class="mb-2">MIN VALUE</Label>
+                            <Label for="field-min" class="mb-2">{editedSchema.subType === 'Rating' ? 'MIN STARS' : 'MIN VALUE'}</Label>
                             <Input
                                 id="field-min"
                                 type="number"
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 bind:value={editedSchema.min}
                             />
                         </div>
                         <div class="space-y-1">
-                            <Label for="field-max" class="mb-2">MAX VALUE</Label>
+                            <Label for="field-max" class="mb-2">{editedSchema.subType === 'Rating' ? 'MAX STARS' : 'MAX VALUE'}</Label>
                             <Input
                                 id="field-max"
                                 type="number"
+                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 bind:value={editedSchema.max}
                             />
                         </div>
@@ -315,6 +321,7 @@
                                 {#if selectedCurrency === 'OTHER'}
                                     <Input 
                                         type="text" 
+                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                         bind:value={customCurrencyCode} 
                                         placeholder="Enter 3-letter ISO Code (e.g. BTC)" 
                                         maxlength="3"
@@ -329,6 +336,7 @@
                         <Input
                             id="field-options"
                             type="text"
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                             bind:value={optionsText}
                             placeholder="Option 1, Option 2, Option 3..."
                         />
@@ -346,9 +354,10 @@
 
                 <!-- Description -->
                 <div class="space-y-1 pt-2">
-                    <Label for="field-desc" class="mb-2">TOOLTIP / DESCRIPTION</Label>
+                    <Label for="field-desc" class="mb-2">DESCRIPTION</Label>
                     <Textarea
                         id="field-desc"
+                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                         bind:value={editedSchema.description}
                         rows="2"
                         placeholder="Explain the purpose of this field..."

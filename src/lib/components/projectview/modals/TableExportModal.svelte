@@ -16,6 +16,7 @@
 
 	export let showModal = false;
 	export let tablePath = '';
+    export let getExportData = null; // Optional function to get formatted data from the UI
 
 	const dispatch = createEventDispatcher();
 
@@ -104,11 +105,29 @@
          }
 
          try {
-             if (exportFormat === 'xlsx') {
-                 await invoke('export_table_to_xlsx', { tablePathStr: tablePath, outputPathStr: fullExportPath });
-             } else if (exportFormat === 'csv') {
-                 await invoke('export_table_to_csv', { tablePathStr: tablePath, outputPathStr: fullExportPath });
-             }
+            if (getExportData) {
+                const formattedDataObj = await getExportData();
+                if (formattedDataObj) {
+                    const { data, headers } = formattedDataObj;
+                    if (exportFormat === 'xlsx') {
+                        await invoke('export_formatted_table_to_xlsx', { data, headers, outputPathStr: fullExportPath });
+                    } else if (exportFormat === 'csv') {
+                        await invoke('export_formatted_table_to_csv', { data, headers, outputPathStr: fullExportPath });
+                    }
+                } else {
+                    if (exportFormat === 'xlsx') {
+                        await invoke('export_table_to_xlsx', { tablePathStr: tablePath, outputPathStr: fullExportPath });
+                    } else if (exportFormat === 'csv') {
+                        await invoke('export_table_to_csv', { tablePathStr: tablePath, outputPathStr: fullExportPath });
+                    }
+                }
+            } else {
+                if (exportFormat === 'xlsx') {
+                    await invoke('export_table_to_xlsx', { tablePathStr: tablePath, outputPathStr: fullExportPath });
+                } else if (exportFormat === 'csv') {
+                    await invoke('export_table_to_csv', { tablePathStr: tablePath, outputPathStr: fullExportPath });
+                }
+            }
              
              dispatch('confirm', { filePath: fullExportPath, format: exportFormat });
              closeModal();
