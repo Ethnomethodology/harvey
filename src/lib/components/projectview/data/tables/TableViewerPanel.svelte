@@ -129,7 +129,6 @@
 
     async function toggleStyle(styleType) {
         if (!tabulatorInstance) return;
-        const selectedCells = tabulatorInstance.getSelectedData ? tabulatorInstance.getSelectedData() : []; // Usually ranges are used
 
         // Tabulator uses ranges for cell selection
         const ranges = tabulatorInstance.getRanges();
@@ -137,8 +136,15 @@
 
         let cellsToModify = [];
         ranges.forEach(range => {
-            const rangeCells = range.getCells();
-            cellsToModify = cellsToModify.concat(rangeCells);
+            const rows = range.getRows();
+            const columns = range.getColumns();
+
+            rows.forEach(row => {
+                columns.forEach(col => {
+                    const cell = row.getCell(col.getField());
+                    if (cell) cellsToModify.push(cell);
+                });
+            });
         });
 
         if (cellsToModify.length === 0) return;
@@ -148,8 +154,7 @@
         // Check if all selected cells already have the style, if so, we toggle it off. Otherwise, toggle on.
         let allHaveStyle = true;
         cellsToModify.forEach(cell => {
-            // Exclude fields that shouldn't be styled
-            const field = cell.getColumn().getField();
+            const field = cell.getField();
             const schema = tableSchema[field];
             if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
                 return; // Skip these
@@ -166,7 +171,7 @@
         const targetStyleState = !allHaveStyle;
 
         cellsToModify.forEach(cell => {
-            const field = cell.getColumn().getField();
+            const field = cell.getField();
             const schema = tableSchema[field];
             if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
                 return;
@@ -1027,7 +1032,7 @@
             const row = cell.getRow();
             const rowData = row.getData();
             const rowIndex = rowData.harvey_internal_id;
-            const colField = cell.getColumn().getField();
+            const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
             
             // Remove existing highlight for this cell
