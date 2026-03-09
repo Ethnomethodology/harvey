@@ -1186,15 +1186,9 @@
         input.step = "1";
         input.value = initialVal;
         
-        const tooltip = document.createElement("div");
-        tooltip.className = "absolute -top-6 -ml-3 w-8 text-center text-xs font-semibold text-white bg-gray-900 dark:bg-gray-700 rounded py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50";
-        tooltip.innerHTML = `${initialVal}<div class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 -bottom-1 left-1/2 -translate-x-1/2"></div>`;
-
         const updateUI = (v) => {
             const percentage = ((v - min) / (max - min)) * 100;
             input.style.background = `linear-gradient(to right, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%)`;
-            tooltip.style.left = `calc(${percentage}% + 8px)`; // 8px offsets to center over thumb correctly with the px-2 container
-            tooltip.childNodes[0].nodeValue = v;
         };
 
         input.className = "progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow";
@@ -1206,7 +1200,6 @@
         textLabel.textContent = `${initialVal}/${max}`;
 
         container.appendChild(input);
-        container.appendChild(tooltip);
         container.appendChild(textLabel);
 
         onRendered(() => {
@@ -1957,11 +1950,11 @@
                     colDef.editorParams = { elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 } else {
                     colDef.editor = "textarea";
-                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
+                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:false, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 }
             } else {
                 colDef.editor = "textarea";
-                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
+                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:false, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
             }
 
             // Apply custom styling/highlighting formatter logic
@@ -2431,7 +2424,7 @@
                     headerHozAlign:"center",
                     headerVAlign:"middle",
                     editor:"textarea",
-                    editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
+                    editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:false },
                     resizable:"header",
                     width:200,
                     minWidth: 100,
