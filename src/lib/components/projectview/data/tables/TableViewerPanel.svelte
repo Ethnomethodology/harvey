@@ -2,7 +2,8 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { get, writable } from 'svelte/store';
-    import { TabulatorFull as Tabulator } from 'tabulator-tables';
+    import { TabulatorFull as Tabulator, HistoryModule } from 'tabulator-tables';
+    Tabulator.registerModule(HistoryModule);
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import {
         loadTableData,
@@ -57,6 +58,10 @@
     let error = null;
     let currentLoadedPath = null;
 
+    let svelteUndoStack = [];
+    let svelteRedoStack = [];
+    let isUndoRedoActive = false; // Flag to prevent history tracking during undo/redo actions
+
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let tableReady = false;
@@ -70,7 +75,7 @@
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
-    let invalidCells = new Set(); // Stores cell keys "rowIndex-colField"
+    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
     let tableHasValidationErrors = false;
 
     function reformatAllRows() {
@@ -336,60 +341,154 @@
         showEditFieldModal = true;
     }
 
+    function parseDate(str, schema) {
+        if (!str || typeof str !== 'string') return null;
+        const format = schema?.format || '';
+        const subType = schema?.subType || 'Date';
+
+        // Helper to normalize months
+        const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+        const getMonthIndex = (m) => months.indexOf(m.toLowerCase());
+
+        // Try standard ISO first
+        let d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
+
+        // Try format-specific parsing
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[1] - 1, p[0]);
+            } else if (format === 'MM/DD/YYYY') {
+                const p = str.split('/');
+                if (p.length === 3) return new Date(p[2], p[0] - 1, p[1]);
+            } else if (format === 'YYYY') {
+                if (/^\d{4}$/.test(str)) return new Date(str, 0, 1);
+            } else if (format === 'MMMM') {
+                const idx = getMonthIndex(str);
+                if (idx !== -1) return new Date(new Date().getFullYear(), idx, 1);
+            } else if (format === 'MMMM YYYY') {
+                const p = str.split(' ');
+                const idx = getMonthIndex(p[0]);
+                if (p.length === 2 && idx !== -1) return new Date(p[1], idx, 1);
+            }
+        } else if (subType === 'Time') {
+            const is12Hour = format.includes('A') || format.includes('a');
+            const ampmMatch = str.match(/(AM|PM)/i);
+            const ampm = ampmMatch ? ampmMatch[0].toUpperCase() : null;
+            const timeParts = str.replace(/(AM|PM)/i, '').trim().split(':');
+            
+            if (timeParts.length >= 2) {
+                let h = parseInt(timeParts[0]);
+                const m = parseInt(timeParts[1]);
+                const s = parseInt(timeParts[2] || 0);
+                
+                if (is12Hour && ampm) {
+                    if (ampm === 'PM' && h < 12) h += 12;
+                    if (ampm === 'AM' && h === 12) h = 0;
+                }
+                
+                const d = new Date();
+                d.setHours(h, m, s);
+                return d;
+            }
+        } else if (subType === 'Date & Time') {
+            // Improved split: find first T or space that separates date and time
+            let dateStr, timeStr;
+            if (str.includes('T')) {
+                [dateStr, timeStr] = str.split('T');
+            } else {
+                // For space separator, we assume the date part is the first block
+                // (which works for YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
+                const firstSpace = str.indexOf(' ');
+                if (firstSpace !== -1) {
+                    dateStr = str.substring(0, firstSpace);
+                    timeStr = str.substring(firstSpace + 1);
+                }
+            }
+
+            if (dateStr && timeStr) {
+                const dateD = parseDate(dateStr, { type: 'DateTime', subType: 'Date', format: format.split(/[T ]/)[0] });
+                const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') });
+                
+                if (dateD && timeD) {
+                    dateD.setHours(timeD.getHours(), timeD.getMinutes(), timeD.getSeconds());
+                    return dateD;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function formatDate(d, schema) {
+        if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+        const format = schema?.format || '';
+        const subType = schema?.subType || 'Date';
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        if (subType === 'Date') {
+            if (format === 'DD/MM/YYYY') return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+            if (format === 'MM/DD/YYYY') return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+            if (format === 'YYYY') return `${d.getFullYear()}`;
+            if (format === 'MMMM') return months[d.getMonth()];
+            if (format === 'MMMM YYYY') return `${months[d.getMonth()]} ${d.getFullYear()}`;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        } else if (subType === 'Time') {
+            const h = d.getHours();
+            const m = pad(d.getMinutes());
+            const s = pad(d.getSeconds());
+            if (format === 'HH:mm:ss') return `${pad(h)}:${m}:${s}`;
+            if (format === 'hh:mm A') {
+                const displayH = h % 12 || 12;
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                return `${pad(displayH)}:${m} ${ampm}`;
+            }
+            return `${pad(h)}:${m}`;
+        } else if (subType === 'Date & Time') {
+            const formatParts = format.split(/[T ]/);
+            const datePart = formatDate(d, { subType: 'Date', format: formatParts[0] });
+            const timePart = formatDate(d, { subType: 'Time', format: formatParts.slice(1).join(' ') || '' });
+            if (format.includes('T')) return `${datePart}T${timePart}`;
+            return `${datePart} ${timePart}`;
+        }
+        return '';
+    }
+
     async function handleSaveField(event) {
         const { oldName, newName, schema } = event.detail;
         if (!tablePath) return;
 
         try {
             if (isAddingNewField) {
-                // Handle new field addition
-                // 1. Update local schema
+                // ... (existing adding new field logic)
                 tableSchema[newName] = { ...schema };
-
-                // 2. Prepare data with empty values for the new field
                 const updatedData = tabulatorInstance.getData();
-                updatedData.forEach(row => {
-                    row[newName] = "";
-                });
-
-                // 3. Determine ordered headers
+                updatedData.forEach(row => { row[newName] = ""; });
                 const columns = tabulatorInstance.getColumns();
-                let orderedHeaders = columns
-                    .filter(c => c.getField())
-                    .map(c => c.getField());
-                
+                let orderedHeaders = columns.filter(c => c.getField()).map(c => c.getField());
                 if (newFieldTargetColumn) {
                     const targetField = newFieldTargetColumn.getField();
                     const index = orderedHeaders.indexOf(targetField);
                     if (index !== -1) {
-                        if (newFieldPosition === 'before') {
-                            orderedHeaders.splice(index, 0, newName);
-                        } else {
-                            orderedHeaders.splice(index + 1, 0, newName);
-                        }
-                    } else {
-                        orderedHeaders.push(newName);
-                    }
-                } else {
-                    orderedHeaders.push(newName);
-                }
-
-                // 4. Save data and schema
+                        if (newFieldPosition === 'before') orderedHeaders.splice(index, 0, newName);
+                        else orderedHeaders.splice(index + 1, 0, newName);
+                    } else orderedHeaders.push(newName);
+                } else orderedHeaders.push(newName);
                 await saveTableData(tablePath, updatedData, orderedHeaders);
                 await saveTableSchema(tablePath, tableSchema);
-
-                // 5. Reload
                 await initializeTable(tablePath, null, true);
             } else {
-                // Handle existing field rename/update
+                const oldSchema = tableSchema[oldName];
+                const isFormatChange = oldSchema && oldSchema.type === 'DateTime' && schema.type === 'DateTime' && oldSchema.format !== schema.format;
+
+                // Handle renaming/updating
                 if (oldName !== newName) {
                     await renameTableHeader(tablePath, oldName, newName);
-                    
-                    // Update local schema reference
                     tableSchema[newName] = { ...schema };
                     delete tableSchema[oldName];
-
-                    // Update layout prefs if they exist
                     const projectBaseDir = get(project)?.baseDirectory;
                     if (projectBaseDir) {
                         const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
@@ -403,14 +502,26 @@
                         }
                     }
                 } else {
-                    // Just update schema
                     tableSchema[oldName] = { ...schema };
                 }
 
-                // Save the updated schema
-                await saveTableSchema(tablePath, tableSchema);
+                // If format changed, attempt to convert data
+                if (isFormatChange && tabulatorInstance) {
+                    const data = tabulatorInstance.getData();
+                    data.forEach(row => {
+                        const val = row[newName || oldName];
+                        if (val) {
+                            const dateObj = parseDate(val, oldSchema);
+                            if (dateObj) {
+                                row[newName || oldName] = formatDate(dateObj, schema);
+                            }
+                        }
+                    });
+                    const orderedHeaders = tabulatorInstance.getColumns().filter(c => c.getField()).map(c => c.getField());
+                    await saveTableData(tablePath, data, orderedHeaders);
+                }
 
-                // Reload table to reflect structural and schema changes
+                await saveTableSchema(tablePath, tableSchema);
                 await initializeTable(tablePath, null, true);
             }
         } catch (error) {
@@ -476,7 +587,10 @@
 
     async function deleteRow(row) {
         try {
+            const rowData = row.getData();
+            const rowId = rowData.harvey_internal_id;
             await row.delete();
+            pushToHistory({ type: 'rowDelete', rowData, rowId });
             await saveTableChanges();
         } catch (err) {
             console.error("Error deleting entry:", err);
@@ -498,6 +612,7 @@
 
         try {
             const addedRow = await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            pushToHistory({ type: 'rowAdd', rowData: newRowData, rowId: newRowData.harvey_internal_id, position, relativeTo: row });
 
             // Workaround for suspected backend bug: "dirty" a cell to ensure the new entry is saved.
             const cells = addedRow.getCells();
@@ -526,6 +641,7 @@
 
         try {
             await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            pushToHistory({ type: 'rowAdd', rowData: newRowData, rowId: newRowData.harvey_internal_id, position, relativeTo: row });
             await saveTableChanges();
         } catch (err) {
             console.error("Error pasting entry:", err);
@@ -544,7 +660,22 @@
         if (tabulatorInstance) {
             const row = tabulatorInstance.getRow(rowIndex);
             if (row) {
+                const oldData = { ...row.getData() };
                 await row.update(rowData);
+
+                // Track modal edits in history by comparing fields
+                Object.keys(rowData).forEach(field => {
+                    if (field !== 'harvey_internal_id' && rowData[field] !== oldData[field]) {
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: rowIndex,
+                            field: field,
+                            oldValue: oldData[field],
+                            newValue: rowData[field]
+                        });
+                    }
+                });
+
                 debouncedSave();
             }
         }
@@ -713,7 +844,7 @@
         
         const rows = tabulatorInstance.getRows();
         let foundError = false;
-        const newInvalidCells = new Set();
+        const newInvalidCells = new Map();
 
         rows.forEach(row => {
             const rowIndex = row.getData().harvey_internal_id;
@@ -721,11 +852,11 @@
                 const colField = cell.getField();
                 const value = cell.getValue();
                 const schema = tableSchema[colField];
-                if (schema && value !== null && value !== undefined && value !== "") {
-                    const isCellValid = performSoftValidation(value, schema);
-                    if (!isCellValid) {
+                if (schema) {
+                    const validation = performSoftValidation(value, schema);
+                    if (!validation.valid) {
                         foundError = true;
-                        newInvalidCells.add(`${rowIndex}-${colField}`);
+                        newInvalidCells.set(`${rowIndex}-${colField}`, validation.message);
                     }
                 }
             });
@@ -748,54 +879,67 @@
     }
 
     function performSoftValidation(value, schema) {
-        if (!schema) return true;
+        if (!schema) return { valid: true };
         const type = schema.type;
         const subType = schema.subType;
 
-        if (schema.required && (value === null || value === undefined || value === "")) {
-            return false;
+        const isBlank = value === null || value === undefined || (typeof value === 'string' && value.trim() === "") || (Array.isArray(value) && value.length === 0);
+
+        if (schema.required && isBlank) {
+            return { valid: false, message: "Field is required" };
         } 
         
-        if (value !== null && value !== undefined && value !== "") {
+        if (!isBlank) {
             if (type === 'Numeric') {
                 const num = parseFloat(value);
-                if (isNaN(num) || !isFinite(value)) return false;
-                if (schema.min !== null && num < schema.min) return false;
-                if (schema.max !== null && num > schema.max) return false;
+                if (isNaN(num) || !isFinite(value)) return { valid: false, message: "Must be a valid number" };
+                if (schema.min !== null && schema.min !== undefined && num < schema.min) return { valid: false, message: `Value must be at least ${schema.min}` };
+                if (schema.max !== null && schema.max !== undefined && num > schema.max) return { valid: false, message: `Value must be at most ${schema.max}` };
             } else if (type === 'Contact' && subType === 'Email') {
-                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { valid: false, message: "Invalid email format" };
             } else if (type === 'Contact' && subType === 'Phone') {
-                return /^\+?[\d\s-]{7,20}$/.test(value);
+                if (!/^\+?[\d\s-]{7,20}$/.test(value)) return { valid: false, message: "Invalid phone format" };
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (schema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-                    if (schema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value);
-                    if (schema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value);
-                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value);
+                    if (schema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return { valid: false, message: "Invalid time format (HH:mm)" };
+                    if (schema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return { valid: false, message: "Invalid time format (HH:mm:ss)" };
+                    if (schema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return { valid: false, message: "Invalid time format (hh:mm AM/PM)" };
+                    if (!/^([01]\d|2[0-3]):?([0-5]\d)/.test(value)) return { valid: false, message: "Invalid time format" };
                 } else if (subType === 'Date') {
-                    if (schema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value);
-                    if (schema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value);
-                    if (schema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value);
-                    if (schema.format === 'YYYY') return /^\d{4}$/.test(value);
-                    if (schema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase());
+                    if (schema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return { valid: false, message: "Invalid date format (YYYY-MM-DD)" };
+                    if (schema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return { valid: false, message: "Invalid date format (DD/MM/YYYY)" };
+                    if (schema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return { valid: false, message: "Invalid date format (MM/DD/YYYY)" };
+                    if (schema.format === 'YYYY' && !/^\d{4}$/.test(value)) return { valid: false, message: "Invalid year format (YYYY)" };
+                    if (schema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return { valid: false, message: "Invalid month name" };
                     if (schema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        return parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        if (!valid) return { valid: false, message: "Invalid Month YYYY format" };
                     }
-                    return !isNaN(Date.parse(value));
+                    
+                    if (!parseDate(value, schema)) return { valid: false, message: "Invalid date" };
                 } else {
-                    return !isNaN(Date.parse(value));
+                    if (!parseDate(value, schema)) return { valid: false, message: "Invalid date/time" };
+                }
+            } else if (type === 'Misc') {
+                if (subType === 'Selectbox' && Array.isArray(schema.options)) {
+                    if (!schema.options.includes(value)) return { valid: false, message: `Value must be one of: ${schema.options.join(', ')}` };
+                } else if (subType === 'Multiselect' && Array.isArray(schema.options)) {
+                    const vals = Array.isArray(value) ? value : String(value).split(',').map(s => s.trim()).filter(Boolean);
+                    const invalidVals = vals.filter(v => !schema.options.includes(v));
+                    if (invalidVals.length > 0) return { valid: false, message: `Invalid options selected: ${invalidVals.join(', ')}` };
                 }
             }
         }
-        return true;
+        return { valid: true };
     }
 
     // Custom soft validator wrapper for Tabulator
     function softValidator(cell, value, parameters) {
-        // Validation check is now handled by checkValidationErrors which redraws and triggers formatting
-        setTimeout(checkValidationErrors, 10);
-        return true; // Always allow editing
+        // We always allow editing.
+        // Validation highlighting is triggered globally on cellEdited to prevent
+        // row reformatting from interrupting Tabulator's active edit/history cycle.
+        return true;
     }
 
     async function getAllProjectAssets() {
@@ -805,21 +949,154 @@
         return await getProjectAssetsForLink(currentProject.id);
     }
 
+    // Custom editors for Progress and Rating
+    function progressEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.className = "flex items-center w-full h-full px-2";
+        container.style.minHeight = "24px";
+
+        const min = editorParams.min ?? 0;
+        const max = editorParams.max ?? 100;
+        const initialVal = cell.getValue() ?? min;
+
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = min;
+        input.max = max;
+        input.step = "1";
+        input.value = initialVal;
+        
+        const updateGradient = (v) => {
+            const percentage = ((v - min) / (max - min)) * 100;
+            input.style.background = `linear-gradient(to right, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%)`;
+        };
+
+        input.className = "progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700";
+        input.style.width = "100%";
+        updateGradient(initialVal);
+
+        container.appendChild(input);
+
+        onRendered(() => {
+            input.focus();
+        });
+
+        const saveVal = () => {
+            success(parseFloat(input.value));
+        };
+
+        input.addEventListener('input', () => updateGradient(input.value));
+        input.addEventListener('change', saveVal);
+        input.addEventListener('blur', saveVal);
+
+        // Stop Tabulator from intercepting drag events
+        input.addEventListener('mousedown', e => e.stopPropagation());
+        input.addEventListener('touchstart', e => e.stopPropagation());
+
+        return container;
+    }
+
+    function ratingEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.className = "flex items-center justify-center w-full h-full gap-0.5 cursor-pointer";
+
+        const maxStars = editorParams.stars || 5;
+        let currentValue = cell.getValue() || 0;
+
+        const stars = [];
+
+        const renderStars = (hoverValue) => {
+            const val = hoverValue !== null ? hoverValue : currentValue;
+            stars.forEach((svg, i) => {
+                const filled = i < val;
+                svg.innerHTML = `<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                if (filled) {
+                    svg.classList.add("text-yellow-400", "dark:text-yellow-300");
+                    svg.classList.remove("text-gray-300", "dark:text-gray-600");
+                } else {
+                    svg.classList.remove("text-yellow-400", "dark:text-yellow-300");
+                    svg.classList.add("text-gray-300", "dark:text-gray-600");
+                }
+            });
+        };
+
+        for (let i = 0; i < maxStars; i++) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", "0 0 24 24");
+            svg.setAttribute("width", "16");
+            svg.setAttribute("height", "16");
+            svg.className = "transition-colors duration-150";
+
+            svg.addEventListener("mouseenter", () => renderStars(i + 1));
+            svg.addEventListener("click", (e) => {
+                e.stopPropagation();
+                currentValue = i + 1;
+                renderStars(null);
+                success(currentValue);
+            });
+
+            stars.push(svg);
+            container.appendChild(svg);
+        }
+
+        container.addEventListener("mouseleave", () => renderStars(null));
+
+        // Initial render
+        renderStars(null);
+
+        onRendered(() => {
+            // Focus container to allow blur detection
+            container.tabIndex = 0;
+            container.focus();
+        });
+
+        const saveVal = () => {
+            success(currentValue);
+        };
+
+        container.addEventListener('blur', saveVal);
+
+        // Stop Tabulator from intercepting drag/click events
+        container.addEventListener('mousedown', e => e.stopPropagation());
+        container.addEventListener('touchstart', e => e.stopPropagation());
+
+        return container;
+    }
+
     // Custom editors for Date, Time, and DateTime
     function dateEditor(cell, onRendered, success, cancel, editorParams) {
+        const container = document.createElement("div");
+        container.style.position = "relative";
+        container.style.width = "100%";
+        container.style.height = "100%";
+
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+        const displayFormat = schema.format || 'YYYY-MM-DD';
+        // Datepicker uses lowercase for format
+        const pickerFormat = displayFormat.toLowerCase().replace('yyyy', 'yyyy').replace('mm', 'mm').replace('dd', 'dd');
+
         const editor = document.createElement("input");
         editor.setAttribute("type", "text");
+        editor.setAttribute("autocomplete", "off");
+        editor.setAttribute("autocorrect", "off");
+        editor.setAttribute("autocapitalize", "off");
+        editor.setAttribute("spellcheck", "false");
         editor.style.padding = "4px";
         editor.style.width = "100%";
+        editor.style.height = "100%";
         editor.style.boxSizing = "border-box";
+        editor.style.border = "none";
         editor.value = cell.getValue() || "";
+
+        container.appendChild(editor);
 
         let picker;
 
         onRendered(function() {
             editor.focus();
             picker = new Datepicker(editor, {
-                format: 'yyyy-mm-dd',
+                format: pickerFormat,
                 autohide: true,
                 orientation: 'auto',
                 todayBtn: true,
@@ -828,27 +1105,53 @@
             });
             picker.show(); // Ensure picker appears immediately
 
+            const finish = () => {
+                if (picker) {
+                    const d = picker.getDate();
+                    let dateStr = editor.value;
+                    if (d instanceof Date && !isNaN(d)) {
+                        dateStr = formatDate(d, schema);
+                    }
+                    success(dateStr);
+                    cleanup();
+                } else {
+                    cancel();
+                }
+            };
+
             editor.addEventListener('changeDate', (e) => {
-                success(picker.getDate('yyyy-mm-dd'));
+                finish(); // Close immediately on date pick
             });
 
             // Handle outside click specifically for Tabulator inline
             const handleOutside = (e) => {
-                const path = e.composedPath();
-                if (picker && picker.active && !path.includes(editor) && !path.includes(picker.pickerElement)) {
-                    picker.hide();
-                    cancel();
+                const isClickInsideContainer = container.contains(e.target) || container === e.target;
+
+                let isClickInsidePicker = false;
+                if (e.target instanceof Element) {
+                    isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
+                }
+
+                if (!isClickInsideContainer && !isClickInsidePicker) {
+                    finish();
                 }
             };
+
             document.addEventListener('mousedown', handleOutside, true);
 
-            editor.onremove = () => {
+            function cleanup() {
                 document.removeEventListener('mousedown', handleOutside, true);
-                if (picker) picker.destroy();
-            };
+                if (picker) {
+                    picker.hide();
+                    picker.destroy();
+                    picker = null;
+                }
+            }
+
+            editor.onremove = cleanup;
         });
 
-        return editor;
+        return container;
     }
 
     function timeEditor(cell, onRendered, success, cancel, editorParams) {
@@ -857,9 +1160,18 @@
         container.style.width = "100%";
         container.style.height = "100%";
 
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+        const format = schema.format || '';
+        const hasSeconds = format.includes(':ss');
+
         const input = document.createElement("input");
         input.type = "text";
-        input.value = cell.getValue() || "00:00";
+        input.setAttribute("autocomplete", "off");
+        input.setAttribute("autocorrect", "off");
+        input.setAttribute("autocapitalize", "off");
+        input.setAttribute("spellcheck", "false");
+        input.value = cell.getValue() || "";
         input.style.width = "100%";
         input.style.height = "100%";
         input.style.padding = "4px";
@@ -868,11 +1180,12 @@
 
         onRendered(() => {
             const dropdownEl = document.createElement("div");
-            dropdownEl.className = "z-[10000] w-24 bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden";
+            dropdownEl.className = `z-[10000] ${hasSeconds ? 'w-36' : 'w-24'} bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden`;
             document.body.appendChild(dropdownEl);
 
             const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
             const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+            const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
             const content = document.createElement("div");
             content.className = "flex h-48";
@@ -881,12 +1194,13 @@
             hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
             hours.forEach(h => {
                 const btn = document.createElement("button");
-                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.startsWith(h) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
                 btn.textContent = h;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const m = input.value.split(':')[1] || "00";
-                    input.value = `${h}:${m}`;
+                    const d = parseDate(input.value, schema) || new Date();
+                    d.setHours(parseInt(h));
+                    input.value = formatDate(d, schema);
                     updateSelected();
                 };
                 hCol.appendChild(btn);
@@ -896,27 +1210,63 @@
             mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
             minutes.forEach(m => {
                 const btn = document.createElement("button");
-                btn.className = `w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30 ${input.value.endsWith(m) ? 'bg-blue-500 text-white font-bold' : ''}`;
+                btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
                 btn.textContent = m;
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    const h = input.value.split(':')[0] || "00";
-                    input.value = `${h}:${m}`;
-                    success(input.value);
-                    cleanup();
+                    const d = parseDate(input.value, schema) || new Date();
+                    d.setMinutes(parseInt(m));
+                    input.value = formatDate(d, schema);
+                    if (!hasSeconds) {
+                        success(input.value);
+                        cleanup();
+                    } else {
+                        updateSelected();
+                    }
                 };
                 mCol.appendChild(btn);
             });
 
-            function updateSelected() {
-                const [h, m] = input.value.split(':');
-                Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
-                Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
-            }
-
             content.appendChild(hCol);
             content.appendChild(mCol);
+
+            if (hasSeconds) {
+                const sCol = document.createElement("div");
+                sCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700";
+                seconds.forEach(s => {
+                    const btn = document.createElement("button");
+                    btn.className = "w-full py-1 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/30";
+                    btn.textContent = s;
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const d = parseDate(input.value, schema) || new Date();
+                        d.setSeconds(parseInt(s));
+                        input.value = formatDate(d, schema);
+                        success(input.value);
+                        cleanup();
+                    };
+                    sCol.appendChild(btn);
+                });
+                content.appendChild(sCol);
+            }
+
+            function updateSelected() {
+                const d = parseDate(input.value, schema);
+                if (!d) return;
+                const h = d.getHours().toString().padStart(2, '0');
+                const m = d.getMinutes().toString().padStart(2, '0');
+                const s = d.getSeconds().toString().padStart(2, '0');
+
+                Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                if (hasSeconds) {
+                    const sCol = content.children[2];
+                    Array.from(sCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === s));
+                }
+            }
+
             dropdownEl.appendChild(content);
+            updateSelected();
 
             const rect = input.getBoundingClientRect();
             dropdownEl.style.position = "fixed";
@@ -930,12 +1280,13 @@
 
             function handleOutside(e) {
                 if (!dropdownEl.contains(e.target) && e.target !== input) {
-                    cancel();
+                    success(input.value);
                     cleanup();
                 }
             }
 
             document.addEventListener('mousedown', handleOutside, true);
+            dropdownEl.addEventListener('mousedown', (e) => e.preventDefault());
         });
 
         return container;
@@ -945,19 +1296,33 @@
         const container = document.createElement("div");
         container.className = "flex items-center gap-1 w-full h-full p-1";
         
+        const field = cell.getField();
+        const schema = tableSchema[field] || {};
+        const format = schema.format || '';
+        const hasSeconds = format.includes(':ss');
+
         const val = cell.getValue() || "";
-        let [datePart, timePart] = val.includes('T') ? val.split('T') : [val, "00:00"];
-        if (!datePart) datePart = "2026-03-07";
+        const dateObj = parseDate(val, schema) || new Date();
+        const datePart = formatDate(dateObj, { ...schema, subType: 'Date', format: format.split(/[T ]/)[0] });
+        const timePart = formatDate(dateObj, { ...schema, subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') || 'HH:mm' });
 
         const dateInput = document.createElement("input");
         dateInput.type = "text";
+        dateInput.setAttribute("autocomplete", "off");
+        dateInput.setAttribute("autocorrect", "off");
+        dateInput.setAttribute("autocapitalize", "off");
+        dateInput.setAttribute("spellcheck", "false");
         dateInput.value = datePart;
         dateInput.className = "flex-1 min-w-0 h-full border-none p-0 text-xs";
         
         const timeInput = document.createElement("input");
         timeInput.type = "text";
+        timeInput.setAttribute("autocomplete", "off");
+        timeInput.setAttribute("autocorrect", "off");
+        timeInput.setAttribute("autocapitalize", "off");
+        timeInput.setAttribute("spellcheck", "false");
         timeInput.value = timePart;
-        timeInput.className = "w-12 h-full border-none p-0 text-xs";
+        timeInput.className = `${hasSeconds ? 'w-20' : 'w-16'} h-full border-none p-0 text-xs`;
         timeInput.readOnly = true;
 
         container.appendChild(dateInput);
@@ -966,31 +1331,155 @@
         let datePicker;
 
         onRendered(() => {
-            dateInput.focus(); // Focus date input first
+            dateInput.focus();
             datePicker = new Datepicker(dateInput, {
-                format: 'yyyy-mm-dd',
+                format: (format.split(/[T ]/)[0] || 'YYYY-MM-DD').toLowerCase(),
                 autohide: true,
                 container: 'body'
             });
-            datePicker.show(); // Show picker immediately
+            datePicker.show();
 
             const finish = () => {
-                success(`${dateInput.value}T${timeInput.value}`);
+                let dStr = dateInput.value;
+                if (datePicker) {
+                    const d = datePicker.getDate();
+                    if (d instanceof Date && !isNaN(d)) {
+                        dStr = formatDate(d, { ...schema, subType: 'Date', format: format.split(/[T ]/)[0] });
+                    }
+                }
+                const finalDateObj = parseDate(`${dStr} ${timeInput.value}`, schema);
+                success(formatDate(finalDateObj || new Date(), schema));
                 cleanup();
             };
 
-            dateInput.addEventListener('changeDate', () => {
-                // Don't finish yet, let them pick time
-            });
+            dateInput.addEventListener('changeDate', () => {});
+
+            let timeDropdownEl = null;
 
             timeInput.onclick = (e) => {
                 e.stopPropagation();
-                // Simple implementation for now
+                if (timeDropdownEl) {
+                    cleanupTimeDropdown();
+                    return;
+                }
+
+                timeDropdownEl = document.createElement("div");
+                timeDropdownEl.className = `time-dropdown-container z-[10000] ${hasSeconds ? 'w-36' : 'w-24'} bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden`;
+                document.body.appendChild(timeDropdownEl);
+
+                const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+                const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+                const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+                const content = document.createElement("div");
+                content.className = "flex h-48";
+
+                const hCol = document.createElement("div");
+                hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
+                hours.forEach(h => {
+                    const btn = document.createElement("button");
+                    btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
+                    btn.textContent = h;
+                    btn.onclick = (ev) => {
+                        ev.stopPropagation();
+                        const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
+                        currentT.setHours(parseInt(h));
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                        updateSelected();
+                    };
+                    hCol.appendChild(btn);
+                });
+
+                const mCol = document.createElement("div");
+                mCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700";
+                minutes.forEach(m => {
+                    const btn = document.createElement("button");
+                    btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
+                    btn.textContent = m;
+                    btn.onclick = (ev) => {
+                        ev.stopPropagation();
+                        const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                        const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
+                        currentT.setMinutes(parseInt(m));
+                        timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                        if (!hasSeconds) {
+                            cleanupTimeDropdown();
+                        } else {
+                            updateSelected();
+                        }
+                    };
+                    mCol.appendChild(btn);
+                });
+
+                content.appendChild(hCol);
+                content.appendChild(mCol);
+
+                if (hasSeconds) {
+                    const sCol = document.createElement("div");
+                    sCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700";
+                    seconds.forEach(s => {
+                        const btn = document.createElement("button");
+                        btn.className = `w-full py-1 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30`;
+                        btn.textContent = s;
+                        btn.onclick = (ev) => {
+                            ev.stopPropagation();
+                            const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                            const currentT = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat }) || new Date();
+                            currentT.setSeconds(parseInt(s));
+                            timeInput.value = formatDate(currentT, { subType: 'Time', format: timeSubFormat });
+                            cleanupTimeDropdown();
+                        };
+                        sCol.appendChild(btn);
+                    });
+                    content.appendChild(sCol);
+                }
+
+                function updateSelected() {
+                    const timeSubFormat = format.split(/[T ]/).slice(1).join(' ') || 'HH:mm';
+                    const d = parseDate(timeInput.value, { subType: 'Time', format: timeSubFormat });
+                    if (!d) return;
+                    const h = d.getHours().toString().padStart(2, '0');
+                    const m = d.getMinutes().toString().padStart(2, '0');
+                    const s = d.getSeconds().toString().padStart(2, '0');
+
+                    Array.from(hCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === h));
+                    Array.from(mCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === m));
+                    if (hasSeconds) {
+                        const sCol = content.children[2];
+                        Array.from(sCol.children).forEach(b => b.classList.toggle('bg-blue-500', b.textContent === s));
+                    }
+                }
+
+                timeDropdownEl.appendChild(content);
+                updateSelected();
+
+                const rect = timeInput.getBoundingClientRect();
+                timeDropdownEl.style.position = "fixed";
+                timeDropdownEl.style.top = `${rect.bottom}px`;
+                timeDropdownEl.style.left = `${rect.left}px`;
+
+                timeDropdownEl.addEventListener('mousedown', (e) => e.preventDefault());
             };
 
+            function cleanupTimeDropdown() {
+                if (timeDropdownEl && timeDropdownEl.parentNode) {
+                    timeDropdownEl.parentNode.removeChild(timeDropdownEl);
+                }
+                timeDropdownEl = null;
+            }
+
             const handleOutside = (e) => {
-                const path = e.composedPath();
-                if (!path.includes(container) && (!datePicker || !path.includes(datePicker.pickerElement))) {
+                const isClickInsideContainer = container.contains(e.target) || container === e.target;
+                let isClickInsidePicker = false;
+                let isClickInsideTimeDropdown = false;
+
+                if (e.target instanceof Element) {
+                    isClickInsidePicker = e.target.closest('.datepicker-dropdown') || e.target.closest('.datepicker');
+                    isClickInsideTimeDropdown = e.target.closest('.time-dropdown-container');
+                }
+
+                if (!isClickInsideContainer && !isClickInsidePicker && !isClickInsideTimeDropdown) {
                     finish();
                 }
             };
@@ -1000,6 +1489,7 @@
             function cleanup() {
                 document.removeEventListener('mousedown', handleOutside, true);
                 if (datePicker) datePicker.destroy();
+                cleanupTimeDropdown();
             }
         });
 
@@ -1055,17 +1545,38 @@
                         // Immediate toggle on single click
                         const currentVal = cell.getValue();
                         const isCurrentlyChecked = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === "1";
-                        cell.setValue(!isCurrentlyChecked);
+                        const newVal = !isCurrentlyChecked;
+                        cell.setValue(newVal);
+
+                        // Manually trigger history and save
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: cell.getRow().getData().harvey_internal_id,
+                            field: cell.getField(),
+                            oldValue: currentVal,
+                            newValue: newVal
+                        });
+                        debouncedSave();
                     };
                     colDef.hozAlign = "center";
                     colDef.headerHozAlign = "center";
                     colDef.width = 50;
                     colDef.resizable = false;
-                } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
+                    } else if (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect') {
                     colDef.editor = "list";
+
+                    let values = colSchema.options || [];
+                    if (colSchema.subType === 'Selectbox') {
+                        // Use an explicit None option instead of the clearable cross, which reverts in Tabulator
+                        values = [
+                            { label: '-- None --', value: '' },
+                            ...values.map(o => ({ label: o, value: o }))
+                        ];
+                    }
+
                     colDef.editorParams = {
-                        values: colSchema.options || [],
-                        multiselect: colSchema.subType === 'Multiselect'
+                        values: values,
+                        multiselect: colSchema.subType === 'Multiselect',
                     };
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
@@ -1076,15 +1587,83 @@
                         }
                         return val || "";
                     };
-                } else if (colSchema.subType === 'Project Link') {
+                    } else if (colSchema.subType === 'Project Link') {
                     colDef.editor = "list";
                     colDef.editorParams = {
-                        values: projectAssetOptions
+                        values: [
+                            { label: '-- None --', value: '' },
+                            ...projectAssetOptions
+                        ]
                     };
-                }
-            } else if (colSchema.type === 'Numeric') {
-                colDef.editor = "number";
-                if (colSchema.subType === 'Currency') {
+                    }
+                    } else if (colSchema.type === 'Numeric') {
+                    colDef.editor = "number";
+                    if (colSchema.subType === 'Progress') {
+                        colDef.editor = progressEditor;
+                        colDef.formatter = "progress";
+                        const min = typeof colSchema.min === 'number' ? colSchema.min : 0;
+                        const max = typeof colSchema.max === 'number' ? colSchema.max : 100;
+                        colDef.formatterParams = { min, max };
+                        colDef.editorParams = { min, max };
+                        colDef.tooltip = (e, cell) => {
+                            try {
+                                const comp = (cell && typeof cell.getValue === 'function') ? cell : (e && typeof e.getValue === 'function' ? e : null);
+                                if (comp) {
+                                    return `${comp.getValue() || 0} / ${max}`;
+                                }
+                            } catch (err) {
+                                console.error("[TableViewerPanel] Progress tooltip error:", err);
+                            }
+                            return "";
+                        };
+                    } else if (colSchema.subType === 'Rating') {
+                        colDef.editor = ratingEditor;
+                        colDef.formatter = "star";
+                        const stars = typeof colSchema.max === 'number' ? colSchema.max : 5;
+                        colDef.formatterParams = { stars };
+                        colDef.editorParams = { stars };
+                        colDef.tooltip = (e, cell) => {
+                            try {
+                                const comp = (cell && typeof cell.getValue === 'function') ? cell : (e && typeof e.getValue === 'function' ? e : null);
+                                if (comp) {
+                                    return `${comp.getValue() || 0} / ${stars} Stars`;
+                                }
+                            } catch (err) {
+                                console.error("[TableViewerPanel] Rating tooltip error:", err);
+                            }
+                            return "";
+                        };
+                        // Force edit on single click rather than waiting for double-click
+                        colDef.cellClick = function(e, cell) { 
+                            if (!e || !e.target) {
+                                cell.edit(true);
+                                return;
+                            }
+                            // Optimization: if they click a star in the formatter directly, set it immediately
+                            const star = e.target.closest('svg');
+                            if (star) {
+                                const allStars = Array.from(cell.getElement().querySelectorAll('svg'));
+                                const index = allStars.indexOf(star);
+                                if (index !== -1) {
+                                    const newVal = index + 1;
+                                    const oldVal = cell.getValue();
+                                    if (newVal !== oldVal) {
+                                        cell.setValue(newVal);
+                                        pushToHistory({
+                                            type: 'cellEdit',
+                                            rowId: cell.getRow().getData().harvey_internal_id,
+                                            field: cell.getField(),
+                                            oldValue: oldVal,
+                                            newValue: newVal
+                                        });
+                                        debouncedSave();
+                                    }
+                                    return;
+                                }
+                            }
+                            cell.edit(true); 
+                        };
+                } else if (colSchema.subType === 'Currency') {
                     colDef.formatter = (cell) => {
                         const val = cell.getValue();
                         if (val === null || val === undefined || val === "") return "";
@@ -1119,26 +1698,40 @@
                 } else {
                     colDef.editor = datetimeEditor;
                 }
+                
+                // Add formatter to ensure UI display matches the desired format
+                colDef.formatter = (cell) => {
+                    const val = cell.getValue();
+                    if (!val) return "";
+                    const dateObj = parseDate(val, colSchema);
+                    if (dateObj) {
+                        return formatDate(dateObj, colSchema);
+                    }
+                    return val;
+                };
             } else if (colSchema.type === 'Text') {
                 if (colSchema.subType === 'Small Text') {
                     colDef.editor = "input";
+                    colDef.editorParams = { elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 } else {
                     colDef.editor = "textarea";
-                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                    colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
                 }
             } else {
                 colDef.editor = "textarea";
-                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true };
+                colDef.editorParams = { verticalNavigation:"editor", shiftEnterSubmit:true, elementAttributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false" } };
             }
 
             // Apply custom styling/highlighting formatter logic
             const baseFormatter = colDef.formatter;
-            colDef.formatter = (cell, formatterParams, onRendered) => {
+            colDef.formatter = function(cell, formatterParams, onRendered) {
                 const rowData = cell.getRow().getData();
                 const rowIndex = rowData.harvey_internal_id;
                 const colField = cell.getField();
                 const cellKey = `cell-${rowIndex}-${colField}`;
                 const cellElement = cell.getElement();
+                if (!cellElement) return cell.getValue();
+
                 const cellColor = tableStyles.cellStyles[cellKey];
                 
                 cellElement.style.backgroundColor = cellColor || "";
@@ -1149,17 +1742,28 @@
                 }
 
                 // Validation border
-                if (invalidCells.has(`${rowIndex}-${colField}`)) {
+                const validationError = invalidCells.get(`${rowIndex}-${colField}`);
+                if (validationError) {
                     cellElement.classList.add('invalid-cell');
+                    cellElement.title = validationError;
                 } else {
                     cellElement.classList.remove('invalid-cell');
+                    // If this cell previously had an error (we can check if title matches any known error or just clear if no error now)
+                    // In Tabulator, cell elements are often reused, so clearing title when no error is safer.
+                    if (!duplicateIds.has(rowIndex) || colField !== currentPrimaryField) {
+                        cellElement.title = "";
+                    }
                 }
 
                 // Primary duplicate highlighting
                 if (colField === currentPrimaryField && duplicateIds.has(rowIndex)) {
                     cellElement.classList.add('duplicate-primary-cell');
-                } else {
+                    cellElement.title = "Duplicate value in primary field";
+                } else if (colField === currentPrimaryField) {
                     cellElement.classList.remove('duplicate-primary-cell');
+                    if (cellElement.title === "Duplicate value in primary field") {
+                        cellElement.title = "";
+                    }
                 }
                 
                 if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
@@ -1168,8 +1772,10 @@
 
                 // Call base formatter if it exists
                 let value = cell.getValue();
+                let isHtmlElement = false;
                 if (typeof baseFormatter === 'function') {
-                    value = baseFormatter(cell, formatterParams, onRendered);
+                    value = baseFormatter.call(this, cell, formatterParams, onRendered);
+                    isHtmlElement = value instanceof HTMLElement;
                 } else if (typeof baseFormatter === 'string') {
                     if (baseFormatter === 'tickCross') {
                         const icon = value === true || value === 'true' || value === 1 ? '✔' : '✖';
@@ -1178,7 +1784,24 @@
                         if (value !== null && value !== undefined && value !== "") {
                             value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
                         }
+                    } else if (baseFormatter === 'progress' || baseFormatter === 'star') {
+                        // Use Tabulator's built-in formatters explicitly for these advanced types
+                        // Tabulator 6 exposes formatters via moduleBindings or getFormatter()
+                        const formatModule = cell.getTable().modules.format;
+                        const builtInFormatter = Tabulator.moduleBindings?.format?.formatters?.[baseFormatter] || (formatModule && typeof formatModule.getFormatter === 'function' ? formatModule.getFormatter(baseFormatter) : null);
+
+                        if (builtInFormatter) {
+                            value = builtInFormatter.call(formatModule || this, cell, formatterParams, onRendered);
+                            isHtmlElement = value instanceof HTMLElement;
+                        } else {
+                            // Fallback if Tabulator's internal API is obfuscated in this version
+                            return cell.getValue();
+                        }
                     }
+                }
+
+                if (isHtmlElement) {
+                    return value; // Do not attempt to string-replace on DOM nodes
                 }
 
                 const term = searchTerm.trim();
@@ -1243,6 +1866,33 @@
         });
 
         return dataColumnDefs;
+    }
+
+    export async function getExportData() {
+        if (!tabulatorInstance) return null;
+        
+        const data = tabulatorInstance.getData();
+        const headers = tabulatorInstance.getColumns().filter(c => c.getField()).map(c => c.getField());
+        
+        // Deep copy data to avoid mutating the original
+        const formattedData = JSON.parse(JSON.stringify(data));
+        
+        formattedData.forEach(row => {
+            for (const field in tableSchema) {
+                const schema = tableSchema[field];
+                if (schema.type === 'DateTime') {
+                    const val = row[field];
+                    if (val) {
+                        const dateObj = parseDate(val, schema);
+                        if (dateObj) {
+                            row[field] = formatDate(dateObj, schema);
+                        }
+                    }
+                }
+            }
+        });
+        
+        return { data: formattedData, headers };
     }
 
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
@@ -1384,7 +2034,8 @@
             const generatedColumns = await generateColumns(tableData, tableHeaders, savedLayout, tableSchema);
 
             tabulatorInstance = new Tabulator(tableContainer, {
-                data: tableData,
+                data: JSON.parse(JSON.stringify(tableData)), // Decouple from Svelte 5 proxies
+                reactiveData: false,
                 index: "harvey_internal_id",
                 layout: "fitData",
                 columns: generatedColumns,
@@ -1535,10 +2186,25 @@
             tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
 
             tabulatorInstance.on("cellEdited", (cell) => {
+                if (!isUndoRedoActive) {
+                    const oldValue = cell.getOldValue();
+                    const newValue = cell.getValue();
+                    if (oldValue !== newValue) {
+                        pushToHistory({
+                            type: 'cellEdit',
+                            rowId: cell.getRow().getData().harvey_internal_id,
+                            field: cell.getField(),
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+                    }
+                }
                 debouncedSave();
                 if (cell.getField() === currentPrimaryField) {
                     detectDuplicates();
                 }
+                checkValidationErrors(); // Check and update error outlines safely after edit is finished
+
                 const row = cell.getRow();
                 const rowData = row.getData();
                 const rowIndex = rowData.harvey_internal_id;
@@ -1708,17 +2374,28 @@
 
     onMount(() => {
         if (tablePath) initializeTable(tablePath);
-        const undoBtn = document.getElementById("history-undo");
-        const redoBtn = document.getElementById("history-redo");
-        const undo = () => tabulatorInstance?.undo();
-        const redo = () => tabulatorInstance?.redo();
-        undoBtn?.addEventListener("click", undo);
-        redoBtn?.addEventListener("click", redo);
 
         const handleKeyDown = (e) => {
+            // Ignore custom shortcuts if user is typing in an input/textarea so native text undo/redo works
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
             if (e.metaKey && e.key === 'c') {
                 e.preventDefault();
                 tabulatorInstance?.copyToClipboard("range");
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                e.stopPropagation();
+                redo();
             }
         };
         tableContainer?.addEventListener('keydown', handleKeyDown);
@@ -1731,15 +2408,82 @@
         };
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
+        // Prevent Tabulator from stealing arrow keys when editing text inputs/textareas
+        const handleEditorArrowKeys = (e) => {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    e.stopPropagation();
+                }
+            }
+        };
+        tableContainer?.addEventListener('keydown', handleEditorArrowKeys, true); // use capture
 
 		return () => {
 			tabulatorInstance?.destroy();
-            undoBtn?.removeEventListener("click", undo);
-            redoBtn?.removeEventListener("click", redo);
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
+            tableContainer?.removeEventListener('keydown', handleEditorArrowKeys, true);
 		}
     });
+
+    function pushToHistory(action) {
+        if (isUndoRedoActive) return;
+        svelteUndoStack.push(action);
+        if (svelteUndoStack.length > 50) svelteUndoStack.shift(); // Keep last 50 actions
+        svelteRedoStack = []; // Clear redo stack on new action
+    }
+
+    async function applyHistoryAction(action, isUndo) {
+        if (!tabulatorInstance) return;
+        isUndoRedoActive = true;
+        try {
+            if (action.type === 'cellEdit') {
+                const row = tabulatorInstance.getRow(action.rowId);
+                if (row) {
+                    const cell = row.getCell(action.field);
+                    if (cell) {
+                        cell.setValue(isUndo ? action.oldValue : action.newValue);
+                    }
+                }
+            } else if (action.type === 'rowAdd') {
+                if (isUndo) {
+                    const row = tabulatorInstance.getRow(action.rowId);
+                    if (row) await row.delete();
+                } else {
+                    await tabulatorInstance.addRow(action.rowData, action.position === 'before', action.relativeTo);
+                }
+            } else if (action.type === 'rowDelete') {
+                if (isUndo) {
+                    await tabulatorInstance.addRow(action.rowData); // Best effort restore
+                } else {
+                    const row = tabulatorInstance.getRow(action.rowId);
+                    if (row) await row.delete();
+                }
+            }
+            debouncedSave();
+            checkValidationErrors();
+            detectDuplicates();
+            reformatAllRows();
+        } catch (e) {
+            console.error("History action failed", e);
+        } finally {
+            isUndoRedoActive = false;
+        }
+    }
+
+    function undo() {
+        if (svelteUndoStack.length === 0) return;
+        const action = svelteUndoStack.pop();
+        svelteRedoStack.push(action);
+        applyHistoryAction(action, true);
+    }
+
+    function redo() {
+        if (svelteRedoStack.length === 0) return;
+        const action = svelteRedoStack.pop();
+        svelteUndoStack.push(action);
+        applyHistoryAction(action, false);
+    }
 
     $: if (tablePath && tablePath !== currentLoadedPath) {
         initializeTable(tablePath);
@@ -1779,69 +2523,82 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
-     <div class="flex items-center justify-between h-12 px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-md">
+     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
-            <Button size="xs" color="alternative" id="history-undo" class="px-2">
-                <Undo2 size={16} />
-            </Button>
+            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
+                <Undo2 size={14} />
+            </button>
             <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
             
-            <Button size="xs" color="alternative" id="history-redo" class="px-2">
-                <Redo2 size={16} />
-            </Button>
+            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
+                <Redo2 size={14} />
+            </button>
             <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
         </div>
 
          {#if !isLoading && !error}
-         <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1">
-                <Search
-                    size="sm"
-                    bind:this={searchInputRef}
-                    bind:value={searchTerm}
-                    on:input={handleSearch}
-                    on:keydown={e => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            goToNextMatch();
-                        }
-                    }}
-                    placeholder="Search table..."
-                    class="w-64"
-                />
-                
-                <div class="flex items-center">
-                    <Button size="xs" color="alternative" on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="px-2 rounded-r-none border-r-0">
-                        <ChevronLeft size={16} />
-                    </Button>
-                    <div class="h-8 px-3 flex items-center border-y border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400 min-w-[80px] justify-center">
-                        {#if cellMatches.length > 0}
-                            {currentMatchIndex + 1} / {cellMatches.length}
-                        {:else if searchTerm}
-                            0 / 0
-                        {:else}
-                            Search
-                        {/if}
+         <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 relative">
+                <!-- Using native input to seamlessly match toolbar height styles -->
+                <div class="relative w-48">
+                    <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                        <svg class="w-3 h-3 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                        </svg>
                     </div>
-                    <Button size="xs" color="alternative" on:click={goToNextMatch} disabled={cellMatches.length === 0} class="px-2 rounded-l-none border-l-0">
-                        <ChevronRight size={16} />
-                    </Button>
+                    <input
+                        type="text"
+                        bind:this={searchInputRef}
+                        bind:value={searchTerm}
+                        on:input={handleSearch}
+                        on:keydown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                goToNextMatch();
+                            }
+                        }}
+                        placeholder="Search table..."
+                        class="w-full text-xs border border-gray-300 dark:border-gray-600 pl-7 pr-6 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 rounded outline-none"
+                    />
+                    {#if searchTerm}
+                        <button
+                            class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                            on:click={() => {
+                                searchTerm = '';
+                                handleSearch();
+                                searchInputRef?.focus();
+                            }}
+                            title="Clear search"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    {/if}
                 </div>
+
+                {#if searchTerm}
+                    <div class="flex items-center gap-[1px]">
+                        <button on:click={goToPreviousMatch} disabled={cellMatches.length === 0} class="mini-toolbar-button" title="Previous Match">
+                            <ChevronLeft size={14} />
+                        </button>
+                        <button on:click={goToNextMatch} disabled={cellMatches.length === 0} class="mini-toolbar-button" title="Next Match">
+                            <ChevronRight size={14} />
+                        </button>
+                    </div>
+                {/if}
             </div>
 
-            <div class="h-6 w-[1px] bg-gray-300 dark:bg-gray-700 mx-1"></div>
+            <div class="separator mx-0.5"></div>
 
              <div class="relative">
-                <Button size="xs" color="alternative" id="table-options-btn" class="px-2">
-                  <MoreVertical size={16} />
-                </Button>
-                <Dropdown triggeredBy="#table-options-btn" placement="bottom-end">
-                    <DropdownItem on:click={toggleFilters}>
+                <button class="mini-toolbar-button" title="Options">
+                  <MoreVertical size={14} />
+                </button>
+                <Dropdown placement="bottom-end">
+                    <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
                         {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
-                    </DropdownItem>
-                    <DropdownItem on:click={() => tabulatorInstance?.download("csv", "table_export.csv")}>
-                        Export as CSV
                     </DropdownItem>
                 </Dropdown>
               </div>
@@ -1913,6 +2670,46 @@
          background-color: rgba(59, 130, 246, 0.1) !important;
      }
 
+    .toolbar button.mini-toolbar-button {
+      @apply p-1.5 rounded inline-flex items-center justify-center
+             focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+             dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
+             text-xs disabled:opacity-50 disabled:cursor-not-allowed;
+      color: var(--ui-icon-color);
+      border: 1px solid var(--ui-select-border);
+      background-color: transparent;
+      margin-right: 2px;
+      line-height: 1.2;
+      min-height: 24px;
+    }
+
+    .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: var(--ui-icon-hover-bg);
+        border-color: var(--ui-select-border);
+    }
+
+    html.dark .toolbar button.mini-toolbar-button {
+        color: #e5e5e5;
+        border: 1px solid #404040;
+        background-color: transparent;
+    }
+
+    html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: #404040;
+        border-color: #404040;
+    }
+
+    .separator {
+      width: 1px;
+      height: 1.25rem;
+      background-color: var(--ui-select-border);
+      margin: 0 0.25rem;
+    }
+
+    html.dark .separator {
+        background-color: #404040;
+    }
+
     .flex-grow {
         position: relative;
     }
@@ -1929,6 +2726,13 @@
             overflow: hidden;
             word-break: break-word;
             border-right: 1px solid #ddd;
+            min-height: 38px; /* Ensures blank inserted rows exactly match text-filled rows (padding + line height) */
+        }
+
+        /* Fix Tabulator Star Formatter SVG stacking */
+        :global(.tabulator-cell svg) {
+            display: inline-block;
+            vertical-align: middle;
         }
 
         :global(.tabulator-cell textarea) {
@@ -1982,5 +2786,36 @@
         }
         :global(.duplicate-primary-cell) {
             box-shadow: inset 0 0 0 2px #ef4444 !important;
+        }
+
+        /* Progress Editor Styling */
+        :global(.progress-range) {
+            -webkit-appearance: none;
+            background: #e5e7eb;
+            height: 6px !important;
+            border-radius: 3px;
+            outline: none;
+            margin: 0;
+            padding: 0;
+        }
+        :global(.progress-range::-webkit-slider-thumb) {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+            margin-top: -4px; /* Center thumb on track */
+        }
+        :global(.progress-range::-moz-range-thumb) {
+            width: 14px;
+            height: 14px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
 </style>

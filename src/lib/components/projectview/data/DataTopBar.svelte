@@ -807,8 +807,8 @@
 <TableExportModal
     bind:showModal={showTableExportModal}
     tablePath={isTable ? $project.selectedDocumentPath : null}
+    getExportData={isTable && tableViewRef ? tableViewRef.getExportData : null}
     on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showTableExportModal = false}
 />
-
 <SplitTranscriptModal />
