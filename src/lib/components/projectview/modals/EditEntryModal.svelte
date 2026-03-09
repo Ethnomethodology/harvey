@@ -628,15 +628,27 @@
                                 {@const max = colSchema.max ?? 100}
                                 {@const val = editedData[col.field] ?? min}
                                 {@const percentage = ((val - min) / (max - min)) * 100}
-                                <div class="flex items-center gap-3 h-10">
-                                    <input 
-                                        type="range" 
-                                        {min} {max} step="1" 
-                                        bind:value={editedData[col.field]} 
-                                        style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
-                                        title="{val} / {max}"
-                                        class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" 
-                                    />
+                                <div class="flex items-center gap-3 h-10 relative">
+                                    <div class="relative flex-grow h-full flex items-center group">
+                                        <input
+                                            type="range"
+                                            {min} {max} step="1"
+                                            bind:value={editedData[col.field]}
+                                            style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
+                                            class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                        />
+                                        <div
+                                            class="absolute -top-6 -ml-3 w-8 text-center text-xs font-semibold text-white bg-gray-900 dark:bg-gray-700 rounded py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                                            style="left: {percentage}%;"
+                                        >
+                                            {val}
+                                            <!-- Tooltip caret -->
+                                            <div class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 -bottom-1 left-1/2 -translate-x-1/2"></div>
+                                        </div>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-right">
+                                        {val}/{max}
+                                    </span>
                                 </div>
                             {:else if colSchema.subType === 'Rating'}
                                 <div class="flex items-center gap-1 h-10">

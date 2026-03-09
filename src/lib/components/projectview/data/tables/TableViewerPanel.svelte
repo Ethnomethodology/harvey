@@ -1172,7 +1172,7 @@
     // Custom editors for Progress and Rating
     function progressEditor(cell, onRendered, success, cancel, editorParams) {
         const container = document.createElement("div");
-        container.className = "flex items-center w-full h-full px-2";
+        container.className = "flex items-center w-full h-full px-2 relative group";
         container.style.minHeight = "24px";
 
         const min = editorParams.min ?? 0;
@@ -1186,16 +1186,28 @@
         input.step = "1";
         input.value = initialVal;
         
-        const updateGradient = (v) => {
+        const tooltip = document.createElement("div");
+        tooltip.className = "absolute -top-6 -ml-3 w-8 text-center text-xs font-semibold text-white bg-gray-900 dark:bg-gray-700 rounded py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50";
+        tooltip.innerHTML = `${initialVal}<div class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 -bottom-1 left-1/2 -translate-x-1/2"></div>`;
+
+        const updateUI = (v) => {
             const percentage = ((v - min) / (max - min)) * 100;
             input.style.background = `linear-gradient(to right, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%)`;
+            tooltip.style.left = `calc(${percentage}% + 8px)`; // 8px offsets to center over thumb correctly with the px-2 container
+            tooltip.childNodes[0].nodeValue = v;
         };
 
-        input.className = "progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700";
+        input.className = "progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 flex-grow";
         input.style.width = "100%";
-        updateGradient(initialVal);
+        updateUI(initialVal);
+
+        const textLabel = document.createElement("span");
+        textLabel.className = "text-xs font-medium text-gray-700 dark:text-gray-300 ml-2 min-w-[2.5rem] text-right shrink-0 pointer-events-none";
+        textLabel.textContent = `${initialVal}/${max}`;
 
         container.appendChild(input);
+        container.appendChild(tooltip);
+        container.appendChild(textLabel);
 
         onRendered(() => {
             input.focus();
@@ -1205,9 +1217,17 @@
             success(parseFloat(input.value));
         };
 
-        input.addEventListener('input', () => updateGradient(input.value));
+        input.addEventListener('input', () => {
+            updateUI(input.value);
+            textLabel.textContent = `${input.value}/${max}`;
+        });
+
         input.addEventListener('change', saveVal);
-        input.addEventListener('blur', saveVal);
+        // Delay the blur save slightly so clicking on the track doesn't immediately close if dragging
+        input.addEventListener('blur', () => {
+            // Check if we are still interacting with the input (mousedown)
+            if (!input.matches(':active')) saveVal();
+        });
 
         // Stop Tabulator from intercepting drag events
         input.addEventListener('mousedown', e => e.stopPropagation());
@@ -1989,7 +2009,13 @@
                 }
                 
                 if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
-                    cellElement.style.whiteSpace = "pre-wrap";
+                    // Pre-wrap allows multi-line text, but for specific Misc subtypes like Project Link or Email,
+                    // we want to ensure they stay on a single line to prevent unnatural row stretching.
+                    if (colSchema.subType === 'Project Link' || colSchema.subType === 'Hyperlink' || colSchema.subType === 'Email') {
+                        cellElement.style.whiteSpace = "nowrap";
+                    } else {
+                        cellElement.style.whiteSpace = "pre-wrap";
+                    }
                 }
 
                 // Call base formatter if it exists
