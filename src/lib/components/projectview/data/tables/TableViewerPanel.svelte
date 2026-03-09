@@ -222,14 +222,14 @@
             
             if (hyperlinkIcon) {
                 popoverUrl = cellElement.dataset.urlValue || '';
-                popoverX = rect.left;
+                popoverX = rect.right;
                 popoverY = rect.bottom + window.scrollY;
                 showUrlPopover = true;
                 showEmailPopover = false;
                 showProjectLinkPopover = false;
             } else if (emailIcon) {
                 popoverEmail = cellElement.dataset.emailValue || '';
-                popoverEmailX = rect.left;
+                popoverEmailX = rect.right;
                 popoverEmailY = rect.bottom + window.scrollY;
                 showEmailPopover = true;
                 showUrlPopover = false;
@@ -237,7 +237,7 @@
             } else if (projectLinkIcon) {
                 const path = cellElement.dataset.projectLinkValue || '';
                 popoverProjectLink = path;
-                popoverProjectLinkX = rect.left;
+                popoverProjectLinkX = rect.right;
                 popoverProjectLinkY = rect.bottom + window.scrollY;
                 
                 // Find category - resolve path safely, handling both relative and absolute paths
@@ -1814,6 +1814,9 @@
                             ...projectAssetOptions
                         ]
                     };
+                    colDef.accessorDownload = (value, data, type, params, column) => {
+                        return value; // Explicitly return the raw file path for export
+                    };
                     }
                     } else if (colSchema.type === 'Numeric') {
                     colDef.editor = "number";
@@ -2061,9 +2064,41 @@
                 if (colSchema.type === 'Misc' && colSchema.subType === 'Project Link' && value) {
                     cellElement.classList.add('interactive-contact-cell');
                     cellElement.dataset.projectLinkValue = value;
+
+                    let displayLabel = outputValue;
+                    if (value && typeof value === 'string') {
+                        const normalizedSearchPath = value.replace(/\\/g, '/');
+                        const matchedAsset = projectAssetOptions.find(a => {
+                            const aNormalized = a.value.replace(/\\/g, '/');
+                            if (aNormalized === normalizedSearchPath) return true;
+
+                            const proj = get(project);
+                            if (proj?.baseDirectory) {
+                                const baseDir = proj.baseDirectory.replace(/\\/g, '/');
+                                const aAbsolute = `${baseDir}/${aNormalized.replace(/^\/+/, '')}`;
+                                const searchAbsolute = normalizedSearchPath.startsWith('/') || normalizedSearchPath.includes(':')
+                                    ? normalizedSearchPath
+                                    : `${baseDir}/${normalizedSearchPath.replace(/^\/+/, '')}`;
+
+                                return aAbsolute === searchAbsolute;
+                            }
+                            return false;
+                        });
+
+                        if (matchedAsset && matchedAsset.label) {
+                            displayLabel = matchedAsset.label;
+                            // Re-apply search highlighting to the label if there's a search term
+                            if (term) {
+                                const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                                const regex = new RegExp(`(${escapedTerm})`, 'gi');
+                                displayLabel = String(displayLabel).replace(regex, '<span class="search-match-highlight">$1</span>');
+                            }
+                        }
+                    }
+
                     return `
                         <div class="flex items-center justify-between w-full h-full">
-                            <span class="truncate mr-2">${outputValue}</span>
+                            <span class="truncate mr-2">${displayLabel}</span>
                             <div class="project-link-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.5 5.96A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v5.22"/></svg>
                             </div>
@@ -2873,7 +2908,7 @@
 
     <div class="flex-grow overflow-auto min-h-0 relative">
         {#if showUrlPopover}
-            <div class="url-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverX}px; top: {popoverY}px; min-width: 140px;">
+            <div class="url-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverX}px; top: {popoverY}px; transform: translateX(-100%); min-width: 140px;">
                 <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenUrl}>
                     <ExternalLink size={14} /> Open in browser
                 </button>
@@ -2888,7 +2923,7 @@
         {/if}
 
         {#if showProjectLinkPopover}
-            <div class="project-link-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverProjectLinkX}px; top: {popoverProjectLinkY}px; min-width: 140px;">
+            <div class="project-link-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverProjectLinkX}px; top: {popoverProjectLinkY}px; transform: translateX(-100%); min-width: 140px;">
                 <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenProjectLink}>
                     <FolderOpen size={14} /> Open File
                 </button>
@@ -2899,7 +2934,7 @@
         {/if}
 
         {#if showEmailPopover}
-            <div class="email-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverEmailX}px; top: {popoverEmailY}px; min-width: 140px;">
+            <div class="email-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverEmailX}px; top: {popoverEmailY}px; transform: translateX(-100%); min-width: 140px;">
                 <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenEmail}>
                     <Mail size={14} /> Send Email
                 </button>
