@@ -116,25 +116,24 @@
                 if (!/^\+?[\d\s-]{7,20}$/.test(value)) return 'Must be a valid phone number.';
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (colSchema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return 'Must match format HH:mm.';
-                    if (colSchema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return 'Must match format HH:mm:ss.';
-                    if (colSchema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return 'Must match format hh:mm A.';
-                    if (!/^([01]\d|2[0-3]):?([0-5]\d)$/.test(value)) return 'Must be a valid time.';
+                    if (colSchema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? null : 'Must match format HH:mm.';
+                    if (colSchema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value) ? null : 'Must match format HH:mm:ss.';
+                    if (colSchema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value) ? null : 'Must match format hh:mm A.';
+                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value) ? null : 'Must be a valid time.';
                 } else if (subType === 'Date') {
-                    if (colSchema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value)) return 'Must match format YYYY-MM-DD.';
-                    if (colSchema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return 'Must match format DD/MM/YYYY.';
-                    if (colSchema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return 'Must match format MM/DD/YYYY.';
-                    if (colSchema.format === 'YYYY' && !/^\d{4}$/.test(value)) return 'Must be a valid 4-digit year.';
-                    if (colSchema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return 'Must be a valid month name.';
+                    if (colSchema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value) ? null : 'Must match format YYYY-MM-DD.';
+                    if (colSchema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value) ? null : 'Must match format DD/MM/YYYY.';
+                    if (colSchema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value) ? null : 'Must match format MM/DD/YYYY.';
+                    if (colSchema.format === 'YYYY') return /^\d{4}$/.test(value) ? null : 'Must be a valid 4-digit year.';
+                    if (colSchema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase()) ? null : 'Must be a valid month name.';
                     if (colSchema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        if (!(parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]))) {
-                            return 'Must match format MMMM YYYY.';
-                        }
+                        const isValid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        return isValid ? null : 'Must match format MMMM YYYY.';
                     }
-                    if (isNaN(Date.parse(value))) return 'Must be a valid date.';
+                    return !isNaN(Date.parse(value)) ? null : 'Must be a valid date.';
                 } else {
-                    if (isNaN(Date.parse(value))) return 'Must be a valid date and time.';
+                    return !isNaN(Date.parse(value)) ? null : 'Must be a valid date and time.';
                 }
             }
         }

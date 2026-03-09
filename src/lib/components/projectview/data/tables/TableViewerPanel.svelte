@@ -202,7 +202,7 @@
     async function handleRevealProjectLink() {
         if (!popoverProjectLink) return;
         try {
-            await invoke('locate_in_finder', { path: popoverProjectLink });
+            await invoke('locate_in_finder', { projectXmlPath: popoverProjectLink });
             showProjectLinkPopover = false;
         } catch (e) {
             console.error("Failed to reveal project link in file manager:", e);
@@ -213,22 +213,62 @@
         if (!popoverProjectLink) return;
         const category = popoverProjectLinkCategory;
         let viewType = 'document';
+        let originalDocType = '';
 
         if (category === 'Audios' || category === 'Videos') {
             viewType = 'media';
-        } else if (category === 'Audio Transcripts' || category === 'Video Transcripts' || category === 'Transcripts') {
+            originalDocType = category === 'Audios' ? 'audio' : 'video';
+        } else if (category === 'Audio Transcripts') {
+            viewType = 'media';
+            originalDocType = 'audio_transcript';
+        } else if (category === 'Video Transcripts') {
+            viewType = 'media';
+            originalDocType = 'video_transcript';
+        } else if (category === 'Transcripts') {
             viewType = 'transcript';
+            originalDocType = 'imported_transcript';
         } else if (category === 'Tables') {
             viewType = 'table';
+            originalDocType = 'csv';
         } else if (category === 'Images') {
             viewType = 'image';
+            originalDocType = 'image';
+        }
+
+        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript') {
+            // Find parent media to load it in the transcription UI properly
+            const proj = get(project);
+            let mediaNode = null;
+
+            function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
+                if (!Array.isArray(nodes)) return null;
+                for (const node of nodes) {
+                    if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath || t.relativePath === transcriptPath || proj.baseDirectory + '/' + t.relativePath === transcriptPath)) return node;
+                    const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
+                    if (found) return found;
+                }
+                return null;
+            }
+
+            mediaNode = findMediaByTranscriptPathRecursive(proj.files, popoverProjectLink);
+
+            if (mediaNode) {
+                // Dispatch event to open the parent media file in the Transcriptions tab
+                // then select the specific transcript
+                dispatch('requestTranscriptionTabWithMediaAndDialog', {
+                    mediaFile: mediaNode,
+                    transcriptPathToLoad: popoverProjectLink
+                });
+                showProjectLinkPopover = false;
+                return;
+            }
         }
 
         dispatch('requestviewchange', {
             tabName: 'data',
             loadNotePath: popoverProjectLink,
             viewType: viewType,
-            originalDocType: category // approximate for `handleInspect` compat
+            originalDocType: originalDocType || category
         });
         showProjectLinkPopover = false;
     }
@@ -889,25 +929,24 @@
                 if (!/^\+?[\d\s-]{7,20}$/.test(value)) return { valid: false, message: 'Must be a valid phone number.' };
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
-                    if (schema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return { valid: false, message: 'Must match format HH:mm.' };
-                    if (schema.format === 'HH:mm:ss' && !/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return { valid: false, message: 'Must match format HH:mm:ss.' };
-                    if (schema.format === 'hh:mm A' && !/^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value)) return { valid: false, message: 'Must match format hh:mm A.' };
-                    if (!/^([01]\d|2[0-3]):?([0-5]\d)$/.test(value)) return { valid: false, message: 'Must be a valid time.' };
+                    if (schema.format === 'HH:mm') return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? { valid: true } : { valid: false, message: 'Must match format HH:mm.' };
+                    if (schema.format === 'HH:mm:ss') return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value) ? { valid: true } : { valid: false, message: 'Must match format HH:mm:ss.' };
+                    if (schema.format === 'hh:mm A') return /^(0[1-9]|1[0-2]):([0-5]\d)\s?(AM|PM)$/i.test(value) ? { valid: true } : { valid: false, message: 'Must match format hh:mm A.' };
+                    return /^([01]\d|2[0-3]):?([0-5]\d)$/.test(value) ? { valid: true } : { valid: false, message: 'Must be a valid time.' };
                 } else if (subType === 'Date') {
-                    if (schema.format === 'YYYY-MM-DD' && !/^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value)) return { valid: false, message: 'Must match format YYYY-MM-DD.' };
-                    if (schema.format === 'DD/MM/YYYY' && !/^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value)) return { valid: false, message: 'Must match format DD/MM/YYYY.' };
-                    if (schema.format === 'MM/DD/YYYY' && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value)) return { valid: false, message: 'Must match format MM/DD/YYYY.' };
-                    if (schema.format === 'YYYY' && !/^\d{4}$/.test(value)) return { valid: false, message: 'Must be a valid 4-digit year.' };
-                    if (schema.format === 'MMMM' && !["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase())) return { valid: false, message: 'Must be a valid month name.' };
+                    if (schema.format === 'YYYY-MM-DD') return /^\d{4}-(0[1-9]|1[0-2])-(0[12]|[12]\d|3[01])$/.test(value) ? { valid: true } : { valid: false, message: 'Must match format YYYY-MM-DD.' };
+                    if (schema.format === 'DD/MM/YYYY') return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value) ? { valid: true } : { valid: false, message: 'Must match format DD/MM/YYYY.' };
+                    if (schema.format === 'MM/DD/YYYY') return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(value) ? { valid: true } : { valid: false, message: 'Must match format MM/DD/YYYY.' };
+                    if (schema.format === 'YYYY') return /^\d{4}$/.test(value) ? { valid: true } : { valid: false, message: 'Must be a valid 4-digit year.' };
+                    if (schema.format === 'MMMM') return ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(value.toLowerCase()) ? { valid: true } : { valid: false, message: 'Must be a valid month name.' };
                     if (schema.format === 'MMMM YYYY') {
                         const parts = value.split(' ');
-                        if (!(parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]))) {
-                            return { valid: false, message: 'Must match format MMMM YYYY.' };
-                        }
+                        const isValid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
+                        return isValid ? { valid: true } : { valid: false, message: 'Must match format MMMM YYYY.' };
                     }
-                    if (isNaN(Date.parse(value))) return { valid: false, message: 'Must be a valid date.' };
+                    return !isNaN(Date.parse(value)) ? { valid: true } : { valid: false, message: 'Must be a valid date.' };
                 } else {
-                    if (isNaN(Date.parse(value))) return { valid: false, message: 'Must be a valid date and time.' };
+                    return !isNaN(Date.parse(value)) ? { valid: true } : { valid: false, message: 'Must be a valid date and time.' };
                 }
             }
         }
