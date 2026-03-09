@@ -38,7 +38,10 @@
         Check,
         Mail,
         FolderSearch,
-        FolderOpen
+        FolderOpen,
+        Bold,
+        Italic,
+        Underline
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
@@ -108,7 +111,12 @@
                     newRowStyles[rowIndex] = h.color;
                 } else if (h.id?.startsWith('cell-')) {
                     // Cell IDs are in format "cell-rowIndex-colField"
-                    newCellStyles[h.id] = h.color;
+                    newCellStyles[h.id] = {
+                        color: h.color,
+                        bold: h.bold,
+                        italic: h.italic,
+                        underline: h.underline
+                    };
                 }
             });
         }
@@ -117,6 +125,76 @@
         
         // Trigger a reformat of entries to apply new styles
         reformatAllRows();
+    }
+
+    async function toggleStyle(styleType) {
+        if (!tabulatorInstance) return;
+        const selectedCells = tabulatorInstance.getSelectedData ? tabulatorInstance.getSelectedData() : []; // Usually ranges are used
+
+        // Tabulator uses ranges for cell selection
+        const ranges = tabulatorInstance.getRanges();
+        if (!ranges || ranges.length === 0) return;
+
+        let cellsToModify = [];
+        ranges.forEach(range => {
+            const rangeCells = range.getCells();
+            cellsToModify = cellsToModify.concat(rangeCells);
+        });
+
+        if (cellsToModify.length === 0) return;
+
+        let currentHighlights = get(project).currentTableHighlights || [];
+
+        // Check if all selected cells already have the style, if so, we toggle it off. Otherwise, toggle on.
+        let allHaveStyle = true;
+        cellsToModify.forEach(cell => {
+            // Exclude fields that shouldn't be styled
+            const field = cell.getField();
+            const schema = tableSchema[field];
+            if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
+                return; // Skip these
+            }
+
+            const rowIndex = cell.getRow().getData().harvey_internal_id;
+            const cellKey = `cell-${rowIndex}-${field}`;
+            const existing = currentHighlights.find(h => h.id === cellKey);
+            if (!existing || !existing[styleType]) {
+                allHaveStyle = false;
+            }
+        });
+
+        const targetStyleState = !allHaveStyle;
+
+        cellsToModify.forEach(cell => {
+            const field = cell.getField();
+            const schema = tableSchema[field];
+            if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
+                return;
+            }
+
+            const rowIndex = cell.getRow().getData().harvey_internal_id;
+            const cellKey = `cell-${rowIndex}-${field}`;
+            let existingIndex = currentHighlights.findIndex(h => h.id === cellKey);
+
+            if (existingIndex !== -1) {
+                currentHighlights[existingIndex][styleType] = targetStyleState;
+                // If it has no color, no bold, no italic, no underline, maybe remove it entirely?
+                // For now, keep the entry as it might hold text or comments later
+            } else if (targetStyleState) {
+                const cellValue = cell.getValue();
+                currentHighlights.push({
+                    id: cellKey,
+                    color: null,
+                    [styleType]: true,
+                    text: `Cell [Entry ${rowIndex + 1}, ${field}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`,
+                    tags: [],
+                    comments: []
+                });
+            }
+        });
+
+        setTableHighlights(currentHighlights);
+        await saveTableHighlights();
     }
 
     let searchTerm = '';
@@ -1967,13 +2045,24 @@
                 const cellElement = cell.getElement();
                 if (!cellElement) return cell.getValue();
 
-                const cellColor = tableStyles.cellStyles[cellKey];
+                const cellStyle = tableStyles.cellStyles[cellKey] || {};
                 
-                cellElement.style.backgroundColor = cellColor || "";
-                if (cellColor) {
+                cellElement.style.backgroundColor = cellStyle.color || "";
+                if (cellStyle.color) {
                     cellElement.classList.add('highlighted-cell');
                 } else {
                     cellElement.classList.remove('highlighted-cell');
+                }
+
+                // Apply text styling if applicable
+                if (!(colSchema.type === 'Misc' && (colSchema.subType === 'Checkbox' || colSchema.subType === 'Rating' || colSchema.subType === 'Progress' || colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect'))) {
+                    cellElement.style.fontWeight = cellStyle.bold ? "bold" : "normal";
+                    cellElement.style.fontStyle = cellStyle.italic ? "italic" : "normal";
+                    cellElement.style.textDecoration = cellStyle.underline ? "underline" : "none";
+                } else {
+                    cellElement.style.fontWeight = "normal";
+                    cellElement.style.fontStyle = "normal";
+                    cellElement.style.textDecoration = "none";
                 }
 
                 // Validation border
@@ -2724,12 +2813,21 @@
         };
         tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
 
-        // Prevent Tabulator from stealing arrow keys when editing text inputs/textareas
+        // Prevent Tabulator from stealing arrow keys and Shift+Enter when editing text inputs/textareas
         const handleEditorArrowKeys = (e) => {
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                     e.stopPropagation();
                 }
+            } else if (e.key === 'Enter' && e.shiftKey && e.target.tagName === 'TEXTAREA') {
+                // Manually insert newline for Shift+Enter to bypass Tabulator's native interception
+                e.preventDefault();
+                e.stopPropagation();
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const val = e.target.value;
+                e.target.value = val.substring(0, start) + "\n" + val.substring(end);
+                e.target.selectionStart = e.target.selectionEnd = start + 1;
             }
         };
         tableContainer?.addEventListener('keydown', handleEditorArrowKeys, true); // use capture
@@ -2853,6 +2951,23 @@
                 <Redo2 size={14} />
             </button>
             <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
+
+            <div class="separator mx-0.5"></div>
+
+            <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold">
+                <Bold size={14} />
+            </button>
+            <Tooltip triggeredBy="#style-bold">Bold</Tooltip>
+
+            <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic">
+                <Italic size={14} />
+            </button>
+            <Tooltip triggeredBy="#style-italic">Italic</Tooltip>
+
+            <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline">
+                <Underline size={14} />
+            </button>
+            <Tooltip triggeredBy="#style-underline">Underline</Tooltip>
         </div>
 
          {#if !isLoading && !error}

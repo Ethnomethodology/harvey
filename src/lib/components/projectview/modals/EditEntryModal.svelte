@@ -708,7 +708,8 @@
                         {:else}
                             <Textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3"
                                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                color={errors[col.field] ? 'red' : 'base'} class="resize-none" />
+                                color={errors[col.field] ? 'red' : 'base'} class="resize-none"
+                                on:keydown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} />
                         {/if}
 
                         {#if errors[col.field]}
