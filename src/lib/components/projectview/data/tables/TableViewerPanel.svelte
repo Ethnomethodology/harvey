@@ -33,9 +33,16 @@
         ChevronLeft, 
         ChevronRight, 
         MoreVertical,
-        Plus
+        Plus,
+        ExternalLink,
+        Check,
+        Mail,
+        FolderSearch,
+        FolderOpen
     } from 'lucide-svelte';
-    import { mount } from 'svelte';
+    import { mount, createEventDispatcher } from 'svelte';
+    import { openUrl } from '@tauri-apps/plugin-opener';
+    import { invoke } from '@tauri-apps/api/core';
     import { 
         Input, 
         Button, 
@@ -49,6 +56,8 @@
 
     export let tablePath = '';
     export let hasHeaders = true;
+
+    const dispatch = createEventDispatcher();
 
     let tableContainer;
     let tabulatorInstance = null;
@@ -118,6 +127,162 @@
 
     let showOptionsMenu = false;
     let areFiltersVisible = false; // Start with the assumption that filters are hidden
+
+    let showUrlPopover = false;
+    let popoverUrl = '';
+    let popoverX = 0;
+    let popoverY = 0;
+    let isUrlCopied = false;
+
+    async function handleOpenUrl() {
+        if (!popoverUrl) return;
+        try {
+            let targetUrl = popoverUrl.trim();
+            if (!targetUrl.toLowerCase().startsWith('http://') && !targetUrl.toLowerCase().startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+            }
+            await openUrl(targetUrl);
+            showUrlPopover = false;
+        } catch (e) {
+            console.error("Failed to open URL:", e);
+        }
+    }
+
+    function handleCopyUrl() {
+        if (!popoverUrl) return;
+        navigator.clipboard.writeText(popoverUrl);
+        isUrlCopied = true;
+        setTimeout(() => {
+            showUrlPopover = false;
+            isUrlCopied = false;
+        }, 2000);
+    }
+
+    let showEmailPopover = false;
+    let popoverEmail = '';
+    let popoverEmailX = 0;
+    let popoverEmailY = 0;
+    let isEmailCopied = false;
+
+    async function handleOpenEmail() {
+        if (!popoverEmail) return;
+        try {
+            await openUrl('mailto:' + popoverEmail.trim());
+            showEmailPopover = false;
+        } catch (e) {
+            console.error("Failed to open email client:", e);
+        }
+    }
+
+    function handleCopyEmail() {
+        if (!popoverEmail) return;
+        navigator.clipboard.writeText(popoverEmail);
+        isEmailCopied = true;
+        setTimeout(() => {
+            showEmailPopover = false;
+            isEmailCopied = false;
+        }, 2000);
+    }
+
+    let showProjectLinkPopover = false;
+    let popoverProjectLink = '';
+    let popoverProjectLinkCategory = '';
+    let popoverProjectLinkX = 0;
+    let popoverProjectLinkY = 0;
+
+    let revealButtonLabel = 'Show in Finder';
+    import { type as getOsType } from '@tauri-apps/plugin-os';
+
+    onMount(async () => {
+        try {
+            const currentOs = await getOsType();
+            if (currentOs === 'windows') revealButtonLabel = 'Reveal in Explorer';
+            else if (currentOs === 'macos') revealButtonLabel = 'Reveal in Finder';
+            else revealButtonLabel = 'Open File Location';
+        } catch (e) {
+            console.error("Error getting OS type:", e);
+        }
+    });
+
+    async function handleRevealProjectLink() {
+        if (!popoverProjectLink) return;
+        try {
+            const proj = get(project);
+            let absolutePath = popoverProjectLink;
+            // If the path is relative, prepend the base directory
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && proj?.baseDirectory) {
+                absolutePath = `${proj.baseDirectory}/${absolutePath}`;
+            }
+            await invoke('locate_in_finder', { projectXmlPath: absolutePath });
+            showProjectLinkPopover = false;
+        } catch (e) {
+            console.error("Failed to reveal project link in file manager:", e);
+        }
+    }
+
+    async function handleOpenProjectLink() {
+        if (!popoverProjectLink) return;
+        const category = popoverProjectLinkCategory;
+        let viewType = 'document';
+        let originalDocType = '';
+
+        if (category === 'Audios' || category === 'Videos') {
+            viewType = 'media';
+            originalDocType = category === 'Audios' ? 'audio' : 'video';
+        } else if (category === 'Audio Transcripts') {
+            viewType = 'media';
+            originalDocType = 'audio_transcript';
+        } else if (category === 'Video Transcripts') {
+            viewType = 'media';
+            originalDocType = 'video_transcript';
+        } else if (category === 'Transcripts') {
+            viewType = 'transcript';
+            originalDocType = 'imported_transcript';
+        } else if (category === 'Tables') {
+            viewType = 'table';
+            originalDocType = 'csv';
+        } else if (category === 'Images') {
+            viewType = 'image';
+            originalDocType = 'image';
+        }
+
+        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript') {
+            // Find parent media to load it in the transcription UI properly
+            const proj = get(project);
+            let mediaNode = null;
+
+            function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
+                if (!Array.isArray(nodes)) return null;
+                for (const node of nodes) {
+                    if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath || t.relativePath === transcriptPath || proj.baseDirectory + '/' + t.relativePath === transcriptPath)) return node;
+                    const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
+                    if (found) return found;
+                }
+                return null;
+            }
+
+            mediaNode = findMediaByTranscriptPathRecursive(proj.files, popoverProjectLink);
+
+            if (mediaNode) {
+                dispatch('requestviewchange', {
+                    tabName: 'data',
+                    loadNotePath: popoverProjectLink,
+                    viewType: viewType,
+                    originalDocType: originalDocType
+                });
+                showProjectLinkPopover = false;
+                return;
+            }
+        }
+
+        dispatch('requestviewchange', {
+            tabName: 'data',
+            loadNotePath: popoverProjectLink,
+            viewType: viewType,
+            originalDocType: originalDocType || category
+        });
+        showProjectLinkPopover = false;
+    }
 
     function scrollToHighlight(id) {
         if (!id || !tabulatorInstance) return;
@@ -1805,12 +1970,54 @@
                 }
 
                 const term = searchTerm.trim();
+                let outputValue = value;
                 if (term && value !== null && value !== undefined && typeof value === 'string') {
                     const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                     const regex = new RegExp(`(${escapedTerm})`, 'gi');
-                    return String(value).replace(regex, '<span class="search-match-highlight">$1</span>');
+                    outputValue = String(value).replace(regex, '<span class="search-match-highlight">$1</span>');
                 }
-                return value;
+
+                if (colSchema.type === 'Contact' && colSchema.subType === 'Hyperlink' && value) {
+                    cellElement.classList.add('interactive-contact-cell');
+                    // Add the value directly to the element dataset for the global click handler to access
+                    cellElement.dataset.urlValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="hyperlink-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (colSchema.type === 'Contact' && colSchema.subType === 'Email' && value) {
+                    cellElement.classList.add('interactive-contact-cell');
+                    cellElement.dataset.emailValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="email-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Email Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (colSchema.type === 'Misc' && colSchema.subType === 'Project Link' && value) {
+                    cellElement.classList.add('interactive-contact-cell');
+                    cellElement.dataset.projectLinkValue = value;
+                    return `
+                        <div class="flex items-center justify-between w-full h-full">
+                            <span class="truncate mr-2">${outputValue}</span>
+                            <div class="project-link-icon-container hidden cursor-pointer text-blue-500 hover:text-blue-600 shrink-0" title="Link Options">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.5 5.96A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v5.22"/></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return outputValue;
             };
 
             if (savedLayoutObj?.columns?.[header]) {
@@ -2607,6 +2814,47 @@
     </div>
 
     <div class="flex-grow overflow-auto min-h-0 relative">
+        {#if showUrlPopover}
+            <div class="url-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverX}px; top: {popoverY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenUrl}>
+                    <ExternalLink size={14} /> Open in browser
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleCopyUrl}>
+                    {#if isUrlCopied}
+                        <Check size={14} class="text-green-500" /> Copied
+                    {:else}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy
+                    {/if}
+                </button>
+            </div>
+        {/if}
+
+        {#if showProjectLinkPopover}
+            <div class="project-link-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverProjectLinkX}px; top: {popoverProjectLinkY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenProjectLink}>
+                    <FolderOpen size={14} /> Open File
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleRevealProjectLink}>
+                    <FolderSearch size={14} /> {revealButtonLabel}
+                </button>
+            </div>
+        {/if}
+
+        {#if showEmailPopover}
+            <div class="email-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1" style="left: {popoverEmailX}px; top: {popoverEmailY}px; min-width: 140px;">
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleOpenEmail}>
+                    <Mail size={14} /> Send Email
+                </button>
+                <button class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2" on:click={handleCopyEmail}>
+                    {#if isEmailCopied}
+                        <Check size={14} class="text-green-500" /> Copied
+                    {:else}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy Email
+                    {/if}
+                </button>
+            </div>
+        {/if}
+
         {#if isLoading}
             <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 z-10">Loading table data...</div>
         {:else if error}
@@ -2788,6 +3036,8 @@
             box-shadow: inset 0 0 0 2px #ef4444 !important;
         }
 
+        :global(.tabulator-cell.interactive-contact-cell:hover .hyperlink-icon-container, .tabulator-cell.interactive-contact-cell:hover .email-icon-container, .tabulator-cell.interactive-contact-cell:hover .project-link-icon-container) {
+            display: flex !important;
         /* Progress Editor Styling */
         :global(.progress-range) {
             -webkit-appearance: none;
