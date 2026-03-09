@@ -132,7 +132,7 @@
     });
 
     async function handleViewChangeRequest(eventDetailFromDispatch) {
-        const pathForView = eventDetailFromDispatch?.itemPath;
+        const pathForView = eventDetailFromDispatch?.itemPath || eventDetailFromDispatch?.loadNotePath;
         const typeForView = eventDetailFromDispatch?.viewType;
         const hasHeadersForView = eventDetailFromDispatch?.hasHeaders;
 
@@ -146,10 +146,14 @@
 
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
             console.error(`[DataView] ABORTING: Invalid path or type. Path: '${pathForView}', Type: '${typeForView}'.`);
-            prepareDocumentView(null, 'placeholder');
-            prepareImportedTranscriptView(null);
-            prepareMediaNoteView(null);
-            activeItemTypeForInfoPanel = null; // Clear for InfoPanel too
+            return;
+        }
+
+        // Check if this is a media transcript that needs special handling
+        const originalDocType = eventDetailFromDispatch?.originalDocType;
+        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript' || typeForView === 'media' || typeForView === 'media_note') {
+            console.debug(`[DataView] Detected media/transcript type, forwarding to ProjectView for parent resolution.`);
+            forwardEvent({ type: 'requestviewchange', detail: eventDetailFromDispatch });
             return;
         }
 
@@ -161,13 +165,14 @@
 
         console.debug(`[DataView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
-        if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
-            prepareDocumentView(pathForView, typeForView, hasHeadersForView !== undefined ? hasHeadersForView : true);
-            // activeItemTypeForInfoPanel will be set by the project.subscribe block
-        } else if (typeForView === 'imported_transcript') {
+        const typeForStore = (typeForView === 'document' || typeForView === 'documents') ? 'documents' :
+                             (typeForView === 'table' || typeForView === 'tables') ? 'tables' :
+                             (typeForView === 'image' || typeForView === 'images') ? 'images' : null;
+
+        if (typeForStore) {
+            prepareDocumentView(pathForView, typeForStore, hasHeadersForView !== undefined ? hasHeadersForView : true);
+        } else if (typeForView === 'transcript' || typeForView === 'imported_transcript') {
             prepareImportedTranscriptView(pathForView);
-        } else if (typeForView === 'media_note') {
-            prepareMediaNoteView(pathForView);
         } else {
             console.warn(`[DataView] Unknown typeForView: '${typeForView}'. Clearing views.`);
             prepareDocumentView(null, 'placeholder');
@@ -238,8 +243,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={forwardEvent} />
-                 {:else if activeViewType === 'images'}
+                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={(event) => handleViewChangeRequest(event.detail)} />                 {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />

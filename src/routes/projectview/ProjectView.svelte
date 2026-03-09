@@ -775,8 +775,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             } else if (isMediaTranscript) {
                 function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
                     if (!Array.isArray(nodes)) return null;
+                    const normTranscriptPath = transcriptPath.replace(/\\/g, '/');
                     for (const node of nodes) {
-                        if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath)) return node;
+                        if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path.replace(/\\/g, '/') === normTranscriptPath)) return node;
                         const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
                         if (found) return found;
                     }
@@ -784,12 +785,16 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 }
                 const mediaNode = findMediaByTranscriptPathRecursive(proj.files, path);
                 if (mediaNode) {
-                    prepareMediaNoteView(mediaNode.path);
-                    // Override the active transcript so the requested one opens specifically
+                    console.log(`[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`);
+                    prepareMediaNoteView(mediaNode.path, path); // dual-path call
+                    // Selection highlighting in Left Panel
                     project.update(p => ({ ...p, activeTranscriptPathInDataTab: path }));
                 } else {
+                    console.warn(`[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`);
                     prepareDocumentView(path, 'documents');
                 }
+            } else if (viewType === 'media_note' || viewType === 'media' || ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm'].includes(path.split('.').pop()?.toLowerCase())) {
+                prepareMediaNoteView(path);
             } else {
                 const ext = path.split('.').pop()?.toLowerCase();
                 let type = 'documents';

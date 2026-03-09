@@ -76,6 +76,8 @@
     let tableReady = false;
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
 
+    let projectAssetOptions = [];
+
     let showEditEntryModal = false;
     let editingEntryData = null;
     let editingEntryIndex = -1;
@@ -204,6 +206,68 @@
         }
     });
 
+    function handleTableClick(e) {
+        const hyperlinkIcon = e.target.closest('.hyperlink-icon-container');
+        const emailIcon = e.target.closest('.email-icon-container');
+        const projectLinkIcon = e.target.closest('.project-link-icon-container');
+
+        if (hyperlinkIcon || emailIcon || projectLinkIcon) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const cellElement = e.target.closest('.tabulator-cell');
+            if (!cellElement) return;
+
+            const rect = cellElement.getBoundingClientRect();
+            
+            if (hyperlinkIcon) {
+                popoverUrl = cellElement.dataset.urlValue || '';
+                popoverX = rect.left;
+                popoverY = rect.bottom + window.scrollY;
+                showUrlPopover = true;
+                showEmailPopover = false;
+                showProjectLinkPopover = false;
+            } else if (emailIcon) {
+                popoverEmail = cellElement.dataset.emailValue || '';
+                popoverEmailX = rect.left;
+                popoverEmailY = rect.bottom + window.scrollY;
+                showEmailPopover = true;
+                showUrlPopover = false;
+                showProjectLinkPopover = false;
+            } else if (projectLinkIcon) {
+                const path = cellElement.dataset.projectLinkValue || '';
+                popoverProjectLink = path;
+                popoverProjectLinkX = rect.left;
+                popoverProjectLinkY = rect.bottom + window.scrollY;
+                
+                // Find category - resolve path to absolute for robust matching
+                const proj = get(project);
+                let absolutePath = path;
+                if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && proj?.baseDirectory) {
+                    const cleanRelative = path.replace(/^\/+/, '');
+                    absolutePath = `${proj.baseDirectory}/${cleanRelative}`;
+                }
+                const normalizedSearchPath = absolutePath.replace(/\\/g, '/');
+                
+                const asset = projectAssetOptions.find(a => a.value.replace(/\\/g, '/') === normalizedSearchPath);
+                popoverProjectLinkCategory = asset ? asset.category : 'Other';
+                
+                showProjectLinkPopover = true;
+                showUrlPopover = false;
+                showEmailPopover = false;
+            }
+        } else {
+            // Close popovers if clicking elsewhere
+            if (!e.target.closest('.url-popover-container') && 
+                !e.target.closest('.email-popover-container') && 
+                !e.target.closest('.project-link-popover-container')) {
+                showUrlPopover = false;
+                showEmailPopover = false;
+                showProjectLinkPopover = false;
+            }
+        }
+    }
+
     async function handleRevealProjectLink() {
         if (!popoverProjectLink) return;
         try {
@@ -211,7 +275,7 @@
             let absolutePath = popoverProjectLink;
             // If the path is relative, prepend the base directory
             if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && proj?.baseDirectory) {
-                absolutePath = `${proj.baseDirectory}/${absolutePath}`;
+                absolutePath = `${proj.baseDirectory}/${absolutePath.replace(/^\/+/, '')}`;
             }
             await invoke('locate_in_finder', { projectXmlPath: absolutePath });
             showProjectLinkPopover = false;
@@ -223,19 +287,18 @@
     async function handleOpenProjectLink() {
         if (!popoverProjectLink) return;
         const category = popoverProjectLinkCategory;
+        const path = popoverProjectLink.toLowerCase();
         let viewType = 'document';
         let originalDocType = '';
 
         if (category === 'Audios' || category === 'Videos') {
             viewType = 'media';
             originalDocType = category === 'Audios' ? 'audio' : 'video';
-        } else if (category === 'Audio Transcripts') {
+        } else if (category === 'Audio Transcripts' || category === 'Video Transcripts') {
             viewType = 'media';
-            originalDocType = 'audio_transcript';
-        } else if (category === 'Video Transcripts') {
-            viewType = 'media';
-            originalDocType = 'video_transcript';
+            originalDocType = category === 'Audio Transcripts' ? 'audio_transcript' : 'video_transcript';
         } else if (category === 'Transcripts') {
+            // Standalone transcripts (imported)
             viewType = 'transcript';
             originalDocType = 'imported_transcript';
         } else if (category === 'Tables') {
@@ -246,38 +309,16 @@
             originalDocType = 'image';
         }
 
-        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript') {
-            // Find parent media to load it in the transcription UI properly
-            const proj = get(project);
-            let mediaNode = null;
-
-            function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
-                if (!Array.isArray(nodes)) return null;
-                for (const node of nodes) {
-                    if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath || t.relativePath === transcriptPath || proj.baseDirectory + '/' + t.relativePath === transcriptPath)) return node;
-                    const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
-                    if (found) return found;
-                }
-                return null;
-            }
-
-            mediaNode = findMediaByTranscriptPathRecursive(proj.files, popoverProjectLink);
-
-            if (mediaNode) {
-                dispatch('requestviewchange', {
-                    tabName: 'data',
-                    loadNotePath: popoverProjectLink,
-                    viewType: viewType,
-                    originalDocType: originalDocType
-                });
-                showProjectLinkPopover = false;
-                return;
-            }
+        const proj = get(project);
+        let absoluteLinkPath = popoverProjectLink;
+        if (!absoluteLinkPath.startsWith('/') && !absoluteLinkPath.startsWith('\\') && !absoluteLinkPath.includes(':') && proj?.baseDirectory) {
+            absoluteLinkPath = `${proj.baseDirectory}/${popoverProjectLink.replace(/^\/+/, '')}`;
         }
 
         dispatch('requestviewchange', {
             tabName: 'data',
-            loadNotePath: popoverProjectLink,
+            itemPath: absoluteLinkPath, // For DataView
+            loadNotePath: absoluteLinkPath, // For ProjectView
             viewType: viewType,
             originalDocType: originalDocType || category
         });
@@ -1064,6 +1105,9 @@
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { valid: false, message: "Invalid email format" };
             } else if (type === 'Contact' && subType === 'Phone') {
                 if (!/^\+?[\d\s-]{7,20}$/.test(value)) return { valid: false, message: "Invalid phone format" };
+            } else if (type === 'Contact' && subType === 'Hyperlink') {
+                const urlRegex = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+                if (!urlRegex.test(value)) return { valid: false, message: "Invalid hyperlink format" };
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
                     if (schema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return { valid: false, message: "Invalid time format (HH:mm)" };
@@ -1665,7 +1709,6 @@
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         
         currentPrimaryField = Object.keys(schema).find(key => schema[key].primary) || null;
-        const projectAssetOptions = await getAllProjectAssets();
         
         let dataColumnDefs = headers.map(header => {
             const colSchema = schema[header] || { type: 'Text', subType: 'Small Text' };
@@ -2238,6 +2281,7 @@
             
             // Reset duplicates state for new table
             duplicateIds = new Set();
+            projectAssetOptions = await getAllProjectAssets();
             const generatedColumns = await generateColumns(tableData, tableHeaders, savedLayout, tableSchema);
 
             tabulatorInstance = new Tabulator(tableContainer, {
@@ -2625,11 +2669,14 @@
         };
         tableContainer?.addEventListener('keydown', handleEditorArrowKeys, true); // use capture
 
+        document.addEventListener('click', handleTableClick);
+
 		return () => {
 			tabulatorInstance?.destroy();
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
             tableContainer?.removeEventListener('keydown', handleEditorArrowKeys, true);
+            document.removeEventListener('click', handleTableClick);
 		}
     });
 
@@ -3038,6 +3085,7 @@
 
         :global(.tabulator-cell.interactive-contact-cell:hover .hyperlink-icon-container, .tabulator-cell.interactive-contact-cell:hover .email-icon-container, .tabulator-cell.interactive-contact-cell:hover .project-link-icon-container) {
             display: flex !important;
+        }
         /* Progress Editor Styling */
         :global(.progress-range) {
             -webkit-appearance: none;

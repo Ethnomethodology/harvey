@@ -204,7 +204,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
     const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables' || itemType === 'table';
     const isImage = itemType === 'images' || itemType === 'image';
-    const isJsonDocument = normalizedFilePath && itemType === 'documents' && !isPdf;
+    const isJsonDocument = normalizedFilePath && (itemType === 'documents' || itemType === 'document') && !isPdf && !isImage;
 
     const defaultFileLevelMetadata = {
         file_name: '', last_modified: '', title: '', description: '', summary: '',
@@ -854,9 +854,9 @@ export function markImportedTranscriptChangesDiscarded(filePath) {
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
-export function prepareMediaNoteView(mediaPath) {
+export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
-
+    const normalizedTranscriptPath = transcriptPath ? transcriptPath.replace(/\\/g, '/') : null;
 
     project.update(p => {
         const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson);
@@ -883,11 +883,11 @@ export function prepareMediaNoteView(mediaPath) {
             isLoading: finalIsGlobalLoading,
 
             // Clear other fieldnotes states
-            selectedDocumentPath: null, /* ... */
+            selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
-            currentImportedTranscriptPath: null, /* ... */
+            currentImportedTranscriptPath: null,
             currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
-            activeTranscriptPathInDataTab: null, // Clear active transcript when switching to other views
+            activeTranscriptPathInDataTab: normalizedTranscriptPath, // Set if provided, otherwise cleared
         };
     });
 
@@ -903,20 +903,20 @@ export function prepareMediaNoteView(mediaPath) {
         }
 
         const mediaFileNode = findMediaFileInTree(currentProjectState.files, normalizedMediaPath);
-        const firstTranscriptPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+        const targetTranscriptPath = normalizedTranscriptPath || mediaFileNode?.associated_transcripts?.[0]?.path || null;
 
         project.update(p => ({
             ...p,
-            activeTranscriptPathInDataTab: firstTranscriptPath,
-            mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
-            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false,
-            isLoading: firstTranscriptPath ? true : false,
+            activeTranscriptPathInDataTab: targetTranscriptPath,
+            mediaNoteTranscriptError: targetTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
+            isMediaNoteTranscriptLoading: targetTranscriptPath ? true : false,
+            isLoading: targetTranscriptPath ? true : false,
             currentDocumentHighlights: [], // Clear highlights initially
         }));
 
-        if (firstTranscriptPath) {
+        if (targetTranscriptPath) {
             (async () => {
-                const meta = await projectService.loadDocumentMetadata(firstTranscriptPath);
+                const meta = await projectService.loadDocumentMetadata(targetTranscriptPath);
                 project.update(p => {
                     if (p.selectedMediaNotePath === normalizedMediaPath) {
                         return {

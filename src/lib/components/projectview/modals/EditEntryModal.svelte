@@ -242,6 +242,9 @@
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Invalid email format";
             } else if (type === 'Contact' && subType === 'Phone') {
                 if (!/^\+?[\d\s-]{7,20}$/.test(value)) return "Invalid phone format";
+            } else if (type === 'Contact' && subType === 'Hyperlink') {
+                const urlRegex = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+                if (!urlRegex.test(value)) return "Invalid hyperlink format";
             } else if (type === 'DateTime') {
                 if (subType === 'Time') {
                     if (colSchema.format === 'HH:mm' && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return "Invalid time format (HH:mm)";
@@ -265,7 +268,7 @@
                 }
             } else if (type === 'Misc') {
                 if (subType === 'Selectbox' && Array.isArray(colSchema.options)) {
-                    if (!colSchema.options.includes(value)) return `Value must be one of: ${colSchema.options.join(', ')}`;
+                    if (value && !colSchema.options.includes(value)) return `Value must be one of: ${colSchema.options.join(', ')}`;
                 } else if (subType === 'Multiselect' && Array.isArray(colSchema.options)) {
                     const vals = Array.isArray(value) ? value : String(value).split(',').map(s => s.trim()).filter(Boolean);
                     const invalidVals = vals.filter(v => !colSchema.options.includes(v));
@@ -276,16 +279,20 @@
         return null;
     }
 
-    function handleSave() {
+    // Reactive validation
+    $: {
         let newErrors = {};
         columns.forEach(col => {
-            if (col.field) {
+            if (col.field && col.field !== 'harvey_internal_id') {
                 const error = validateField(col.field, editedData[col.field]);
                 if (error) newErrors[col.field] = error;
             }
         });
         errors = newErrors;
-        if (Object.keys(newErrors).length === 0) {
+    }
+
+    function handleSave() {
+        if (Object.keys(errors).length === 0) {
             dispatch('save', { rowData: editedData, rowIndex });
         }
     }
