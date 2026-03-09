@@ -151,9 +151,16 @@
 
         // Check if this is a media transcript that needs special handling
         const originalDocType = eventDetailFromDispatch?.originalDocType;
-        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript' || typeForView === 'media' || typeForView === 'media_note') {
-            console.debug(`[DataView] Detected media/transcript type, forwarding to ProjectView for parent resolution.`);
-            forwardEvent({ type: 'requestviewchange', detail: eventDetailFromDispatch });
+        // If it's explicitly an audio/video transcript (i.e. from the table link), it MUST go to ProjectView.
+        // However, standard media_note clicks from the left panel should just be handled directly here
+        // using prepareMediaNoteView unless it's a specific table intercept routing.
+        if (originalDocType === 'audio_transcript' || originalDocType === 'video_transcript' || typeForView === 'media') {
+            console.debug(`[DataView] Detected complex media/transcript link type, forwarding to ProjectView for parent resolution.`);
+            // Inject tabName and loadNotePath so ProjectView's handleRequestOpenTab doesn't early return
+            forwardEvent({
+                type: 'requestviewchange',
+                detail: { ...eventDetailFromDispatch, tabName: 'data', loadNotePath: pathForView }
+            });
             return;
         }
 
@@ -173,6 +180,8 @@
             prepareDocumentView(pathForView, typeForStore, hasHeadersForView !== undefined ? hasHeadersForView : true);
         } else if (typeForView === 'transcript' || typeForView === 'imported_transcript') {
             prepareImportedTranscriptView(pathForView);
+        } else if (typeForView === 'media_note') {
+            prepareMediaNoteView(pathForView);
         } else {
             console.warn(`[DataView] Unknown typeForView: '${typeForView}'. Clearing views.`);
             prepareDocumentView(null, 'placeholder');

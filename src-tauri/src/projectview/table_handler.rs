@@ -1129,7 +1129,7 @@ pub async fn export_formatted_table_to_csv(
 pub async fn export_formatted_table_to_xlsx(
     data: Vec<Value>,
     headers: Vec<String>,
-    styles: Option<serde_json::Map<String, Value>>,
+    styles: Option<Value>,
     output_path_str: String,
 ) -> Result<String, CommandError> {
     info!("[export_formatted_table_to_xlsx] Exporting formatted table to: {}", output_path_str);
@@ -1139,7 +1139,14 @@ pub async fn export_formatted_table_to_xlsx(
         fs::create_dir_all(parent)?;
     }
 
-    save_xlsx_data_with_headers_and_styles(output_path, data, &headers, styles)?;
+    let mut styles_map = None;
+    if let Some(val) = styles {
+        if let Some(map) = val.as_object() {
+            styles_map = Some(map.clone());
+        }
+    }
+
+    save_xlsx_data_with_headers_and_styles(output_path, data, &headers, styles_map)?;
     
     Ok(output_path_str)
 }
