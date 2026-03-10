@@ -1,0 +1,11 @@
+--- src/routes/projectview/ProjectView.svelte
++++ src/routes/projectview/ProjectView.svelte
+@@ -1089,7 +1089,7 @@
+				bind:isProjectSettingsModalOpen={isProjectSettingsModalOpen}
+				bind:isTranscriptionSettingsModalOpen={isTranscriptionSettingsModalOpen}
+				bind:isTranslationSettingsModalOpen={isTranslationSettingsModalOpen}
+-				tableViewRef={dataViewRef?.tableViewRef}
++				dataViewRef={dataViewRef}
+				{hasHeaders}
+				{isTable}
+                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}

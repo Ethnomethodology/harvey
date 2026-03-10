@@ -51,7 +51,7 @@
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
 	import TranscribeConfirmModal from '$lib/components/projectview/modals/TranscribeConfirmModal.svelte';
-    
+
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
     import ConfirmConversionModal from '$lib/components/projectview/modals/ConfirmConversionModal.svelte';
     import ImportTranscriptSourceModal from '$lib/components/projectview/modals/ImportTranscriptSourceModal.svelte';
@@ -81,8 +81,8 @@
     let closeImportMenuListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
-    	let showHeaderConfirmationModal = false;
-    	let showConfigurationModal = false;
+	let showHeaderConfirmationModal = false;
+	let showConfigurationModal = false;
         let showHelpModal = false;
         let showCreateGroupModal = false;    let showCreateTableModal = false;
     let fileToAddForGroup = null;
@@ -98,7 +98,7 @@
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
-	
+
 	let isLoadingTranscriptionConfig = true;
 
 	$: if ($transcriptStore.showTranscribeModal) {
@@ -168,7 +168,7 @@ async function onConfirmTranscriptionStart(event) {
         const { segmentCount, segmentDuration, speakerMode, startTime } = manualSettings;
         const store = get(transcriptStore);
         const speakerNames = store.speakers.names;
-        
+
         let currentStartTime = startTime;
         let lastSpeakerIndex = -1; // New transcript, start from first speaker or unassigned
 
@@ -176,19 +176,19 @@ async function onConfirmTranscriptionStart(event) {
         for (let i = 0; i < segmentCount; i++) {
             const newEndTime = currentStartTime + segmentDuration;
             let speaker = "Unknown";
-            
+
             if (speakerMode === 'alternate' && speakerNames && speakerNames.length > 0) {
                  const currentSpeakerIndex = i % speakerNames.length;
                  speaker = speakerNames[currentSpeakerIndex];
             }
 
-            const newSegment = { 
-                start_time: currentStartTime, 
-                end_time: newEndTime, 
-                speaker: speaker, 
-                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), 
+            const newSegment = {
+                start_time: currentStartTime,
+                end_time: newEndTime,
+                speaker: speaker,
+                text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }),
             };
-            
+
             newSegments.push(newSegment);
             currentStartTime = newEndTime;
         }
@@ -197,7 +197,7 @@ async function onConfirmTranscriptionStart(event) {
             try {
                 project.update(p => ({ ...p, isLoading: true, statusMessage: 'Creating manual transcript...' }));
                 await createManualTranscript(store.selectedMediaFile.path, newSegments, manualSettings);
-                
+
                 // Automatically enter edit mode
                 if (transcriptionsViewRef && typeof transcriptionsViewRef.enterManualEditMode === 'function') {
                     await transcriptionsViewRef.enterManualEditMode();
@@ -219,8 +219,8 @@ async function onConfirmTranscriptionStart(event) {
 $: hasCriticalConfigIssues = ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.python_libraries_installed) || ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed);
 
 $: hasNonCriticalConfigIssues = !hasCriticalConfigIssues && (
-    !$configStatus.hf_token_present || 
-    !$configStatus.diarization_model_downloaded || 
+    !$configStatus.hf_token_present ||
+    !$configStatus.diarization_model_downloaded ||
     ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) ||
     ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded) ||
     ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_models_downloaded) ||
@@ -244,7 +244,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         unlistenMenuEvents.push(await listen('menu:file:import:image', () => triggerMediaImport('image')));
         unlistenMenuEvents.push(await listen('menu:file:import:table', () => triggerMediaImport('table')));
         unlistenMenuEvents.push(await listen('menu:file:import:transcript', () => triggerMediaImport('transcript')));
-        
+
         unlistenMenuEvents.push(await listen('menu:file:create:document', async () => {
              const currentProject = get(project);
              if (currentProject && currentProject.xmlPath) {
@@ -369,7 +369,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
 	});
 
-	
+
 
 	function handleGlobalKeys(event) {
         if (event.key === 'Backspace') {
@@ -533,7 +533,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             }
         }
     }
-    function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } } 
+    function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } }
     function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for conversion action: ${action}`); hideConversionPrompt(); } }
 
     async function handleCloseProject() {
@@ -714,7 +714,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
         const proj = get(project);
         let path = normalizePath(loadNotePath);
-        
+
         // Robust absolute path resolution
         let cleanPath = path.replace(/^\/+/, ''); // Strip leading slashes for check
         if (proj.baseDirectory && !path.startsWith(proj.baseDirectory)) {
@@ -728,11 +728,11 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         console.log(`[ProjectView] handleRequestOpenTab: path=${path}, viewType=${viewType}, originalDocType=${originalDocType}`);
 
         // Update requested highlight ID immediately so the target component can react
-        project.update(p => ({ 
-            ...p, 
-            isLoading: true, 
+        project.update(p => ({
+            ...p,
+            isLoading: true,
             statusMessage: `Opening ${itemLogName}...`,
-            requestedHighlightId: highlightId || null 
+            requestedHighlightId: highlightId || null
         }));
 
         // Determine if we are already viewing this path
@@ -767,9 +767,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         if (tabName === 'data') {
             const isImportedTranscript = viewType === 'transcript' || originalDocType === 'imported_transcript' ||
                 proj.importedTranscriptFiles?.some(f => normalizePath(`${proj.baseDirectory}/${f.relative_path || f.relativePath}`) === path);
-            
+
             const isMediaTranscript = originalDocType === 'audio_transcript' || originalDocType === 'video_transcript';
-            
+
             if (isImportedTranscript) {
                 prepareImportedTranscriptView(path);
             } else if (isMediaTranscript) {
@@ -943,7 +943,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         } else {
             project.update(p => ({ ...p, statusMessage: `Media ${mediaName} already selected.`}));
         }
-        
+
         if (transcriptionsViewRef && typeof transcriptionsViewRef.activateTrimModeOnPlayer === 'function') {
             transcriptionsViewRef.activateTrimModeOnPlayer();
             project.update(p => ({ ...p, isLoading: false, statusMessage: `Trim mode activated for ${mediaName}.` }));
@@ -1023,9 +1023,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                     }
                 }
             }
-            else if (actionType === 'transcript') { 
-                showImportTranscriptSourceModal = true; 
-                project.update(p => ({...p, isLoading: false})); 
+            else if (actionType === 'transcript') {
+                showImportTranscriptSourceModal = true;
+                project.update(p => ({...p, isLoading: false}));
             }
             else { await message(`Import type (${actionType}) not recognized.`, {title: "Import Error", type: "error"}); project.update(p => ({...p, isLoading: false}));}
         } catch (e) { project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Import failed.`}));}
@@ -1033,17 +1033,17 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     }
 
     async function handleImportTranscriptSourceConfirm(event) {
-        const { sourceType } = event.detail; 
+        const { sourceType } = event.detail;
         showImportTranscriptSourceModal = false;
-        if (sourceType === 'msWord') { 
-            try { 
+        if (sourceType === 'msWord') {
+            try {
                 const newTranscriptPath = await importTranscriptFile('msWord');
                 if (newTranscriptPath) {
                     if (await ensureTab('data')) {
                         prepareImportedTranscriptView(newTranscriptPath);
                     }
                 }
-            } catch (e) { 
+            } catch (e) {
                 project.update(p => ({...p, isImportingAsset: false, isLoading: false}));
             }
         }
@@ -1051,9 +1051,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     }
 
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
-        function handleImportMenuAction(event, actionType) { 
-        closeImportMenu(); 
-        triggerMediaImport(actionType); 
+        function handleImportMenuAction(event, actionType) {
+        closeImportMenu();
+        triggerMediaImport(actionType);
     }
 
 	async function handleHeaderConfirmation(event) {
@@ -1089,7 +1089,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 	<div class="flex-shrink-0">
 		{#if selectedTab === 'data'}
 			<DataTopBar
-				dataViewRef={dataViewRef}
+				tableViewRef={dataViewRef?.tableViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
@@ -1159,7 +1159,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		downloadedModelsList={downloadedModelsList}
         mediaDuration={$transcriptStore.player?.duration || 0}
         lastSegmentEndTime={$transcriptStore.segments?.length > 0 ? $transcriptStore.segments[$transcriptStore.segments.length - 1].end_time : 0}
-		
+
 		languageOptions={languageOptions}
 		initialDiarizationEnabled={$transcriptStore.diarizationEnabledForNextJob}
         on:confirmStart={onConfirmTranscriptionStart}
@@ -1179,7 +1179,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false }));
         }} />
 
-    
+
 
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
@@ -1191,9 +1191,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		on:confirm={handleHeaderConfirmation}
 	/>
 
-    <CreateTableModal 
-        bind:showModal={showCreateTableModal} 
-        on:tableCreated={handleTableCreated} 
+    <CreateTableModal
+        bind:showModal={showCreateTableModal}
+        on:tableCreated={handleTableCreated}
     />
 
     <CreateGroupModal

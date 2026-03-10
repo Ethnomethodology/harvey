@@ -25,7 +25,7 @@
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
-    export let dataViewRef = null;
+    export let tableViewRef = null;
 
     // Determine platform-specific modifier key name
     const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -166,7 +166,7 @@
     let currentActivePath;
 
     let displayTitle = '';
-  
+
     $: { // This is the existing reactive block for autosave related logic
         const p = $project;
         autosaveEnabled = p.autosaveEnabled;
@@ -235,7 +235,7 @@
             currentActivePath = newActivePath;
         }
     }
-  
+
     function openLayoutSettingsModal() {
 		isLayoutSettingsModalOpen = true;
 	}
@@ -250,31 +250,31 @@
 
     async function handleManualSave() {
         const projState = get(project);
-        const currentCanSave = !projState.autosaveEnabled && 
+        const currentCanSave = !projState.autosaveEnabled &&
                                (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
-        
-        if (!currentCanSave) { 
-            console.warn("[DataTopBar] Manual save clicked but conditions not met."); 
-            return; 
+
+        if (!currentCanSave) {
+            console.warn("[DataTopBar] Manual save clicked but conditions not met.");
+            return;
         }
         console.log("[DataTopBar] Manual save proceeding...");
 
         if ((projState.isDocumentDirty || projState.isDocumentMetadataDirty) && projState.selectedDocumentPath && projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
             console.log("[DataTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
-            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[DataTopBar] Document manual save successful."); } 
+            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[DataTopBar] Document manual save successful."); }
             catch (error) { console.error("[DataTopBar] Document manual save via editor ref failed:", error); }
         } else if (projState.isPdfAnnotationsDirty && projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
             console.log("[DataTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
-            try { 
+            try {
                 // PDF Annotations save might be handled differently, e.g. a direct service call if no 'ref.save'
                 // Assuming there's a service for this like `saveCurrentPdfAnnotations`
                 const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
                 await saveCurrentPdfAnnotations();
-                console.log("[DataTopBar] PDF Annotations manual save successful."); 
+                console.log("[DataTopBar] PDF Annotations manual save successful.");
             } catch (error) { console.error("[DataTopBar] PDF Annotations manual save failed:", error); }
         } else if ((projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty) && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
              console.log("[DataTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
-            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); } 
+            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); }
             catch (error) { console.error("[DataTopBar] Imported Transcript manual save via editor ref failed:", error); }
         } else if (projState.isMediaNoteTranscriptDirty && projState.selectedMediaNotePath && projState.activeMediaNoteEditorRef?.ref && typeof projState.activeMediaNoteEditorRef.ref.save === 'function') {
             console.log("[DataTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
@@ -284,15 +284,15 @@
             console.log("[DataTopBar] Manual save triggered for TABLE via editor ref:", projState.selectedTablePath);
             try { await tableViewRef.save(); console.log("[DataTopBar] Table manual save successful."); }
             catch (error) { console.error("[DataTopBar] Table manual save via editor ref failed:", error); }
-        } else { 
-            console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
+        } else {
+            console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call.");
         }
     }
-  
+
     function handleToggleChange() {
         toggleAutosave();
     }
-  
+
     let autosaveTimeout;
     $: {
         const p = $project;
@@ -353,22 +353,22 @@
 
                 if (editorStillActiveAndDirty) {
                      console.log(`[DataTopBar] Autosaving (Action: ${saveAction})...`);
-                     try { 
+                     try {
                         if (saveAction === 'pdfAnnotations') {
                             const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
                             await saveCurrentPdfAnnotations();
                         } else if (activeEditorRefToSave && typeof activeEditorRefToSave.save === 'function') {
-                            await activeEditorRefToSave.save(); 
+                            await activeEditorRefToSave.save();
                         } else {
                             console.warn(`[DataTopBar Autosave] No valid save method for action ${saveAction}`);
                         }
-                        console.log(`[DataTopBar] Autosave successful for ${saveAction}.`); 
+                        console.log(`[DataTopBar] Autosave successful for ${saveAction}.`);
                     }
                      catch (error) { console.error(`[DataTopBar] Autosave failed for ${saveAction}:`, error); }
-                } else { 
-                    console.log(`[DataTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`); 
+                } else {
+                    console.log(`[DataTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`);
                 }
-            }, 3000); 
+            }, 3000);
         }
     }
     async function handleExportConfirm(event) {
@@ -425,7 +425,7 @@
                     const cells = rowNode.children;
                     const timestampText = getTextFromLexicalNode(cells[1]);
                     const [startStr, endStr] = timestampText.split(' - ').map(s => s.trim());
-                    
+
                     const startTime = parseTimestamp(startStr);
                     const endTime = parseTimestamp(endStr);
                     const speaker = getTextFromLexicalNode(cells[2]);
@@ -553,7 +553,7 @@
         ? 'error'
         : 'default';
   </script>
-  
+
   <div
     class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-50"
     on:requestTranscriptionTabWithMediaAndDialog
@@ -569,7 +569,7 @@
                 </svg>
             </button>
         </div>
-        
+
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
         <button class="ui-button-icon flex items-center ml-2 space-x-0.5 hover-scale-effect"
@@ -602,7 +602,7 @@
 
     <div class="flex justify-center min-w-0 z-10"> <!-- Middle Column -->
     </div>
-  
+
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
@@ -625,7 +625,7 @@
                 </svg>
                 <span class="text-xs">Translate</span>
             </button>
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
                 on:click="{() => {
                     if (isImportedTranscript) {
                         pathForExportModal = $project.currentImportedTranscriptPath;
@@ -633,8 +633,8 @@
                     } else {
                         showDocumentExportModal = true;
                     }
-                }}" 
-                title={isImportedTranscript ? "Export Transcript" : "Export Document"} 
+                }}"
+                title={isImportedTranscript ? "Export Transcript" : "Export Document"}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
@@ -653,19 +653,19 @@
             </button>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <button 
-                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
-                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}" 
-                title="Split Transcript (Horizontal)" 
+            <button
+                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}"
+                title="Split Transcript (Horizontal)"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-split" viewBox="0 0 16 16">
                     <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5z"/>
                 </svg>
             </button>
-            <button 
-                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
-                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))}" 
-                title="Split Transcript (Vertical)" 
+            <button
+                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))}"
+                title="Split Transcript (Vertical)"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-split" viewBox="0 0 16 16" style="transform: rotate(90deg);">
                     <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5z"/>
@@ -682,7 +682,7 @@
             <span class="ml-1 hidden sm:inline">Save</span>
             {#if showDirtyIndicator}<span class="text-orange-500 ml-0.5">*</span>{/if}
         </button>
-  
+
         <div class="flex items-center space-x-1.5" title={autosaveEnabled ? 'Autosave is ON' : 'Autosave is OFF'}> <!-- Reduced space-x-2 to space-x-1.5 -->
           <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
             Autosave
@@ -690,7 +690,7 @@
             <label class="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                class="sr-only peer" 
+                class="sr-only peer"
                 bind:checked={autosaveEnabled}
                 on:change={handleToggleChange}
               >
@@ -704,7 +704,7 @@
               </span>
             </label>
         </div>
-  
+
          <!-- <button
             id="theme-toggle-button"
             on:click={cycleThemePreference}
@@ -729,7 +729,7 @@
 	</div>
     </div>
   </div>
-  
+
   <style lang="postcss">
     .ui-button-icon-no-border {
 		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 disabled:hover:bg-transparent dark:disabled:hover:!bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
@@ -758,7 +758,7 @@
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
         @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-700 dark:disabled:hover:!bg-transparent;
     }
-  
+
     .hover-scale-effect {
         /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */
         will-change: transform;
@@ -797,8 +797,8 @@
     on:closeAndReset={() => toggleTranslateModal(false)}
 />
 
-<DocumentExportModal 
-    bind:showModal={showDocumentExportModal} 
+<DocumentExportModal
+    bind:showModal={showDocumentExportModal}
     documentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={() => message('Document exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showDocumentExportModal = false}

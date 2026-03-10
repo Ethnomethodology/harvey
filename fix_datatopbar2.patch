@@ -1,0 +1,22 @@
+--- src/routes/projectview/ProjectView.svelte
++++ src/routes/projectview/ProjectView.svelte
+@@ -1089,7 +1089,7 @@
+	<div class="flex-shrink-0">
+		{#if selectedTab === 'data'}
+			<DataTopBar
+-				tableViewRef={dataViewRef?.tableViewRef}
++				dataViewRef={dataViewRef}
+				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+                 on:requestImport={handleImportMediaInSidebar}
+                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
+--- src/lib/components/projectview/data/DataTopBar.svelte
++++ src/lib/components/projectview/data/DataTopBar.svelte
+@@ -25,7 +25,7 @@
+	import EditEntryModal from './tables/EditEntryModal.svelte';
+	import CreateTableModal from './tables/CreateTableModal.svelte';
+	import ViewRawDataModal from './tables/ViewRawDataModal.svelte';
+-    export let tableViewRef = null;
++    export let dataViewRef = null;
+
+	let showImportMediaModal = false;
+	let showImportTranscriptSourceModal = false;
