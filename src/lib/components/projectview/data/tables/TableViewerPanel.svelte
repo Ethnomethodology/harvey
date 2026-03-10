@@ -2303,7 +2303,7 @@
         
         // Extract style information for export
         const stylesMap = {};
-        if (tableStyles && tableStyles.cellStyles) {
+        if (tableStyles) {
             // Re-map internal id -> string index based on current order if needed,
             // but our backend export uses the raw data array which might not match `harvey_internal_id` 1:1 if sorted.
             // Let's attach styles directly to the formatted data to ensure it matches.
@@ -2312,15 +2312,32 @@
                 const internalId = row.harvey_internal_id;
                 headers.forEach((field, colIndex) => {
                     const cellKey = `cell-${internalId}-${field}`;
-                    if (tableStyles.cellStyles[cellKey]) {
+                    let color = null;
+                    let bold = false;
+                    let italic = false;
+                    let underline = false;
+
+                    // Row highlights
+                    if (tableStyles.rowStyles && tableStyles.rowStyles[internalId]) {
+                        color = tableStyles.rowStyles[internalId];
+                    }
+
+                    // Cell highlights (override row color)
+                    if (tableStyles.cellStyles && tableStyles.cellStyles[cellKey]) {
                         const s = tableStyles.cellStyles[cellKey];
-                        // Using row,col coordinates for Rust to easily look up
+                        if (s.color) color = s.color;
+                        if (s.bold) bold = !!s.bold;
+                        if (s.italic) italic = !!s.italic;
+                        if (s.underline) underline = !!s.underline;
+                    }
+
+                    if (color || bold || italic || underline) {
                         const coordKey = `${rowIndex},${colIndex}`;
                         stylesMap[coordKey] = {
-                            color: s.color || null,
-                            bold: !!s.bold,
-                            italic: !!s.italic,
-                            underline: !!s.underline
+                            color,
+                            bold,
+                            italic,
+                            underline
                         };
                     }
                 });
