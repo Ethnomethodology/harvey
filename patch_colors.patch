@@ -1,0 +1,104 @@
+--- src/lib/components/projectview/data/tables/TableViewerPanel.svelte
++++ src/lib/components/projectview/data/tables/TableViewerPanel.svelte
+@@ -113,6 +113,7 @@
+                     // Cell IDs are in format "cell-rowIndex-colField"
+                     newCellStyles[h.id] = {
+                         color: h.color,
++                        textColor: h.textColor,
+                         bold: h.bold,
+                         italic: h.italic,
+                         underline: h.underline
+@@ -201,6 +202,7 @@
+                 currentHighlights.push({
+                     id: cellKey,
+                     color: null,
++                    textColor: null,
+                     [styleType]: true,
+                     text: `Cell [Entry ${rowIndex + 1}, ${field}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`,
+                     tags: [],
+@@ -213,6 +215,86 @@
+         setTableHighlights(currentHighlights);
+         await saveTableHighlights();
+     }
++
++    async function applyTextColor(colorValue) {
++        if (!tabulatorInstance) return;
++
++        const ranges = tabulatorInstance.getRanges();
++        if (!ranges || ranges.length === 0) return;
++
++        let cellsToModify = [];
++        ranges.forEach(range => {
++            const rows = range.getRows();
++            const columns = range.getColumns();
++            rows.forEach(row => {
++                columns.forEach(col => {
++                    const cell = row.getCell(col.getField());
++                    if (cell) cellsToModify.push(cell);
++                });
++            });
++        });
++
++        if (cellsToModify.length === 0) return;
++
++        let currentHighlights = get(project).currentTableHighlights || [];
++
++        cellsToModify.forEach(cell => {
++            const field = cell.getField();
++            const schema = tableSchema[field];
++            if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
++                return;
++            }
++
++            const rowIndex = cell.getRow().getData().harvey_internal_id;
++            const cellKey = `cell-${rowIndex}-${field}`;
++            let existingIndex = currentHighlights.findIndex(h => h.id === cellKey);
++
++            if (existingIndex !== -1) {
++                currentHighlights[existingIndex].textColor = colorValue === 'transparent' ? null : colorValue;
++            } else if (colorValue !== 'transparent') {
++                const cellValue = cell.getValue();
++                currentHighlights.push({
++                    id: cellKey,
++                    color: null,
++                    textColor: colorValue,
++                    bold: false,
++                    italic: false,
++                    underline: false,
++                    text: `Cell [Entry ${rowIndex + 1}, ${field}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`,
++                    tags: [],
++                    comments: []
++                });
++            }
++        });
++
++        setTableHighlights(currentHighlights);
++        await saveTableHighlights();
++        isColorDropdownOpen = false;
++    }
++
++    async function clearFormatting() {
++        if (!tabulatorInstance) return;
++        const ranges = tabulatorInstance.getRanges();
++        if (!ranges || ranges.length === 0) return;
++
++        let cellsToClear = new Set();
++        ranges.forEach(range => {
++            range.getRows().forEach(row => {
++                range.getColumns().forEach(col => {
++                    const rowIndex = row.getData().harvey_internal_id;
++                    cellsToClear.add(`cell-${rowIndex}-${col.getField()}`);
++                });
++            });
++        });
++
++        if (cellsToClear.size === 0) return;
++
++        let currentHighlights = get(project).currentTableHighlights || [];
++        currentHighlights = currentHighlights.filter(h => !h.id.startsWith('cell-') || !cellsToClear.has(h.id));
++        setTableHighlights(currentHighlights);
++        await saveTableHighlights();
++    }
+
+     let searchTerm = '';
+     let cellMatches = []; // Changed from searchMatches to store cell components

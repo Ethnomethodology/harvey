@@ -678,6 +678,18 @@ fn save_xlsx_data_with_headers_and_styles(
                                 if let Some(is_underline) = style_obj.get("underline").and_then(|v| v.as_bool()) {
                                     if is_underline { cell_format = cell_format.set_underline(rust_xlsxwriter::FormatUnderline::Single); }
                                 }
+                                if let Some(text_color_val) = style_obj.get("textColor").and_then(|v| v.as_str()) {
+                                    if !text_color_val.is_empty() {
+                                        let clean_color = if text_color_val.starts_with('#') {
+                                            &text_color_val[1..]
+                                        } else {
+                                            text_color_val
+                                        };
+                                        if let Ok(color_num) = u32::from_str_radix(clean_color, 16) {
+                                            cell_format = cell_format.set_font_color(rust_xlsxwriter::Color::RGB(color_num));
+                                        }
+                                    }
+                                }
                                 if let Some(color_val) = style_obj.get("color").and_then(|v| v.as_str()) {
                                     if !color_val.is_empty() {
                                         // Strip # if it exists

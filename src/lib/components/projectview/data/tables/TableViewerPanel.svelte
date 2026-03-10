@@ -41,7 +41,8 @@
         FolderOpen,
         Bold,
         Italic,
-        Underline
+        Underline,
+        Eraser
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
@@ -113,6 +114,7 @@
                     // Cell IDs are in format "cell-rowIndex-colField"
                     newCellStyles[h.id] = {
                         color: h.color,
+                        textColor: h.textColor,
                         bold: h.bold,
                         italic: h.italic,
                         underline: h.underline
@@ -190,6 +192,7 @@
                 currentHighlights.push({
                     id: cellKey,
                     color: null,
+                    textColor: null,
                     [styleType]: true,
                     text: `Cell [Entry ${rowIndex + 1}, ${field}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`,
                     tags: [],
@@ -198,6 +201,101 @@
             }
         });
 
+        setTableHighlights(currentHighlights);
+        await saveTableHighlights();
+    }
+
+    let isColorDropdownOpen = false;
+    let colorDropdownRef;
+
+    function toggleColorDropdown() {
+        if (!tabulatorInstance) return;
+        isColorDropdownOpen = !isColorDropdownOpen;
+    }
+
+    const colorOptions = [
+      { value: '#000000', label: 'Black' }, { value: '#FF0000', label: 'Red' }, { value: '#000080', label: 'Navy' },
+      { value: '#228B22', label: 'Forest Green' }, { value: '#FF8C00', label: 'Dark Orange' }, { value: '#800080', label: 'Purple' },
+      { value: '#008B8B', label: 'Teal' }, { value: 'transparent', label: 'Default'}
+    ];
+
+    async function applyTextColor(colorValue) {
+        if (!tabulatorInstance) return;
+
+        const ranges = tabulatorInstance.getRanges();
+        if (!ranges || ranges.length === 0) return;
+
+        let cellsToModify = [];
+        ranges.forEach(range => {
+            const rows = range.getRows();
+            const columns = range.getColumns();
+            rows.forEach(row => {
+                columns.forEach(col => {
+                    const cell = row.getCell(col.getField());
+                    if (cell) cellsToModify.push(cell);
+                });
+            });
+        });
+
+        if (cellsToModify.length === 0) return;
+
+        let currentHighlights = get(project).currentTableHighlights || [];
+
+        cellsToModify.forEach(cell => {
+            const field = cell.getField();
+            const schema = tableSchema[field];
+            if (schema && schema.type === 'Misc' && (schema.subType === 'Checkbox' || schema.subType === 'Rating' || schema.subType === 'Progress' || schema.subType === 'Selectbox' || schema.subType === 'Multiselect')) {
+                return;
+            }
+
+            const rowIndex = cell.getRow().getData().harvey_internal_id;
+            const cellKey = `cell-${rowIndex}-${field}`;
+            let existingIndex = currentHighlights.findIndex(h => h.id === cellKey);
+
+            if (existingIndex !== -1) {
+                currentHighlights[existingIndex].textColor = colorValue === 'transparent' ? null : colorValue;
+            } else if (colorValue !== 'transparent') {
+                const cellValue = cell.getValue();
+                currentHighlights.push({
+                    id: cellKey,
+                    color: null,
+                    textColor: colorValue,
+                    bold: false,
+                    italic: false,
+                    underline: false,
+                    text: `Cell [Entry ${rowIndex + 1}, ${field}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`,
+                    tags: [],
+                    comments: []
+                });
+            }
+        });
+
+        setTableHighlights(currentHighlights);
+        await saveTableHighlights();
+        isColorDropdownOpen = false;
+    }
+
+    async function clearFormatting() {
+        if (!tabulatorInstance) return;
+        const ranges = tabulatorInstance.getRanges();
+        if (!ranges || ranges.length === 0) return;
+
+        let cellsToClear = new Set();
+        ranges.forEach(range => {
+            const rows = range.getRows();
+            const columns = range.getColumns();
+            rows.forEach(row => {
+                columns.forEach(col => {
+                    const rowIndex = row.getData().harvey_internal_id;
+                    cellsToClear.add(`cell-${rowIndex}-${col.getField()}`);
+                });
+            });
+        });
+
+        if (cellsToClear.size === 0) return;
+
+        let currentHighlights = get(project).currentTableHighlights || [];
+        currentHighlights = currentHighlights.filter(h => !h.id.startsWith('cell-') || !cellsToClear.has(h.id));
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
     }
@@ -2064,10 +2162,16 @@
                     cellElement.style.fontWeight = cellStyle.bold ? "bold" : "normal";
                     cellElement.style.fontStyle = cellStyle.italic ? "italic" : "normal";
                     cellElement.style.textDecoration = cellStyle.underline ? "underline" : "none";
+                    if (cellStyle.textColor) {
+                        cellElement.style.color = cellStyle.textColor;
+                    } else {
+                        cellElement.style.color = "";
+                    }
                 } else {
                     cellElement.style.fontWeight = "normal";
                     cellElement.style.fontStyle = "normal";
                     cellElement.style.textDecoration = "none";
+                    cellElement.style.color = "";
                 }
 
                 // Validation border
@@ -2313,6 +2417,7 @@
                 headers.forEach((field, colIndex) => {
                     const cellKey = `cell-${internalId}-${field}`;
                     let color = null;
+                    let textColor = null;
                     let bold = false;
                     let italic = false;
                     let underline = false;
@@ -2326,15 +2431,17 @@
                     if (tableStyles.cellStyles && tableStyles.cellStyles[cellKey]) {
                         const s = tableStyles.cellStyles[cellKey];
                         if (s.color) color = s.color;
+                        if (s.textColor) textColor = s.textColor;
                         if (s.bold) bold = !!s.bold;
                         if (s.italic) italic = !!s.italic;
                         if (s.underline) underline = !!s.underline;
                     }
 
-                    if (color || bold || italic || underline) {
+                    if (color || textColor || bold || italic || underline) {
                         const coordKey = `${rowIndex},${colIndex}`;
                         stylesMap[coordKey] = {
                             color,
+                            textColor,
                             bold,
                             italic,
                             underline
@@ -3019,6 +3126,38 @@
                 <Underline size={14} />
             </button>
             <Tooltip triggeredBy="#style-underline">Underline</Tooltip>
+
+            <div class="separator mx-0.5"></div>
+
+            <div class="relative" bind:this={colorDropdownRef}>
+              <button id="style-color" on:click={toggleColorDropdown} class="mini-toolbar-button flex items-center" title="Text Color">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
+                </svg>
+                <svg class="ml-0.5 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
+              </button>
+              <Tooltip triggeredBy="#style-color">Text Color</Tooltip>
+              {#if isColorDropdownOpen}
+                <div class="absolute top-full left-0 mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg rounded-md">
+                  {#each colorOptions as option}
+                    <button
+                      class="w-full text-left px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+                      on:click={() => applyTextColor(option.value)}
+                    >
+                      <span class="w-4 h-4 border border-gray-400 dark:border-gray-500 rounded-full shrink-0" style="background-color: {option.value === 'transparent' ? '#fff' : option.value};"></span>
+                      <span class="truncate">{option.label}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+
+            <div class="separator mx-0.5"></div>
+
+            <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
+                <Eraser size={14} />
+            </button>
+            <Tooltip triggeredBy="#style-clear">Clear Formatting</Tooltip>
         </div>
 
          {#if !isLoading && !error}
