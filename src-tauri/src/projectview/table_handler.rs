@@ -650,7 +650,7 @@ fn save_xlsx_data_with_headers_and_styles(
     let worksheet = workbook.add_worksheet();
 
     let mut header_format = rust_xlsxwriter::Format::new();
-    header_format = header_format.set_bold();
+    header_format.set_bold();
 
     // Write headers
     for (col_num, header) in headers.iter().enumerate() {
@@ -663,20 +663,20 @@ fn save_xlsx_data_with_headers_and_styles(
             for (col_num, header) in headers.iter().enumerate() {
                 if let Some(cell_value) = row_map.get(header) {
                     let mut cell_format = rust_xlsxwriter::Format::new();
-                    cell_format = cell_format.set_text_wrap(); // Preserve newlines
+                    cell_format.set_text_wrap(); // Preserve newlines
 
                     if let Some(ref style_map) = styles {
                         let coord_key = format!("{},{}", row_num, col_num);
                         if let Some(style_val) = style_map.get(&coord_key) {
                             if let Some(style_obj) = style_val.as_object() {
                                 if let Some(is_bold) = style_obj.get("bold").and_then(|v| v.as_bool()) {
-                                    if is_bold { cell_format = cell_format.set_bold(); }
+                                    if is_bold { cell_format.set_bold(); }
                                 }
                                 if let Some(is_italic) = style_obj.get("italic").and_then(|v| v.as_bool()) {
-                                    if is_italic { cell_format = cell_format.set_italic(); }
+                                    if is_italic { cell_format.set_italic(); }
                                 }
                                 if let Some(is_underline) = style_obj.get("underline").and_then(|v| v.as_bool()) {
-                                    if is_underline { cell_format = cell_format.set_underline(rust_xlsxwriter::FormatUnderline::Single); }
+                                    if is_underline { cell_format.set_underline(rust_xlsxwriter::FormatUnderline::Single); }
                                 }
                                 if let Some(color_val) = style_obj.get("color").and_then(|v| v.as_str()) {
                                     if !color_val.is_empty() {
@@ -687,7 +687,7 @@ fn save_xlsx_data_with_headers_and_styles(
                                             color_val
                                         };
                                         if let Ok(color_num) = u32::from_str_radix(clean_color, 16) {
-                                            cell_format = cell_format.set_background_color(rust_xlsxwriter::Color::RGB(color_num));
+                                            cell_format.set_background_color(rust_xlsxwriter::Color::RGB(color_num));
                                         }
                                     }
                                 }
@@ -1141,9 +1141,15 @@ pub async fn export_formatted_table_to_xlsx(
 
     let mut styles_map = None;
     if let Some(val) = styles {
+        info!("[export_formatted_table_to_xlsx] Received styles parameter.");
         if let Some(map) = val.as_object() {
+            info!("[export_formatted_table_to_xlsx] Successfully parsed styles as object with {} keys", map.len());
             styles_map = Some(map.clone());
+        } else {
+            info!("[export_formatted_table_to_xlsx] Styles parameter was not an object: {:?}", val);
         }
+    } else {
+        info!("[export_formatted_table_to_xlsx] Styles parameter was None.");
     }
 
     save_xlsx_data_with_headers_and_styles(output_path, data, &headers, styles_map)?;

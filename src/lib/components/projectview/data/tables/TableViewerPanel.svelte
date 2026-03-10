@@ -2327,6 +2327,7 @@
             });
         }
 
+        console.log("[TableViewerPanel] Export styles map:", stylesMap);
         return { data: formattedData, headers, styles: stylesMap };
     }
 
