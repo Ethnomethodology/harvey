@@ -807,7 +807,7 @@
 <TableExportModal
     bind:showModal={showTableExportModal}
     tablePath={isTable ? $project.selectedDocumentPath : null}
-    getExportData={isTable && tableViewRef ? tableViewRef.getExportData : null}
+    getExportData={() => { if (isTable && tableViewRef) { return tableViewRef.getExportData(); } else { return null; } }}
     on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showTableExportModal = false}
 />

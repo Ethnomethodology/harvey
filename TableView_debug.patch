@@ -1,0 +1,10 @@
+--- src/lib/components/projectview/data/tables/TableView.svelte
++++ src/lib/components/projectview/data/tables/TableView.svelte
+@@ -20,6 +20,7 @@
+     let tableViewerPanelRef;
+
+     export async function getExportData() {
++        console.log("[TableView] getExportData called. tableViewerPanelRef:", !!tableViewerPanelRef);
+         if (tableViewerPanelRef) {
+             return await tableViewerPanelRef.getExportData();
+         }

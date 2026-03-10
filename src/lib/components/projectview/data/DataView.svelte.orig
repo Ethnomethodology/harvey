@@ -39,7 +39,6 @@
     let importedTranscriptViewRef;
 
     export async function getExportData() {
-        console.log("[DataView] getExportData called. tableViewRef:", !!tableViewRef);
         if (tableViewRef) {
             return await tableViewRef.getExportData();
         }

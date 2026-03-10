@@ -1,0 +1,10 @@
+--- src/lib/components/projectview/data/DataView.svelte
++++ src/lib/components/projectview/data/DataView.svelte
+@@ -40,6 +40,7 @@
+     let importedTranscriptViewRef;
+
+     export async function getExportData() {
++        console.log("[DataView] getExportData called. tableViewRef:", !!tableViewRef);
+         if (tableViewRef) {
+             return await tableViewRef.getExportData();
+         }
