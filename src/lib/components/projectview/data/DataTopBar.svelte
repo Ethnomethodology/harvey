@@ -535,24 +535,24 @@
 
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
-        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
+        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
             <span>Transcribe</span>
         </Button>
 
-        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
+        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
             <Languages class="w-3.5 h-3.5" />
             <span>Translate</span>
         </Button>
         {/if}
         {#if $project.activeDocumentEditorRef}
-        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={toggleLiveTranscription} title="Live Transcribe">
+        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
             <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
             <span>Live Transcribe</span>
         </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => toggleTranslateModal(true)} title="Translate Document">
+            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => toggleTranslateModal(true)} title="Translate Document">
                 <Languages class="w-3.5 h-3.5" />
                 <span>Translate</span>
             </Button>
@@ -572,13 +572,13 @@
                 on:change={(e) => switchTranscriptInDataTab(e.detail)}
                 placeholder="Select Transcript"
             />
-            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
+            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => {
+            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => {
                     if (isImportedTranscript) {
                         pathForExportModal = $project.currentImportedTranscriptPath;
                         isExportModalOpen = true;
@@ -591,23 +591,23 @@
             </Button>
         {/if}
         {#if isTable}
-            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => showTableExportModal = true} title="Export Table">
+            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isImage}
-            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestImageExport')} title="Export Image">
+            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
                 <ImageDown class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <Button size="sm" color="alternative" class="ml-2 px-2 h-9" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
+            <Button size="xs" color="alternative" class="ml-2 px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
                 <SquareSplitHorizontal class="w-3.5 h-3.5" />
             </Button>
 
-            <Button size="sm" color="alternative" class="ml-2 px-2 h-9" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
+            <Button size="xs" color="alternative" class="ml-2 px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
                 <SquareSplitVertical class="w-3.5 h-3.5" />
             </Button>
         {/if}

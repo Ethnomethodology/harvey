@@ -353,7 +353,7 @@
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center ml-2">
-			<Button size="sm" color="alternative" class="space-x-0.5 px-2 h-9 relative" on:click="{openSpeakersModal}" title="Configure number of speakers and their names">
+			<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1 relative" on:click="{openSpeakersModal}" title="Configure number of speakers and their names">
 				<Users class="w-3.5 h-3.5" />
 				<span>Speakers</span> <!-- Shorter Text -->
 			  {#if $transcriptStore.speakers.count > 0}
@@ -366,7 +366,7 @@
 
 		<!-- Transcribe Button -->
 			<Button
-				size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9"
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1"
 				on:click="{handleTranscribeClick}"
 				disabled="{isTranscribeDisabled}"
                 title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
@@ -384,7 +384,7 @@
 
 			<!-- Translate Button -->
 			<Button
-				size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9"
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1"
 				on:click={openTranslateModal}
                 title="Translate Transcript"
 			>
@@ -405,7 +405,7 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<Button size="sm" color="alternative" class="space-x-0.5 px-2 h-9" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
+		<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
 		   <Share class="w-3.5 h-3.5" />
 		   <span>Export</span>
 		</Button>
