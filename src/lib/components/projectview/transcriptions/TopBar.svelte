@@ -28,6 +28,7 @@
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
+    import ImportSpeedDial from '$lib/components/projectview/shared/ImportSpeedDial.svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -325,18 +326,11 @@
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
-        <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-            </button>
-        </div>
 		
 
 		<!-- Media Selection Dropdown -->
 		<Dropdown
-			containerClasses="w-72"
+			containerClasses="w-72 ml-2"
 			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
 			bind:value={selectedMediaValue}
 			on:change={(e) => handleMediaSelectionChange(e.detail)}
@@ -397,6 +391,7 @@
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
+        <ImportSpeedDial on:requestImportAction />
 		<!-- Export Button -->
 		<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
 		   <Share class="w-3.5 h-3.5" />

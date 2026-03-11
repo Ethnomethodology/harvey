@@ -25,6 +25,7 @@
     import TableExportModal from '../modals/TableExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
+    import ImportSpeedDial from '$lib/components/projectview/shared/ImportSpeedDial.svelte';
 
     const dispatch = createEventDispatcher();
     export let dataViewRef = null;
@@ -519,15 +520,7 @@
     <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
     <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
-        <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-            </button>
-        </div>
-
-        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
+        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate ml-2" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
         <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
@@ -557,6 +550,7 @@
     </div>
 
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
+        <ImportSpeedDial on:requestImportAction />
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
             <Dropdown
