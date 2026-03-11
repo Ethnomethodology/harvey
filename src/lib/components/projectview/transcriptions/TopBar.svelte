@@ -28,7 +28,6 @@
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
-	import { AudioLines, Rows2 } from 'lucide-svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
