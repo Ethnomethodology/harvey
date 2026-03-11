@@ -366,7 +366,7 @@
     ` },
   ];
 
-  const blockTypeIcons = { paragraph: 'paragraph', h1: 'h1', h2: 'h2', h3: 'h3', ul: 'ul', ol: 'ol', check: 'check', quote: 'quote', code: 'code' };
+  const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: CheckSquare, quote: QuoteIcon, code: CodeIcon };
 
   const fontOptions = [
     { label: 'Inter', value: 'Inter' },
@@ -2585,7 +2585,7 @@ $: if (editor && activeLayout) {
                   tabindex="-1"
                 >
                   <span class="flex items-center gap-3 mr-3">
-                    {@html blockTypeIcons[option.value]}
+                    <svelte:component this={blockTypeIcons[option.value]} size={16} />
                     <span>{option.label}</span>
                   </span>
                   <span class="text-xs text-gray-500">{option.shortcut}</span>
