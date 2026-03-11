@@ -370,7 +370,7 @@
 				</svg>
 				<span>Transcribing...</span>
 				{:else}
-				<MessageSquareText class="w-3.5 h-3.5 {$configStatus.transcription_models_downloaded ? '' : 'text-yellow-500'}" />
+				<MessageSquareText class="w-3.5 h-3.5" />
 				<span>Transcribe</span>
 				{/if}
 			</Button>

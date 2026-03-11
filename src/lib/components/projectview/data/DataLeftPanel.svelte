@@ -1043,13 +1043,23 @@
 
                 <!-- Bottom 1/3 for Groups -->
                 <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: {100 - categoriesHeightPercent}%;">
-                    <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5">
-                        <span class="mr-1.5 flex-shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
-                                <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-                            </svg>
-                        </span>
-                        Groups
+                    <h3 class="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5 group hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                        <div class="flex items-center">
+                            <span class="mr-1.5 flex-shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
+                                    <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
+                                </svg>
+                            </span>
+                            Groups
+                        </div>
+                        <button
+                            type="button"
+                            class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-700 hover:text-gray-600 dark:hover:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${categoryContextMenuVisible && categoryContextMenuType === 'groups' ? 'opacity-100' : ''}"
+                            title="Options"
+                            on:click|stopPropagation={(e) => handleCategoryContextMenu(e, 'groups')}
+                        >
+                            {@html CONTEXT_MENU_ICON_SVG}
+                        </button>
                     </h3>
                     <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-700 text-xs">
                         {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
@@ -1263,36 +1273,46 @@
             }
         }}
     >
-        {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
+        {#if categoryContextMenuType === 'groups'}
           <button
-            on:click|stopPropagation={() => {
-                if (categoryContextMenuType === 'document') {
-                    const currentProject = get(project);
-                    if (currentProject && currentProject.xmlPath) {
-                        createNewDocument(currentProject.xmlPath);
-                    } else {
-                        message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
-                    }
-                }
-                if (categoryContextMenuType === 'table') {
-                    emit('request-create-table-modal');
-                }
-                closeCategoryContextMenu();
-            }}
+            on:click|stopPropagation={() => { handleNewGroupClick(); closeCategoryContextMenu(); }}
             class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
-            title="Create New"
+            title="Create New Group"
           >
             Create New
           </button>
+        {:else}
+            {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
+              <button
+                on:click|stopPropagation={() => {
+                    if (categoryContextMenuType === 'document') {
+                        const currentProject = get(project);
+                        if (currentProject && currentProject.xmlPath) {
+                            createNewDocument(currentProject.xmlPath);
+                        } else {
+                            message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
+                        }
+                    }
+                    if (categoryContextMenuType === 'table') {
+                        emit('request-create-table-modal');
+                    }
+                    closeCategoryContextMenu();
+                }}
+                class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                title="Create New"
+              >
+                Create New
+              </button>
+            {/if}
+            <button
+              on:click|stopPropagation={() => { handleImportClick(categoryContextMenuType); closeCategoryContextMenu(); }}
+              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+              disabled={!CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.importEnabled}
+              title="Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}"
+            >
+              Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}
+            </button>
         {/if}
-        <button
-          on:click|stopPropagation={() => { handleImportClick(categoryContextMenuType); closeCategoryContextMenu(); }}
-          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
-          disabled={!CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.importEnabled}
-          title="Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}"
-        >
-          Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}
-        </button>
       </div>
     {/if}
 </div>

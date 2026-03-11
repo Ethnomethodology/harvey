@@ -348,22 +348,9 @@
   ];
 
   const insertOptions = [
-      { value: 'table', label: 'Table', action: openInsertTableDialog, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 bi bi-table" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/>
-      </svg>
-    ` },
-    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
-        <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z"/>
-      </svg>
-    ` },
-    { value: 'link', label: 'Link', action: toggleLink, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
-        <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
-        <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
-      </svg>
-    ` },
+    { value: 'table', label: 'Table', action: openInsertTableDialog, iconComponent: TableIcon },
+    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, iconComponent: Minus },
+    { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
   ];
 
   const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: CheckSquare, quote: QuoteIcon, code: CodeIcon };
@@ -479,6 +466,7 @@
 
   import { get } from 'svelte/store';
   import { project } from '$lib/stores/projectStore.js';
+  import { Table as TableIcon, Minus, Link as LinkIcon, ChevronDown, Search, X, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-svelte';
   import { invoke } from '@tauri-apps/api/core';
 
   const dispatch = createEventDispatcher();
@@ -2604,9 +2592,7 @@ $: if (editor && activeLayout) {
             disabled={!editable}
           >
             <span class="truncate">{fontOptions.find(f => f.value === selectedFontFamily)?.label ?? selectedFontFamily}</span>
-            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
           {#if isFontDropdownOpen}
             <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
@@ -2693,9 +2679,7 @@ $: if (editor && activeLayout) {
             title="Insert"
             disabled={!editable}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
+            <Plus class="h-4 w-4" />
             <span class="ml-1 hidden sm:inline">Insert</span>
             <ChevronDown size={12} class="ml-1" />
           </button>
@@ -2838,9 +2822,7 @@ $: if (editor && activeLayout) {
             }}
             title="Search"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-            </svg>
+            <Search class="w-4 h-4" />
           </button>
 
           {#if showSearchBox}
@@ -2876,9 +2858,7 @@ $: if (editor && activeLayout) {
                       on:click|stopPropagation={clearSearchTermInput}
                       title="Clear Search"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                      </svg>
+                      <X class="w-3 h-3" />
                     </button>
                   {/if}
                 </div>
@@ -2891,9 +2871,7 @@ $: if (editor && activeLayout) {
                   disabled={searchResults.length === 0}
                   title="Previous Match"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-                  </svg>
+                  <ChevronLeft class="w-3.5 h-3.5" />
                 </button>
                 <button
                   class="mini-toolbar-button !p-1"
@@ -2901,9 +2879,7 @@ $: if (editor && activeLayout) {
                   disabled={searchResults.length === 0}
                   title="Next Match"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-                  </svg>
+                  <ChevronRight class="w-3.5 h-3.5" />
                 </button>
 
                 <div class="relative" bind:this={searchOptionsDropdownRef}>
@@ -2912,9 +2888,7 @@ $: if (editor && activeLayout) {
                     on:click={toggleSearchOptionsDropdown}
                     title="Search Options"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                      <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                    </svg>
+                    <MoreVertical class="w-3.5 h-3.5" />
                   </button>
                   {#if showSearchOptionsDropdown}
                     <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]">
@@ -2959,9 +2933,7 @@ $: if (editor && activeLayout) {
         on:click|stopPropagation={handlePlaySegmentClick}
         title="Play this segment"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
-          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-        </svg>
+        <Play class="w-3.5 h-3.5 ml-0.5 fill-current" />
       </button>
     {/if}
   </div>

@@ -5,8 +5,9 @@
     import { v4 as uuidv4 } from 'uuid';
     import { project } from '$lib/stores/projectStore.js';
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
-import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
-import { get } from 'svelte/store';
+    import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
+    import { get } from 'svelte/store';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo, Redo } from 'lucide-svelte';
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
@@ -2278,12 +2279,12 @@ function updateHighlightOverlayColor(id, color) {
 <div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 shadow overflow-hidden">
 
 <div class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-20">
-    <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
+    <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><ChevronLeft class="w-4 h-4" /></button>
     <input type="number" class="mini-toolbar-input w-12 text-center" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
     <span class="text-xs px-1 text-gray-600 dark:text-gray-600"> of {numPages || '?'} </span>
-    <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
+    <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><ChevronRight class="w-4 h-4" /></button>
     <div class="separator"></div>
-    <button class="mini-toolbar-button" on:click={zoomOut} title="Zoom out" disabled={loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" /></svg></button>
+    <button class="mini-toolbar-button" on:click={zoomOut} title="Zoom out" disabled={loading || !pdfDoc}><Minus class="w-4 h-4" /></button>
 
     <!-- Custom Zoom Dropdown -->
     <div class="relative" bind:this={zoomDropdownRef}>
@@ -2296,9 +2297,7 @@ function updateHighlightOverlayColor(id, color) {
             aria-expanded={isZoomDropdownOpen}
         >
             <span class="truncate text-xs">{@html currentZoomLabel}</span>
-            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
         </button>
         {#if isZoomDropdownOpen}
             <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-60 py-1">
@@ -2319,7 +2318,7 @@ function updateHighlightOverlayColor(id, color) {
                         >
                             <span>{option.label}</span>
                             {#if String(currentScaleValue) === option.value}
-                                <svg class="h-4 w-4 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                                <Check class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             {/if}
                         </div>
                     {/if}
@@ -2328,22 +2327,18 @@ function updateHighlightOverlayColor(id, color) {
         {/if}
     </div>
 
-    <button class="mini-toolbar-button" on:click={zoomIn} title="Zoom in" disabled={loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" /></svg></button>
+    <button class="mini-toolbar-button" on:click={zoomIn} title="Zoom in" disabled={loading || !pdfDoc}><Plus class="w-4 h-4" /></button>
     <div class="separator"></div>
     <div class="flex items-center space-x-0.5">
         <input type="search" class="mini-toolbar-input w-28 text-xs" placeholder="Search" bind:value={searchQuery} on:keydown={handleSearchKeydown} disabled={loading || !pdfDoc} aria-label="Search text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <button class="mini-toolbar-button" title="Previous match" on:click={() => runSearch({ findPrevious: true })} disabled={loading || !pdfDoc || !searchQuery}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
-        <button class="mini-toolbar-button" title="Next match" on:click={() => runSearch({ findPrevious: false })} disabled={loading || !pdfDoc || !searchQuery}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
+        <button class="mini-toolbar-button" title="Previous match" on:click={() => runSearch({ findPrevious: true })} disabled={loading || !pdfDoc || !searchQuery}><ChevronLeft class="w-3 h-3" /></button>
+        <button class="mini-toolbar-button" title="Next match" on:click={() => runSearch({ findPrevious: false })} disabled={loading || !pdfDoc || !searchQuery}><ChevronRight class="w-3 h-3" /></button>
     </div>
     <div class="separator"></div>
     <div class="relative" bind:this={highlightDropdownRef}>
       <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
-            <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
-        </svg>
-        <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-        </svg>
+        <Highlighter class="w-4 h-4" />
+        <ChevronDown class="ml-1 h-3 w-3" />
       </button>
       {#if isHighlightDropdownOpen}
         <div class="absolute top-full mt-1 right-0 z-30 w-32 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-lg py-1">
@@ -2364,16 +2359,10 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={undo} title="Undo (⌘+Z)" disabled={undoStack.length === 0}>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4">
-        <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/>
-        <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/>
-      </svg>
+      <Undo class="w-4 h-4" />
     </button>
     <button class="mini-toolbar-button" on:click={redo} title="Redo (⌘+Y / ⌘+⇧+Z)" disabled={redoStack.length === 0}>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4">
-        <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
-        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
-      </svg>
+      <Redo class="w-4 h-4" />
     </button>
     <div class="separator"></div>
 
