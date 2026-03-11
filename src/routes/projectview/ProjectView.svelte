@@ -393,7 +393,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 const activeImpTsEditor = proj.activeImportedTranscriptEditorRef?.ref;
                 const activeMediaNoteEditor = proj.activeMediaNoteEditorRef?.ref;
 
-                if (!proj.autosaveEnabled) {
+                if (false) {
                     if ((proj.isDocumentDirty || proj.isDocumentMetadataDirty) && activeDocEditor && typeof activeDocEditor.save === 'function') {
                         activeDocEditor.save().catch(e => console.error(`${modKeyName}+S document save failed`, e));
                     } else if (proj.isImportedTranscriptDirty && activeImpTsEditor && typeof activeImpTsEditor.save === 'function') {

@@ -3,7 +3,7 @@
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
-    import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
+    import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
@@ -150,7 +150,7 @@
 
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /></svg>`;
 
-    let autosaveEnabled = true;
+
     let isDocumentDirty = false;
     let isImportedTranscriptDirty = false;
     let isMediaNoteTranscriptDirty = false; // New state for media note
@@ -159,7 +159,7 @@
     let activeImportedTranscriptEditorRef = null;
     let activeMediaNoteEditorRef = null; // New ref
     let isAnythingDirty = false;
-    let canSave = false;
+
     let showDirtyIndicator = false;
     let isLayoutSettingsModalOpen = false;
     let isExportModalOpen = false;
@@ -169,7 +169,7 @@
   
     $: { // This is the existing reactive block for autosave related logic
         const p = $project;
-        autosaveEnabled = p.autosaveEnabled;
+
         isDocumentDirty = p.isDocumentDirty || p.isDocumentMetadataDirty; // Combine content and metadata dirty for documents
         isImportedTranscriptDirty = p.isImportedTranscriptDirty;
         isMediaNoteTranscriptDirty = p.isMediaNoteTranscriptDirty; // Read from store
@@ -180,7 +180,7 @@
         activeMediaNoteEditorRef = p.activeMediaNoteEditorRef; // Read from store
 
         isAnythingDirty = isDocumentDirty || isImportedTranscriptDirty || isMediaNoteTranscriptDirty || isPdfAnnotationsDirty;
-        canSave = !autosaveEnabled && isAnythingDirty;
+
         showDirtyIndicator = isAnythingDirty;
     }
 
@@ -249,49 +249,10 @@
     const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
 
     async function handleManualSave() {
-        const projState = get(project);
-        const currentCanSave = !projState.autosaveEnabled && 
-                               (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
-        
-        if (!currentCanSave) { 
-            console.warn("[DataTopBar] Manual save clicked but conditions not met."); 
-            return; 
-        }
-        console.log("[DataTopBar] Manual save proceeding...");
-
-        if ((projState.isDocumentDirty || projState.isDocumentMetadataDirty) && projState.selectedDocumentPath && projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
-            console.log("[DataTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
-            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[DataTopBar] Document manual save successful."); } 
-            catch (error) { console.error("[DataTopBar] Document manual save via editor ref failed:", error); }
-        } else if (projState.isPdfAnnotationsDirty && projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            console.log("[DataTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
-            try { 
-                // PDF Annotations save might be handled differently, e.g. a direct service call if no 'ref.save'
-                // Assuming there's a service for this like `saveCurrentPdfAnnotations`
-                const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
-                await saveCurrentPdfAnnotations();
-                console.log("[DataTopBar] PDF Annotations manual save successful."); 
-            } catch (error) { console.error("[DataTopBar] PDF Annotations manual save failed:", error); }
-        } else if ((projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty) && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
-             console.log("[DataTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
-            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); } 
-            catch (error) { console.error("[DataTopBar] Imported Transcript manual save via editor ref failed:", error); }
-        } else if (projState.isMediaNoteTranscriptDirty && projState.selectedMediaNotePath && projState.activeMediaNoteEditorRef?.ref && typeof projState.activeMediaNoteEditorRef.ref.save === 'function') {
-            console.log("[DataTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
-            try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[DataTopBar] Media Note Transcript manual save successful."); }
-            catch (error) { console.error("[DataTopBar] Media Note Transcript manual save via editor ref failed:", error); }
-        } else if (projState.isDocumentDirty && projState.selectedTablePath && tableViewRef) {
-            console.log("[DataTopBar] Manual save triggered for TABLE via editor ref:", projState.selectedTablePath);
-            try { await tableViewRef.save(); console.log("[DataTopBar] Table manual save successful."); }
-            catch (error) { console.error("[DataTopBar] Table manual save via editor ref failed:", error); }
-        } else { 
-            console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
-        }
+        // Autosave handles everything.
     }
   
-    function handleToggleChange() {
-        toggleAutosave();
-    }
+
   
     let autosaveTimeout;
     $: {
@@ -300,7 +261,7 @@
         let activeEditorRefToSave = null;
         let saveAction = null;
 
-        if (p.autosaveEnabled) {
+        if (true) {
             if ((p.isDocumentDirty || p.isDocumentMetadataDirty) && p.selectedDocumentPath && p.activeDocumentEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeDocumentEditorRef.ref;
@@ -563,144 +524,13 @@
 
     <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
         <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-            </button>
-        </div>
-        
-        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
-        {#if $activeMediaFile}
-        <button class="ui-button-icon flex items-center ml-2 space-x-0.5 hover-scale-effect"
-            on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
-            title="Transcribe"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-            </svg>
-            <span class="text-xs">Transcribe</span>
-        </button>
-        {/if}
-        {#if $project.activeDocumentEditorRef}
-        <button class="ui-button-icon flex items-center ml-2 space-x-0.5 hover-scale-effect" on:click={toggleLiveTranscription} title="Live Transcribe">
-            {#if isLiveTranscriptionActive}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-fill" class:blinking-red-text={isLiveTranscriptionActive} viewBox="0 0 16 16">
-                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z"/>
-                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
-            </svg>
-            {:else}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
-                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
-                <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3"/>
-            </svg>
-            {/if}
-            <span class="text-xs">Live Transcribe</span>
-        </button>
-        {/if}
-    </div>
 
-    <div class="flex justify-center min-w-0 z-10"> <!-- Middle Column -->
-    </div>
-  
-    <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
-        <!-- Transcript Dropdown -->
-        {#if $activeMediaFile}
-            <Dropdown
-                containerClasses="w-48"
-                options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
-                value={$project.activeTranscriptPathInDataTab}
-                on:change={(e) => switchTranscriptInDataTab(e.detail)}
-                placeholder="Select Transcript"
-            />
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }}" title="Export Transcript" >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-                <span class="text-xs">Export</span>
-            </button>
-        {/if}
-        {#if isLexicalDocument}
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => toggleTranslateModal(true)}" title="Translate Document" >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
-                </svg>
-                <span class="text-xs">Translate</span>
-            </button>
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
-                on:click="{() => {
-                    if (isImportedTranscript) {
-                        pathForExportModal = $project.currentImportedTranscriptPath;
-                        isExportModalOpen = true;
-                    } else {
-                        showDocumentExportModal = true;
-                    }
-                }}" 
-                title={isImportedTranscript ? "Export Transcript" : "Export Document"} 
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-                <span class="text-xs">Export</span>
-            </button>
-        {/if}
-        {#if isTable}
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => showTableExportModal = true}" title="Export Table" >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-                <span class="text-xs">Export</span>
-            </button>
-        {/if}
-        {#if isImage}
-            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => dispatch('requestImageExport')}" title="Export Image" >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-                <span class="text-xs">Export</span>
-            </button>
-        {/if}
-        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <button 
-                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
-                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}" 
-                title="Split Transcript (Horizontal)" 
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-split" viewBox="0 0 16 16">
-                    <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5z"/>
-                </svg>
-            </button>
-            <button 
-                class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" 
-                on:click="{() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))}" 
-                title="Split Transcript (Vertical)" 
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-split" viewBox="0 0 16 16" style="transform: rotate(90deg);">
-                    <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5z"/>
-                </svg>
-            </button>
-        {/if}
-        <button
-            class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs hover-scale-effect"
-            title={canSave ? `Save Changes (${modKeyName}+S)` : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
-            disabled={!canSave}
-            on:click={handleManualSave}
-        >
-            {@html SAVE_ICON}
-            <span class="ml-1 hidden sm:inline">Save</span>
-            {#if showDirtyIndicator}<span class="text-orange-500 ml-0.5">*</span>{/if}
-        </button>
-  
-        <div class="flex items-center space-x-1.5" title={autosaveEnabled ? 'Autosave is ON' : 'Autosave is OFF'}> <!-- Reduced space-x-2 to space-x-1.5 -->
-          <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
-            Autosave
-          </span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                class="sr-only peer" 
-                bind:checked={autosaveEnabled}
-                on:change={handleToggleChange}
-              >
-              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-700 peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
               <span
                 class="absolute top-0 bottom-0 flex items-center text-xs font-medium text-gray-700 dark:text-gray-300 pointer-events-none"
-                class:left-1={autosaveEnabled}
-                class:right-1={!autosaveEnabled}
+
+
               >
-                {autosaveEnabled ? 'On' : 'Off'}
+
               </span>
             </label>
         </div>

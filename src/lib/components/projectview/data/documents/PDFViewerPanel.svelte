@@ -18,7 +18,6 @@ import { get } from 'svelte/store';
     // { id: string, color: string, pageIndex: number, text: string, 
     //   prefix?: string, suffix?: string, occurrenceInPageContext?: number }
 
-    let autosaveIntervalId = null;
     let loading = true; let loadingMessage = 'Loading PDF...'; let error = null;
     let pdfDoc = null; let pdfViewer = null; let eventBus = null; let numPages = 0; let currentPageNum = 1; let currentScaleValue = 'auto'; // Default to auto
     const PRESET_SCALES = ['auto', 'page-actual', 'page-fit', 'page-width', '0.5', '0.75', '1', '1.25', '1.5', '2', '3', '4'];
@@ -456,137 +455,7 @@ import { get } from 'svelte/store';
       else if (e.metaKey && e.key === 's') {
         e.preventDefault(); // Always prevent browser save dialog
         const currentProjectState = get(project);
-        if (!currentProjectState.autosaveEnabled && currentProjectState.isPdfAnnotationsDirty && pdfPath === currentProjectState.selectedDocumentPath) {
-            console.log('[PDFViewerPanel Manual Save Shortcut] Saving PDF annotations...');
-            saveCurrentPdfAnnotations().then(() => {
-                console.log('[PDFViewerPanel Manual Save Shortcut] PDF annotations saved successfully.');
-            }).catch(error => {
-                console.error('[PDFViewerPanel Manual Save Shortcut] Error during save:', error);
-                // Optionally, dispatch a non-intrusive notification here
-            });
-        }
-      }
-    }
 
-    onMount(async () => {
-        isMounted = true;
-        // Initialize the Web Worker
-        annotationMatcherWorker = new Worker(new URL('$lib/workers/pdfAnnotationMatcher.worker.js', import.meta.url), { type: 'module' });
-        annotationMatcherWorker.onmessage = handleWorkerMessage;
-
-        const res = await fetch('/pdfjs/pdf_viewer.css');
-        let css = await res.text();
-        css = css.replace(/(^|\})\s*([^{]+)/g, `$1 .pdf-viewer-panel-root $2`);
-        pdfJsStyleElement = document.createElement('style');
-        pdfJsStyleElement.textContent = css;
-        pdfJsStyleElement.dataset.pdfjsScoped = 'true'; 
-        document.head.appendChild(pdfJsStyleElement);
-        if (!pdfPath) { error = 'No PDF path provided.'; loading = false; return; }
-        setTimeout(async () => {
-            if (!isMounted) return;
-            if (!viewerContainer || !viewerElement || !pdfViewerWrapperElement) { 
-                console.warn('[PDFViewerPanel] Required container elements not ready after delay.'); 
-                return; 
-            }
-            await loadPdfAndLibraries(viewerContainer);
-            document.addEventListener('click', handleClickOutside);
-            viewerContainer?.addEventListener('mouseup', handleViewerMouseUp);
-            viewerContainer?.addEventListener('click', handleViewerClick);
-            viewerContainer?.addEventListener('mousedown', handleViewerMouseDown, true);
-            window.addEventListener('keydown', handleKeydown);
-
-            // Setup autosave interval
-            autosaveIntervalId = setInterval(async () => {
-                const currentProjectState = get(project);
-                if (currentProjectState.autosaveEnabled && 
-                    currentProjectState.isPdfAnnotationsDirty && 
-                    pdfPath === currentProjectState.selectedDocumentPath) {
-                    console.log('[PDFViewerPanel Autosave] Dirty PDF annotations detected. Autosaving...');
-                    try {
-                        await saveCurrentPdfAnnotations();
-                        console.log('[PDFViewerPanel Autosave] PDF annotations autosaved successfully.');
-                    } catch (error) {
-                        console.error('[PDFViewerPanel Autosave] Error during autosave:', error);
-                        // Optionally, dispatch a non-intrusive notification to the user about the failed autosave
-                    }
-                }
-            }, 60000); // 60,000 milliseconds = 1 minute
-
-        }, 200); 
-    });
-
-    onDestroy(() => {
-        isMounted = false;
-        if (autosaveIntervalId) {
-            clearInterval(autosaveIntervalId);
-        }
-        if (pdfJsStyleElement && pdfJsStyleElement.parentNode) { pdfJsStyleElement.parentNode.removeChild(pdfJsStyleElement); }
-        document.removeEventListener('click', handleClickOutside);
-        viewerContainer?.removeEventListener('mouseup', handleViewerMouseUp);
-        viewerContainer?.removeEventListener('click', handleViewerClick);
-        viewerContainer?.removeEventListener('mousedown', handleViewerMouseDown, true);
-        window.removeEventListener('keydown', handleKeydown);
-        clearTimeout(hideToolbarTimeoutId);
-        if (eventBus && typeof eventBus.destroy === 'function') { eventBus.destroy(); } eventBus = null; 
-        if (pdfViewer) { pdfViewer.cleanup(); pdfViewer.setDocument(null); pdfViewer = null; } 
-        if (pdfDoc) { pdfDoc.destroy(); pdfDoc = null; }
-        if (annotationMatcherWorker) {
-            annotationMatcherWorker.terminate();
-            annotationMatcherWorker = null;
-        }
-    });
-
-    async function handleWorkerMessage(event) {
-        const { pageIndex, annotationId, startIndex, matchLength, error } = event.data;
-        const workerTaskKey = `${pageIndex}-${annotationId}`;
-        pendingWorkerTasks.delete(workerTaskKey); // Remove from pending tasks
-
-        if (error) {
-            console.warn(`[Worker Message] Error for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
-            return;
-        }
-
-        if (startIndex !== -1 && matchLength > 0) {
-            // console.log(`[Worker Message] Match found for ${annotationId} on page ${pageIndex + 1}. Start: ${startIndex}, Length: ${matchLength}`);
-            const pageView = pdfViewer?.getPageView(pageIndex);
-            const layerDiv = pageView?.textLayer?.textLayerDiv;
-
-            if (!pageView || !layerDiv) {
-                console.warn(`[Worker Message] Could not find pageView or layerDiv for page ${pageIndex + 1} to apply highlight ${annotationId}.`);
-                return;
-            }
-
-            // Use a dummy normalizedExpectedText for now, as worker already did the match.
-            // Or, pass the original normalized text from worker if needed for verification in findRangeInTextLayer.
-            const range = findRangeInTextLayer(layerDiv, startIndex, matchLength, "");
-
-            if (range) {
-                const pageRect = pageView.div.getBoundingClientRect();
-                const clientRects = range.getClientRects();
-                const newQuadPoints = [];
-                for (let i = 0; i < clientRects.length; i++) {
-                    const rect = clientRects[i];
-                    newQuadPoints.push([
-                        rect.left - pageRect.left, rect.top - pageRect.top,
-                        rect.right - pageRect.left, rect.top - pageRect.top,
-                        rect.left - pageRect.left, rect.bottom - pageRect.top,
-                        rect.right - pageRect.left, rect.bottom - pageRect.top
-                    ]);
-                }
-
-                if (newQuadPoints.length > 0) {
-                    const highlight = initialHighlights.find(h => h.id === annotationId && h.pageIndex === pageIndex);
-                    if (highlight) {
-                        renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
-                        // console.log(`[Worker Message] Rendered ${annotationId} via worker result and generated quadPoints.`);
-
-                        // Update initialHighlights with the new quadPoints to avoid future worker calls for this item
-                        highlight.quadPoints = newQuadPoints;
-                        // No explicit store dispatch here as per subtask, but this is where it would go if persistence is needed.
-                        // Mark dirty if quadpoints are generated and should be saved
-                        markPdfAnnotationsDirty();
-
-                    } else {
                         console.warn(`[Worker Message] Highlight ${annotationId} not found in initialHighlights after worker processing.`);
                     }
                 } else {
@@ -2404,41 +2273,7 @@ function updateHighlightOverlayColor(id, color) {
       </svg>
     </button>
     <div class="separator"></div>
-    {#if !$project.autosaveEnabled && $project.isPdfAnnotationsDirty && pdfPath === $project.selectedDocumentPath}
-        <button class="mini-toolbar-button !text-blue-600 dark:!text-blue-400 !border-blue-500 flex items-center space-x-1" 
-                on:click={async () => { 
-                    try { 
-                        await saveCurrentPdfAnnotations(); 
-                        console.log('[PDFViewerPanel Manual Save] Saved PDF annotations.'); 
-                    } catch (e) { 
-                        console.error('[PDFViewerPanel Manual Save] Error saving PDF annotations:', e); 
-                        // Optionally dispatch a user-facing error message here
-                    } 
-                }} 
-                title="Save PDF annotations (⌘+S)">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                <path d="M9.25 13.25a.75.75 0 0 01.5 0l5-2.5a.75.75 0 0 0-.042-1.412l-1.316-.333-3.034-4.046a1.75 1.75 0 0 0-3.02.022L5.09 9.005l-1.317.333a.75.75 0 0 0-.042 1.412l5 2.5Z" />
-                <path d="M3.513 10.173 2.22 9.84A.75.75 0 0 0 1.173 11.03l3.91 1.563a.75.75 0 0 0 .868-.003l3.91-1.563a.75.75 0 0 0-.707-1.387l-1.29.323L5.81 7.38a.75.75 0 0 0-1.299.028l-1 2.765Z" />
-            </svg>
-            <span>Save</span>
-        </button>
-        <div class="separator"></div>
-    {/if}
-</div>
 
-<div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-gray-950 relative pdf-viewer-wrapper">
-    {#if error}
-        <div class="absolute inset-0 flex items-center justify-center p-4 z-40 pointer-events-none"><div class="text-red-700 dark:text-red-300 p-4 bg-red-100 dark:bg-red-900/80 rounded border border-red-400 dark:border-red-600 max-w-lg text-center shadow-lg"><p class="font-semibold mb-2">Error:</p><p class="text-sm break-words">{@html error}</p></div></div>
-    {:else if loading || isLoadingInitialAnnotations}
-        <div class="absolute inset-0 flex flex-col items-center justify-center z-50 bg-gray-900/75 dark:bg-black/75 pointer-events-auto">
-            <!-- Replace this SVG with your GIF: <img src="/path/to/your-loading.gif" alt="Loading..." class="w-16 h-16 mb-4" /> -->
-            <svg class="animate-spin h-12 w-12 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <div class="text-white text-xl font-medium p-2 rounded">{loadingMessage}</div>
-        </div>
-    {/if}
 
     {#if showSelectionToolbar}
         <div class="floating-toolbar absolute bg-white dark:bg-gray-900 border border-gray-400 dark:border-gray-700 shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"

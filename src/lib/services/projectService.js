@@ -70,7 +70,6 @@ import {
 
     prepareMediaNoteView,
     markMediaNoteTranscriptChangesDiscarded,
-    loadAutosaveState
 } from '$lib/stores/projectStore.js';
 
 import {
@@ -483,7 +482,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 
         // Load autosave preference for this project (defaults to true)
         if (loadedData.project_uuid) {
-            loadAutosaveState(loadedData.project_uuid);
         }
 
         // Update project groups list
@@ -2401,7 +2399,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         return true;
     }
 
-    if (projState.autosaveEnabled) {
+    if (true) {
         if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
             try {
                 await saveCurrentPdfAnnotations();
@@ -2446,28 +2444,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             await message(`Cannot ${actionContextDisplay}: Unsaved changes exist for "${itemName}", but an automatic save could not be performed (missing save capability for this item type). Please save or discard changes manually.`, { title: 'Autosave Error', type: 'error'});
             return false;
         }
-    } else {
-        return new Promise((resolve) => {
-            showUnsavedChangesPrompt(itemName, itemTypeForPrompt,
-                async () => {
-                    hideUnsavedChangesPrompt();
-                    if (saveFunction) {
-                        try { await saveFunction(); resolve(true); }
-                        catch (error) { console.error("[UnsavedChangesModal callback] Save failed:", error); await message(`Failed to save "${itemName}": ${error.message || error}`, {title: "Save Error", type: "error"}); resolve(false); }
-                    } else { console.error("[UnsavedChangesModal callback] Save chosen, but save function missing."); await message('Cannot save: Editor reference or save method is missing.', { title: 'Internal Error', type: 'error' }); resolve(false); }
-                },
-                () => {
-                    hideUnsavedChangesPrompt();
-                    if (discardFunction) discardFunction();
-                    if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null) resetEditorFunction(initialContentForReset);
-                    resolve(true);
-                },
-                () => {
-                    hideUnsavedChangesPrompt();
-                    resolve(false);
-                }
-            );
-        });
     }
 }
 
