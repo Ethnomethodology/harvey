@@ -53,26 +53,6 @@
     // Define extensions for note types for icon matching
     const NOTE_EXTENSIONS = new Set(['json', 'md', 'txt']); // Adjusted to include json
 
-    /**
-     * Determines the correct SVG icon HTML string based on the node type.
-     */
-	function renderFileIcon() {
-		const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-
-        // Use file_type first for more specific identification
-        if (node.file_type === 'media') {
-            if (AUDIO_EXTENSIONS.has(ext)) return AUDIO_ICON;
-			if (VIDEO_EXTENSIONS.has(ext)) return VIDEO_ICON;
-        } else if (node.file_type === 'transcript' || node.file_type === 'imported_transcript') {
-             return TRANSCRIPT_ICON;
-        } else if (node.file_type === 'note') {
-             return NOTE_ICON;
-        }
-
-        // Fallback for 'other' or if file_type is somehow missing
-		return QUESTION_ICON; // Fallback for unknown file types
-	}
-
     /* ---------- Highlighting Logic ---------- */
     $: shouldHighlight = !node.is_directory && (
         (node.file_type === 'media' && node.path === selectedMediaPath) ||
@@ -102,12 +82,26 @@
 		<!-- Folder Toggle Icon OR File Icon -->
 		{#if node.is_directory}
             <span on:click="{toggleExpand}" class="px-1 cursor-pointer flex-shrink-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-				{@html expanded ? FOLDER_OPEN_ICON : FOLDER_CLOSE_ICON}
+                {#if expanded}
+                    <FolderOpen class="w-4 h-4" />
+                {:else}
+                    <FolderClosed class="w-4 h-4" />
+                {/if}
 			</span>
 		{:else}
 			<!-- File Icon -->
 			<span class="px-1 flex-shrink-0 flex items-center justify-center text-gray-600 dark:text-gray-400">
-				{@html renderFileIcon()}
+                {#if node.file_type === 'media' && AUDIO_EXTENSIONS.has(node.name.split('.').pop()?.toLowerCase() ?? '')}
+                    <Music class="w-4 h-4" />
+                {:else if node.file_type === 'media' && VIDEO_EXTENSIONS.has(node.name.split('.').pop()?.toLowerCase() ?? '')}
+                    <Film class="w-4 h-4" />
+                {:else if node.file_type === 'transcript' || node.file_type === 'imported_transcript'}
+                    <MessageSquareText class="w-4 h-4" />
+                {:else if node.file_type === 'note'}
+                    <FileText class="w-4 h-4" />
+                {:else}
+                    <CircleHelp class="w-4 h-4" />
+                {/if}
 			</span>
 		{/if}
 
