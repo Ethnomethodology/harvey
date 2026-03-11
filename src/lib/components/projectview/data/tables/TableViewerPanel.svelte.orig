@@ -26,12 +26,12 @@
     import EditFieldModal from '$lib/components/projectview/modals/EditFieldModal.svelte';
     import TableHeaderIcon from './TableHeaderIcon.svelte';
     import TableIcon from './TableIcon.svelte';
-    import { 
-        Pencil, 
-        Undo2, 
-        Redo2, 
-        ChevronLeft, 
-        ChevronRight, 
+    import {
+        Pencil,
+        Undo2,
+        Redo2,
+        ChevronLeft,
+        ChevronRight,
         MoreVertical,
         Plus,
         ExternalLink,
@@ -47,11 +47,12 @@
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
     import { invoke } from '@tauri-apps/api/core';
-    import { 
-        Input, 
-        Button, 
-        Dropdown, 
+    import {
+        Input,
+        Button,
+        Dropdown,
         DropdownItem,
+        Tooltip,
         Search,
         Badge
     } from 'flowbite-svelte';
@@ -88,7 +89,7 @@
 
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
-    
+
     let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
     let tableHasValidationErrors = false;
 
@@ -103,7 +104,7 @@
         const hls = $project.currentTableHighlights;
         const newRowStyles = {};
         const newCellStyles = {};
-        
+
         if (Array.isArray(hls)) {
             hls.forEach(h => {
                 if (h.id?.startsWith('row-')) {
@@ -121,9 +122,9 @@
                 }
             });
         }
-        
+
         tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
-        
+
         // Trigger a reformat of entries to apply new styles
         reformatAllRows();
     }
@@ -399,7 +400,7 @@
             if (!cellElement) return;
 
             const rect = cellElement.getBoundingClientRect();
-            
+
             if (hyperlinkIcon) {
                 popoverUrl = cellElement.dataset.urlValue || '';
                 popoverX = rect.right;
@@ -419,7 +420,7 @@
                 popoverProjectLink = path;
                 popoverProjectLinkX = rect.right;
                 popoverProjectLinkY = rect.bottom + window.scrollY;
-                
+
                 // Find category - resolve path safely, handling both relative and absolute paths
                 const proj = get(project);
                 const normalizedSearchPath = path.replace(/\\/g, '/');
@@ -440,17 +441,17 @@
                     }
                     return false;
                 });
-                
+
                 popoverProjectLinkCategory = asset ? asset.category : 'Other';
-                
+
                 showProjectLinkPopover = true;
                 showUrlPopover = false;
                 showEmailPopover = false;
             }
         } else {
             // Close popovers if clicking elsewhere
-            if (!e.target.closest('.url-popover-container') && 
-                !e.target.closest('.email-popover-container') && 
+            if (!e.target.closest('.url-popover-container') &&
+                !e.target.closest('.email-popover-container') &&
                 !e.target.closest('.project-link-popover-container')) {
                 showUrlPopover = false;
                 showEmailPopover = false;
@@ -518,14 +519,14 @@
 
     function scrollToHighlight(id) {
         if (!id || !tabulatorInstance) return;
-        
+
         // Clear immediately to prevent infinite loops
         project.update(p => ({ ...p, requestedHighlightId: null }));
 
         console.log(`[TableViewerPanel] Scrolling to highlight: ${id}`);
         if (id.startsWith('row-')) {
             const rowIndex = parseInt(id.substring(4), 10);
-            
+
             // Small delay to ensure Tabulator has finished internal layout
             setTimeout(() => {
                 const row = tabulatorInstance.getRow(rowIndex);
@@ -597,8 +598,8 @@
     async function saveTableChanges() {
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
-        
-        // DO NOT update tableData = updatedData; here. 
+
+        // DO NOT update tableData = updatedData; here.
         // Updating reactive tableData causes Tabulator to re-init/re-render, which steals focus.
 
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
@@ -632,7 +633,7 @@
 
         const data = tabulatorInstance.getData();
         const valueMap = new Map(); // value -> [internal_ids]
-        
+
         data.forEach(row => {
             const val = String(row[currentPrimaryField] || "").trim();
             if (val === "") return; // Skip empty
@@ -731,9 +732,9 @@
 
     function openFieldEditor(column) {
         const field = column.getField();
-        editingFieldData = { 
-            name: field, 
-            schema: tableSchema[field] || { type: 'Text', subType: 'Small Text' } 
+        editingFieldData = {
+            name: field,
+            schema: tableSchema[field] || { type: 'Text', subType: 'Small Text' }
         };
         showEditFieldModal = true;
     }
@@ -774,17 +775,17 @@
             const ampmMatch = str.match(/(AM|PM)/i);
             const ampm = ampmMatch ? ampmMatch[0].toUpperCase() : null;
             const timeParts = str.replace(/(AM|PM)/i, '').trim().split(':');
-            
+
             if (timeParts.length >= 2) {
                 let h = parseInt(timeParts[0]);
                 const m = parseInt(timeParts[1]);
                 const s = parseInt(timeParts[2] || 0);
-                
+
                 if (is12Hour && ampm) {
                     if (ampm === 'PM' && h < 12) h += 12;
                     if (ampm === 'AM' && h === 12) h = 0;
                 }
-                
+
                 const d = new Date();
                 d.setHours(h, m, s);
                 return d;
@@ -807,7 +808,7 @@
             if (dateStr && timeStr) {
                 const dateD = parseDate(dateStr, { type: 'DateTime', subType: 'Date', format: format.split(/[T ]/)[0] });
                 const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') });
-                
+
                 if (dateD && timeD) {
                     dateD.setHours(timeD.getHours(), timeD.getMinutes(), timeD.getSeconds());
                     return dateD;
@@ -934,7 +935,7 @@
         isAddingNewField = true;
         newFieldPosition = position;
         newFieldTargetColumn = column;
-        
+
         editingFieldData = {
             name: getUniqueColumnName("NewField"),
             schema: { type: 'Text', subType: 'Small Text' }
@@ -1028,9 +1029,9 @@
             alert("No entry data on clipboard.");
             return;
         }
-        
+
         const newRowData = { ...tableClipboard.data };
-        
+
         // Calculate a new unique internal ID
         const allData = tabulatorInstance.getData();
         const maxId = allData.reduce((max, r) => Math.max(max, r.harvey_internal_id || 0), -1);
@@ -1121,7 +1122,7 @@
 
     async function applyHighlightToCells(color, cellsToModify) {
         if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
-        
+
         let currentHighlights = get(project).currentTableHighlights || [];
         const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
 
@@ -1131,14 +1132,14 @@
             const rowIndex = rowData.harvey_internal_id;
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
-            
+
             // Remove existing highlight for this cell
             currentHighlights = currentHighlights.filter(h => h.id !== cellKey);
-            
+
             if (color) {
                 const cellValue = rowData[colField];
                 const text = `Cell [Entry ${rowIndex + 1}, ${colField}]: ${cellValue !== null && cellValue !== undefined ? cellValue : ""}`;
-                
+
                 currentHighlights.push({
                     id: cellKey,
                     color: color,
@@ -1148,7 +1149,7 @@
                 });
             }
         });
-        
+
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
     }
@@ -1238,7 +1239,7 @@
 
     function checkValidationErrors() {
         if (!tabulatorInstance) return;
-        
+
         const rows = tabulatorInstance.getRows();
         let foundError = false;
         const newInvalidCells = new Map();
@@ -1261,17 +1262,17 @@
 
         invalidCells = newInvalidCells;
         tableHasValidationErrors = foundError;
-        
+
         // Extract filename from path (handle both / and \ separators)
         const filename = tablePath.split(/[\\/]/).pop() || 'Table';
-        
+
         if (tableHasValidationErrors) {
             project.update(p => ({ ...p, statusMessage: `${filename} contains validation errors.` }));
         } else if (foundError === false && tabulatorInstance) {
             // Restore default message if errors cleared
             project.update(p => ({ ...p, statusMessage: `Ready: ${filename}` }));
         }
-        
+
         reformatAllRows();
     }
 
@@ -1284,8 +1285,8 @@
 
         if (schema.required && isBlank) {
             return { valid: false, message: "Field is required" };
-        } 
-        
+        }
+
         if (!isBlank) {
             if (type === 'Numeric') {
                 const num = parseFloat(value);
@@ -1316,7 +1317,7 @@
                         const valid = parts.length === 2 && ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].includes(parts[0].toLowerCase()) && /^\d{4}$/.test(parts[1]);
                         if (!valid) return { valid: false, message: "Invalid Month YYYY format" };
                     }
-                    
+
                     if (!parseDate(value, schema)) return { valid: false, message: "Invalid date" };
                 } else {
                     if (!parseDate(value, schema)) return { valid: false, message: "Invalid date/time" };
@@ -1365,7 +1366,7 @@
         input.max = max;
         input.step = "1";
         input.value = initialVal;
-        
+
         const updateUI = (v) => {
             const percentage = ((v - min) / (max - min)) * 100;
             input.style.background = `linear-gradient(to right, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%)`;
@@ -1602,7 +1603,7 @@
 
             const content = document.createElement("div");
             content.className = "flex h-48";
-            
+
             const hCol = document.createElement("div");
             hCol.className = "flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800";
             hours.forEach(h => {
@@ -1708,7 +1709,7 @@
     function datetimeEditor(cell, onRendered, success, cancel, editorParams) {
         const container = document.createElement("div");
         container.className = "flex items-center gap-1 w-full h-full p-1";
-        
+
         const field = cell.getField();
         const schema = tableSchema[field] || {};
         const format = schema.format || '';
@@ -1727,7 +1728,7 @@
         dateInput.setAttribute("spellcheck", "false");
         dateInput.value = datePart;
         dateInput.className = "flex-1 min-w-0 h-full border-none p-0 text-xs";
-        
+
         const timeInput = document.createElement("input");
         timeInput.type = "text";
         timeInput.setAttribute("autocomplete", "off");
@@ -1911,9 +1912,9 @@
 
     async function generateColumns(data, headers, savedLayoutObj, schema) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
-        
+
         currentPrimaryField = Object.keys(schema).find(key => schema[key].primary) || null;
-        
+
         let dataColumnDefs = headers.map(header => {
             const colSchema = schema[header] || { type: 'Text', subType: 'Small Text' };
             const isPrimary = colSchema.primary === true;
@@ -2049,7 +2050,7 @@
                             return "";
                         };
                         // Force edit on single click rather than waiting for double-click
-                        colDef.cellClick = function(e, cell) { 
+                        colDef.cellClick = function(e, cell) {
                             if (!e || !e.target) {
                                 cell.edit(true);
                                 return;
@@ -2076,7 +2077,7 @@
                                     return;
                                 }
                             }
-                            cell.edit(true); 
+                            cell.edit(true);
                         };
                 } else if (colSchema.subType === 'Currency') {
                     colDef.formatter = (cell) => {
@@ -2085,13 +2086,13 @@
                         const currencyCode = (colSchema.currency || 'USD').toUpperCase();
                         try {
                             // Try native formatting first (supports standard ISO codes)
-                            return new Intl.NumberFormat('en-US', { 
-                                style: 'currency', 
+                            return new Intl.NumberFormat('en-US', {
+                                style: 'currency',
                                 currency: currencyCode
                             }).format(val);
                         } catch (e) {
                             // Fallback for custom/unsupported codes (e.g. "BTC", "XXX")
-                            const formattedNum = new Intl.NumberFormat('en-US', { 
+                            const formattedNum = new Intl.NumberFormat('en-US', {
                                 style: 'decimal',
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
@@ -2113,7 +2114,7 @@
                 } else {
                     colDef.editor = datetimeEditor;
                 }
-                
+
                 // Add formatter to ensure UI display matches the desired format
                 colDef.formatter = (cell) => {
                     const val = cell.getValue();
@@ -2148,7 +2149,7 @@
                 if (!cellElement) return cell.getValue();
 
                 const cellStyle = tableStyles.cellStyles[cellKey] || {};
-                
+
                 cellElement.style.backgroundColor = cellStyle.color || "";
                 if (cellStyle.color) {
                     cellElement.classList.add('highlighted-cell');
@@ -2197,7 +2198,7 @@
                         cellElement.title = "";
                     }
                 }
-                
+
                 if (colSchema.type === 'Text' || colSchema.type === 'Misc' || !colSchema.type) {
                     // Pre-wrap allows multi-line text, but for specific Misc subtypes like Project Link or Email,
                     // we want to ensure they stay on a single line to prevent unnatural row stretching.
@@ -2332,7 +2333,7 @@
             }
             return colDef;
         });
-        
+
         // Ensure primary field is first in data columns if frozen
         if (currentPrimaryField) {
             const primaryIdx = dataColumnDefs.findIndex(c => c.field === currentPrimaryField);
@@ -2382,13 +2383,13 @@
 
     export async function getExportData() {
         if (!tabulatorInstance) return null;
-        
+
         const data = tabulatorInstance.getData();
         const headers = tabulatorInstance.getColumns().filter(c => c.getField()).map(c => c.getField());
-        
+
         // Deep copy data to avoid mutating the original
         const formattedData = JSON.parse(JSON.stringify(data));
-        
+
         formattedData.forEach(row => {
             for (const field in tableSchema) {
                 const schema = tableSchema[field];
@@ -2403,7 +2404,7 @@
                 }
             }
         });
-        
+
         // Extract style information for export
         const stylesMap = {};
         if (tableStyles) {
@@ -2511,7 +2512,7 @@
                 } else if (typeof loadedHighlightsOrStyles === 'object' && loadedHighlightsOrStyles.rowStyles) {
                     // Old format: Object with rowStyles and cellStyles. Convert to new format.
                     console.log('[TableViewerPanel] Converting old style format to new highlights format');
-                    
+
                     // Convert rowStyles
                     if (loadedHighlightsOrStyles.rowStyles) {
                         for (const [rowIndexStr, color] of Object.entries(loadedHighlightsOrStyles.rowStyles)) {
@@ -2538,7 +2539,7 @@
                             }
                         }
                     }
-                    
+
                     // Convert cellStyles
                     if (loadedHighlightsOrStyles.cellStyles) {
                         for (const [cellKey, color] of Object.entries(loadedHighlightsOrStyles.cellStyles)) {
@@ -2589,7 +2590,7 @@
                 return;
             }
             let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
-            
+
             // Reset duplicates state for new table
             duplicateIds = new Set();
             projectAssetOptions = await getAllProjectAssets();
@@ -2684,20 +2685,20 @@
                         const rowNum = cell.getRow().getPosition(true);
                         const container = document.createElement("div");
                         container.className = "row-number-container group relative flex items-center justify-center h-full w-full";
-                        
+
                         const span = document.createElement("span");
                         span.className = "row-number-text group-hover:hidden";
                         span.textContent = rowNum;
-                        
+
                         const button = document.createElement("button");
                         button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
                         button.title = "Edit Entry";
-                        
+
                         mount(TableIcon, {
                             target: button,
                             props: { icon: Pencil, size: 14 }
                         });
-                        
+
                         container.appendChild(span);
                         container.appendChild(button);
                         return container;
@@ -2872,12 +2873,12 @@
 
     function addFloatingAddRowButton() {
         if (!tableContainer || addRowButtonEl) return;
-        
+
         addRowButtonEl = document.createElement("button");
         addRowButtonEl.className = "absolute z-30 flex items-center justify-center w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md text-blue-500 hover:text-blue-600 transition-all hover:scale-110";
         addRowButtonEl.style.left = "9px"; // Centered under the 50px width row number column
         addRowButtonEl.title = "Add New Entry";
-        
+
         mount(TableIcon, {
             target: addRowButtonEl,
             props: { icon: Plus, size: 18 }
@@ -2895,7 +2896,7 @@
 
     function updateFloatingAddRowButtonPosition() {
         if (!tabulatorInstance || !addRowButtonEl) return;
-        
+
         const rows = tabulatorInstance.getRows("active");
         if (rows.length === 0) {
             addRowButtonEl.style.top = "45px"; // Just below header
@@ -2905,12 +2906,12 @@
         const lastRow = rows[rows.length - 1];
         const lastRowEl = lastRow.getElement();
         const tableHeaderHeight = tableContainer.querySelector(".tabulator-header")?.offsetHeight || 0;
-        
+
         // Position it just below the last row
         const topPos = lastRowEl.offsetTop + lastRowEl.offsetHeight + tableHeaderHeight - tabulatorInstance.rowManager.element.scrollTop;
-        
+
         addRowButtonEl.style.top = `${topPos + 5}px`;
-        
+
         // Hide if it would be outside the visible area of the holder
         const holderHeight = tableContainer.querySelector(".tabulator-tableholder")?.offsetHeight || 0;
         if (topPos > holderHeight + tableHeaderHeight || topPos < tableHeaderHeight) {
@@ -3102,24 +3103,29 @@
             <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
                 <Undo2 size={14} />
             </button>
-            
+            <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
+
             <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
                 <Redo2 size={14} />
             </button>
+            <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
 
             <div class="separator mx-0.5"></div>
 
             <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold">
                 <Bold size={14} />
             </button>
+            <Tooltip triggeredBy="#style-bold">Bold</Tooltip>
 
             <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic">
                 <Italic size={14} />
             </button>
+            <Tooltip triggeredBy="#style-italic">Italic</Tooltip>
 
             <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline">
                 <Underline size={14} />
             </button>
+            <Tooltip triggeredBy="#style-underline">Underline</Tooltip>
 
             <div class="separator mx-0.5"></div>
 
@@ -3130,6 +3136,7 @@
                 </svg>
                 <svg class="ml-0.5 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
               </button>
+              <Tooltip triggeredBy="#style-color">Text Color</Tooltip>
               {#if isColorDropdownOpen}
                 <div class="absolute top-full left-0 mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg rounded-md">
                   {#each colorOptions as option}
@@ -3150,6 +3157,7 @@
             <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
                 <Eraser size={14} />
             </button>
+            <Tooltip triggeredBy="#style-clear">Clear Formatting</Tooltip>
         </div>
 
          {#if !isLoading && !error}
@@ -3415,7 +3423,7 @@
         :global(html.dark .tabulator-cell.highlighted-cell) {
             color: #111827 !important;
         }
-        
+
         /* Ensure the Add Field column doesn't inherit row highlight backgrounds */
         :global(.tabulator-row .tabulator-cell.add-column-header) {
             background-color: white !important;
