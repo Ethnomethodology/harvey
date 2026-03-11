@@ -32,8 +32,14 @@
 
 	function getLanguageLabel(langCode) {
 		if (!langCode || langCode.toLowerCase() === 'original') return 'Original';
-		const option = languageOptions.find(opt => opt.value === langCode);
-		return option ? option.label : langCode; // Fallback to code if not found
+
+        let targetCode = langCode;
+        if (langCode.includes('-')) {
+            targetCode = langCode.split('-').pop(); // e.g., 'en-hi' -> 'hi'
+        }
+
+		const option = languageOptions.find(opt => opt.value === targetCode);
+		return option ? option.label : targetCode; // Fallback to code if not found
 	}
 
     // Function to close dropdown when clicking outside

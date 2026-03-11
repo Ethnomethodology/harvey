@@ -109,6 +109,7 @@
       aria-haspopup="true"
       aria-expanded={isOpen}
       {disabled}
+      title={selectedLabel}
     >
       <div class="flex items-center truncate">
         {#if showColorPreview && selectedOption && isColor(selectedOption.value)}
@@ -133,7 +134,7 @@
       <div class="py-1" role="none">
         {#each options as option}
           <button
-            class="dropdown-option flex items-center"
+            class="dropdown-option flex items-center {value === option.value ? 'bg-gray-100 dark:bg-gray-700' : ''}"
             role="menuitem"
             on:click={() => selectOption(option.value)}
             title={option.label}
@@ -141,7 +142,7 @@
             {#if showColorPreview && isColor(option.value)}
               <span class="color-swatch mr-2" style={getColorStyle(option.value)}></span>
             {/if}
-            <span class="truncate">{option.label}</span>
+            <span class="truncate {value === option.value ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}">{option.label}</span>
           </button>
         {/each}
       </div>

@@ -1,5 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
+	import { Button, Tooltip } from 'flowbite-svelte';
+	import { Mic, FileOutput, Languages, Users, LayoutTemplate } from 'lucide-svelte';
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
@@ -350,60 +352,53 @@
 		/>
 
 		<!-- Speakers Button -->
-		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
-			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-				  </svg>
-				  <span class="text-xs">Speakers</span> <!-- Shorter Text -->
+		<div class="relative inline-flex items-center ml-2">
+			<Button size="xs" color="alternative" class="space-x-0.5 px-2 relative" on:click="{openSpeakersModal}">
+				<Users class="w-3.5 h-3.5" />
+				<span>Speakers</span> <!-- Shorter Text -->
 			  {#if $transcriptStore.speakers.count > 0}
-				<span class="absolute -top-0.5 -right-0.5 bg-blue-500 text-white rounded-full text-xxs w-3.5 h-3.5 flex items-center justify-center"> <!-- Adjusted badge size/pos -->
+				<span class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"> <!-- Adjusted badge size/pos -->
 					{$transcriptStore.speakers.count}
 				</span>
 			  {/if}
-			</button>
+			</Button>
+            <Tooltip>Configure number of speakers and their names</Tooltip>
 		  </div>
 
 		<!-- Transcribe Button -->
-			<button
-				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+			<Button
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2"
 				on:click="{handleTranscribeClick}"
-				title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
 			>
 				{#if $transcriptStore.isTranscribing}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Transcribing...</span>
+				<span>Transcribing...</span>
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4" class:text-yellow-500={!$configStatus.transcription_models_downloaded}>
-					<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-				</svg>
-				<span class="text-xs">Transcribe</span>
+				<Mic class="w-3.5 h-3.5 {$configStatus.transcription_models_downloaded ? '' : 'text-yellow-500'}" />
+				<span>Transcribe</span>
 				{/if}
-			</button>
-
+			</Button>
+            <Tooltip>{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}</Tooltip>
 
 			<!-- Translate Button -->
-			<button
-				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+			<Button
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2"
 				on:click={openTranslateModal}
-				title="Translate Transcript"
 			>
 				{#if $transcriptStore.isTranslating}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Translating...</span>
+				<span>Translating...</span>
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4" viewBox="0 0 16 16">
-					<path d="M4.545 6.714 4.11 8H3l1.862-5h1.284L8 8H6.833l-.435-1.286zm1.634-.736L5.5 3.956h-.049l-.679 2.022z"/>
-					<path d="M0 2a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v3h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm7.138 9.995q.289.451.63.846c-.748.575-1.673 1.001-2.768 1.292.178.217.451.635.555.867 1.125-.359 2.08-.844 2.886-1.494.777.665 1.739 1.165 2.93 1.472.133-.254.414-.673.629-.89-1.125-.253-2.057-.694-2.82-1.284.681-.747 1.222-1.651 1.621-2.757H14V8h-3v1.047h.765c-.318.844-.74 1.546-1.272 2.13a6 6 0 0 1-.415-.492 2 2 0 0 1-.94.31"/>
-				</svg>
-				<span class="text-xs">Translate</span>
+				<Languages class="w-3.5 h-3.5" />
+				<span>Translate</span>
 				{/if}
-			</button>
+			</Button>
+            <Tooltip>Translate Transcript</Tooltip>
 
 			
 	</div>
@@ -411,10 +406,11 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
-		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-		   <span class="text-xs">Export</span>
-		</button>
+		<Button size="xs" color="alternative" class="space-x-0.5 px-2" on:click="{openExportModal}" disabled="{isExportDisabled}">
+		   <FileOutput class="w-3.5 h-3.5" />
+		   <span>Export</span>
+		</Button>
+        <Tooltip>Export Transcript</Tooltip>
 
 		<!-- Dual Mode Toggle Button -->
 		<button 
