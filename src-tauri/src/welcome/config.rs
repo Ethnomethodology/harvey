@@ -204,7 +204,9 @@ pub fn read_config() -> Result<Config, CommandError> {
     use crate::projectview::db_handler::{get_db_path, init_db};
 
     // Ensure DB is initialized
-    let _ = init_db();
+    if let Err(e) = init_db() {
+        eprintln!("Failed to initialize DB in read_config: {:?}", e);
+    }
 
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
@@ -307,7 +309,9 @@ pub fn write_config(config: &Config) -> Result<(), CommandError> {
     use rusqlite::{Connection, params};
     use crate::projectview::db_handler::{get_db_path, init_db};
 
-    let _ = init_db();
+    if let Err(e) = init_db() {
+        eprintln!("Failed to initialize DB in write_config: {:?}", e);
+    }
     let db_path = get_db_path()?;
     let mut conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
 

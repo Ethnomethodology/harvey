@@ -432,7 +432,8 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !last_opened_col_exists {
         info!("[DB] Adding last_opened_ts column to projects table.");
-        conn.execute("ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP", [])?;
+        conn.execute("ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP", [])?;
+        conn.execute("UPDATE projects SET last_opened_ts = CURRENT_TIMESTAMP WHERE last_opened_ts IS NULL", [])?;
     }
 
     // Global Settings table
