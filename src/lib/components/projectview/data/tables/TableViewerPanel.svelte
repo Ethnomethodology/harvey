@@ -2740,7 +2740,12 @@
                 updateTableLayoutSnapshot();
                 await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
             }, 750);
-            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
+            tabulatorInstance.on("columnResized", (column) => {
+                saveCurrentTableLayout();
+                if (tabulatorInstance) {
+                    tabulatorInstance.redraw();
+                }
+            });
 
             // Event-driven layout saving for structural changes
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
@@ -3285,6 +3290,7 @@
     }
      :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
          white-space: normal !important;
+         @apply text-gray-900 dark:text-gray-200 font-semibold;
      }
      :global(.tabulator-header-filter input) {
          @apply p-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
@@ -3377,6 +3383,11 @@
 
 :global(.tabulator .tabulator-header .tabulator-col) {
     padding-left: 0px !important;
+    @apply bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 border-gray-300 dark:border-gray-700;
+}
+
+:global(.tabulator .tabulator-header) {
+    @apply bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700;
 }
 
         :global(.tabulator-cell) {

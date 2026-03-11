@@ -52,7 +52,6 @@
         Button,
         Dropdown,
         DropdownItem,
-        Tooltip,
         Search,
         Badge
     } from 'flowbite-svelte';
@@ -3103,29 +3102,24 @@
             <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
                 <Undo2 size={14} />
             </button>
-            <Tooltip triggeredBy="#history-undo">Undo</Tooltip>
 
             <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
                 <Redo2 size={14} />
             </button>
-            <Tooltip triggeredBy="#history-redo">Redo</Tooltip>
 
             <div class="separator mx-0.5"></div>
 
             <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold">
                 <Bold size={14} />
             </button>
-            <Tooltip triggeredBy="#style-bold">Bold</Tooltip>
 
             <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic">
                 <Italic size={14} />
             </button>
-            <Tooltip triggeredBy="#style-italic">Italic</Tooltip>
 
             <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline">
                 <Underline size={14} />
             </button>
-            <Tooltip triggeredBy="#style-underline">Underline</Tooltip>
 
             <div class="separator mx-0.5"></div>
 
@@ -3136,7 +3130,6 @@
                 </svg>
                 <svg class="ml-0.5 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
               </button>
-              <Tooltip triggeredBy="#style-color">Text Color</Tooltip>
               {#if isColorDropdownOpen}
                 <div class="absolute top-full left-0 mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg rounded-md">
                   {#each colorOptions as option}
@@ -3157,7 +3150,6 @@
             <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
                 <Eraser size={14} />
             </button>
-            <Tooltip triggeredBy="#style-clear">Clear Formatting</Tooltip>
         </div>
 
          {#if !isLoading && !error}
@@ -3293,6 +3285,7 @@
     }
      :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
          white-space: normal !important;
+         @apply text-gray-900 dark:text-gray-200 font-semibold;
      }
      :global(.tabulator-header-filter input) {
          @apply p-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
@@ -3385,6 +3378,11 @@
 
 :global(.tabulator .tabulator-header .tabulator-col) {
     padding-left: 0px !important;
+    @apply bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 border-gray-300 dark:border-gray-700;
+}
+
+:global(.tabulator .tabulator-header) {
+    @apply bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700;
 }
 
         :global(.tabulator-cell) {
