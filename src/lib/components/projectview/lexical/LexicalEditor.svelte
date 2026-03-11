@@ -95,7 +95,8 @@
     ChevronDown, AlignLeft, AlignCenter, AlignRight, AlignJustify,
     Outdent, Indent, PaintBucket, Eraser, Search,
     List, ListOrdered, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
-    Highlighter, Baseline, X, ChevronUp, CheckSquare
+    Highlighter, Baseline, X, ChevronUp, CheckSquare,
+    Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
   } from 'lucide-svelte';
   export let initialJson = null;
   export let editable = true;
@@ -466,7 +467,6 @@
 
   import { get } from 'svelte/store';
   import { project } from '$lib/stores/projectStore.js';
-  import { Table as TableIcon, Minus, Link as LinkIcon, ChevronDown, Search, X, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-svelte';
   import { invoke } from '@tauri-apps/api/core';
 
   const dispatch = createEventDispatcher();
