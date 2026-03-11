@@ -61,7 +61,7 @@
 	import DataView from '$lib/components/projectview/data/DataView.svelte';
     import TranscriptionsView from '$lib/components/projectview/transcriptions/TranscriptionsView.svelte';
     import TagsView from '$lib/components/projectview/tags/TagsView.svelte';
-    import { Loader, Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Notebook, Tags, Cog, CircleHelp } from 'lucide-svelte';
+    import { Loader, Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Files, Tags, Cog, CircleHelp } from 'lucide-svelte';
     import DataTopBar from '$lib/components/projectview/data/DataTopBar.svelte';
     import TranscriptionsTopBar from '$lib/components/projectview/transcriptions/TopBar.svelte';
     import SimpleTopBar from '$lib/components/projectview/shared/SimpleTopBar.svelte';
@@ -1144,7 +1144,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		<div class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 overflow-hidden border-r border-gray-300 dark:border-gray-700">
 			<div class="flex-grow flex flex-col space-y-2">
                 <button title="Data" aria-label="Data" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'data'} class:border-blue-500={selectedTab === 'data'} class:dark:border-blue-400={selectedTab === 'data'} class:bg-white={selectedTab === 'data'} class:dark:bg-gray-950={selectedTab === 'data'} class:text-blue-500={selectedTab === 'data'} class:dark:text-accent={selectedTab === 'data'} class:hover:bg-gray-300={selectedTab !== 'data'} class:dark:hover:bg-gray-800={selectedTab !== 'data'} class:text-gray-700={selectedTab !== 'data'} class:dark:text-gray-300={selectedTab !== 'data'} class:dark:hover:text-gray-100={selectedTab !== 'data'} class:hover:text-gray-900={selectedTab !== 'data'} on:click={() => handleTabClick('data')}>
-                    <Notebook class="w-6 h-6" />
+                    <Files class="w-6 h-6" />
                 </button>
                 <button title="Transcription" aria-label="Transcription" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'transcriptions'} class:border-blue-500={selectedTab === 'transcriptions'} class:dark:border-blue-400={selectedTab === 'transcriptions'} class:bg-white={selectedTab === 'transcriptions'} class:dark:bg-gray-950={selectedTab === 'transcriptions'} class:text-blue-500={selectedTab === 'transcriptions'} class:dark:text-accent={selectedTab === 'transcriptions'} class:hover:bg-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:bg-gray-800={selectedTab !== 'transcriptions'} class:text-gray-700={selectedTab !== 'transcriptions'} class:dark:text-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:text-gray-100={selectedTab !== 'transcriptions'} class:hover:text-gray-900={selectedTab !== 'transcriptions'} on:click={() => handleTabClick('transcriptions')}>
                     <MessageSquareText class="w-6 h-6" />
@@ -1155,7 +1155,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             </div>
 			<div class="mt-auto flex flex-col space-y-2 pb-2 w-full">
                 <button title="Help" aria-label="Help" on:click={() => showHelpModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400">
-                    <CircleHelp class="w-[18px] h-[18px]" />
+                    <CircleHelp class="w-6 h-6" />
                 </button>
                 <button title="Configure" aria-label="Configure" on:click={() => showConfigurationModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400">
 					<Cog class="w-6 h-6 {hasCriticalConfigIssues ? 'text-red-500' : (hasNonCriticalConfigIssues ? 'text-yellow-500' : '')}" />
