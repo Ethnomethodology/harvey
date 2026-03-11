@@ -39,7 +39,7 @@
 	let isLayoutSettingsModalOpen = false; // Added
 	let transcriptsForModal = [];
 
-	function openTranslateModal() {
+	export function openTranslateModal() {
 		const selectedMedia = $transcriptStore.selectedMediaFile;
 
 		if (!selectedMedia?.relative_path) {

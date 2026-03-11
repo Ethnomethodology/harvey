@@ -72,6 +72,7 @@
 
 	let transcribeModalRef;
     let transcriptionsViewRef;
+    let transcriptionsTopBarRef;
     let dataViewRef;
     let tagsViewRef;
 	let selectedTab = 'data';
@@ -941,7 +942,12 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         }
 
         // Now trigger the translation dialog
-        toggleTranslateModal(true);
+        if (transcriptionsTopBarRef) {
+            transcriptionsTopBarRef.openTranslateModal();
+        } else {
+            console.warn("[ProjectView] transcriptionsTopBarRef not available. Opening translate modal via store.");
+            toggleTranslateModal(true);
+        }
 
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to translate ${mediaName}. Dialog opened.` }));
     }
@@ -1121,7 +1127,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 			/>
 		{:else if selectedTab === 'transcriptions'}
 			<TranscriptionsTopBar
-				bind:this={transcriptionsViewRef}
+				bind:this={transcriptionsTopBarRef}
                 on:requestImport={handleImportMediaInSidebar}
 				on:cancelTranslationRequest={handleCancelTranslationRequest}
 				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
