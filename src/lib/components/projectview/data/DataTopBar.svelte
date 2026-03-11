@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
-    import { Button, Tooltip, Select } from 'flowbite-svelte';
-    import { Mic, FileOutput, Languages, ImageDown, Mic2, LayoutTemplate } from 'lucide-svelte';
+    import { Button, Select } from 'flowbite-svelte';
+    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical } from 'lucide-svelte';
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
@@ -535,31 +535,27 @@
 
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}>
-            <Mic class="w-3.5 h-3.5" />
+        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
+            <MessageSquareText class="w-3.5 h-3.5" />
             <span>Transcribe</span>
         </Button>
-        <Tooltip>Transcribe</Tooltip>
 
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })}>
+        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
             <Languages class="w-3.5 h-3.5" />
             <span>Translate</span>
         </Button>
-        <Tooltip>Translate Transcript</Tooltip>
         {/if}
         {#if $project.activeDocumentEditorRef}
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={toggleLiveTranscription}>
-            <Mic2 class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
+        <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={toggleLiveTranscription} title="Live Transcribe">
+            <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
             <span>Live Transcribe</span>
         </Button>
-        <Tooltip>Live Transcribe</Tooltip>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => toggleTranslateModal(true)}>
+            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => toggleTranslateModal(true)} title="Translate Document">
                 <Languages class="w-3.5 h-3.5" />
                 <span>Translate</span>
             </Button>
-            <Tooltip>Translate Document</Tooltip>
         {/if}
     </div>
 
@@ -576,50 +572,44 @@
                 on:change={(e) => switchTranscriptInDataTab(e.detail)}
                 placeholder="Select Transcript"
             />
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }}>
-                <FileOutput class="w-3.5 h-3.5" />
+            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
+                <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
-            <Tooltip>Export Transcript</Tooltip>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => {
+            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => {
                     if (isImportedTranscript) {
                         pathForExportModal = $project.currentImportedTranscriptPath;
                         isExportModalOpen = true;
                     } else {
                         showDocumentExportModal = true;
                     }
-                }}>
-                <FileOutput class="w-3.5 h-3.5" />
+                }} title={isImportedTranscript ? "Export Transcript" : "Export Document"}>
+                <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
-            <Tooltip>{isImportedTranscript ? "Export Transcript" : "Export Document"}</Tooltip>
         {/if}
         {#if isTable}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => showTableExportModal = true}>
-                <FileOutput class="w-3.5 h-3.5" />
+            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => showTableExportModal = true} title="Export Table">
+                <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
-            <Tooltip>Export Table</Tooltip>
         {/if}
         {#if isImage}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2" on:click={() => dispatch('requestImageExport')}>
+            <Button size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9" on:click={() => dispatch('requestImageExport')} title="Export Image">
                 <ImageDown class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
-            <Tooltip>Export Image</Tooltip>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <Button size="xs" color="alternative" class="ml-2 px-2" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))}>
-                <LayoutTemplate class="w-3.5 h-3.5" />
+            <Button size="sm" color="alternative" class="ml-2 px-2 h-9" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
+                <SquareSplitHorizontal class="w-3.5 h-3.5" />
             </Button>
-            <Tooltip>Split Transcript (Horizontal)</Tooltip>
 
-            <Button size="xs" color="alternative" class="ml-2 px-2" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))}>
-                <LayoutTemplate class="w-3.5 h-3.5 rotate-90" />
+            <Button size="sm" color="alternative" class="ml-2 px-2 h-9" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
+                <SquareSplitVertical class="w-3.5 h-3.5" />
             </Button>
-            <Tooltip>Split Transcript (Vertical)</Tooltip>
         {/if}
 
   
@@ -638,7 +628,7 @@
             class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
             title="Change Transcript View Layout"
         >
-            {@html LAYOUT_ICON_SVG}
+            <LayoutDashboard class="w-4 h-4" />
         </button>
         {/if}
 				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->

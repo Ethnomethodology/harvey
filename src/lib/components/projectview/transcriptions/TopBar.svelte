@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
-	import { Button, Tooltip } from 'flowbite-svelte';
-	import { Mic, FileOutput, Languages, Users, LayoutTemplate } from 'lucide-svelte';
+	import { Button } from 'flowbite-svelte';
+	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical } from 'lucide-svelte';
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
@@ -353,7 +353,7 @@
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center ml-2">
-			<Button size="xs" color="alternative" class="space-x-0.5 px-2 relative" on:click="{openSpeakersModal}">
+			<Button size="sm" color="alternative" class="space-x-0.5 px-2 h-9 relative" on:click="{openSpeakersModal}" title="Configure number of speakers and their names">
 				<Users class="w-3.5 h-3.5" />
 				<span>Speakers</span> <!-- Shorter Text -->
 			  {#if $transcriptStore.speakers.count > 0}
@@ -362,14 +362,14 @@
 				</span>
 			  {/if}
 			</Button>
-            <Tooltip>Configure number of speakers and their names</Tooltip>
 		  </div>
 
 		<!-- Transcribe Button -->
 			<Button
-				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2"
+				size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9"
 				on:click="{handleTranscribeClick}"
 				disabled="{isTranscribeDisabled}"
+                title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 			>
 				{#if $transcriptStore.isTranscribing}
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
@@ -377,16 +377,16 @@
 				</svg>
 				<span>Transcribing...</span>
 				{:else}
-				<Mic class="w-3.5 h-3.5 {$configStatus.transcription_models_downloaded ? '' : 'text-yellow-500'}" />
+				<MessageSquareText class="w-3.5 h-3.5 {$configStatus.transcription_models_downloaded ? '' : 'text-yellow-500'}" />
 				<span>Transcribe</span>
 				{/if}
 			</Button>
-            <Tooltip>{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}</Tooltip>
 
 			<!-- Translate Button -->
 			<Button
-				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2"
+				size="sm" color="alternative" class="ml-2 space-x-0.5 px-2 h-9"
 				on:click={openTranslateModal}
+                title="Translate Transcript"
 			>
 				{#if $transcriptStore.isTranslating}
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
@@ -398,7 +398,6 @@
 				<span>Translate</span>
 				{/if}
 			</Button>
-            <Tooltip>Translate Transcript</Tooltip>
 
 			
 	</div>
@@ -406,11 +405,10 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<Button size="xs" color="alternative" class="space-x-0.5 px-2" on:click="{openExportModal}" disabled="{isExportDisabled}">
-		   <FileOutput class="w-3.5 h-3.5" />
+		<Button size="sm" color="alternative" class="space-x-0.5 px-2 h-9" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
+		   <Share class="w-3.5 h-3.5" />
 		   <span>Export</span>
 		</Button>
-        <Tooltip>Export Transcript</Tooltip>
 
 		<!-- Dual Mode Toggle Button -->
 		<button 
@@ -427,7 +425,7 @@
 			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
 			title="Change Transcript View Layout"
 		>
-			{@html LAYOUT_ICON_SVG}
+			<LayoutDashboard class="w-4 h-4" />
 		</button>
 
 		<!-- Waveform Toggle Button -->
