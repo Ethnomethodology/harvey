@@ -1,0 +1,28 @@
+--- src-tauri/src/welcome/commands.rs
++++ src-tauri/src/welcome/commands.rs
+@@ -723,7 +723,24 @@
+
+
+ // --- Project Commands (Unchanged - Omitted for brevity) ---
+-#[command] pub async fn load_recent_projects() -> Result<Vec<ProjectInfo>, CommandError> { /* ... */ log::info!("---- load_recent_projects: Start ----"); let mut config = read_config()?; let original_project_count = config.projects.len(); let existing_paths: HashSet<String> = config.projects .iter() .filter(|p| PathBuf::from(&p.path).exists()) .map(|p| p.path.clone()) .collect(); let mut updated_config = false; if existing_paths.len() < original_project_count { config.projects.retain(|p| existing_paths.contains(&p.path)); log::info!("load_recent_projects: Removed {} missing projects.", original_project_count - existing_paths.len()); updated_config = true; } log::info!("load_recent_projects: Found {} valid projects.", config.projects.len()); if updated_config { write_config(&config)?; log::info!("load_recent_projects: Updated config.xml after removing missing projects."); } config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); log::info!("---- load_recent_projects: End ----"); Ok(config.projects) }
++#[command]
++pub async fn load_recent_projects() -> Result<Vec<ProjectInfo>, CommandError> {
++    log::info!("---- load_recent_projects: Start ----");
++    let mut config = read_config()?;
++    let original_project_count = config.projects.len();
++    let existing_paths: HashSet<String> = config.projects.iter().filter(|p| PathBuf::from(&p.path).exists()).map(|p| p.path.clone()).collect();
++    let mut updated_config = false;
++    if existing_paths.len() < original_project_count {
++        config.projects.retain(|p| existing_paths.contains(&p.path));
++        log::info!("load_recent_projects: Removed {} missing projects.", original_project_count - existing_paths.len());
++        updated_config = true;
++    }
++    log::info!("load_recent_projects: Found {} valid projects.", config.projects.len());
++    if updated_config { write_config(&config)?; log::info!("load_recent_projects: Updated db after removing missing projects."); }
++    config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
++    log::info!("---- load_recent_projects: End ----");
++    Ok(config.projects)
++}
+ #[command]
+ pub async fn create_project(name: String, parent_location: String, overwrite: Option<bool>) -> Result<String, CommandError> {
+     let should_overwrite = overwrite.unwrap_or(false);

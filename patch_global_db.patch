@@ -1,0 +1,50 @@
+--- src-tauri/src/projectview/db_handler.rs
++++ src-tauri/src/projectview/db_handler.rs
+@@ -421,6 +421,8 @@
+             root_path TEXT NOT NULL UNIQUE,
+             xml_path TEXT NOT NULL UNIQUE,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
++            last_opened_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+         [],
+     )?;
+     info!("[DB] Initialized projects table.");
++
++    // Add last_opened_ts column to older DBs
++    let mut stmt_check_last_opened = conn.prepare("PRAGMA table_info(projects)")?;
++    let last_opened_col_exists = stmt_check_last_opened
++        .query_map([], |row| row.get::<_, String>(1))?
++        .any(|col_name_result| col_name_result.map_or(false, |name| name == "last_opened_ts"));
++
++    if !last_opened_col_exists {
++        info!("[DB] Adding last_opened_ts column to projects table.");
++        conn.execute("ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP", [])?;
++    }
++
++    // Global Settings Table
++    conn.execute(
++        "CREATE TABLE IF NOT EXISTS global_settings (
++            key TEXT PRIMARY KEY,
++            value TEXT NOT NULL
++        )",
++        [],
++    )?;
++    info!("[DB] Initialized global_settings table.");
++
++    // Downloaded Models Table
++    conn.execute(
++        "CREATE TABLE IF NOT EXISTS downloaded_models (
++            name TEXT PRIMARY KEY,
++            family TEXT,
++            language TEXT,
++            size TEXT,
++            description TEXT,
++            download_location TEXT,
++            download_url TEXT
++        )",
++        [],
++    )?;
++    info!("[DB] Initialized downloaded_models table.");
+
+     // Trigger for projects updated_at
