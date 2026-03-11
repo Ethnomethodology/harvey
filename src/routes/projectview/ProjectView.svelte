@@ -925,6 +925,27 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Dialog opened.` }));
     }
 
+    async function handleRequestTranslationTabWithMediaAndDialog(event) {
+        const { mediaPath, transcriptPath } = event.detail;
+        const mediaName = mediaPath.split(/[\\/]/).pop();
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to translate ${mediaName} and opening dialog...` }));
+
+        await handleTabClick('transcriptions');
+        await tick();
+        await handleRequestMediaSelection({ detail: { mediaPath } });
+        await tick();
+
+        if (transcriptPath && transcriptPath !== get(transcriptStore).currentTranscriptPath) {
+            await loadTranscriptFile(transcriptPath);
+            await tick();
+        }
+
+        // Now trigger the translation dialog
+        toggleTranslateModal(true);
+
+        project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to translate ${mediaName}. Dialog opened.` }));
+    }
+
     async function handleRequestTrimInTranscriptionTab(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
@@ -1091,6 +1112,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 			<DataTopBar
 				dataViewRef={dataViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+                on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
@@ -1135,6 +1157,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 						on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
 						on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}
 						on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+						on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
 						on:requestviewchange={handleRequestOpenTab}
 					 />
 				{:else if selectedTab === 'tags'}
