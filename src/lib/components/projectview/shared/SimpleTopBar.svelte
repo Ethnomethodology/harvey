@@ -31,11 +31,11 @@
   data-tauri-drag-region
 >
   <div class="flex items-center space-x-1.5 min-w-0">
+      <ImportSpeedDial on:requestImportAction />
       <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate ml-2" title={displayTitle}>{displayTitle}</span>
   </div>
 
   <div class="flex items-center space-x-2 flex-shrink-0">
-    <ImportSpeedDial on:requestImportAction />
     <div class="flex-shrink-0">
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
             {#if $themePreference === 'light'}

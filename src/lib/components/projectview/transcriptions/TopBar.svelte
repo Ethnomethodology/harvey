@@ -326,7 +326,7 @@
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
-		
+		<ImportSpeedDial on:requestImportAction />
 
 		<!-- Media Selection Dropdown -->
 		<Dropdown
@@ -391,7 +391,6 @@
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
-        <ImportSpeedDial on:requestImportAction />
 		<!-- Export Button -->
 		<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
 		   <Share class="w-3.5 h-3.5" />

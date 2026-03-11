@@ -520,6 +520,7 @@
     <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
     <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
+        <ImportSpeedDial on:requestImportAction />
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate ml-2" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
         <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
@@ -550,7 +551,6 @@
     </div>
 
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
-        <ImportSpeedDial on:requestImportAction />
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
             <Dropdown
