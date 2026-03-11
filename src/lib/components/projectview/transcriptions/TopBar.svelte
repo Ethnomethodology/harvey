@@ -435,11 +435,11 @@
 		<!-- Theme Toggle Button -->
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
             {#if $themePreference === 'light'}
-                <Sun class="w-4 h-4" />
-            {:else if $themePreference === 'dark'}
                 <Moon class="w-4 h-4" />
-            {:else}
+            {:else if $themePreference === 'dark'}
                 <Monitor class="w-4 h-4" />
+            {:else}
+                <Sun class="w-4 h-4" />
             {/if}
 		 </button>
 	</div>
