@@ -76,6 +76,10 @@
     let dataViewRef;
     let tagsViewRef;
 	let selectedTab = 'data';
+    let importMenuVisible = false;
+    let importMenuX = 0;
+    let importMenuY = 0;
+    let closeImportMenuListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
     	let showHeaderConfirmationModal = false;
@@ -363,6 +367,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 			unlistenCloseRequested();
 		}
 		window.removeEventListener('keydown', handleGlobalKeys);
+        if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
 	});
 
 	
@@ -976,9 +981,15 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     }
 
 
-    function handleImportActionRequest(event) {
-        const { type } = event.detail;
-        triggerMediaImport(type);
+	function handleImportMediaInSidebar(event) {
+        event.preventDefault(); event.stopPropagation();
+        if (importMenuVisible) { closeImportMenu(); return; }
+        importMenuX = event.clientX; importMenuY = event.clientY; importMenuVisible = true;
+        setTimeout(() => {
+            if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true });
+            closeImportMenuListener = (e) => { const menu = document.getElementById('import-context-menu-div'); if (menu && !menu.contains(e.target)) closeImportMenu(); };
+            document.addEventListener('click', closeImportMenuListener, { capture: true, once: true });
+        }, 0);
     }
 
     // Helper to switch tabs without toggling the panel if already active
@@ -1066,6 +1077,12 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         else await message(`Import from "${sourceType}" not supported.`, { title: 'Import Error', type: 'error' });
     }
 
+    function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
+        function handleImportMenuAction(event, actionType) {
+        closeImportMenu();
+        triggerMediaImport(actionType);
+    }
+
 	async function handleHeaderConfirmation(event) {
 		const { hasHeaders } = event.detail;
 		const { tablePath } = headerConfirmationData;
@@ -1102,7 +1119,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 				dataViewRef={dataViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
-                on:requestImportAction={handleImportActionRequest}
+                on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
 
@@ -1111,14 +1128,14 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		{:else if selectedTab === 'transcriptions'}
 			<TranscriptionsTopBar
 				bind:this={transcriptionsTopBarRef}
-                on:requestImportAction={handleImportActionRequest}
+                on:requestImport={handleImportMediaInSidebar}
 				on:cancelTranslationRequest={handleCancelTranslationRequest}
 				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
                 on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'tags'}
-			<SimpleTopBar on:requestImportAction={handleImportActionRequest} on:close={handleCloseProject} />
+			<SimpleTopBar on:requestImport={handleImportMediaInSidebar} on:close={handleCloseProject} />
 		{/if}
 	</div>
 
@@ -1225,6 +1242,17 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         }}
     />
 
+
+    {#if importMenuVisible}
+        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
+            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Audio</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Document</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Image</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Table</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Transcript</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Video</button>
+        </div>
+    {/if}
 
     {#if showLoadingOverlay}
         <div class="absolute inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-sm">

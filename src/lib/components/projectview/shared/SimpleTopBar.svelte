@@ -5,7 +5,6 @@
     import { derived } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
     import { Sun, Moon, Monitor } from 'lucide-svelte';
-    import ImportSpeedDial from './ImportSpeedDial.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -31,8 +30,15 @@
   data-tauri-drag-region
 >
   <div class="flex items-center space-x-1.5 min-w-0">
-      <ImportSpeedDial on:requestImportAction />
-      <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate ml-2" title={displayTitle}>{displayTitle}</span>
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+            </button>
+        </div>
+
+      <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
   </div>
 
   <div class="flex items-center space-x-2 flex-shrink-0">
