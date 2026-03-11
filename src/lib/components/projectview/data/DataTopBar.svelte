@@ -25,7 +25,7 @@
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
-    export let tableViewRef = null;
+    export let dataViewRef = null;
 
     // Determine platform-specific modifier key name
     const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -731,6 +731,7 @@
 <TableExportModal
     bind:showModal={showTableExportModal}
     tablePath={isTable ? $project.selectedDocumentPath : null}
+    getExportData={dataViewRef?.getExportData}
     on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showTableExportModal = false}
 />
