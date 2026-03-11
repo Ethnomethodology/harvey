@@ -61,7 +61,7 @@
 	import DataView from '$lib/components/projectview/data/DataView.svelte';
     import TranscriptionsView from '$lib/components/projectview/transcriptions/TranscriptionsView.svelte';
     import TagsView from '$lib/components/projectview/tags/TagsView.svelte';
-    import { Loader } from 'lucide-svelte';
+    import { Loader, Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon } from 'lucide-svelte';
     import DataTopBar from '$lib/components/projectview/data/DataTopBar.svelte';
     import TranscriptionsTopBar from '$lib/components/projectview/transcriptions/TopBar.svelte';
     import SimpleTopBar from '$lib/components/projectview/shared/SimpleTopBar.svelte';
@@ -1244,13 +1244,25 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 
     {#if importMenuVisible}
-        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
-            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Audio</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Document</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Image</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Table</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Transcript</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Video</button>
+        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[140px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
+            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Music class="w-4 h-4" /><span>Audio</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <FileText class="w-4 h-4" /><span>Document</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <ImageIcon class="w-4 h-4" /><span>Image</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Sheet class="w-4 h-4" /><span>Table</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <MessageSquareText class="w-4 h-4" /><span>Transcript</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Film class="w-4 h-4" /><span>Video</span>
+            </button>
         </div>
     {/if}
 
