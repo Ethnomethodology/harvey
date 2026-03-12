@@ -53,36 +53,28 @@
         // console.log("[DataTopBar] Path:", p.selectedDocumentPath, "Type:", p.selectedDocumentType);
         isGroup = !!p.selectedGroupId;
 
-        if (isGroup) {
-            isLexicalDocument = false;
-            isImportedTranscript = false;
-            isImage = false;
-            isTable = false;
-        } else if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
-             isLexicalDocument = true;
-             isImportedTranscript = !!p.currentImportedTranscriptPath;
-             isImage = false;
-             isTable = false;
+        // Reset all export flags
+        isLexicalDocument = false;
+        isImportedTranscript = false;
+        isImage = false;
+        isTable = false;
+
+        if (p.selectedMediaNotePath) {
+            // Audio/Video is open. Export is handled by the media transcript dropdown.
         } else if (p.currentImportedTranscriptPath) {
-             isLexicalDocument = true;
-             isImportedTranscript = true;
-             isImage = false;
-             isTable = false;
-        } else if (p.selectedDocumentType === 'images' || p.selectedDocumentType === 'image' || (p.selectedDocumentPath && /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath))) {
-             isImage = true;
-             isLexicalDocument = false;
-             isImportedTranscript = false;
-             isTable = false;
-        } else if (p.selectedDocumentType === 'tables' || p.selectedDocumentType === 'table' || (p.selectedDocumentPath && /\.(csv|xlsx)$/i.test(p.selectedDocumentPath))) {
-             isTable = true;
-             isImage = false;
-             isLexicalDocument = false;
-             isImportedTranscript = false;
-        } else {
-            isLexicalDocument = false;
-            isImportedTranscript = false;
-            isImage = false;
-            isTable = false;
+            isLexicalDocument = true;
+            isImportedTranscript = true;
+        } else if (p.selectedDocumentPath) {
+            if (p.selectedDocumentType === 'images' || p.selectedDocumentType === 'image' || /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath)) {
+                 isImage = true;
+            } else if (p.selectedDocumentType === 'tables' || p.selectedDocumentType === 'table' || /\.(csv|xlsx)$/i.test(p.selectedDocumentPath)) {
+                 isTable = true;
+            } else if (p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
+                 isLexicalDocument = true;
+                 isImportedTranscript = false;
+            }
+        } else if (p.selectedGroupId) {
+            // Group view, no export button
         }
 
         // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);

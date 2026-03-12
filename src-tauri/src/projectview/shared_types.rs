@@ -604,6 +604,7 @@ pub struct AssociatedFile {
     pub full_path: String,     // Absolute path
     pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "imported_transcript", "other"
     pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
+    pub last_modified: Option<String>, // Last modified date from file metadata
 }
 
 // This struct is primarily for backend use when fetching from DB,

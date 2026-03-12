@@ -13,7 +13,7 @@
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
     import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, SquarePen } from 'lucide-svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell } from 'flowbite-svelte';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -52,9 +52,15 @@
         videos: [],
         others: [] // For any files that don't fit predefined categories
     };
+    let allFiles = []; // Flat list for table view
     let isLoading = false;
     let errorMessage = null;
     let isEditGroupModalOpen = false;
+
+    // Table List View State
+    let searchQuery = '';
+    let sortKey = 'type';
+    let sortDirection = 1;
 
     const CATEGORY_ORDER = [
         { key: 'audios', name: 'Audios', icon: Music },
@@ -65,6 +71,18 @@
         { key: 'videos', name: 'Videos', icon: Film },
         { key: 'others', name: 'Others', icon: File }
     ];
+
+    function getCategoryInfo(fileType) {
+        switch (fileType) {
+            case 'audio': return CATEGORY_ORDER.find(c => c.key === 'audios');
+            case 'video': return CATEGORY_ORDER.find(c => c.key === 'videos');
+            case 'document': return CATEGORY_ORDER.find(c => c.key === 'documents');
+            case 'image': return CATEGORY_ORDER.find(c => c.key === 'images');
+            case 'table': return CATEGORY_ORDER.find(c => c.key === 'tables');
+            case 'imported_transcript': return CATEGORY_ORDER.find(c => c.key === 'imported_transcripts');
+            default: return CATEGORY_ORDER.find(c => c.key === 'others');
+        }
+    }
 
     async function fetchGroupContents() {
         // Use get(project) to access store values if outside reactive context or component markup
@@ -83,6 +101,7 @@
             });
 
             const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+            allFiles = files || [];
             (files || []).forEach(file => { // Ensure files is an array
                 switch (file.file_type) {
                     case 'audio': newCategorizedFiles.audios.push(file); break;
@@ -95,6 +114,7 @@
                 }
             });
             categorizedFiles = newCategorizedFiles;
+            sortFiles();
         } catch (err) {
             console.error("Error fetching group contents:", err);
             errorMessage = typeof err === 'string' ? err : "Failed to load group contents.";
@@ -134,6 +154,43 @@
         }
     });
 
+    function handleSort(key) {
+        if (sortKey === key) {
+            sortDirection *= -1;
+        } else {
+            sortKey = key;
+            sortDirection = 1;
+        }
+        sortFiles();
+    }
+
+    function sortFiles() {
+        allFiles = [...allFiles].sort((a, b) => {
+            let valA, valB;
+            if (sortKey === 'type') {
+                valA = getCategoryInfo(a.file_type)?.name || '';
+                valB = getCategoryInfo(b.file_type)?.name || '';
+                if (valA === valB) {
+                    // secondary sort by name
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                }
+            } else if (sortKey === 'name') {
+                valA = a.name.toLowerCase();
+                valB = b.name.toLowerCase();
+            } else if (sortKey === 'lastModified') {
+                valA = a.last_modified ? new Date(a.last_modified).getTime() : 0;
+                valB = b.last_modified ? new Date(b.last_modified).getTime() : 0;
+            }
+
+            if (valA < valB) return -1 * sortDirection;
+            if (valA > valB) return 1 * sortDirection;
+            return 0;
+        });
+    }
+
+    $: filteredAllFiles = allFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
     // Reactive watch on groupData and specific project properties
     // Using get(projectStore) inside the reactive block might be redundant if $projectStore is used,
     // but ensures access if the block's timing is tricky with store updates.
@@ -142,6 +199,7 @@
         fetchGroupContents();
     } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) { // Added condition to clear if context is lost
         categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+        allFiles = [];
         isLoading = false;
         errorMessage = null;
     }
@@ -509,68 +567,148 @@
 <div class="p-4 h-full flex flex-col bg-white dark:bg-gray-900">
     {#if groupData}
         <!-- Header -->
-        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-700">
-            <div class="flex items-center space-x-2">
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
-                <button
-                    on:click={() => isEditGroupModalOpen = true}
-                    title="Edit group details"
-                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
-                >
-                    <SquarePen class="w-4 h-4" />
-                </button>
+        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-700 flex justify-between items-start">
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
+                    <button
+                        on:click={() => isEditGroupModalOpen = true}
+                        title="Edit group details"
+                        class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
+                    >
+                        <SquarePen class="w-4 h-4" />
+                    </button>
+                </div>
+                {#if groupData.description && groupData.description.trim() !== ''}
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
+                {:else}
+                    <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
+                {/if}
             </div>
-            {#if groupData.description && groupData.description.trim() !== ''}
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
-            {:else}
-                <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
+
+            {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
+                <div class="w-64">
+                    <Search size="sm" class="bg-gray-50 dark:bg-gray-800" placeholder="Search..." bind:value={searchQuery} />
+                </div>
             {/if}
         </div>
 
         <!-- Body -->
-        <div class="flex-grow overflow-y-auto">
+        <div class="flex-grow overflow-y-auto pr-2">
             {#if isLoading}
                 <p class="text-gray-500 dark:text-gray-400 text-center py-8">Loading group contents...</p>
             {:else if errorMessage}
                 <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
             {:else}
-                {#each CATEGORY_ORDER as category}
-                    {@const filesInCategory = categorizedFiles[category.key]}
-                    {#if filesInCategory && filesInCategory.length > 0}
-                    <div class="mb-6">
-                        <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                            {#each filesInCategory as file (file.relative_path)}
-                                <div
-                                    class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
-                                    on:dblclick={() => handleFileDoubleClick(file)}
-                                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
-                                    on:contextmenu={(e) => handleFileContextMenu(e, file)}
-                                    role="button"
-                                    tabindex="0"
-                                    title={file.name}
-                                >
-                                    <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                                        {#if file.file_type === 'image' && file.full_path}
-                                            <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
-                                        {:else}
-                                            <svelte:component this={category.icon} class="w-12 h-12" />
+                {#if $panelStateStore.groupDetailViewMode === 'grid'}
+                    {#each CATEGORY_ORDER as category}
+                        {@const filesInCategory = categorizedFiles[category.key]}
+                        {#if filesInCategory && filesInCategory.length > 0}
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                {#each filesInCategory as file (file.relative_path)}
+                                    <div
+                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        on:dblclick={() => handleFileDoubleClick(file)}
+                                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
+                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
+                                        role="button"
+                                        tabindex="0"
+                                        title={file.name}
+                                    >
+                                        <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                            {#if file.file_type === 'image' && file.full_path}
+                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
+                                            {:else}
+                                                <svelte:component this={category.icon} class="w-12 h-12" />
+                                            {/if}
+                                        </div>
+                                        <p class="text-sm text-center text-gray-700 dark:text-gray-400 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
+                                        <button
+                                            on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300/80 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-400 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            title="More options for {file.name}"
+                                        >
+                                            <MoreHorizontal class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                        {/if}
+                    {/each}
+                {:else}
+                    <!-- List View -->
+                    {#if filteredAllFiles.length > 0}
+                        <Table hoverable={true}>
+                            <TableHead>
+                                <TableHeadCell on:click={() => handleSort('type')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Type</span>
+                                        {#if sortKey === 'type'}
+                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
                                         {/if}
                                     </div>
-                                    <p class="text-sm text-center text-gray-700 dark:text-gray-400 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
-                                    <button
-                                        on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                        class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300/80 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-400 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                                        title="More options for {file.name}"
+                                </TableHeadCell>
+                                <TableHeadCell on:click={() => handleSort('name')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                    <div class="flex items-center space-x-1">
+                                        <span>File name</span>
+                                        {#if sortKey === 'name'}
+                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
+                                        {/if}
+                                    </div>
+                                </TableHeadCell>
+                                <TableHeadCell on:click={() => handleSort('lastModified')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Last Modified</span>
+                                        {#if sortKey === 'lastModified'}
+                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
+                                        {/if}
+                                    </div>
+                                </TableHeadCell>
+                                <TableHeadCell class="w-10"><span class="sr-only">Actions</span></TableHeadCell>
+                            </TableHead>
+                            <TableBody>
+                                {#each filteredAllFiles as file (file.relative_path)}
+                                    <TableBodyRow
+                                        class="cursor-pointer group"
+                                        on:dblclick={() => handleFileDoubleClick(file)}
+                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                     >
-                                        <MoreHorizontal class="w-4 h-4" />
-                                    </button>
-                                </div>
-                            {/each}
-                        </div>
-                    </div>
+                                        <TableBodyCell class="w-48 whitespace-nowrap">
+                                            <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
+                                                <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
+                                                <span>{getCategoryInfo(file.file_type)?.name || 'Unknown'}</span>
+                                            </div>
+                                        </TableBodyCell>
+                                        <TableBodyCell class="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                                            {file.name}
+                                        </TableBodyCell>
+                                        <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                            {#if file.last_modified}
+                                                {new Date(file.last_modified).toLocaleString()}
+                                            {:else}
+                                                Unknown
+                                            {/if}
+                                        </TableBodyCell>
+                                        <TableBodyCell class="text-right">
+                                            <button
+                                                on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                                class="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-700"
+                                                title="More options"
+                                            >
+                                                <MoreHorizontal class="w-4 h-4" />
+                                            </button>
+                                        </TableBodyCell>
+                                    </TableBodyRow>
+                                {/each}
+                            </TableBody>
+                        </Table>
+                    {:else}
+                        <p class="text-gray-500 dark:text-gray-400 text-center py-8">No files match your search.</p>
                     {/if}
-                {/each}
+                {/if}
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
                 {#if totalFiles === 0 && !isLoading}
