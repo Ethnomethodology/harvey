@@ -3530,4 +3530,21 @@
             border: 2px solid white;
             box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
+
+        /* Tabulator Menu / Context Menu Dark Mode Styling */
+        :global(html.dark .tabulator-menu) {
+            background-color: #1f2937 !important; /* gray-800 */
+            border: 1px solid #374151 !important; /* gray-700 */
+            color: #f3f4f6 !important; /* gray-100 */
+        }
+        :global(html.dark .tabulator-menu .tabulator-menu-item) {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+        :global(html.dark .tabulator-menu .tabulator-menu-item:hover) {
+            background-color: #374151 !important; /* gray-700 */
+        }
+        :global(html.dark .tabulator-menu .tabulator-menu-separator) {
+            border-top: 1px solid #374151 !important; /* gray-700 */
+        }
 </style>
