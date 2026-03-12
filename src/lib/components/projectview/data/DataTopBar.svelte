@@ -530,6 +530,9 @@
         </div>
 
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
+        {#if $activeMediaFile || $project.activeDocumentEditorRef || isLexicalDocument}
+            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+        {/if}
         {#if $activeMediaFile}
         <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
@@ -599,6 +602,7 @@
             </Button>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
+            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
             <Button size="xs" color="alternative" class="ml-2 px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
                 <SquareSplitHorizontal class="w-3.5 h-3.5" />
             </Button>

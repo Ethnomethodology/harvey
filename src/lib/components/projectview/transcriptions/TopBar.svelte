@@ -403,6 +403,8 @@
 		   <span>Export</span>
 		</Button>
 
+		<div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+
 		<!-- Dual Mode Toggle Button -->
 		<button 
 			on:click="{handleDualModeToggle}" 
