@@ -27,7 +27,7 @@
     import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { get } from 'svelte/store';
-    import { MoreVertical, SquarePen, Eye, MessageCircle, TagOff, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
+    import { MoreVertical, SquarePen, Eye, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
 
     let unsubscribePanelState;
     let unsubscribeRefresher;
@@ -325,7 +325,7 @@
 
                 const commentsBtn = document.createElement("button");
                 commentsBtn.title = "Comments";
-                commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600";
+                commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4";
                 mount(MessageCircle, { target: commentsBtn, props: { size: 16 } });
                 if (commentCount > 0) {
                     const pill = document.createElement("span");
@@ -336,8 +336,12 @@
 
                 const untagBtn = document.createElement("button");
                 untagBtn.title = "Untag";
-                untagBtn.style.color = "red";
-                mount(TagOff, { target: untagBtn, props: { size: 16 } });
+                untagBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
+                      <path d="M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
+                      <path d="M15.5 0.5 L 0.5 15.5"></path>
+                    </svg>
+                `;
 
                 container.appendChild(inspectBtn);
                 container.appendChild(commentsBtn);
