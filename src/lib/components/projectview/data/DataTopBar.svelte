@@ -531,27 +531,27 @@
 
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile || $project.activeDocumentEditorRef || isLexicalDocument}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
         {/if}
         {#if $activeMediaFile}
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
+        <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
             <span>Transcribe</span>
         </Button>
 
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
+        <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
             <Languages class="w-3.5 h-3.5" />
             <span>Translate</span>
         </Button>
         {/if}
         {#if $project.activeDocumentEditorRef}
-        <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
+        <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
             <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
             <span>Live Transcribe</span>
         </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => toggleTranslateModal(true)} title="Translate Document">
+            <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => toggleTranslateModal(true)} title="Translate Document">
                 <Languages class="w-3.5 h-3.5" />
                 <span>Translate</span>
             </Button>
@@ -571,13 +571,13 @@
                 on:change={(e) => switchTranscriptInDataTab(e.detail)}
                 placeholder="Select Transcript"
             />
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
+            <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => {
+            <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => {
                     if (isImportedTranscript) {
                         pathForExportModal = $project.currentImportedTranscriptPath;
                         isExportModalOpen = true;
@@ -590,24 +590,24 @@
             </Button>
         {/if}
         {#if isTable}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
+            <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isImage}
-            <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
+            <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
-            <Button size="xs" color="alternative" class="ml-2 px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
+            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
+            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
                 <SquareSplitHorizontal class="w-3.5 h-3.5" />
             </Button>
 
-            <Button size="xs" color="alternative" class="ml-2 px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
+            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
                 <SquareSplitVertical class="w-3.5 h-3.5" />
             </Button>
         {/if}
@@ -621,9 +621,9 @@
         >
             {@html themeIconHtml}
          </button> -->
-    <div class="flex-shrink-0 flex items-center">
+    <div class="flex-shrink-0 flex items-center space-x-2">
         {#if isGroup}
-            <div class="flex items-center space-x-1 mr-2 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
                 <button
                     on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
                     class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
@@ -643,13 +643,13 @@
         {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors mr-2"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
             title="Change Transcript View Layout"
         >
             <LayoutDashboard class="w-4 h-4" />
         </button>
         {/if}
-        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Moon class="w-4 h-4" />
