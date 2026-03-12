@@ -24,6 +24,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-unmaximize",
     "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
     "core:window:allow-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
