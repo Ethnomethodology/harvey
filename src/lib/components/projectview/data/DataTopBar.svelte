@@ -51,7 +51,14 @@
     $: {
         const p = $project;
         // console.log("[DataTopBar] Path:", p.selectedDocumentPath, "Type:", p.selectedDocumentType);
-        if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
+        isGroup = !!p.selectedGroupId;
+
+        if (isGroup) {
+            isLexicalDocument = false;
+            isImportedTranscript = false;
+            isImage = false;
+            isTable = false;
+        } else if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
              isLexicalDocument = true;
              isImportedTranscript = !!p.currentImportedTranscriptPath;
              isImage = false;
@@ -78,7 +85,6 @@
             isTable = false;
         }
 
-        isGroup = !!p.selectedGroupId;
         // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);
     }
 
@@ -596,7 +602,7 @@
         {/if}
         {#if isImage}
             <Button size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
-                <ImageDown class="w-3.5 h-3.5" />
+                <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
         {/if}
