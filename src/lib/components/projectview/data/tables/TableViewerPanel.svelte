@@ -523,21 +523,49 @@
         project.update(p => ({ ...p, requestedHighlightId: null }));
 
         console.log(`[TableViewerPanel] Scrolling to highlight: ${id}`);
+
+        let rowIndex = null;
+        let fieldName = null;
+
         if (id.startsWith('row-')) {
-            const rowIndex = parseInt(id.substring(4), 10);
-            
+            rowIndex = parseInt(id.substring(4), 10);
+        } else if (id.startsWith('cell-')) {
+            // ID format: cell-{rowIndex}-{fieldName}
+            const parts = id.split('-');
+            if (parts.length >= 3) {
+                rowIndex = parseInt(parts[1], 10);
+                fieldName = parts.slice(2).join('-');
+            }
+        }
+
+        if (rowIndex !== null && !isNaN(rowIndex)) {
             // Small delay to ensure Tabulator has finished internal layout
             setTimeout(() => {
                 const row = tabulatorInstance.getRow(rowIndex);
                 if (row) {
                     row.scrollTo().then(() => {
-                        const el = row.getElement();
-                        el.style.transition = 'outline 0.3s ease';
-                        el.style.outline = '4px solid #3b82f6';
-                        el.style.outlineOffset = '-4px';
-                        setTimeout(() => {
-                            el.style.outline = 'none';
-                        }, 2000);
+                        let elToHighlight = null;
+
+                        if (fieldName) {
+                            const cell = row.getCell(fieldName);
+                            if (cell) {
+                                elToHighlight = cell.getElement();
+                            }
+                        }
+
+                        // Fallback to highlighting the entire row if cell isn't found or it's a row highlight
+                        if (!elToHighlight) {
+                            elToHighlight = row.getElement();
+                        }
+
+                        if (elToHighlight) {
+                            elToHighlight.style.transition = 'outline 0.3s ease';
+                            elToHighlight.style.outline = '4px solid #3b82f6';
+                            elToHighlight.style.outlineOffset = '-4px';
+                            setTimeout(() => {
+                                elToHighlight.style.outline = 'none';
+                            }, 2000);
+                        }
                     }).catch(err => console.error(`[TableViewerPanel] Scroll failed for entry ${rowIndex}:`, err));
                 } else {
                     console.warn(`[TableViewerPanel] Entry ${rowIndex} not found for highlight ${id}`);

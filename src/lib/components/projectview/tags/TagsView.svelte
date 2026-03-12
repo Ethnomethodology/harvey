@@ -146,8 +146,6 @@
         }
     }
 
-    import { mount, unmount } from 'svelte';
-
     // --- Icons ---
     function getIconComponentForFileType(fileType) {
         switch (fileType) {
@@ -264,7 +262,7 @@
                 iconContainer.style.color = iconTextColor;
 
                 const iconSpan = document.createElement("span");
-                mount(IconComponent, { target: iconSpan, props: { size: 16 } });
+                new IconComponent({ target: iconSpan, props: { size: 16 } });
                 iconContainer.appendChild(iconSpan);
 
                 const textSpan = document.createElement("span");
@@ -321,12 +319,12 @@
 
                 const inspectBtn = document.createElement("button");
                 inspectBtn.title = "Inspect";
-                mount(Eye, { target: inspectBtn, props: { size: 16 } });
+                new Eye({ target: inspectBtn, props: { size: 16 } });
 
                 const commentsBtn = document.createElement("button");
                 commentsBtn.title = "Comments";
                 commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600";
-                mount(MessageCircle, { target: commentsBtn, props: { size: 16 } });
+                new MessageCircle({ target: commentsBtn, props: { size: 16 } });
                 if (commentCount > 0) {
                     const pill = document.createElement("span");
                     pill.className = "absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center";

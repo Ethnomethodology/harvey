@@ -3127,6 +3127,14 @@ $: if (editor && activeLayout) {
     @apply bg-gray-300 dark:bg-gray-500;
   }
 
+  /* Make text black if it has a background color in dark mode (improves contrast) */
+  :global(html.dark .lexical-content [style*="background-color"]) {
+      color: black;
+  }
+  :global(html.dark .lexical-content [style*="background-color: transparent"]) {
+      color: white; /* Revert if it's explicitly transparent */
+  }
+
   /* Ensure link color applies to text - targeting anchor tags directly inside editor */
   :global(.lexical-content a), :global(.link-text) {
       color: #2563eb !important; /* blue-600 */

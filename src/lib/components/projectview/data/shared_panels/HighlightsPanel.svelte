@@ -271,7 +271,7 @@
                                         {#if highlight.pageIndex !== undefined && highlight.pageIndex !== null}
                                             <p class="text-[10px] uppercase tracking-wider font-bold text-blue-600 dark:text-blue-400 mb-1">Page {highlight.pageIndex + 1}</p>
                                         {/if}
-                                        <p class="font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
+                                        <p class="font-medium text-gray-900 dark:text-gray-100 leading-relaxed break-all">
                                             {highlight.text}
                                         </p>
                                     {/if}
