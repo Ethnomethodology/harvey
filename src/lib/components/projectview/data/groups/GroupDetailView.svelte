@@ -11,9 +11,9 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
-    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen } from 'lucide-svelte';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from 'lucide-svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search } from 'flowbite-svelte';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -61,6 +61,17 @@
     let searchQuery = '';
     let sortKey = 'type';
     let sortDirection = 1;
+
+    let columns = [
+        { key: 'type', label: 'Type', visible: true, disabled: true },
+        { key: 'name', label: 'File Name', visible: true, disabled: true },
+        { key: 'title', label: 'Title', visible: false, disabled: false },
+        { key: 'description', label: 'Description', visible: false, disabled: false },
+        { key: 'createdAt', label: 'Created At', visible: true, disabled: false },
+        { key: 'lastModified', label: 'Last Modified', visible: true, disabled: false }
+    ];
+
+    $: visibleColumnsCount = columns.filter(c => c.visible).length;
 
     const CATEGORY_ORDER = [
         { key: 'audios', name: 'Audios', singularName: 'Audio', icon: Music },
@@ -184,6 +195,12 @@
             } else if (sortKey === 'lastModified') {
                 valA = a.last_modified ? new Date(a.last_modified).getTime() : 0;
                 valB = b.last_modified ? new Date(b.last_modified).getTime() : 0;
+            } else if (sortKey === 'title') {
+                valA = (a.title || '').toLowerCase();
+                valB = (b.title || '').toLowerCase();
+            } else if (sortKey === 'description') {
+                valA = (a.description || '').toLowerCase();
+                valB = (b.description || '').toLowerCase();
             }
 
             if (valA < valB) return -1 * sortDirection;
@@ -586,31 +603,45 @@
 <div class="p-4 h-full flex flex-col bg-white dark:bg-gray-900">
     {#if groupData}
         <!-- Header -->
-        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-700 flex justify-between items-start">
-            <div>
-                <div class="flex items-center space-x-2">
-                    <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
-                    <button
-                        on:click={() => isEditGroupModalOpen = true}
-                        title="Edit group details"
-                        class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
-                    >
-                        <SquarePen class="w-4 h-4" />
-                    </button>
-                </div>
-                {#if groupData.description && groupData.description.trim() !== ''}
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
-                {:else}
-                    <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
-                {/if}
+        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-700">
+            <div class="flex items-center space-x-2">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
+                <button
+                    on:click={() => isEditGroupModalOpen = true}
+                    title="Edit group details"
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
+                >
+                    <SquarePen class="w-4 h-4" />
+                </button>
             </div>
+            {#if groupData.description && groupData.description.trim() !== ''}
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
+            {:else}
+                <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
+            {/if}
+        </div>
 
-            {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
+        <!-- Toolbar (Below Header Rule) -->
+        {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
+            <div class="mb-4 flex justify-between items-center">
+                <div class="relative inline-block text-left">
+                    <Button color="alternative" size="sm" class="flex items-center space-x-1">
+                        <span>{visibleColumnsCount} Columns</span>
+                        <ChevronDown class="w-4 h-4" />
+                    </Button>
+                    <Dropdown class="w-48 p-3 space-y-2">
+                        {#each columns as col}
+                            <li>
+                                <Checkbox bind:checked={col.visible} disabled={col.disabled} class="cursor-pointer">{col.label}</Checkbox>
+                            </li>
+                        {/each}
+                    </Dropdown>
+                </div>
                 <div class="w-64">
                     <Search size="sm" class="bg-gray-50 dark:bg-gray-800" placeholder="Search..." bind:value={searchQuery} />
                 </div>
-            {/if}
-        </div>
+            </div>
+        {/if}
 
         <!-- Body -->
         <div class="flex-grow overflow-y-auto pr-2">
@@ -662,38 +693,18 @@
                     {#if filteredAllFiles.length > 0}
                         <Table hoverable={true}>
                             <TableHead>
-                                <TableHeadCell on:click={() => handleSort('type')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
-                                    <div class="flex items-center space-x-1">
-                                        <span>Type</span>
-                                        {#if sortKey === 'type'}
-                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
-                                        {/if}
-                                    </div>
-                                </TableHeadCell>
-                                <TableHeadCell on:click={() => handleSort('name')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
-                                    <div class="flex items-center space-x-1">
-                                        <span>File name</span>
-                                        {#if sortKey === 'name'}
-                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
-                                        {/if}
-                                    </div>
-                                </TableHeadCell>
-                                <TableHeadCell on:click={() => handleSort('createdAt')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
-                                    <div class="flex items-center space-x-1">
-                                        <span>Created At</span>
-                                        {#if sortKey === 'createdAt'}
-                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
-                                        {/if}
-                                    </div>
-                                </TableHeadCell>
-                                <TableHeadCell on:click={() => handleSort('lastModified')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
-                                    <div class="flex items-center space-x-1">
-                                        <span>Last Modified</span>
-                                        {#if sortKey === 'lastModified'}
-                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
-                                        {/if}
-                                    </div>
-                                </TableHeadCell>
+                                {#each columns as col}
+                                    {#if col.visible}
+                                        <TableHeadCell on:click={() => handleSort(col.key)} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                            <div class="flex items-center space-x-1">
+                                                <span>{col.label}</span>
+                                                {#if sortKey === col.key}
+                                                    <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
+                                                {/if}
+                                            </div>
+                                        </TableHeadCell>
+                                    {/if}
+                                {/each}
                                 <TableHeadCell class="w-10"><span class="sr-only">Actions</span></TableHeadCell>
                             </TableHead>
                             <TableBody>
@@ -703,29 +714,47 @@
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                     >
-                                        <TableBodyCell class="w-48 whitespace-nowrap">
-                                            <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
-                                                <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
-                                                <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
-                                            </div>
-                                        </TableBodyCell>
-                                        <TableBodyCell class="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                                            {file.name}
-                                        </TableBodyCell>
-                                        <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                            {#if file.created_at}
-                                                {new Date(file.created_at).toLocaleString()}
-                                            {:else}
-                                                Unknown
-                                            {/if}
-                                        </TableBodyCell>
-                                        <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                            {#if file.last_modified}
-                                                {new Date(file.last_modified).toLocaleString()}
-                                            {:else}
-                                                Unknown
-                                            {/if}
-                                        </TableBodyCell>
+                                        {#if columns.find(c => c.key === 'type').visible}
+                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file.file_type)?.singularName || 'Unknown'}>
+                                                <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
+                                                    <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
+                                                    <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
+                                                </div>
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'name').visible}
+                                            <TableBodyCell class="whitespace-nowrap font-medium text-gray-900 dark:text-white" title={file.name}>
+                                                {file.name}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'title').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400 truncate max-w-[150px]" title={file.title || ''}>
+                                                {file.title || ''}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'description').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400 truncate max-w-[200px]" title={file.description || ''}>
+                                                {file.description || ''}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'createdAt').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400" title={file.created_at ? new Date(file.created_at).toLocaleString() : 'Unknown'}>
+                                                {#if file.created_at}
+                                                    {new Date(file.created_at).toLocaleString()}
+                                                {:else}
+                                                    Unknown
+                                                {/if}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'lastModified').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400" title={file.last_modified ? new Date(file.last_modified).toLocaleString() : 'Unknown'}>
+                                                {#if file.last_modified}
+                                                    {new Date(file.last_modified).toLocaleString()}
+                                                {:else}
+                                                    Unknown
+                                                {/if}
+                                            </TableBodyCell>
+                                        {/if}
                                         <TableBodyCell class="text-right">
                                             <button
                                                 on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}

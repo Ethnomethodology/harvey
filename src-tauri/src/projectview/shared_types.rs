@@ -606,6 +606,8 @@ pub struct AssociatedFile {
     pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
     pub last_modified: Option<String>, // Last modified date from file metadata
     pub created_at: Option<String>,    // Created at date from file metadata
+    pub title: Option<String>,         // Title from file metadata
+    pub description: Option<String>,   // Description from file metadata
 }
 
 // This struct is primarily for backend use when fetching from DB,
