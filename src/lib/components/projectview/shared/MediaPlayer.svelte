@@ -17,7 +17,7 @@
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
-    import { Volume2, Volume1, VolumeX, Minimize2, Maximize2, Expand, Shrink, Play, Pause, RotateCcw, RotateCw, Camera, ClosedCaption, Scissors, MoreVertical, Maximize, FileOutput } from 'lucide-svelte';
+    import { Volume2, Volume1, VolumeX, Minimize2, Maximize2, Expand, Shrink, Play, Pause, RotateCcw, RotateCw, Camera, ClosedCaption, Scissors, MoreVertical, Maximize, FileOutput, Subtitles } from 'lucide-svelte';
 	let waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
 	let currentWaveformLoadId = 0;
 	let waveformLoadData = new Map();
