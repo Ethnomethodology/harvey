@@ -12,6 +12,8 @@
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
     import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, SquarePen } from 'lucide-svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }

@@ -17,7 +17,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
-    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search } from 'lucide-svelte';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from 'lucide-svelte';
 
 
     const dispatch = createEventDispatcher();
@@ -1046,9 +1046,7 @@
                     <h3 class="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5 group hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
                         <div class="flex items-center">
                             <span class="mr-1.5 flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
-                                    <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-                                </svg>
+                                <GalleryVerticalEnd class="w-3.5 h-3.5" />
                             </span>
                             Groups
                         </div>

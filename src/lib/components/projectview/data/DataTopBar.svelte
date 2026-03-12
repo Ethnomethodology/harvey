@@ -1,8 +1,9 @@
 <!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
     import { Button, Select } from 'flowbite-svelte';
-    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor } from 'lucide-svelte';
+    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List } from 'lucide-svelte';
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
     import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
@@ -44,6 +45,7 @@
     let isImportedTranscript = false;
     let isImage = false;
     let isTable = false;
+    let isGroup = false;
     let pathForExportModal = '';
 
     $: {
@@ -75,6 +77,8 @@
             isImage = false;
             isTable = false;
         }
+
+        isGroup = !!p.selectedGroupId;
         // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);
     }
 
@@ -615,7 +619,26 @@
         >
             {@html themeIconHtml}
          </button> -->
-    <div class="flex-shrink-0">
+    <div class="flex-shrink-0 flex items-center">
+        {#if isGroup}
+            <div class="flex items-center space-x-1 mr-2 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+                <button
+                    on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
+                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+                    title="Grid View"
+                >
+                    <LayoutGrid class="w-4 h-4" />
+                </button>
+                <button
+                    on:click="{() => panelStateStore.setGroupDetailViewMode('list')}"
+                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+                    title="List View"
+                >
+                    <List class="w-4 h-4" />
+                </button>
+            </div>
+            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+        {/if}
         {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile}
         <button
             on:click="{() => openLayoutSettingsModal()}"
