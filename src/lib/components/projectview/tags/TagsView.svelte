@@ -829,7 +829,9 @@
 :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
     white-space: normal !important;
     @apply text-gray-900 dark:text-gray-200 font-semibold;
-    color: inherit;
+}
+:global(html.dark .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
+    color: #e5e7eb !important;
 }
 
 :global(.tabulator-cell) {
