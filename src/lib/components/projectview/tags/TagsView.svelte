@@ -817,21 +817,28 @@
 <style lang="postcss">
 :global(.tabulator .tabulator-header .tabulator-col) {
     padding-left: 0px !important;
-    @apply bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 border-gray-300 dark:border-gray-700;
-    color: inherit;
+    background-color: #f3f4f6 !important; /* bg-gray-100 */
+    @apply border-gray-300 dark:border-gray-700;
+}
+:global(html.dark .tabulator .tabulator-header .tabulator-col) {
+    background-color: #1f2937 !important; /* bg-gray-800 */
 }
 
 :global(.tabulator .tabulator-header) {
-    @apply bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700;
-    color: inherit;
+    background-color: #f3f4f6 !important; /* bg-gray-100 */
+    @apply border-b border-gray-300 dark:border-gray-700;
+}
+:global(html.dark .tabulator .tabulator-header) {
+    background-color: #1f2937 !important; /* bg-gray-800 */
 }
 
 :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
     white-space: normal !important;
-    @apply text-gray-900 dark:text-gray-200 font-semibold;
+    color: #111827 !important; /* text-gray-900 */
+    @apply font-semibold;
 }
 :global(html.dark .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
-    color: #e5e7eb !important;
+    color: #e5e7eb !important; /* text-gray-200 */
 }
 
 :global(.tabulator-cell) {
