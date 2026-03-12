@@ -650,7 +650,7 @@
                 </button>
             </div>
             {#if groupData.description && groupData.description.trim() !== ''}
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-h-20 overflow-y-auto pr-2">{groupData.description}</p>
             {:else}
                 <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
             {/if}

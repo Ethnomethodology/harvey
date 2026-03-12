@@ -635,18 +635,18 @@
                     <List class="w-4 h-4" />
                 </button>
             </div>
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
         {/if}
         {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors mr-2"
             title="Change Transcript View Layout"
         >
             <LayoutDashboard class="w-4 h-4" />
         </button>
         {/if}
-				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
+        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Moon class="w-4 h-4" />
             {:else if $themePreference === 'dark'}
