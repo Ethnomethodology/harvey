@@ -62,7 +62,8 @@
     let sortKey = 'type';
     let sortDirection = 1;
 
-    let columns = [
+    const LS_COLUMNS_KEY = 'harveyGroupListColumns';
+    const defaultColumns = [
         { key: 'type', label: 'Type', visible: true, disabled: true },
         { key: 'name', label: 'File Name', visible: true, disabled: true },
         { key: 'title', label: 'Title', visible: false, disabled: false },
@@ -70,6 +71,40 @@
         { key: 'createdAt', label: 'Created At', visible: true, disabled: false },
         { key: 'lastModified', label: 'Last Modified', visible: true, disabled: false }
     ];
+
+    let columns = [...defaultColumns];
+
+    if (typeof window !== 'undefined') {
+        try {
+            const savedColumns = localStorage.getItem(LS_COLUMNS_KEY);
+            if (savedColumns) {
+                const parsed = JSON.parse(savedColumns);
+                // Merge saved visibility state into the default configuration to ensure all columns exist and correct labels/disabled states are preserved.
+                columns = defaultColumns.map(defCol => {
+                    const savedCol = parsed.find(c => c.key === defCol.key);
+                    if (savedCol && !defCol.disabled) {
+                        return { ...defCol, visible: savedCol.visible };
+                    }
+                    return defCol;
+                });
+            }
+        } catch (e) {
+            console.warn("[GroupDetailView] Failed to load column preferences:", e);
+        }
+    }
+
+    // Reactively save to localStorage when columns change
+    $: {
+        if (typeof window !== 'undefined') {
+            try {
+                // Save only the key and visibility state to reduce storage payload
+                const stateToSave = columns.map(c => ({ key: c.key, visible: c.visible }));
+                localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(stateToSave));
+            } catch (e) {
+                console.warn("[GroupDetailView] Failed to save column preferences:", e);
+            }
+        }
+    }
 
     $: visibleColumnsCount = columns.filter(c => c.visible).length;
 
