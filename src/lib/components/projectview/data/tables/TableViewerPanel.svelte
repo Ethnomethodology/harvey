@@ -522,6 +522,12 @@
         // Clear immediately to prevent infinite loops
         project.update(p => ({ ...p, requestedHighlightId: null }));
 
+        // Clear any existing range/cell selections before focusing new ones
+        const ranges = tabulatorInstance.getRanges();
+        if (ranges) {
+            ranges.forEach(range => range.remove());
+        }
+
         console.log(`[TableViewerPanel] Scrolling to highlight: ${id}`);
 
         let rowIndex = null;
@@ -562,6 +568,13 @@
                             elToHighlight.style.transition = 'outline 0.3s ease';
                             elToHighlight.style.outline = '4px solid #3b82f6';
                             elToHighlight.style.outlineOffset = '-4px';
+
+                            // Let's also actually add the Tabulator range so it is officially "selected"
+                            if (fieldName) {
+                                const cell = row.getCell(fieldName);
+                                if (cell) tabulatorInstance.addRange(cell, cell);
+                            }
+
                             setTimeout(() => {
                                 elToHighlight.style.outline = 'none';
                             }, 2000);

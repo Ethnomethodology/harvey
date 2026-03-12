@@ -9,7 +9,8 @@
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
-    import { Tags, MessageCircle, ExternalLink } from 'lucide-svelte';
+    import { Tags, MessageCircle, MoreVertical, Trash2 } from 'lucide-svelte';
+    import { Dropdown, DropdownItem } from 'flowbite-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -243,6 +244,15 @@
             requestedHighlightId: highlight.id
         }));
     }
+
+    async function handleDeleteHighlight(highlightId) {
+        if (!highlightId) return;
+
+        // Remove from local activeHighlights array and project store
+        const newHighlights = activeHighlights.filter(h => h.id !== highlightId);
+
+        await handleHighlightsUpdate(newHighlights);
+    }
 </script>
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
@@ -276,8 +286,20 @@
                                         </p>
                                     {/if}
                                 </div>
-                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-blue-500 dark:text-blue-400 flex items-center justify-center">
-                                    <ExternalLink class="w-3.5 h-3.5" />
+                                <div class="flex-shrink-0">
+                                    <button
+                                        id="dropdown-menu-{highlight.id}"
+                                        class="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                        on:click|stopPropagation
+                                    >
+                                        <MoreVertical class="w-4 h-4" />
+                                    </button>
+                                    <Dropdown placement="bottom-end" triggeredBy="#dropdown-menu-{highlight.id}">
+                                        <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" on:click={() => handleDeleteHighlight(highlight.id)}>
+                                            <Trash2 class="w-3.5 h-3.5" />
+                                            <span>Delete Highlight</span>
+                                        </DropdownItem>
+                                    </Dropdown>
                                 </div>
                             </div>
                         </div>

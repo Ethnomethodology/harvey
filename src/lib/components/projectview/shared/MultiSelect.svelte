@@ -15,10 +15,13 @@
 	const dispatch = createEventDispatcher();
 
 	$: {
+        const _trigger1 = allOptions;
+        const _trigger2 = assignedOptions;
 		updateAvailableOptions();
 	}
 
 	function updateAvailableOptions() {
+        if (!allOptions || !assignedOptions) return;
 		const assignedSet = new Set(assignedOptions);
 		availableOptions = allOptions.filter(o => !assignedSet.has(o));
 	}
