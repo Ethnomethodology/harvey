@@ -27,7 +27,7 @@
     import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { get } from 'svelte/store';
-    import { MoreVertical, SquarePen, Eye, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
+    import { MoreVertical, SquarePen, View, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
 
     let unsubscribePanelState;
     let unsubscribeRefresher;
@@ -321,7 +321,7 @@
 
                 const inspectBtn = document.createElement("button");
                 inspectBtn.title = "Inspect";
-                mount(Eye, { target: inspectBtn, props: { size: 16 } });
+                mount(View, { target: inspectBtn, props: { size: 16 } });
 
                 const commentsBtn = document.createElement("button");
                 commentsBtn.title = "Comments";

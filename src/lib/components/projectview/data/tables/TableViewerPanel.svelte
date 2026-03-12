@@ -3037,12 +3037,33 @@
 
         document.addEventListener('click', handleTableClick);
 
+        // Workaround to make Tabulator 6 submenus expand on hover like standard desktop applications
+        const handleMenuHover = (e) => {
+            if (e.target && e.target.classList && e.target.classList.contains('tabulator-menu-item-submenu')) {
+                // To avoid rapid click loops, we check if the submenu is already open
+                // Tabulator attaches a `.tabulator-menu` popup to the body when clicked
+                // It is difficult to query directly, so we just trigger a click if we haven't recently
+                if (!e.target.dataset.hoverOpened) {
+                    e.target.dataset.hoverOpened = "true";
+                    e.target.click();
+
+                    // Reset the hover flag when mouse leaves the menu item
+                    e.target.addEventListener('mouseleave', function resetHover() {
+                        e.target.dataset.hoverOpened = "";
+                        e.target.removeEventListener('mouseleave', resetHover);
+                    }, { once: true });
+                }
+            }
+        };
+        document.addEventListener('mouseover', handleMenuHover, true);
+
 		return () => {
 			tabulatorInstance?.destroy();
             tableContainer?.removeEventListener('keydown', handleKeyDown);
             tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
             tableContainer?.removeEventListener('keydown', handleEditorArrowKeys, true);
             document.removeEventListener('click', handleTableClick);
+            document.removeEventListener('mouseover', handleMenuHover, true);
 		}
     });
 
