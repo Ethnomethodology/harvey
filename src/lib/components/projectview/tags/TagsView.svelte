@@ -818,15 +818,18 @@
 :global(.tabulator .tabulator-header .tabulator-col) {
     padding-left: 0px !important;
     @apply bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 border-gray-300 dark:border-gray-700;
+    color: inherit;
 }
 
 :global(.tabulator .tabulator-header) {
     @apply bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700;
+    color: inherit;
 }
 
 :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
     white-space: normal !important;
     @apply text-gray-900 dark:text-gray-200 font-semibold;
+    color: inherit;
 }
 
 :global(.tabulator-cell) {
