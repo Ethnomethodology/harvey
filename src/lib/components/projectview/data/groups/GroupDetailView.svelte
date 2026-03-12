@@ -206,6 +206,8 @@
     function closeContextMenu() {
       contextMenuVisible = false;
       contextMenuItem = null;
+      showAddToGroupSubMenu = false; // also close submenu
+      itemForAddToGroup = null;
       if (closeContextMenuListener) {
         document.removeEventListener('click', closeContextMenuListener, { capture: true });
         closeContextMenuListener = null;

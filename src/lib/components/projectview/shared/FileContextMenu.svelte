@@ -7,6 +7,7 @@
   export let y = 0;
   export let isVisible = false;
   export let revealLabel = 'Reveal in File System'; // New prop with default
+  export let id = "file-context-menu"; // Allow an optional id for targeted outside-click handling
 
   const dispatch = createEventDispatcher();
 
@@ -30,6 +31,7 @@
 
 {#if isVisible && item}
   <div
+    {id}
     class="fixed z-[100] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[180px]"
     style="left: {x}px; top: {y}px;"
     on:click|stopPropagation
@@ -39,11 +41,6 @@
       <li>
         <button on:click={() => emitAction('open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Open</button>
       </li>
-      {#if isMedia(item)}
-        <li>
-          <button on:click={() => emitAction('transcribe')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Transcribe</button>
-        </li>
-      {/if}
       <li>
         <button on:click={() => emitAction('addToGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Add to Group...</button>
       </li>
