@@ -17,7 +17,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
-    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon } from 'lucide-svelte';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search } from 'lucide-svelte';
 
 
     const dispatch = createEventDispatcher();
@@ -939,7 +939,7 @@
                 class:pointer-events-none={$showSearchBox}
                 on:click={handleSearchClick}
                 title="Search Data">
-                {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
+                <Search class="w-4 h-4" />
             </button>
 
             <!-- Search Input Overlay -->
@@ -1006,7 +1006,7 @@
                                                         <div class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
                                                              class:bg-blue-100={fileItem.path === selectedItemPathInStore}
                                                              class:dark:bg-blue-800={fileItem.path === selectedItemPathInStore}
-                                                             title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                             title="{fileItem.name}" role="button" tabindex="0"
                                                              on:click={() => handleItemClick(fileItem) }
                                                              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
                                                             <span class="flex items-center space-x-1 text-gray-800 dark:text-gray-200 truncate"

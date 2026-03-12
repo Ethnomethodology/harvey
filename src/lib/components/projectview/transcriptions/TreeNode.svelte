@@ -73,7 +73,7 @@
         on:click="{handleRowClick}"
         on:dblclick="{handleRowDoubleClick}"
         on:contextmenu="{handleRowContextMenu}"
-        title="{node.path}"
+        title="{node.name}"
 	>
 		<!-- Indentation based on depth -->
         <!-- Base depth is 3 (stem folder). Subtract 3 to get nesting level (0 for stem, 1 for subdirs, 2 for files) -->
