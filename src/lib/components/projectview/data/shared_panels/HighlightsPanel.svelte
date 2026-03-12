@@ -9,6 +9,7 @@
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
+    import { Tags, MessageCircle, ExternalLink } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -275,20 +276,14 @@
                                         </p>
                                     {/if}
                                 </div>
-                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-blue-500 dark:text-blue-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-box-arrow-in-up-right" viewBox="0 0 16 16">
-                                        <path fill-rule="evenodd" d="M6.364 13.5a.5.5 0 0 0 .5.5H13.5a1.5 1.5 0 0 0 1.5-1.5v-10A1.5 1.5 0 0 0 13.5 1h-10A1.5 1.5 0 0 0 2 2.5v6.636a.5.5 0 1 0 1 0V2.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v10a.5.5 0 0 1-.5.5H6.864a.5.5 0 0 0-.5.5z"/>
-                                        <path fill-rule="evenodd" d="M11 5.5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793l-8.147 8.146a.5.5 0 0 0 .708.708L9.5 6.707V10.5a.5.5 0 0 0 1 0v-5z"/>
-                                    </svg>
+                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-blue-500 dark:text-blue-400 flex items-center justify-center">
+                                    <ExternalLink class="w-3.5 h-3.5" />
                                 </div>
                             </div>
                         </div>
                         <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-2 rounded-b-md flex flex-col bg-gray-50/30 dark:bg-gray-900/50">
                             <div class="flex items-center w-full">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-tags-fill mr-2 flex-shrink-0 text-gray-400" viewBox="0 0 16 16">
-                                    <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
-                                    <path d="M1.293 7.793A1 1 0 0 1 1 7.086V2a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l.043-.043z"/>
-                                </svg>
+                                <Tags class="w-3 h-3 mr-2 flex-shrink-0 text-gray-400" />
                                 <div class="w-full relative">
                                     <TagMultiSelect
                                         allTags={$allTagsStore.map(t => t.name)}
@@ -301,12 +296,10 @@
                             <div class="flex justify-end w-full mt-2">
                                 <button 
                                     on:click={() => openCommentsModal(highlight)} 
-                                    class="relative p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
+                                    class="relative p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors flex items-center justify-center"
                                     title="View comments"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chat-fill" viewBox="0 0 16 16">
-                                        <path d="M8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6-.097 1.016-.417 2.13-.771 2.966-.079.186.074.394.273.362 2.256-.37 3.597-.938 4.18-1.234A9 9 0 0 0 8 15"/>
-                                    </svg>
+                                    <MessageCircle class="w-3.5 h-3.5" />
                                     {#if highlight.comments && highlight.comments.length > 0}
                                         <span class="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-4 w-4 flex items-center justify-center border-2 border-white dark:border-gray-800">
                                             {highlight.comments.length}

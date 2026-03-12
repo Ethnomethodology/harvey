@@ -16,7 +16,8 @@
     import { ListNode, ListItemNode } from '@lexical/list';
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
     import { LinkNode } from '@lexical/link';
-import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+    import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+    import { SquarePen, Save, ChevronUp, ChevronDown } from 'lucide-svelte';
 
 
     /* --- Keyboard Shortcut --- */
@@ -534,8 +535,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             dispatch('toggleedit');
         }
     }
-    const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
-    const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;
 
     // --- Layout specific styles ---
     const columnContainerClass = 'flex flex-col mx-auto gap-y-2 mt-4';
@@ -557,14 +556,18 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
                 <button on:click="{handleEditSaveClick}"
-                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white'
+                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white flex items-center justify-center'
                         title="{editEnabled ? `Save & Exit Edit mode (${modKeyName}+E)` : `Enable Editing (${modKeyName}+E)`}"
                         aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
                         style="padding-left:0px;">
-                    {@html editEnabled ? SAVE_ICON : EDIT_ICON}
+                    {#if editEnabled}
+                        <Save class="w-5 h-5" />
+                    {:else}
+                        <SquarePen class="w-5 h-5" />
+                    {/if}
                 </button>
-                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /> </svg>
+                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2 flex items-center justify-center" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
+                    <ChevronUp class="w-5 h-5" />
                 </button>
             </div>
             <!-- Main content area for inputs, unified layout -->
@@ -629,7 +632,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 </div>
             </div>
-            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" title="Next Segment ({modKeyName}+Down)"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
+            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical flex items-center justify-center" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" title="Next Segment ({modKeyName}+Down)"> <ChevronDown class="w-5 h-5" /> </button> </div>
         </div>
     {/if}
 </div>

@@ -27,7 +27,7 @@
     import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { get } from 'svelte/store';
-    import { MoreVertical, SquarePen } from 'lucide-svelte';
+    import { MoreVertical, SquarePen, Eye, MessageCircle, TagOff, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
 
     let unsubscribePanelState;
     let unsubscribeRefresher;
@@ -146,27 +146,21 @@
         }
     }
 
-    // --- Icons ---
-    const AUDIO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-music w-4 h-4"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
-    const VIDEO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-film w-4 h-4"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg>`;
-    const DOCUMENT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text w-4 h-4"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`;
-    const IMAGE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image w-4 h-4"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
-    const TABLE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sheet w-4 h-4"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="9" x2="9" y1="9" y2="21"/><line x1="15" x2="15" y1="9" y2="21"/></svg>`;
-    const TRANSCRIPT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square-text w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`;
-    const UNKNOWN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-help w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`;
+    import { mount, unmount } from 'svelte';
 
-    function getIconForFileType(fileType) {
+    // --- Icons ---
+    function getIconComponentForFileType(fileType) {
         switch (fileType) {
-            case 'audio': return AUDIO_ICON;
-            case 'video': return VIDEO_ICON;
-            case 'document': return DOCUMENT_ICON;
-            case 'image': return IMAGE_ICON;
-            case 'table': return TABLE_ICON;
-            case 'transcript': return TRANSCRIPT_ICON;
-            case 'imported_transcript': return TRANSCRIPT_ICON;
-            case 'audio_transcript': return AUDIO_ICON;
-            case 'video_transcript': return VIDEO_ICON;
-            default: return UNKNOWN_ICON;
+            case 'audio': return Music;
+            case 'video': return Film;
+            case 'document': return FileText;
+            case 'image': return ImageIcon;
+            case 'table': return Sheet;
+            case 'transcript': return MessageSquareText;
+            case 'imported_transcript': return MessageSquareText;
+            case 'audio_transcript': return Music;
+            case 'video_transcript': return Film;
+            default: return CircleHelp;
         }
     }
 
@@ -252,19 +246,34 @@
         currentTableMode = isGroupView ? 'group' : 'tag';
 
         let columns = [
-            { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell) => {
+            { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
                 const filePath = highlight.source.file_path;
                 const fileName = filePath.split(/[\\/]/).pop();
-                const icon = getIconForFileType(highlight.source.file_type);
+                const IconComponent = getIconComponentForFileType(highlight.source.file_type);
                 const isDarkMode = document.documentElement.classList.contains('dark');
                 const iconTextColor = (highlight.color && isDarkMode) ? '#111827' : 'currentColor';
-                return `<div class=\"flex items-center space-x-2\" title=\"${filePath}\">
-                            <div class="w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square" style="background-color: ${highlight.color};">
-                                <span style="color: ${iconTextColor};">${icon}</span>
-                            </div>
-                            <span>${fileName}</span>
-                        </div>`;
+
+                const container = document.createElement("div");
+                container.className = "flex items-center space-x-2";
+                container.title = filePath;
+
+                const iconContainer = document.createElement("div");
+                iconContainer.className = "w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square";
+                iconContainer.style.backgroundColor = highlight.color || 'transparent';
+                iconContainer.style.color = iconTextColor;
+
+                const iconSpan = document.createElement("span");
+                mount(IconComponent, { target: iconSpan, props: { size: 16 } });
+                iconContainer.appendChild(iconSpan);
+
+                const textSpan = document.createElement("span");
+                textSpan.textContent = fileName;
+
+                container.appendChild(iconContainer);
+                container.appendChild(textSpan);
+
+                return container;
             }},
             { title: "Content", field: "text", widthGrow: 5, formatter: (cell) => {
                 const text = cell.getValue();
@@ -303,24 +312,38 @@
 
         columns.push({
             title: "Actions", width: "10%", hozAlign: "center",
-            formatter: (cell) => {
+            formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
                 const commentCount = highlight.comments.length;
-                const commentPill = commentCount > 0 ? `<span class=\"absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center\">${commentCount}</span>` : '';
 
-                return `<div class=\"flex items-center justify-center\">
-                        <button title=\"Inspect\" class=\"mr-4\"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></button>
-                        <button title="Comments" class=\"relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4\">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-                            ${commentPill}
-                        </button>
-                        <button title="Untag">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
-                              <path d="M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
-                              <path d="M15.5 0.5 L 0.5 15.5"></path>
-                            </svg>
-                        </button>
-                    </div>`;
+                const container = document.createElement("div");
+                container.className = "flex items-center justify-center gap-4";
+
+                const inspectBtn = document.createElement("button");
+                inspectBtn.title = "Inspect";
+                mount(Eye, { target: inspectBtn, props: { size: 16 } });
+
+                const commentsBtn = document.createElement("button");
+                commentsBtn.title = "Comments";
+                commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600";
+                mount(MessageCircle, { target: commentsBtn, props: { size: 16 } });
+                if (commentCount > 0) {
+                    const pill = document.createElement("span");
+                    pill.className = "absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center";
+                    pill.textContent = commentCount;
+                    commentsBtn.appendChild(pill);
+                }
+
+                const untagBtn = document.createElement("button");
+                untagBtn.title = "Untag";
+                untagBtn.style.color = "red";
+                mount(TagOff, { target: untagBtn, props: { size: 16 } });
+
+                container.appendChild(inspectBtn);
+                container.appendChild(commentsBtn);
+                container.appendChild(untagBtn);
+
+                return container;
             },
             cellClick: (e, cell) => {
                 const highlight = cell.getRow().getData();
@@ -795,6 +818,11 @@
 
 :global(.tabulator .tabulator-header) {
     @apply bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700;
+}
+
+:global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
+    white-space: normal !important;
+    @apply text-gray-900 dark:text-gray-200 font-semibold;
 }
 
 :global(.tabulator-cell) {

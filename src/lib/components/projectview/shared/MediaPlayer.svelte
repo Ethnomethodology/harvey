@@ -1457,7 +1457,7 @@
 				aria-label="Select Subtitles"
 				disabled={!localMediaUrl || isLoadingMedia || isAudio}
 			>
-				<Subtitles class="w-4 h-4" />
+				<ClosedCaption class="w-4 h-4" />
 			</button>
 
 

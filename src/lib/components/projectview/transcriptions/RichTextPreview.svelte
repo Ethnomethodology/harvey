@@ -14,6 +14,7 @@
     	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
     	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     	import FindReplaceModal from '../modals/FindReplaceModal.svelte';
+        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X } from 'lucide-svelte';
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;
@@ -996,21 +997,6 @@
         }
     }
 
-	// --- SVG Icons (Unchanged) ---
-	const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
-	const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;
-	const DOCUMENT_ICON = `
-  <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" class="w-5 h-5">
-    <path d="M8.5 11.5a.5.5 0 0 1-1 0V7.707L6.354 8.854a.5.5 0 1 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 7.707z"/>
-  <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
-</svg>
-`;
-    const UNDO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"> <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/> <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/> </svg>`;
-    const REDO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"> <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/> <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/> </svg>`;
-    const INSERT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>`;
-	const DELETE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /> </svg>`;
-    const SPLIT_ICON = `<svg class="w-6 h-6 text-gray-800 dark:text-white rotate-90" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"> <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18v2h6V4H4v2m16 12v2h-6V4h6v2M6.49545 14.4954 4.00003 12m0 0 2.49542-2.49543M4.00003 12h5.94809m7.49798 2.5539L20 12m0 0-2.5539-2.55392M20 12h-5.8319"/> </svg>`;
-	const MENU_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="size-6" viewBox="0 0 16 16"> <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/> </svg>`;
 	let showExportMenu = false;
 
     // --- Layout specific visibility ---
@@ -1073,10 +1059,16 @@
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
             {#if allSegmentsData.length || previewEditMode}
-                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
+                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}>
+                    {#if previewEditMode}
+                        <Save class="w-5 h-5" />
+                    {:else}
+                        <SquarePen class="w-5 h-5" />
+                    {/if}
+                </button>
                 {#if previewEditMode}
-                  <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-gray-700={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-600={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title={`Undo (${modKeyName}+Z)`} aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
-                  <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-gray-700={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-600={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title={`Redo (${modKeyName}+Y)`} aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>
+                  <button class="btn-icon ml-2 flex items-center justify-center" class:text-gray-400={!canUndo} class:dark:text-gray-700={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-600={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title={`Undo (${modKeyName}+Z)`} aria-label="Undo Transcript Change" disabled={!canUndo}> <Undo class="w-5 h-5" /> </button>
+                  <button class="btn-icon ml-2 flex items-center justify-center" class:text-gray-400={!canRedo} class:dark:text-gray-700={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-600={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title={`Redo (${modKeyName}+Y)`} aria-label="Redo Transcript Change" disabled={!canRedo}> <Redo class="w-5 h-5" /> </button>
                 {/if}
             {/if}
             <!-- Edit/Save/Undo/Redo buttons HTML block ends here -->
@@ -1086,23 +1078,23 @@
             {#if allSegmentsData.length || previewEditMode}
                 <button
                     bind:this={searchToggleButtonElement}
-                    class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200"
+                    class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center"
                     class:active={showSearchBox}
                     on:click={toggleSearchBox}
                     title="Search"
                 >
-                    {@html SEARCH_ICON}
+                    <Search class="w-5 h-5" />
                 </button>
             {/if}
             {#if allSegmentsData.length > 0}
               <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
-                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200"
+                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center"
                   title="More options"
                   aria-label="More options"
                 >
-                  {@html MENU_ICON}
+                  <MoreVertical class="w-5 h-5" />
                 </button>
                 {#if showExportMenu}
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
@@ -1171,37 +1163,31 @@
                                     {/if}
                                 </span>
                                 <button
-                                    class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full pointer-events-auto transition-colors"
+                                    class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full pointer-events-auto transition-colors flex items-center justify-center"
                                     on:click|stopPropagation={() => { searchTerm = ''; executeSearch(''); }}
                                     title="Clear Search"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-                                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                                    </svg>
+                                    <X class="w-3 h-3" />
                                 </button>
                             {/if}
                         </div>
                     </div>
                     <div class="flex items-center gap-0.5">
                         <button
-                            class="btn-icon !p-1"
+                            class="btn-icon !p-1 flex items-center justify-center"
                             on:click={navigateToPreviousResult}
                             disabled={searchResults.length === 0}
                             title="Previous Match"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-                            </svg>
+                            <ChevronLeft class="w-4 h-4" />
                         </button>
                         <button
-                            class="btn-icon !p-1"
+                            class="btn-icon !p-1 flex items-center justify-center"
                             on:click={navigateToNextResult}
                             disabled={searchResults.length === 0}
                             title="Next Match"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-                            </svg>
+                            <ChevronRight class="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -1213,7 +1199,7 @@
         <div class="flex-grow flex items-center justify-center text-gray-400">
             {#if previewEditMode}
                 Transcript empty. Click Insert button to add a segment.
-                <div class="flex justify-center insert-button-wrapper absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
+                <div class="flex justify-center insert-button-wrapper absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300 flex items-center justify-center" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> <PlusSquare class="w-5 h-5" /> </button> </div>
             {:else} No transcript data to preview. {/if}
         </div>
     {:else}
@@ -1227,7 +1213,7 @@
         >
             <div style="height: {paddingTop}px;"></div>
             {#if previewEditMode && visibleStartIndex === 0}
-              <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
+              <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300 flex items-center justify-center" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> <PlusSquare class="w-5 h-5" /> </button> </div>
             {/if}
             {#each visibleSegments as seg (`${seg.segmentIndex}-${seg.isPrimary}`)}
                 <div
@@ -1262,20 +1248,20 @@
                     <div class="flex-shrink-0 flex flex-col items-center justify-start min-w-[24px] self-center">
                         {#if previewEditMode}
                             <button
-                                class="btn-icon p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                class="btn-icon p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center justify-center"
                                 on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)}
                                 title="Delete this segment"
                                 aria-label="Delete this segment"
                             >
-                                {@html DELETE_ICON}
+                                <Trash2 class="w-5 h-5" />
                             </button>
                             <button
-                                class="btn-icon p-0.5 mt-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                class="btn-icon p-0.5 mt-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 flex items-center justify-center"
                                 on:click|stopPropagation={(e) => handleSplitSegment(seg.segmentIndex)}
                                 title="Split this segment"
                                 aria-label="Split this segment"
                             >
-                                {@html SPLIT_ICON}
+                                <UnfoldVertical class="w-5 h-5" />
                             </button>
                         {:else}
                             <button
@@ -1283,9 +1269,7 @@
                                 on:click|stopPropagation={() => dispatch('playsegment', seg.segmentIndex)}
                                 title="Play this segment"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
-                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                                </svg>
+                                <Play class="w-3 h-3 ml-0.5 fill-current" />
                             </button>
                         {/if}
                     </div>
@@ -1378,7 +1362,7 @@
                     {/if}
                 </div>
                 {#if previewEditMode && (!$transcriptStore.isDualModeActive || !seg.isPrimary)}
-                      <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
+                      <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300 flex items-center justify-center" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> <PlusSquare class="w-5 h-5" /> </button> </div>
                     {/if}
             {/each}
             <div style="height: {paddingBottom}px;"></div>
