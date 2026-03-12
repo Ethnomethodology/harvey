@@ -477,10 +477,9 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
         // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
         // or use/enhance shared_utils::determine_asset_type if applicable.
 
-        let last_modified = db_handler::load_asset_metadata(&project_id_for_db, &relative_path_str)
-            .ok()
-            .flatten()
-            .map(|meta| meta.last_modified);
+        let meta_opt = db_handler::load_asset_metadata(&project_id_for_db, &relative_path_str).ok().flatten();
+        let last_modified = meta_opt.as_ref().map(|meta| meta.last_modified.clone());
+        let created_at = meta_opt.as_ref().and_then(|meta| meta.creation_time.clone());
 
         associated_files.push(AssociatedFile {
             name: file_name,
@@ -489,6 +488,7 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             file_type,
             media_xml_identifier,
             last_modified,
+            created_at,
         });
     }
     Ok(associated_files)

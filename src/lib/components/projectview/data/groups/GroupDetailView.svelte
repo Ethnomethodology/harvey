@@ -11,7 +11,7 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
-    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, SquarePen } from 'lucide-svelte';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen } from 'lucide-svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search } from 'flowbite-svelte';
 
@@ -63,13 +63,13 @@
     let sortDirection = 1;
 
     const CATEGORY_ORDER = [
-        { key: 'audios', name: 'Audios', icon: Music },
-        { key: 'documents', name: 'Documents', icon: FileText },
-        { key: 'images', name: 'Images', icon: ImageIcon },
-        { key: 'tables', name: 'Tables', icon: Sheet },
-        { key: 'imported_transcripts', name: 'Transcripts', icon: MessageSquareText },
-        { key: 'videos', name: 'Videos', icon: Film },
-        { key: 'others', name: 'Others', icon: File }
+        { key: 'audios', name: 'Audios', singularName: 'Audio', icon: Music },
+        { key: 'documents', name: 'Documents', singularName: 'Document', icon: FileText },
+        { key: 'images', name: 'Images', singularName: 'Image', icon: ImageIcon },
+        { key: 'tables', name: 'Tables', singularName: 'Table', icon: Sheet },
+        { key: 'imported_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
+        { key: 'videos', name: 'Videos', singularName: 'Video', icon: Film },
+        { key: 'others', name: 'Others', singularName: 'Other', icon: File }
     ];
 
     function getCategoryInfo(fileType) {
@@ -168,8 +168,8 @@
         allFiles = [...allFiles].sort((a, b) => {
             let valA, valB;
             if (sortKey === 'type') {
-                valA = getCategoryInfo(a.file_type)?.name || '';
-                valB = getCategoryInfo(b.file_type)?.name || '';
+                valA = getCategoryInfo(a.file_type)?.singularName || '';
+                valB = getCategoryInfo(b.file_type)?.singularName || '';
                 if (valA === valB) {
                     // secondary sort by name
                     valA = a.name.toLowerCase();
@@ -178,6 +178,9 @@
             } else if (sortKey === 'name') {
                 valA = a.name.toLowerCase();
                 valB = b.name.toLowerCase();
+            } else if (sortKey === 'createdAt') {
+                valA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                valB = b.created_at ? new Date(b.created_at).getTime() : 0;
             } else if (sortKey === 'lastModified') {
                 valA = a.last_modified ? new Date(a.last_modified).getTime() : 0;
                 valB = b.last_modified ? new Date(b.last_modified).getTime() : 0;
@@ -249,8 +252,24 @@
         closeContextMenu();
       }
       contextMenuItem = file;
-      contextMenuX = event.clientX;
-      contextMenuY = event.clientY;
+
+      let x = event.clientX;
+      let y = event.clientY;
+
+      // Estimate menu size to keep it in viewport
+      const menuWidthEstimate = 200;
+      const menuHeightEstimate = 250;
+
+      if (x + menuWidthEstimate > window.innerWidth) {
+          x = window.innerWidth - menuWidthEstimate - 10;
+      }
+      if (y + menuHeightEstimate > window.innerHeight) {
+          y = window.innerHeight - menuHeightEstimate - 10;
+      }
+
+      contextMenuX = Math.max(10, x);
+      contextMenuY = Math.max(10, y);
+
       contextMenuVisible = true;
       // Add listener to close on outside click
       if (closeContextMenuListener) document.removeEventListener('click', closeContextMenuListener, { capture: true });
@@ -659,6 +678,14 @@
                                         {/if}
                                     </div>
                                 </TableHeadCell>
+                                <TableHeadCell on:click={() => handleSort('createdAt')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Created At</span>
+                                        {#if sortKey === 'createdAt'}
+                                            <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
+                                        {/if}
+                                    </div>
+                                </TableHeadCell>
                                 <TableHeadCell on:click={() => handleSort('lastModified')} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
                                     <div class="flex items-center space-x-1">
                                         <span>Last Modified</span>
@@ -679,11 +706,18 @@
                                         <TableBodyCell class="w-48 whitespace-nowrap">
                                             <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
                                                 <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
-                                                <span>{getCategoryInfo(file.file_type)?.name || 'Unknown'}</span>
+                                                <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
                                             </div>
                                         </TableBodyCell>
                                         <TableBodyCell class="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                                             {file.name}
+                                        </TableBodyCell>
+                                        <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                            {#if file.created_at}
+                                                {new Date(file.created_at).toLocaleString()}
+                                            {:else}
+                                                Unknown
+                                            {/if}
                                         </TableBodyCell>
                                         <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400">
                                             {#if file.last_modified}
@@ -698,7 +732,7 @@
                                                 class="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-700"
                                                 title="More options"
                                             >
-                                                <MoreHorizontal class="w-4 h-4" />
+                                                <MoreVertical class="w-4 h-4" />
                                             </button>
                                         </TableBodyCell>
                                     </TableBodyRow>
