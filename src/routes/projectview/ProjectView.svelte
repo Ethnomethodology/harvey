@@ -232,6 +232,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onMount(async () => {
 		const appWindow = getCurrentWindow();
+		await appWindow.setMinSize(new LogicalSize(1280, 600));
 		await appWindow.maximize();
         await invoke('set_menu_context', { context: 'project' }).catch(err => console.warn('Failed to set menu context:', err));
 
@@ -565,6 +566,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		if (canProceed) {
             await clearProjectDataStore();
 			const appWindow = getCurrentWindow();
+			await appWindow.setMinSize(new LogicalSize(800, 600)); // Reset min size for welcome screen
 			await appWindow.unmaximize();
 			await appWindow.setSize(new LogicalSize(800, 600));
 			await goto('/');
