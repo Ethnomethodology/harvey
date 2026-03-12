@@ -7,7 +7,7 @@
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo, Redo } from 'lucide-svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2 } from 'lucide-svelte';
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
@@ -2359,10 +2359,10 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={undo} title="Undo (⌘+Z)" disabled={undoStack.length === 0}>
-      <Undo class="w-4 h-4" />
+      <Undo2 class="w-4 h-4" />
     </button>
     <button class="mini-toolbar-button" on:click={redo} title="Redo (⌘+Y / ⌘+⇧+Z)" disabled={redoStack.length === 0}>
-      <Redo class="w-4 h-4" />
+      <Redo2 class="w-4 h-4" />
     </button>
     <div class="separator"></div>
 

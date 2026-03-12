@@ -325,7 +325,7 @@
 
                 const commentsBtn = document.createElement("button");
                 commentsBtn.title = "Comments";
-                commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4";
+                commentsBtn.className = "relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600";
                 mount(MessageCircle, { target: commentsBtn, props: { size: 16 } });
                 if (commentCount > 0) {
                     const pill = document.createElement("span");

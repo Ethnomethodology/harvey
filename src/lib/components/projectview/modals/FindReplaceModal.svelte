@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { CaseSensitive, Regex, WholeWord, X } from 'lucide-svelte';
 
   export let showModal = false;
   export let initialSearchTerm = '';
@@ -142,9 +143,7 @@
           class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
           title="Close"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16">
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
+          <X class="w-4 h-4" />
         </button>
       </div>
 
@@ -186,7 +185,7 @@
             title="Match Case"
             on:click={toggleCaseSensitive}
           >
-            Aa
+            <CaseSensitive class="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -194,9 +193,7 @@
             title="Use Regular Expression"
             on:click={toggleRegex}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-regex" viewBox="0 0 16 16">
-              <path fill-rule="evenodd" d="M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 1 1 .707.707m9.9-.707a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.314.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707M6 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0m5-6.5a.5.5 0 0 0-1 0v2.117L8.257 5.57a.5.5 0 0 0-.514.858L9.528 7.5 7.743 8.571a.5.5 0 1 0 .514.858L10 8.383V10.5a.5.5 0 1 0 1 0V8.383l1.743 1.046a.5.5 0 0 0 .514-.858L11.472 7.5l1.785-1.071a.5.5 0 1 0-.514-.858L11 6.617z"/>
-            </svg>
+            <Regex class="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -204,7 +201,7 @@
             title="Match Whole Word"
             on:click={toggleWholeWord}
           >
-            <span class="underline decoration-1 underline-offset-2">ab</span>
+            <WholeWord class="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
