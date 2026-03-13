@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
     import { confirm } from '@tauri-apps/plugin-dialog';
+    import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
 
     export let showModal = false;
     export let group = null;
@@ -63,72 +64,67 @@
     }
 </script>
 
-{#if showModal}
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" on:click={closeModal}>
-    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
-        <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">Edit Tag Group</h2>
+<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full" on:close={closeModal}>
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" slot="header">Edit Tag Group</h2>
 
-        {#if errorMessage}
-            <div class="mb-4 p-3 bg-red-100 dark:bg-red-700 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-100 rounded-md text-sm">
-                {errorMessage}
-            </div>
-        {/if}
+    {#if errorMessage}
+        <div class="mb-4 p-3 bg-red-100 dark:bg-red-700 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-100 rounded-md text-sm">
+            {errorMessage}
+        </div>
+    {/if}
 
-        <form on:submit|preventDefault={handleSave}>
-            <div class="mb-4">
-                <label for="groupName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name</label>
-                <input
-                    type="text"
-                    id="groupName"
-                    bind:value={name}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                    required
-                    autocomplete="off"
-                />
-            </div>
+    <form on:submit|preventDefault={handleSave} class="space-y-4">
+        <div>
+            <Label for="groupName" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Group Name</Label>
+            <Input
+                type="text"
+                id="groupName"
+                bind:value={name}
+                required
+                autocomplete="off"
+            />
+        </div>
 
-            <div class="mb-6">
-                <label for="groupDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
-                <textarea
-                    id="groupDescription"
-                    bind:value={description}
-                    rows="3"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                ></textarea>
-            </div>
+        <div>
+            <Label for="groupDescription" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
+            <Textarea
+                id="groupDescription"
+                bind:value={description}
+                rows="3"
+            ></Textarea>
+        </div>
+    </form>
 
-            <div class="flex justify-between items-center">
-                <button
-                    type="button"
-                    on:click={handleDelete}
+    <svelte:fragment slot="footer">
+        <div class="flex justify-between items-center w-full">
+            <Button
+                color="red"
+                outline
+                on:click={handleDelete}
+                disabled={isLoading}
+            >
+                Delete Group
+            </Button>
+            <div class="flex space-x-3">
+                <Button
+                    color="alternative"
+                    on:click={closeModal}
                     disabled={isLoading}
-                    class="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md border border-red-300 dark:border-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 disabled:opacity-50"
                 >
-                    Delete Group
-                </button>
-                <div class="flex space-x-3">
-                    <button
-                        type="button"
-                        on:click={closeModal}
-                        disabled={isLoading}
-                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md border border-gray-300 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={isLoading || !name.trim()}
-                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50"
-                    >
-                        {#if isLoading}
-                            Saving...
-                        {:else}
-                            Save Changes
-                        {/if}
-                    </button>
-                </div>
+                    Cancel
+                </Button>
+                <Button
+                    color="blue"
+                    on:click={handleSave}
+                    disabled={isLoading || !name.trim()}
+                >
+                    {#if isLoading}
+                        Saving...
+                    {:else}
+                        Save Changes
+                    {/if}
+                </Button>
             </div>
-        </form>
-    </div>
-</div>
-{/if}
+        </div>
+    </svelte:fragment>
+</Modal>

@@ -1,6 +1,7 @@
 <!-- src/lib/components/welcome/RenameModal.svelte -->
 <script>
-  import { createEventDispatcher, afterUpdate } from 'svelte';
+  import { createEventDispatcher, afterUpdate, tick } from 'svelte';
+  import { Modal, Label, Input, Button } from 'flowbite-svelte';
 
   export let showModal = false;
   export let projectToRename = null;
@@ -72,69 +73,43 @@
   // --- FOCUS & SELECT LOGIC using afterUpdate + Flag ---
   afterUpdate(() => {
       // Only run if the modal is visible AND we explicitly need to set focus
-      if (showModal && needsFocus && modalElement) {
-          inputElement = modalElement.querySelector('#projectNameInput');
-          if (inputElement) {
-              console.log("RenameModal: afterUpdate - Focusing and selecting input.");
-              inputElement.focus();
-              inputElement.select();
-              needsFocus = false; // Reset the flag so it doesn't run again until next open
-          } else {
-              console.error("RenameModal: afterUpdate - Could not find input element.");
-              needsFocus = false; // Reset flag even on error
-          }
-      } else if (showModal && !needsFocus) {
-          // console.log("RenameModal: afterUpdate - Modal visible but focus not needed.");
+      if (showModal && needsFocus) {
+          tick().then(() => {
+            if (inputElement) {
+                console.log("RenameModal: afterUpdate - Focusing and selecting input.");
+                inputElement.focus();
+                inputElement.select();
+                needsFocus = false; // Reset the flag so it doesn't run again until next open
+            }
+          })
       }
   });
 
 </script>
 
-{#if showModal}
-  <div
-    bind:this={modalElement}
-    class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
-    on:click|self={cancel}
-    on:keydown={handleKeydown}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="rename-modal-title"
-    tabindex="-1"
-  >
-    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md m-4" role="document">
-      <h2 id="rename-modal-title" class="text-lg font-semibold text-gray-800 mb-5">Rename Project</h2>
-      <div class="mb-5">
-        <label for="projectNameInput" class="block text-sm font-medium text-gray-700 mb-1">
-            New project name:
-        </label>
-        <input
-            id="projectNameInput"
-            type="text"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            bind:value={newName}
-            placeholder="Enter new project name"
-            autocomplete="off"
-            autocorrect="off"
-        />
-        <p class="mt-1 text-xs text-gray-500">Original Path: <span class="truncate inline-block max-w-full align-bottom" title={projectXmlPath}>{projectXmlPath || 'N/A'}</span></p>
-      </div>
-      <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-5">
-        <button
-            type="button"
-            on:click={cancel}
-            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition duration-150 ease-in-out text-sm font-medium"
-        >
-            Cancel
-        </button>
-        <button
-            type="button"
-            on:click={confirm}
-            class="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-150 ease-in-out text-sm font-medium disabled:opacity-50"
-            disabled={!newName.trim()}
-        >
-            Rename
-        </button>
-      </div>
+<Modal bind:open={showModal} size="md" autoclose={false} outsideclose={true} class="w-full z-50" on:close={cancel}>
+    <h2 id="rename-modal-title" class="text-lg font-semibold text-gray-800" slot="header">Rename Project</h2>
+
+    <div class="space-y-4" on:keydown={handleKeydown}>
+        <div>
+            <Label for="projectNameInput" class="mb-1 text-sm font-medium text-gray-700">New project name:</Label>
+            <Input
+                id="projectNameInput"
+                type="text"
+                bind:this={inputElement}
+                bind:value={newName}
+                placeholder="Enter new project name"
+                autocomplete="off"
+                autocorrect="off"
+            />
+            <p class="mt-1 text-xs text-gray-500">Original Path: <span class="truncate inline-block max-w-full align-bottom" title={projectXmlPath}>{projectXmlPath || 'N/A'}</span></p>
+        </div>
     </div>
-  </div>
-{/if}
+
+    <svelte:fragment slot="footer">
+        <div class="flex justify-end space-x-3 w-full">
+            <Button color="alternative" on:click={cancel}>Cancel</Button>
+            <Button color="blue" on:click={confirm} disabled={!newName.trim()}>Rename</Button>
+        </div>
+    </svelte:fragment>
+</Modal>

@@ -30,7 +30,8 @@
         Textarea, 
         Button, 
         Toggle,
-        Helper
+        Helper,
+        Modal
     } from 'flowbite-svelte';
 
     export let fieldName = '';
@@ -207,169 +208,162 @@
     $: isPrimaryDisabled = currentPrimaryField && currentPrimaryField !== fieldName && !editedSchema.primary;
 </script>
 
-<div class="fixed inset-0 z-[150] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
-    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-lg flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden">
-        <!-- Header -->
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-            <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} class="text-blue-500" size={20} />
-                Edit Field Settings
-            </h3>
-            <button on:click={() => dispatch('cancel')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <X size={20} />
-            </button>
+<Modal open={true} size="md" autoclose={false} outsideclose={true} class="w-full z-[150]" on:close={() => dispatch('cancel')}>
+    <div class="flex items-center gap-2" slot="header">
+        <svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} class="text-blue-500" size={20} />
+        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Edit Field Settings</h3>
+    </div>
+
+    <div class="space-y-5">
+        <!-- Field Name -->
+        <div class="space-y-1">
+            <Label for="field-name" class="mb-2">FIELD NAME</Label>
+            <Input
+                id="field-name"
+                type="text"
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                bind:value={editedName}
+                placeholder="Enter field name"
+            />
         </div>
 
-        <!-- Content -->
-        <div class="p-6 overflow-y-auto space-y-5 max-h-[70vh]">
-            <!-- Field Name -->
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Type Selection -->
             <div class="space-y-1">
-                <Label for="field-name" class="mb-2">FIELD NAME</Label>
-                <Input
-                    id="field-name"
-                    type="text"
-                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                    bind:value={editedName}
-                    placeholder="Enter field name"
+                <Label for="field-type" class="mb-2">DATA TYPE</Label>
+                <Select
+                    id="field-type"
+                    items={types}
+                    bind:value={editedSchema.type}
+                    on:change={handleTypeChange}
                 />
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <!-- Type Selection -->
-                <div class="space-y-1">
-                    <Label for="field-type" class="mb-2">DATA TYPE</Label>
-                    <Select
-                        id="field-type"
-                        items={types}
-                        bind:value={editedSchema.type}
-                        on:change={handleTypeChange}
-                    />
-                </div>
-
-                <!-- SubType Selection -->
-                <div class="space-y-1">
-                    <Label for="field-subtype" class="mb-2">SUB-TYPE</Label>
-                    <Select
-                        id="field-subtype"
-                        items={(subTypes[editedSchema.type] || []).map(st => ({name: st, value: st}))}
-                        bind:value={editedSchema.subType}
-                        on:change={handleSubTypeChange}
-                    />
-                </div>
-            </div>
-
-            <!-- Toggles Area -->
-            <div class="grid grid-cols-2 gap-4">
-                <!-- Primary Toggle -->
-                <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800"
-                     class:opacity-50={isPrimaryDisabled}
-                     title={isPrimaryDisabled ? "Another field is already primary" : ""}>
-                    <Checkbox
-                        id="field-primary"
-                        bind:checked={editedSchema.primary}
-                        on:change={handlePrimaryChange}
-                        disabled={isPrimaryDisabled}
-                    >
-                        Primary Field
-                    </Checkbox>
-                </div>
-
-                <!-- Required Toggle -->
-                <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
-                    <Checkbox
-                        id="field-required"
-                        bind:checked={editedSchema.required}
-                        disabled={editedSchema.primary}
-                    >
-                        Required
-                    </Checkbox>
-                </div>
-            </div>
-
-            <!-- Constraints Area -->
-            <div class="space-y-4 pt-2">
-                {#if editedSchema.type === 'Numeric'}
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <Label for="field-min" class="mb-2">{editedSchema.subType === 'Rating' ? 'MIN STARS' : 'MIN VALUE'}</Label>
-                            <Input
-                                id="field-min"
-                                type="number"
-                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                bind:value={editedSchema.min}
-                            />
-                        </div>
-                        <div class="space-y-1">
-                            <Label for="field-max" class="mb-2">{editedSchema.subType === 'Rating' ? 'MAX STARS' : 'MAX VALUE'}</Label>
-                            <Input
-                                id="field-max"
-                                type="number"
-                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                bind:value={editedSchema.max}
-                            />
-                        </div>
-                    </div>
-                    {#if editedSchema.subType === 'Currency'}
-                        <div class="space-y-1">
-                            <Label for="field-currency" class="mb-2">CURRENCY / COUNTRY</Label>
-                            <div class="space-y-2">
-                                <Select
-                                    id="field-currency"
-                                    items={currencyOptions}
-                                    bind:value={selectedCurrency}
-                                />
-                                {#if selectedCurrency === 'OTHER'}
-                                    <Input 
-                                        type="text" 
-                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                        bind:value={customCurrencyCode} 
-                                        placeholder="Enter 3-letter ISO Code (e.g. BTC)" 
-                                        maxlength="3"
-                                    />
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-                {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
-                    <div class="space-y-1">
-                        <Label for="field-options" class="mb-2">OPTIONS (Comma separated)</Label>
-                        <Input
-                            id="field-options"
-                            type="text"
-                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                            bind:value={optionsText}
-                            placeholder="Option 1, Option 2, Option 3..."
-                        />
-                    </div>
-                {:else if editedSchema.type === 'DateTime'}
-                    <div class="space-y-1">
-                        <Label for="field-format" class="mb-2">DISPLAY FORMAT</Label>
-                        <Select
-                            id="field-format"
-                            items={dateTimeFormats[editedSchema.subType] || []}
-                            bind:value={editedSchema.format}
-                        />
-                    </div>
-                {/if}
-
-                <!-- Description -->
-                <div class="space-y-1 pt-2">
-                    <Label for="field-desc" class="mb-2">DESCRIPTION</Label>
-                    <Textarea
-                        id="field-desc"
-                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                        bind:value={editedSchema.description}
-                        rows="2"
-                        placeholder="Explain the purpose of this field..."
-                    />
-                </div>
+            <!-- SubType Selection -->
+            <div class="space-y-1">
+                <Label for="field-subtype" class="mb-2">SUB-TYPE</Label>
+                <Select
+                    id="field-subtype"
+                    items={(subTypes[editedSchema.type] || []).map(st => ({name: st, value: st}))}
+                    bind:value={editedSchema.subType}
+                    on:change={handleSubTypeChange}
+                />
             </div>
         </div>
 
-        <!-- Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+        <!-- Toggles Area -->
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Primary Toggle -->
+            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800"
+                    class:opacity-50={isPrimaryDisabled}
+                    title={isPrimaryDisabled ? "Another field is already primary" : ""}>
+                <Checkbox
+                    id="field-primary"
+                    bind:checked={editedSchema.primary}
+                    on:change={handlePrimaryChange}
+                    disabled={isPrimaryDisabled}
+                >
+                    Primary Field
+                </Checkbox>
+            </div>
+
+            <!-- Required Toggle -->
+            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
+                <Checkbox
+                    id="field-required"
+                    bind:checked={editedSchema.required}
+                    disabled={editedSchema.primary}
+                >
+                    Required
+                </Checkbox>
+            </div>
+        </div>
+
+        <!-- Constraints Area -->
+        <div class="space-y-4 pt-2">
+            {#if editedSchema.type === 'Numeric'}
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <Label for="field-min" class="mb-2">{editedSchema.subType === 'Rating' ? 'MIN STARS' : 'MIN VALUE'}</Label>
+                        <Input
+                            id="field-min"
+                            type="number"
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                            bind:value={editedSchema.min}
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <Label for="field-max" class="mb-2">{editedSchema.subType === 'Rating' ? 'MAX STARS' : 'MAX VALUE'}</Label>
+                        <Input
+                            id="field-max"
+                            type="number"
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                            bind:value={editedSchema.max}
+                        />
+                    </div>
+                </div>
+                {#if editedSchema.subType === 'Currency'}
+                    <div class="space-y-1">
+                        <Label for="field-currency" class="mb-2">CURRENCY / COUNTRY</Label>
+                        <div class="space-y-2">
+                            <Select
+                                id="field-currency"
+                                items={currencyOptions}
+                                bind:value={selectedCurrency}
+                            />
+                            {#if selectedCurrency === 'OTHER'}
+                                <Input
+                                    type="text"
+                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                    bind:value={customCurrencyCode}
+                                    placeholder="Enter 3-letter ISO Code (e.g. BTC)"
+                                    maxlength="3"
+                                />
+                            {#if true}{""}{/if}
+                            {/if}
+                        </div>
+                    </div>
+                {/if}
+            {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
+                <div class="space-y-1">
+                    <Label for="field-options" class="mb-2">OPTIONS (Comma separated)</Label>
+                    <Input
+                        id="field-options"
+                        type="text"
+                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                        bind:value={optionsText}
+                        placeholder="Option 1, Option 2, Option 3..."
+                    />
+                </div>
+            {:else if editedSchema.type === 'DateTime'}
+                <div class="space-y-1">
+                    <Label for="field-format" class="mb-2">DISPLAY FORMAT</Label>
+                    <Select
+                        id="field-format"
+                        items={dateTimeFormats[editedSchema.subType] || []}
+                        bind:value={editedSchema.format}
+                    />
+                </div>
+            {/if}
+
+            <!-- Description -->
+            <div class="space-y-1 pt-2">
+                <Label for="field-desc" class="mb-2">DESCRIPTION</Label>
+                <Textarea
+                    id="field-desc"
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                    bind:value={editedSchema.description}
+                    rows="2"
+                    placeholder="Explain the purpose of this field..."
+                />
+            </div>
+        </div>
+    </div>
+
+    <svelte:fragment slot="footer">
+        <div class="flex justify-end space-x-3 w-full">
             <Button color="alternative" on:click={() => dispatch('cancel')}>Cancel</Button>
             <Button color="blue" on:click={handleSave}>Save Settings</Button>
         </div>
-    </div>
-</div>
+    </svelte:fragment>
+</Modal>

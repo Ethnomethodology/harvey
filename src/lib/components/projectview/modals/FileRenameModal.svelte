@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/FileRenameModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, tick } from 'svelte';
-	import { fade } from 'svelte/transition';
+	import { Modal, Label, Input, Button, Helper } from 'flowbite-svelte';
 
 	export let showModal = false;
 	export let currentName = '';
@@ -138,99 +138,67 @@
 	}
 </script>
 
-{#if showModal}
-	<div
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
-		on:click|stopPropagation={closeModal}
-		transition:fade={{ duration: 150 }}
-	>
-		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-200"
-			on:click|stopPropagation
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="rename-modal-title"
-		>
-			<h2 id="rename-modal-title" class="text-lg font-semibold mb-4">Rename Item</h2>
+<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full z-[120]" on:close={closeModal}>
+	<h2 id="rename-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white" slot="header">Rename Item</h2>
 
-			<div class="mb-4">
-				<label for="current-name-display" class="block text-sm font-medium text-gray-700 dark:text-gray-400"
-					>Current name:</label
-				>
-                <!-- UPDATED: Use currentDisplayName -->
-				<input
-					id="current-name-display"
-					type="text"
-					readonly
-					value={currentDisplayName}
-					class="mt-1 block w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed"
-					autocomplete="off"
-					autocorrect="off"
-				/>
-			</div>
-
-			<div class="mb-4">
-				<label for="new-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-					>New name:</label
-				>
-				<input
-					bind:this={inputElement}
-					bind:value={newNameBase}
-					on:keydown={handleKeyDown}
-					id="new-name"
-					type="text"
-					required
-					class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-					aria-describedby="newNameHelp"
-					autocomplete="off"
-					autocorrect="off"
-				/>
-				{#if isStemInputMode}
-					<p id="newNameHelp" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-						{#if (itemType === 'doc' || itemType === 'table' || itemType === 'image') && currentExtension}
-                            Enter the new file name.
-						{:else if itemType === 'note' || itemType === 'transcript'}
-                            Enter the new file name.
-						{:else if itemType === 'media' || itemType === 'imported_transcript'}
-							Enter the new file name.
-                        {:else}
-                            Enter just the file name. The original extension '<code>{currentExtension || '.ext'}</code>' will be used.
-                        {/if}
-						<!-- {#if itemType === 'media'}
-							<br>This also renames the folder and primary transcript.
-						{/if}
-                        {#if itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript'}
-                             <br>This also renames the item's dedicated folder.
-                        {/if} -->
-					</p>
-				{:else}
-					<p id="newNameHelp" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-						Enter the full new filename including the extension.
-					</p>
-				{/if}
-			</div>
-
-			{#if errorMessage}
-				<p class="text-sm text-red-600 dark:text-red-400 mb-4" role="alert">{errorMessage}</p>
-			{/if}
-
-			<div class="flex justify-end space-x-3">
-				<button
-					type="button"
-					class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:focus:ring-offset-gray-800"
-					on:click={closeModal}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50"
-					on:click={handleConfirm}
-					disabled={!newNameBase.trim() || !!errorMessage}
-				>
-					Rename
-				</button>
-			</div>
+	<div class="space-y-4">
+		<div>
+			<Label for="current-name-display" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-400">Current name:</Label>
+			<Input
+				id="current-name-display"
+				type="text"
+				readonly
+				value={currentDisplayName}
+				class="cursor-not-allowed bg-gray-100 dark:bg-gray-700"
+				autocomplete="off"
+				autocorrect="off"
+			/>
 		</div>
+
+		<div>
+			<Label for="new-name" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">New name:</Label>
+			<Input
+				bind:this={inputElement}
+				bind:value={newNameBase}
+				on:keydown={handleKeyDown}
+				id="new-name"
+				type="text"
+				required
+				autocomplete="off"
+				autocorrect="off"
+			/>
+			{#if isStemInputMode}
+				<Helper class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+					{#if (itemType === 'doc' || itemType === 'table' || itemType === 'image') && currentExtension}
+						Enter the new file name.
+					{:else if itemType === 'note' || itemType === 'transcript'}
+						Enter the new file name.
+					{:else if itemType === 'media' || itemType === 'imported_transcript'}
+						Enter the new file name.
+					{:else}
+						Enter just the file name. The original extension '<code>{currentExtension || '.ext'}</code>' will be used.
+					{/if}
+				</Helper>
+			{:else}
+				<Helper class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+					Enter the full new filename including the extension.
+				</Helper>
+			{/if}
+		</div>
+
+		{#if errorMessage}
+			<p class="text-sm text-red-600 dark:text-red-400" role="alert">{errorMessage}</p>
+		{/if}
 	</div>
-{/if}
+
+	<svelte:fragment slot="footer">
+		<div class="flex justify-end space-x-3 w-full">
+			<Button color="alternative" on:click={closeModal}>
+				Cancel
+			</Button>
+			<Button color="blue" on:click={handleConfirm} disabled={!newNameBase.trim() || !!errorMessage}>
+				Rename
+			</Button>
+		</div>
+	</svelte:fragment>
+</Modal>

@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { Modal, Button } from 'flowbite-svelte';
 
     export let show = false;
     export let title = 'Select a Color';
@@ -24,28 +25,28 @@
     }
 </script>
 
-{#if show}
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]" on:click|self={handleClose} role="dialog" aria-modal="true" aria-labelledby="color-picker-title">
-    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-xs text-gray-900 dark:text-gray-100" on:click|stopPropagation>
-        <h3 id="color-picker-title" class="text-lg font-bold mb-4">{title}</h3>
-        <div class="grid grid-cols-6 gap-2 mb-4">
-            {#each colors as color}
-            <button
-                type="button"
-                aria-label="Select color {color}"
-                class="w-8 h-8 rounded-full border-2 transition-all"
-                style="background-color: {color};"
-                class:border-blue-500={selectedColor === color}
-                class:scale-110={selectedColor === color}
-                class:border-transparent={selectedColor !== color}
-                on:click={() => selectedColor = color}
-            ></button>
-            {/each}
-        </div>
-        <div class="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button class="px-4 py-2 text-sm rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" on:click={handleClose}>Cancel</button>
-            <button class="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700" on:click={handleConfirm}>Apply</button>
-        </div>
+<Modal bind:open={show} size="xs" autoclose={false} outsideclose={true} class="w-full z-[100]" on:close={handleClose}>
+    <h3 id="color-picker-title" class="text-lg font-bold text-gray-900 dark:text-gray-100" slot="header">{title}</h3>
+
+    <div class="grid grid-cols-6 gap-2">
+        {#each colors as color}
+        <button
+            type="button"
+            aria-label="Select color {color}"
+            class="w-8 h-8 rounded-full border-2 transition-all"
+            style="background-color: {color};"
+            class:border-blue-500={selectedColor === color}
+            class:scale-110={selectedColor === color}
+            class:border-transparent={selectedColor !== color}
+            on:click={() => selectedColor = color}
+        ></button>
+        {/each}
     </div>
-</div>
-{/if}
+
+    <svelte:fragment slot="footer">
+        <div class="flex justify-end space-x-2 w-full">
+            <Button color="alternative" on:click={handleClose}>Cancel</Button>
+            <Button color="blue" on:click={handleConfirm}>Apply</Button>
+        </div>
+    </svelte:fragment>
+</Modal>

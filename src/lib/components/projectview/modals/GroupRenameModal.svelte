@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
     import { message } from '@tauri-apps/plugin-dialog';
+    import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
 
     export let showModal = false;
     export let groupData = { id: null, name: '', description: '' }; // Incoming group data
@@ -68,45 +69,39 @@
 
 <svelte:window on:keydown={handleKeydown}/>
 
-{#if showModal}
-    <div class="fixed inset-0 z-[60] bg-gray-900 bg-opacity-50 dark:bg-opacity-75 flex items-center justify-center p-4" on:click|self={closeModal} role="dialog" aria-modal="true" aria-labelledby="rename-group-title">
-        <div class="bg-white dark:bg-gray-900 p-5 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
-            <h2 id="rename-group-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rename Group</h2>
+<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full z-[60]" on:close={closeModal}>
+    <h2 id="rename-group-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4" slot="header">Rename Group</h2>
 
-            <div class="space-y-4">
-                <div>
-                    <label for="groupRenameName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name <span class="text-red-500">*</span></label>
-                    <input bind:this={nameInputRef} type="text" id="groupRenameName" bind:value={currentName} placeholder="Enter group name"
-                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                           required
-                           autocomplete="off"
-                           autocorrect="off"
-                           autocapitalize="off"
-                           spellcheck="false" />
-                </div>
-                <div>
-                    <label for="groupRenameDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
-                    <textarea id="groupRenameDescription" bind:value={currentDescription} rows="3" placeholder="Enter group description"
-                              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                              autocomplete="off"
-                              autocorrect="off"></textarea>
-                </div>
-            </div>
-
-            <div class="mt-6 flex justify-end space-x-3">
-                <button type="button" on:click={closeModal} disabled={isSaving}
-                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-                    Cancel
-                </button>
-                <button type="button" on:click={handleSave} disabled={isSaving || !currentName.trim()}
-                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-blue-400">
-                    {#if isSaving}
-                        Saving...
-                    {:else}
-                        Save Changes
-                    {/if}
-                </button>
-            </div>
+    <div class="space-y-4">
+        <div>
+            <Label for="groupRenameName" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Group Name <span class="text-red-500">*</span></Label>
+            <Input bind:this={nameInputRef} type="text" id="groupRenameName" bind:value={currentName} placeholder="Enter group name"
+                   required
+                   autocomplete="off"
+                   autocorrect="off"
+                   autocapitalize="off"
+                   spellcheck="false" />
+        </div>
+        <div>
+            <Label for="groupRenameDescription" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
+            <Textarea id="groupRenameDescription" bind:value={currentDescription} rows="3" placeholder="Enter group description"
+                      autocomplete="off"
+                      autocorrect="off"></Textarea>
         </div>
     </div>
-{/if}
+
+    <svelte:fragment slot="footer">
+        <div class="flex justify-end space-x-3 w-full">
+            <Button color="alternative" on:click={closeModal} disabled={isSaving}>
+                Cancel
+            </Button>
+            <Button color="blue" on:click={handleSave} disabled={isSaving || !currentName.trim()}>
+                {#if isSaving}
+                    Saving...
+                {:else}
+                    Save Changes
+                {/if}
+            </Button>
+        </div>
+    </svelte:fragment>
+</Modal>
