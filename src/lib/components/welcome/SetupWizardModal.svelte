@@ -1,5 +1,6 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+    import { Modal } from 'flowbite-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
     import { ask } from '@tauri-apps/plugin-dialog';
@@ -596,12 +597,11 @@
     }
 </script>
 
-{#if showModal}
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" transition:fade={{ duration: 200 }}>
-    <div class="bg-white dark:bg-gray-900 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" transition:fly={{ y: 20, duration: 300 }}>
-        <!-- Header -->
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
-            <div class="flex items-center space-x-3">
+<Modal bind:open={showModal} size="xl" outsideclose={false} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-50" on:close={close}>
+    <!-- Header -->
+    <div slot="header" class="flex items-center justify-between w-full m-0 p-0 rounded-t-lg">
+        <div class="flex items-center justify-between w-full">
+            <div class="flex items-center space-x-3 pl-2">
                 <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                     <PackageOpen class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
@@ -610,16 +610,15 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">Step {currentStep} of 8</p>
                 </div>
             </div>
-            <button on:click={close} class="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors">
-                <X class="w-5 h-5 text-gray-500" />
-            </button>
         </div>
+    </div>
 
-        <div class="w-full h-1 bg-gray-100 dark:bg-gray-800">
-            <div class="h-full bg-blue-600 transition-all duration-500" style="width: {(currentStep / 8) * 100}%"></div>
-        </div>
+    <!-- Progress Bar (Injected right below header) -->
+    <div class="h-1 bg-gray-100 dark:bg-gray-800 w-full relative -mt-4 mb-4">
+        <div class="h-full bg-blue-500 transition-all duration-500 ease-out" style="width: {(currentStep / 8) * 100}%"></div>
+    </div>
 
-        <div class="flex-grow overflow-y-auto p-8">
+    <div class="flex-grow overflow-y-auto px-8 pb-8 -m-6 mt-0">
             {#if isCleaningUp}
                 <div class="h-full flex flex-col items-center justify-center space-y-4" in:fade>
                     <Loader2 class="w-12 h-12 animate-spin text-blue-600" />
@@ -1110,27 +1109,25 @@
                     </div>
                 </div>
             {/if}
-        </div>
+    </div>
 
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
-            <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization || isCleaningUp} class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 disabled:opacity-30 flex items-center transition-colors hover:text-gray-900 dark:hover:text-gray-200"><ChevronLeft class="w-4 h-4 mr-1" /> Back</button>
-            <div class="flex space-x-3">
-                {#if currentStep === 2}
-                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
-                {:else if currentStep < 7}
-                    <button on:click={nextStep} disabled={isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
-                {:else if currentStep === 7}
-                    <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
-                {:else}
-                    <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">
-                        {diarizationDownloaded ? 'Finish' : 'Get Started'}
-                    </button>
-                {/if}
-            </div>
+    <div slot="footer" class="flex justify-between items-center w-full bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md m-0 p-4 -mx-6 -mb-6 rounded-b-lg border-t border-gray-200 dark:border-gray-800">
+        <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization || isCleaningUp} class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 disabled:opacity-30 flex items-center transition-colors hover:text-gray-900 dark:hover:text-gray-200"><ChevronLeft class="w-4 h-4 mr-1" /> Back</button>
+        <div class="flex space-x-3">
+            {#if currentStep === 2}
+                <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+            {:else if currentStep < 7}
+                <button on:click={nextStep} disabled={isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+            {:else if currentStep === 7}
+                <button on:click={nextStep} disabled={installProgress.phase !== 'complete' || isCleaningUp} class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center hover:bg-blue-700 transition-colors">Next <ChevronRight class="w-4 h-4 ml-1" /></button>
+            {:else}
+                <button on:click={close} disabled={isDownloadingDiarization || isCleaningUp} class="px-8 py-2 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-green-700 transition-colors">
+                    {diarizationDownloaded ? 'Finish' : 'Get Started'}
+                </button>
+            {/if}
         </div>
     </div>
-</div>
-{/if}
+</Modal>
 
 <style>
     .scrollbar-hide::-webkit-scrollbar { display: none; }

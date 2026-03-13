@@ -2,6 +2,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
   import { Search, X, ChevronLeft, ChevronRight } from 'lucide-svelte';
+  import { Modal } from 'flowbite-svelte';
 
   export let showModal = false;
   export let isCompact = false; // New prop to control sidebar width
@@ -152,74 +153,60 @@
   });
 </script>
 
-{#if showModal}
-  <div
-    class="fixed inset-0 z-[150] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
-    on:keydown={handleKeydown}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="help-modal-title"
-    tabindex="-1"
-  >
-    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-[80vw] h-[80vh] flex flex-col relative overflow-hidden" role="document">
-      
-      <!-- Main Modal Header -->
-      <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
-        <div class="flex items-center space-x-3">
-            <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
-            <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
-        </div>
-        
-        <div class="flex items-center space-x-4 flex-grow justify-end">
-            <!-- Search Bar -->
-            <div class="relative w-64 help-search-container">
-                <div class="relative">
-                    <input 
-                        type="text" 
-                        bind:value={searchQuery}
-                        on:focus={() => showSearchResults = true}
-                        placeholder="Search help..." 
-                        autocomplete="off"
-                        autocorrect="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        class="w-full pl-9 pr-4 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all"
-                    />
-                    <Search class="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
+<svelte:window on:keydown={handleKeydown} />
 
-                <!-- Search Results Dropdown -->
-                {#if showSearchResults && filteredResults.length > 0}
-                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] py-1 max-h-64 overflow-y-auto">
-                        {#each filteredResults as result}
-                            <button 
-                                class="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 dark:text-gray-200 transition-colors flex items-center justify-between group"
-                                on:click={() => navigateTo(result.id)}
-                            >
-                                <span>{result.label}</span>
-                                <span class="text-[10px] text-gray-400 group-hover:text-blue-500 uppercase tracking-wider">{result.sidebarId}</span>
-                            </button>
-                        {/each}
-                    </div>
-                {:else if showSearchResults && searchQuery.trim() !== ''}
-                    <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] p-4 text-center">
-                        <p class="text-sm text-gray-500">No results found for "{searchQuery}"</p>
-                    </div>
-                {/if}
+<Modal bind:open={showModal} size="xl" outsideclose on:close={close} class="w-[80vw] max-w-[1200px] h-[80vh] p-0 overflow-hidden flex flex-col z-[150]">
+      <!-- Main Modal Header -->
+      <div slot="header" class="flex-shrink-0 flex justify-between items-center bg-gray-50 dark:bg-gray-900 w-full m-0 p-0 rounded-t-lg">
+        <div class="flex items-center justify-between w-full px-2">
+            <div class="flex items-center space-x-3">
+                <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
+                <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
             </div>
 
-            <button 
-                on:click={close} 
-                aria-label="Close" 
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-full p-1 transition-colors"
-            >
-                <X class="h-6 w-6" />
-            </button>
+            <div class="flex items-center space-x-4 flex-grow justify-end">
+                <!-- Search Bar -->
+                <div class="relative w-64 help-search-container">
+                    <div class="relative">
+                        <input
+                            type="text"
+                            bind:value={searchQuery}
+                            on:focus={() => showSearchResults = true}
+                            placeholder="Search help..."
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            class="w-full pl-9 pr-4 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all"
+                        />
+                        <Search class="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    </div>
+
+                    <!-- Search Results Dropdown -->
+                    {#if showSearchResults && filteredResults.length > 0}
+                        <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] py-1 max-h-64 overflow-y-auto">
+                            {#each filteredResults as result}
+                                <button
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 dark:text-gray-200 transition-colors flex items-center justify-between group"
+                                    on:click={() => navigateTo(result.id)}
+                                >
+                                    <span>{result.label}</span>
+                                    <span class="text-[10px] text-gray-400 group-hover:text-blue-500 uppercase tracking-wider">{result.sidebarId}</span>
+                                </button>
+                            {/each}
+                        </div>
+                    {:else if showSearchResults && searchQuery.trim() !== ''}
+                        <div class="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[160] p-4 text-center">
+                            <p class="text-sm text-gray-500">No results found for "{searchQuery}"</p>
+                        </div>
+                    {/if}
+                </div>
+            </div>
         </div>
       </div>
 
       <!-- Main Body -->
-      <div class="flex flex-grow overflow-hidden">
+      <div class="flex flex-grow overflow-hidden -m-6 h-full">
         <!-- Sidebar -->
         <div class="{isCompact ? 'w-32' : 'w-64'} bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 {isCompact ? 'p-2' : 'p-4'} flex flex-col flex-shrink-0 overflow-y-auto font-sans transition-all duration-300">
           <nav class="flex flex-col space-y-1">
@@ -318,9 +305,7 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
-{/if}
+</Modal>
 
 <style>
   /* Custom scrollbar for Webkit browsers */

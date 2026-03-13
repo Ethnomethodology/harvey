@@ -16,7 +16,8 @@
         TableBody, 
         TableBodyRow, 
         TableBodyCell,
-        Tooltip
+        Tooltip,
+        Modal
     } from 'flowbite-svelte';
 
     export let showModal = false;
@@ -167,113 +168,103 @@
     }
 </script>
 
-{#if showModal}
-<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm">
-    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[90vh]">
-        <!-- Header -->
-        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <TableIcon size={20} class="text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Create New Table</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Define your schema and data types</p>
-                </div>
-            </div>
-            <button on:click={closeModal} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
-                <X size={20} />
-            </button>
+<Modal bind:open={showModal} size="xl" outsideclose on:close={closeModal} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[150]">
+    <div slot="header" class="flex items-center space-x-3 w-full">
+        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <TableIcon size={20} class="text-blue-600 dark:text-blue-400" />
         </div>
-
-        <div class="flex-1 overflow-auto p-0">
-            <Table hoverable={true} shadow={false} class="border-b border-gray-200 dark:border-gray-800">
-                <TableHead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
-                    <TableHeadCell class="w-[200px]">Field Name</TableHeadCell>
-                    <TableHeadCell>Type</TableHeadCell>
-                    <TableHeadCell>Sub-type</TableHeadCell>
-                    <TableHeadCell class="text-center">Primary</TableHeadCell>
-                    <TableHeadCell class="text-center">Req?</TableHeadCell>
-                    <TableHeadCell class="min-w-[150px]">Constraints</TableHeadCell>
-                    <TableHeadCell class="min-w-[250px]">Description</TableHeadCell>
-                    <TableHeadCell class="w-10"></TableHeadCell>
-                </TableHead>
-                <TableBody>
-                    {#each fields as field, i}
-                        <TableBodyRow class="group">
-                            <TableBodyCell class="px-3 py-2">
-                                <Input size="sm" bind:value={field.name} placeholder="Name" />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2">
-                                <Select size="sm" items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} bind:value={field.type} on:change={() => handleTypeChange(i)} />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2">
-                                <Select size="sm" items={(FIELD_TYPES[field.type] || []).map(st => ({name: st, value: st}))} bind:value={field.subType} on:change={() => handleSubTypeChange(i)} />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2 text-center">
-                                <Checkbox bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2 text-center">
-                                <Checkbox bind:checked={field.required} disabled={field.primary} />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2">
-                                {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
-                                    <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
-                                {:else if field.type === 'Numeric'}
-                                    <div class="flex flex-col gap-1">
-                                        <div class="flex gap-1">
-                                            <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
-                                            <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
-                                        </div>
-                                        {#if field.subType === 'Currency'}
-                                            <div class="flex flex-col gap-1">
-                                                <Select size="sm" items={currencyOptions} bind:value={field.currency} />
-                                                {#if field.currency === 'OTHER'}
-                                                    <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO Code" maxlength="3" />
-                                                {/if}
-                                            </div>
-                                        {/if}
-                                    </div>
-                                {:else if field.type === 'DateTime'}
-                                    <Select size="sm" items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} bind:value={field.format} />
-                                {:else}
-                                    <span class="text-xs text-gray-400 italic">None</span>
-                                {/if}
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2">
-                                <Input size="sm" bind:value={field.description} placeholder="Purpose of this field" />
-                            </TableBodyCell>
-                            <TableBodyCell class="px-3 py-2 text-center">
-                                <button 
-                                    on:click={() => removeField(i)}
-                                    class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                    disabled={fields.length <= 1}
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                                <Tooltip>Remove Field</Tooltip>
-                            </TableBodyCell>
-                        </TableBodyRow>
-                    {/each}
-                </TableBody>
-            </Table>
-            
-            <div class="p-6 bg-gray-50/50 dark:bg-gray-800/30">
-                <Button color="alternative" size="sm" on:click={addField} class="flex items-center gap-2">
-                    <Plus size={16} />
-                    Add Field
-                </Button>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
-            <Button color="alternative" on:click={closeModal}>Cancel</Button>
-            <Button color="blue" on:click={handleSubmit}>Create Table</Button>
+        <div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Create New Table</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Define your schema and data types</p>
         </div>
     </div>
-</div>
-{/if}
+
+    <div class="flex-1 overflow-auto p-0 -m-6 h-full">
+        <Table hoverable={true} shadow={false} class="border-b border-gray-200 dark:border-gray-800 h-full">
+            <TableHead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
+                <TableHeadCell class="w-[200px]">Field Name</TableHeadCell>
+                <TableHeadCell>Type</TableHeadCell>
+                <TableHeadCell>Sub-type</TableHeadCell>
+                <TableHeadCell class="text-center">Primary</TableHeadCell>
+                <TableHeadCell class="text-center">Req?</TableHeadCell>
+                <TableHeadCell class="min-w-[150px]">Constraints</TableHeadCell>
+                <TableHeadCell class="min-w-[250px]">Description</TableHeadCell>
+                <TableHeadCell class="w-10"></TableHeadCell>
+            </TableHead>
+            <TableBody>
+                {#each fields as field, i}
+                    <TableBodyRow class="group">
+                        <TableBodyCell class="px-3 py-2">
+                            <Input size="sm" bind:value={field.name} placeholder="Name" />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2">
+                            <Select size="sm" items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} bind:value={field.type} on:change={() => handleTypeChange(i)} />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2">
+                            <Select size="sm" items={(FIELD_TYPES[field.type] || []).map(st => ({name: st, value: st}))} bind:value={field.subType} on:change={() => handleSubTypeChange(i)} />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2 text-center">
+                            <Checkbox bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2 text-center">
+                            <Checkbox bind:checked={field.required} disabled={field.primary} />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2">
+                            {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
+                                <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
+                            {:else if field.type === 'Numeric'}
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex gap-1">
+                                        <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
+                                        <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
+                                    </div>
+                                    {#if field.subType === 'Currency'}
+                                        <div class="flex flex-col gap-1">
+                                            <Select size="sm" items={currencyOptions} bind:value={field.currency} />
+                                            {#if field.currency === 'OTHER'}
+                                                <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO Code" maxlength="3" />
+                                            {/if}
+                                        </div>
+                                    {/if}
+                                </div>
+                            {:else if field.type === 'DateTime'}
+                                <Select size="sm" items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} bind:value={field.format} />
+                            {:else}
+                                <span class="text-xs text-gray-400 italic">None</span>
+                            {/if}
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2">
+                            <Input size="sm" bind:value={field.description} placeholder="Purpose of this field" />
+                        </TableBodyCell>
+                        <TableBodyCell class="px-3 py-2 text-center">
+                            <button
+                                on:click={() => removeField(i)}
+                                class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={fields.length <= 1}
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                            <Tooltip>Remove Field</Tooltip>
+                        </TableBodyCell>
+                    </TableBodyRow>
+                {/each}
+            </TableBody>
+        </Table>
+
+        <div class="p-6 bg-gray-50/50 dark:bg-gray-800/30">
+            <Button color="alternative" size="sm" on:click={addField} class="flex items-center gap-2">
+                <Plus size={16} />
+                Add Field
+            </Button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div slot="footer" class="flex justify-end gap-3 w-full">
+        <Button color="alternative" on:click={closeModal}>Cancel</Button>
+        <Button color="blue" on:click={handleSubmit}>Create Table</Button>
+    </div>
+</Modal>
 
 <style>
     .dark .hover\:bg-gray-700:hover {
