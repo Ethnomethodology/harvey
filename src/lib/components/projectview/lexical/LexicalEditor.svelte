@@ -2540,9 +2540,9 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-hidden shadow-sm layout-{activeLayout}">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-[100]">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}><Undo2 size={14} /></button>
       {/if}
@@ -2564,7 +2564,7 @@ $: if (editor && activeLayout) {
             <ChevronDown size={12} class="ml-0.5" />
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2595,7 +2595,7 @@ $: if (editor && activeLayout) {
             <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
           {#if isFontDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontOptions as option}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -2640,7 +2640,7 @@ $: if (editor && activeLayout) {
             +
           </button>
           {#if isFontSizeDropdownOpen}
-            <div class="absolute mt-1 top-full left-0 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute mt-1 top-full left-0 z-[200] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontSizeOptions as size}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -2684,7 +2684,7 @@ $: if (editor && activeLayout) {
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
                 class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2710,7 +2710,7 @@ $: if (editor && activeLayout) {
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2751,7 +2751,7 @@ $: if (editor && activeLayout) {
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isColorDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each colorOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2778,7 +2778,7 @@ $: if (editor && activeLayout) {
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isHighlightDropdownOpen}
-            <div class="absolute mt-1 z-20 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each highlightOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2910,7 +2910,7 @@ $: if (editor && activeLayout) {
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 relative overflow-y-auto"
+    class="lexical-wrapper flex-grow min-h-0 relative overflow-visible"
     style="{enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}"
     bind:this={editorWrapper}
   >

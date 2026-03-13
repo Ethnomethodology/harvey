@@ -195,7 +195,7 @@
 <div
     bind:this={dialogElement}
     class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
-    style="left: {x}px; top: {y}px; width: {dialogWidth}px;"
+    style="left: {x}px; top: {y}px; width: {dialogWidth}px; overflow: visible;"
     on:click|stopPropagation
     on:pointerdown|stopPropagation
 >
@@ -426,7 +426,7 @@
 
     :global(.lexical-container .lexical-wrapper) {
         min-height: 0;
-        overflow-y: auto !important;
+        overflow-y: visible !important;
         flex-grow: 1;
     }
 
