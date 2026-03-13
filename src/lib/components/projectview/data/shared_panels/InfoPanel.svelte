@@ -536,69 +536,69 @@
 
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
         {#if currentFileMetadata}
-            <div class="space-y-4">
+            <div class="space-y-3 mt-1 pb-4">
                 <div>
-                    <Label for="fileNameInput" class="mb-2">File Name</Label>
+                    <Label for="fileNameInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">File Name</Label>
                     {#if isEditing}
-                        <Input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} size="sm" placeholder="Enter name without extension" autocorrect="off" autocomplete="off" />
+                        <Input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} class="text-xs !py-1.5" size="sm" placeholder="Enter name without extension" autocorrect="off" autocomplete="off" />
                         {#if currentFileMetadata.file_name && currentFileMetadata.file_name.includes('.')}
-                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
                                 Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
                             </p>
                         {/if}
                     {:else}
-                        <div id="fileNameInput" class="text-sm text-gray-900 dark:text-gray-100 break-words p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{currentFileMetadata.file_name || 'N/A'}</div>
+                        <div id="fileNameInput" class="text-xs text-gray-900 dark:text-gray-100 break-words px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.file_name || 'N/A'}</div>
                     {/if}
                 </div>
 
                 <div>
-                    <Label for="filePathAbsolute" class="mb-2">File Path</Label>
-                    <div id="filePathAbsolute" class="text-sm text-gray-900 dark:text-gray-100 break-all p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{currentFileMetadata.db_absolute_file_path || ''}</div>
+                    <Label for="filePathAbsolute" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">File Path</Label>
+                    <div id="filePathAbsolute" class="text-xs text-gray-900 dark:text-gray-100 break-all px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</div>
                 </div>
 
                 <div>
-                    <Label for="fileTypeDisplay" class="mb-2">File Type</Label>
-                    <div id="fileTypeDisplay" class="text-sm text-gray-900 dark:text-gray-100 break-words p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{currentFileMetadata.file_type || 'N/A'}</div>
+                    <Label for="fileTypeDisplay" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">File Type</Label>
+                    <div id="fileTypeDisplay" class="text-xs text-gray-900 dark:text-gray-100 break-words px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.file_type || 'N/A'}</div>
                 </div>
 
                 {#if currentFileMetadata.creation_time}
                 <div>
-                    <Label for="createdAt" class="mb-2">Created At</Label>
-                    <div id="createdAt" class="text-sm text-gray-900 dark:text-gray-100 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{new Date(currentFileMetadata.creation_time).toLocaleString()}</div>
+                    <Label for="createdAt" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Created At</Label>
+                    <div id="createdAt" class="text-xs text-gray-900 dark:text-gray-100 px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{new Date(currentFileMetadata.creation_time).toLocaleString()}</div>
                 </div>
                 {/if}
 
                 {#if currentFileMetadata.last_modified}
                 <div>
-                    <Label for="lastModified" class="mb-2">Last Modified</Label>
-                    <div id="lastModified" class="text-sm text-gray-900 dark:text-gray-100 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{new Date(currentFileMetadata.last_modified).toLocaleString()}</div>
+                    <Label for="lastModified" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Last Modified</Label>
+                    <div id="lastModified" class="text-xs text-gray-900 dark:text-gray-100 px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{new Date(currentFileMetadata.last_modified).toLocaleString()}</div>
                 </div>
                 {/if}
 
                 <div>
-                    <Label for="titleInput" class="mb-2">Title</Label>
+                    <Label for="titleInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Title</Label>
                     {#if isEditing}
-                        <Input type="text" id="titleInput" bind:value={editableMetadata.title} size="sm" autocorrect="off" autocomplete="off" />
+                        <Input type="text" id="titleInput" bind:value={editableMetadata.title} class="text-xs !py-1.5" size="sm" autocorrect="off" autocomplete="off" />
                     {:else}
-                        <div id="titleInput" class="text-sm text-gray-900 dark:text-gray-100 break-words p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[36px]">{currentFileMetadata.title || ''}</div>
+                        <div id="titleInput" class="text-xs text-gray-900 dark:text-gray-100 break-words px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.title || ''}</div>
                     {/if}
                 </div>
 
                 <div>
-                    <Label for="descriptionInput" class="mb-2">Description</Label>
+                    <Label for="descriptionInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Description</Label>
                     {#if isEditing}
-                        <Textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" autocorrect="off" autocomplete="off" />
+                        <Textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
                     {:else}
-                        <div id="descriptionInput" class="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[60px]">{currentFileMetadata.description || ''}</div>
+                        <div id="descriptionInput" class="text-xs text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[50px]">{currentFileMetadata.description || ''}</div>
                     {/if}
                 </div>
 
                 <div>
-                    <Label for="summaryInput" class="mb-2">Summary</Label>
+                    <Label for="summaryInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Summary</Label>
                     {#if isEditing}
-                        <Textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" autocorrect="off" autocomplete="off" />
+                        <Textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
                     {:else}
-                        <div id="summaryInput" class="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg min-h-[60px]">{currentFileMetadata.summary || ''}</div>
+                        <div id="summaryInput" class="text-xs text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[50px]">{currentFileMetadata.summary || ''}</div>
                     {/if}
                 </div>
 
@@ -724,29 +724,29 @@
 
                 {#if !isEditing}
                     {#each displayableCustomFields as field, index (field.key + '-' + index)}
-                        <div class="mb-3">
-                            <label for={`custom-field-display-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
-                            <span id={`custom-field-display-${index}`} class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all' : 'break-words break-all'} block w-full border border-gray-300 dark:border-gray-800 px-1.5 py-1 bg-gray-50 dark:bg-gray-800 min-h-[30px]">
+                        <div>
+                            <Label for={`custom-field-display-${index}`} class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">{field.name || field.key}</Label>
+                            <div id={`custom-field-display-${index}`} class="text-xs text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all min-h-[50px]' : 'break-words break-all min-h-[30px]'} px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md">
                                 {field.value || ''}
-                            </span>
+                            </div>
                         </div>
                     {/each}
                     {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom field values set for this item. Edit to add.</p>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 italic mt-2">No custom field values set for this item. Edit to add.</p>
                     {/if}
                 {/if}
 
                 {#if isEditing}
                     {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
-                        <div class="mb-3">
+                        <div>
                             <div class="flex justify-between items-center mb-1">
-                                <label for={`custom-field-edit-${field.key}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
+                                <Label for={`custom-field-edit-${field.key}`} class="text-xs text-gray-500 font-semibold uppercase tracking-wide">{field.name || field.key}</Label>
                                 <button
                                     on:click={() => handleDeleteCustomField(field.key)}
                                     title={`Delete '${field.name || field.key}' definition`}
-                                    class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 flex items-center justify-center"
+                                    class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 flex items-center justify-center rounded"
                                 >
-                                    <Trash2 class="w-3.5 h-3.5" />
+                                    <Trash2 class="w-3 h-3" />
                                 </button>
                             </div>
                             {#if field.type === 'small_text'}
@@ -754,6 +754,7 @@
                                     type="text"
                                     id={`custom-field-edit-${field.key}`}
                                     bind:value={editableMetadata.customFields[index].value}
+                                    class="text-xs !py-1.5"
                                     size="sm"
                                     placeholder={`Enter value for ${field.name || field.key}`}
                                     autocorrect="off" autocomplete="off" />
@@ -761,6 +762,7 @@
                                 <Textarea
                                     id={`custom-field-edit-${field.key}`}
                                     rows="3"
+                                    class="text-xs !py-1.5"
                                     bind:value={editableMetadata.customFields[index].value}
                                     placeholder={`Enter value for ${field.name || field.key}`}
                                     autocorrect="off" autocomplete="off" />
