@@ -37,7 +37,6 @@
         Dropdown
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
-    import { CalendarDays, Clock, Star } from 'lucide-svelte';
 
     export let rowData = {};
     export let columns = [];
