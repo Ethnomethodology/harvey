@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from 'svelte';
     import { v4 as uuidv4 } from 'uuid';
+    import { X, MoreVertical } from 'lucide-svelte';
 
     export let showModal = false;
     export let comments = [];
@@ -94,9 +95,7 @@
                             <p class="text-sm text-gray-800 dark:text-gray-200 flex-grow pr-8">{comment.text}</p>
                             <div class="absolute top-1 right-1">
                                 <button on:click={() => toggleMenu(comment.id)} class="p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                                        <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                                    </svg>
+                                    <MoreVertical class="w-4 h-4" />
                                 </button>
                                 {#if activeMenuId === comment.id}
                                     <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
@@ -126,9 +125,7 @@
                                 <p class="text-sm text-gray-800 dark:text-gray-200 flex-grow pr-8">{reply.text}</p>
                                 <div class="absolute top-1 right-1">
                                     <button on:click={() => toggleMenu(reply.id)} class="p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                                            <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                                        </svg>
+                                        <MoreVertical class="w-4 h-4" />
                                     </button>
                                     {#if activeMenuId === reply.id}
                                         <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">

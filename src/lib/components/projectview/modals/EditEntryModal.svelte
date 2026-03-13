@@ -37,6 +37,7 @@
         Dropdown
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
+    import { CalendarDays, Clock, Star } from 'lucide-svelte';
 
     export let rowData = {};
     export let columns = [];
@@ -464,7 +465,7 @@
                                 {#if colSchema.subType === 'Date'}
                                     <div class="relative">
                                         <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
-                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/></svg>
+                                            <CalendarDays class="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                         </div>
                                         <input 
                                             use:flowbiteDatepicker={{field: col.field}}
@@ -484,9 +485,7 @@
                                     {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
                                     <div class="relative max-w-[12rem]">
                                         <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
-                                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
-                                                <path fill-rule="evenodd" d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12Zm11-4a1 1 0 1 0-2 0v4a1 1 0 0 0 .293.707l3 3a1 1 0 0 0 1.414-1.414L13 11.586V8Z" clip-rule="evenodd"/>
-                                            </svg>
+                                            <Clock class="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                         </div>
                                         <input 
                                             id="time_input_{sanitizeId(col.field)}"
@@ -541,7 +540,7 @@
                                             <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Date</Label>
                                             <div class="relative">
                                                 <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-                                                    <svg class="w-3.5 h-3.5 text-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/></svg>
+                                                    <CalendarDays class="w-3.5 h-3.5 text-blue-500" />
                                                 </div>
                                                 <input 
                                                     use:flowbiteDatepicker={{field: col.field, isDateTime: true}}
@@ -557,9 +556,7 @@
                                             <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Time</Label>
                                             <div class="relative">
                                                 <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-2.5 pointer-events-none">
-                                                    <svg class="w-3.5 h-3.5 text-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
-                                                        <path fill-rule="evenodd" d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12Zm11-4a1 1 0 1 0-2 0v4a1 1 0 0 0 .293.707l3 3a1 1 0 0 0 1.414-1.414L13 11.586V8Z" clip-rule="evenodd"/>
-                                                    </svg>
+                                                    <Clock class="w-3.5 h-3.5 text-blue-500" />
                                                 </div>
                                                 <input 
                                                     id="dt_time_input_{sanitizeId(col.field)}"
@@ -658,9 +655,7 @@
                                             class="focus:outline-none transition-colors"
                                             on:click={() => editedData[col.field] = i + 1}
                                         >
-                                            <svg class="w-6 h-6 {(editedData[col.field] || 0) > i ? 'text-yellow-400 dark:text-yellow-300' : 'text-gray-300 dark:text-gray-600'}" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
+                                            <Star class="w-6 h-6 {(editedData[col.field] || 0) > i ? 'text-yellow-400 dark:text-yellow-300 fill-current' : 'text-gray-300 dark:text-gray-600'}" />
                                         </button>
                                     {/each}
                                 </div>

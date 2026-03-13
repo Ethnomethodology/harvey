@@ -5,6 +5,7 @@
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
+    import { AlertTriangle } from 'lucide-svelte';
 
     let primaryPath = '';
     let secondaryPath = '';
@@ -199,9 +200,7 @@
 
                 {#if hasMismatch}
                     <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md flex gap-3 text-red-800 dark:text-red-200 transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0 mt-0.5">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                        </svg>
+                        <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
                         <div class="flex flex-col gap-1">
                             <span class="text-xs font-bold">Segment Mismatch</span>
                             <p class="text-[11px] leading-relaxed">

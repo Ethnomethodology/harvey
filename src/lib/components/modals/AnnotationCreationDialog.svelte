@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import { MessageSquare, Code, Check, Square, Circle, Info } from 'lucide-svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -316,9 +317,7 @@
                     title="Rectangle"
                     on:click={() => (selectedShape = 'rectangle')}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zM2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/>
-                    </svg>
+                    <Square class="w-4 h-4" />
                 </button>
                 <button
                     class="flex-1 flex justify-center py-1.5 text-xs font-medium border rounded transition-colors"
@@ -329,9 +328,7 @@
                     title="Circle"
                     on:click={() => (selectedShape = 'circle')}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                    </svg>
+                    <Circle class="w-4 h-4" />
                 </button>
             </div>
         </div>
@@ -380,9 +377,7 @@
     {#if isCensoredMode}
         <div class="mb-4 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-[10px] text-amber-800 dark:text-amber-200 leading-tight">
             <div class="flex items-start space-x-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="mt-0.5 flex-shrink-0" viewBox="0 0 16 16">
-                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.93-9.412-1 4.705c-.07.34.029.533.308.533.19 0 .452-.113.688-.273l.111.19c-.3.213-.662.338-.958.338-.589 0-.813-.41-.699-1.112l1.047-4.973c.067-.318-.05-.562-.38-.562-.286 0-.633.163-.84.294l-.11-.191c.217-.152.56-.322.896-.322.604 0 .822.424.71.105zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2"/>
-                </svg>
+                <Info class="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span>Anonymization is only permanent when the image is <strong>exported with annotations</strong>.</span>
             </div>
         </div>

@@ -6,6 +6,7 @@
     import { basename } from '@tauri-apps/api/path';
     import { normalizePath } from '$lib/services/projectService.js';
     import { invoke } from '@tauri-apps/api/core';
+    import { AlertTriangle } from 'lucide-svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -205,9 +206,7 @@
 
                 {#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
                     <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-md flex gap-3 text-amber-800 dark:text-amber-200 transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0 mt-0.5">
-                            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625l6.28-10.875zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                        </svg>
+                        <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
                         <div class="flex flex-col gap-1">
                             <span class="text-xs font-bold">Row Count Mismatch</span>
                             <p class="text-[11px] leading-relaxed">
