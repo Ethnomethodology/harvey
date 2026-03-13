@@ -597,7 +597,7 @@
     }
 </script>
 
-<Modal bind:open={showModal} size="xl" outsideclose={false} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-50" on:close={close}>
+<Modal bind:open={showModal} size="xl" outsideclose={false} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-50" on:close={(e) => { e.preventDefault(); }}>
     <!-- Header -->
     <div slot="header" class="flex items-center justify-between w-full m-0 p-0 rounded-t-lg">
         <div class="flex items-center justify-between w-full">
