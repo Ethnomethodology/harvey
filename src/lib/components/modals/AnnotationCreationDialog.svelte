@@ -203,7 +203,7 @@
         {#if initialText !== null}
             <div class="mb-3">
                 <label for="annotation-text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Content</label>
-                <div class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-hidden bg-white dark:bg-gray-900">
+                <div class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-visible bg-white dark:bg-gray-900">
                     <LexicalEditor
                         initialJson={text.startsWith('{') ? text : null}
                         placeholder={!text.startsWith('{') ? text : "Enter text..."}
@@ -408,7 +408,7 @@
         height: 200px;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        /* Remove overflow: hidden to allow dropdowns to escape the container */
     }
     
     :global(.lexical-container > .lexical-editor-root) {
