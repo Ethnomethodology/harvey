@@ -1,14 +1,21 @@
-<!-- src/lib/components/projectview/ExportModal.svelte -->
+<!-- src/lib/components/projectview/modals/ExportModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-	import { activeLayout } from '$lib/stores/layoutStore.js'; // Re-added
+	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { open } from '@tauri-apps/plugin-dialog';
     import { documentDir } from '@tauri-apps/api/path';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
-	// --- REMOVED: No fs functions imported for path manipulation ---
+    import { 
+        Input, 
+        Label, 
+        Select, 
+        Button, 
+        Helper,
+        Modal
+    } from 'flowbite-svelte';
+    import { Share, FolderOpen, X } from 'lucide-svelte';
 
 	export let showModal = false;
 	// Prop to receive the path of the transcript being exported
@@ -28,12 +35,12 @@
 
 	// Available export formats
 	const exportFormats = [
-		{ value: 'csv', label: 'CSV (.csv)', disabled: false },
-		{ value: 'docx', label: 'DOCX (.docx)', disabled: false },
-		{ value: 'md', label: 'Markdown (.md)', disabled: false },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: false },
-		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: false },
-		{ value: 'ass', label: 'Advanced SubStation Alpha (.ass)', disabled: false }, // Added ASS
+		{ value: 'csv', name: 'CSV (.csv)', disabled: false },
+		{ value: 'docx', name: 'DOCX (.docx)', disabled: false },
+		{ value: 'md', name: 'Markdown (.md)', disabled: false },
+		{ value: 'srt', name: 'SRT (.srt)', disabled: false },
+		{ value: 'vtt', name: 'Web VTT (.vtt)', disabled: false },
+		{ value: 'ass', name: 'Advanced SubStation Alpha (.ass)', disabled: false }, // Added ASS
 	];
 
 	const DEFAULT_EXPORT_FOLDER_NAME = 'exports'; // Name for the default subfolder
@@ -188,12 +195,9 @@
 		if (showModal && event.key === 'Escape') {
 			closeModal();
 		}
-		if (event.key === 'Enter') {
+		if (showModal && event.key === 'Enter') {
 			event.preventDefault();
-			 const confirmButton = modalElement?.querySelector('.btn-primary');
-			 if (confirmButton && !confirmButton.disabled) {
-				 handleConfirm();
-			 }
+			 handleConfirm();
 		}
 	}
 
@@ -209,7 +213,7 @@
 {#if showModal}
 	<div
 		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
@@ -217,44 +221,58 @@
 		tabindex="-1"
 	>
 		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
 			on:click|stopPropagation
 			role="document"
 		>
-			<h2 id="export-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5 truncate" title="{modalTitle}">
-				{modalTitle}
-			</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <Share size={20} class="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 id="export-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[250px]" title="{modalTitle}">
+                        Export Transcript
+                    </h3>
+                </div>
+                <button on:click={closeModal} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
+                    <X size={20} />
+                </button>
+            </div>
 
-			<div class="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+			<div class="p-6 space-y-5">
 				<!-- Filename Input -->
-				<div>
-					<label for="export-filename" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Filename:</label>
-					<input
+				<div class="space-y-2">
+					<Label for="export-filename">Filename</Label>
+					<Input
 						id="export-filename"
 						type="text"
 						bind:value={exportFileName}
-						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="e.g., MyMeetingTranscript"
 						autocomplete="off"
-						autocorrect="off"
 					/>
 				</div>
 
 				<!-- Format Dropdown -->
-				 <div>
-					<label for="export-format" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Format:</label>
-					<Dropdown
-						containerClasses="w-full"
-						options={exportFormats}
+				 <div class="space-y-2">
+					<Label for="export-format">Export Format</Label>
+					<Select
+						id="export-format"
+						items={exportFormats}
 						bind:value={exportFormat}
-						placeholder="Select a Format"
 					/>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md' && exportFormat !== 'ass'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. All listed formats are available.</p>
-					 {:else if exportFormat === 'md'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
+					 {#if exportFormat === 'md'}
+						<Helper class="italic">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</Helper>
 					 {:else if exportFormat === 'ass'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export provides standard subtitles with styling support (bold, italic, underline, strikethrough, color).</p>
+						<Helper class="italic">ASS export provides standard subtitles with styling support (bold, italic, underline, strikethrough, color).</Helper>
+                     {:else if exportFormat === 'csv'}
+                        <Helper class="italic">Comma-separated values file (.csv)</Helper>
+                     {:else if exportFormat === 'docx'}
+                        <Helper class="italic">Microsoft Word document (.docx)</Helper>
+                     {:else if exportFormat === 'srt'}
+                        <Helper class="italic">SubRip Subtitle file (.srt)</Helper>
+                     {:else if exportFormat === 'vtt'}
+                        <Helper class="italic">Web Video Text Tracks file (.vtt)</Helper>
 					 {/if}
 				</div>
 
@@ -267,16 +285,16 @@
 							bind:checked={excludeSpeakerNames}
 							class="w-4 h-4 text-blue-600 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-600 focus:ring-2"
 						/>
-						<label for="exclude-speakers" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+						<Label for="exclude-speakers" class="text-sm font-medium">
 							Exclude speaker names from subtitles
-						</label>
+						</Label>
 					</div>
 				{/if}
 
 				<!-- Layout Options (Conditional for DOCX and MD) -->
 				{#if exportFormat === 'docx' || exportFormat === 'md'}
-				<div class="pt-2">
-						<div id="layout-label" class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">{exportFormat.toUpperCase()} Layout:</div>
+				<div class="pt-2 space-y-2">
+						<Label id="layout-label">{exportFormat.toUpperCase()} Layout:</Label>
 						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-labelledby="layout-label">
 							{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
 								<button
@@ -306,35 +324,32 @@
 				{/if}
 
 				<!-- Directory Selection -->
-				<div>
-					<label for="export-directory" class="block font-medium text-gray-700 dark:text-gray-300 mb-1 pt-2">Export To:</label>
-					<div class="flex space-x-2">
-						<input
+				<div class="space-y-2">
+					<Label for="export-directory">Destination Directory</Label>
+					<div class="flex gap-2">
+						<Input
 							id="export-directory"
 							type="text"
 							bind:value={exportDirectory}
-							class="input-field flex-grow bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 cursor-not-allowed"
 							readonly
-							placeholder="Select directory..."
-							autocomplete="off"
-							autocorrect="off"
+							class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
 						/>
-						<button type="button" on:click={selectExportDirectory} class="btn-secondary flex-shrink-0 text-xs px-3 py-1.5">
-							Browse
-						</button>
+						<Button color="alternative" on:click={selectExportDirectory} class="px-3" title="Browse">
+							<FolderOpen size={18} />
+						</Button>
 					</div>
 				</div>
 			</div>
 
-			<!-- Footer Buttons -->
-			<div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600 mt-6">
-				<button type="button" on:click={closeModal} class="btn-secondary">
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+				<Button color="alternative" on:click={closeModal} title="Cancel">
 					Cancel
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					color="blue"
 					on:click={handleConfirm}
-					class="btn-primary"
+                    title="Export to {exportFormat.toUpperCase()}"
 					disabled={
 						!exportFileName || exportFileName.trim() === '' ||
 						!exportDirectory || exportDirectory.trim() === '' ||
@@ -349,43 +364,8 @@
 					}
 				>
 					Export {exportFormat.toUpperCase()}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style lang="postcss">
-	/* Reuse button/input styles from other components */
-	.btn-primary, .btn-secondary {
-		@apply px-4 py-2 rounded-md shadow-sm text-sm font-medium transition duration-150 ease-in-out;
-	}
-	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 dark:disabled:bg-gray-600;
-	}
-	 .btn-secondary {
-		@apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800;
-	}
-	.input-field {
-		@apply block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm;
-	}
-	 /* Add dark mode styling */
-	 .dark .input-field {
-		 @apply bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400;
-	 }
-	 .dark .input-field:read-only {
-		 @apply bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed;
-	 }
-
-	 select.input-field {
-		 @apply appearance-none pr-8; /* Add padding for dropdown arrow */
-		 background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%236b7280%22%3E%3Cpath%20d%3D%22M7.293%209.293a1%201%200%20011.414%200L12%2012.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20fill-rule%3D%22evenodd%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E');
-		 background-repeat: no-repeat;
-		 background-size: 1rem 1rem; /* 16px */
-		 background-position: right 0.5rem center;
-	 }
-
-	 select.input-field option[disabled] {
-		 color: #9ca3af; /* gray-400 */
-	 }
-</style>
