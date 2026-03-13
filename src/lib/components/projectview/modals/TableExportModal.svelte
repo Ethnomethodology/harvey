@@ -227,7 +227,8 @@
 							class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
 						/>
 						<Button color="alternative" on:click={selectExportDirectory} class="px-3">
-							<FolderOpen size={18} />
+							Browse
+							<FolderOpen size={18} class="ml-2" />
 						</Button>
 					</div>
 				</div>
