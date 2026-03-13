@@ -12,7 +12,7 @@
         Helper,
         Badge, Modal
     } from 'flowbite-svelte';
-    import { Download, FolderOpen, X } from 'lucide-svelte';
+    import { Share, FolderOpen, X } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let tablePath = '';
@@ -178,7 +178,7 @@
             <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center space-x-3">
                     <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <Download size={20} class="text-blue-600 dark:text-blue-400" />
+                        <Share size={20} class="text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 id="table-export-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[250px]" title="{modalTitle}">
                         Export Table
