@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/modals/CreateTableModal.svelte -->
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
+import { Modal } from 'flowbite-svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { Plus, Trash2, X, Table as TableIcon } from 'lucide-svelte';

@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/modals/HeaderConfirmationModal.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
+import { Modal } from 'flowbite-svelte';
 	import { fade } from 'svelte/transition';
     import { 
         Input, 

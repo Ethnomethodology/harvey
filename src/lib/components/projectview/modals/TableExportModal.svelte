@@ -10,7 +10,7 @@
         Select, 
         Button, 
         Helper,
-        Badge
+        Badge, Modal
     } from 'flowbite-svelte';
     import { Download, FolderOpen, X } from 'lucide-svelte';
 
