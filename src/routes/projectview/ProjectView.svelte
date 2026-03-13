@@ -232,7 +232,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onMount(async () => {
 		const appWindow = getCurrentWindow();
-		await appWindow.setMinSize(new LogicalSize(1280, 600));
+		await appWindow.setMinSize(new LogicalSize(1024, 600));
 		await appWindow.maximize();
         await invoke('set_menu_context', { context: 'project' }).catch(err => console.warn('Failed to set menu context:', err));
 

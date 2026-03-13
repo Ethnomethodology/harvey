@@ -547,7 +547,7 @@
         {#if $project.activeDocumentEditorRef}
         <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
             <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
-            <span>Live Transcribe</span>
+            <span class="whitespace-nowrap">Live Transcribe</span>
         </Button>
         {/if}
         {#if isLexicalDocument}
