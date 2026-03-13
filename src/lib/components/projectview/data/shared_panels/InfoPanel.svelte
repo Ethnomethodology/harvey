@@ -119,7 +119,6 @@
 
     let currentFileMetadata = null;
     let currentOriginalAssetDetails = null; // Store the full details object
-    let isEditing = false;
     let editableMetadata = { file_name: '', title: '', description: '', summary: '', customFields: [] };
     let showAddFieldModal = false;
     let displayableCustomFields = [];
@@ -234,11 +233,60 @@
         previousProcessedItemPath = assetRelativePathToLoad; // Crucial: update after attempt
     }
 
-    function toggleEditMode() {
-        isEditing = !isEditing;
+    let saveTimeout;
+    function debouncedSaveMetadata() {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveTextMetadata();
+        }, 1000);
     }
 
-    async function handleSaveMetadata() {
+    async function handleFileNameBlur() {
+        await saveFileName();
+    }
+
+    async function handleFileNameKeydown(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.target.blur(); // Triggers blur which saves
+        }
+    }
+
+    async function saveFileName() {
+        if (!currentFileMetadata || !currentFileMetadata.file_path || !itemType) return;
+
+        const currentFullFileName = currentFileMetadata.file_name;
+        const currentFileExtension = await getFileExtname(currentFullFileName).then(ext => ext ? ext.substring(1).toLowerCase() : '');
+        const currentFileNameWithoutExtension = currentFileExtension ? currentFullFileName.substring(0, currentFullFileName.lastIndexOf('.')) : currentFullFileName;
+        const editedFileNameStem = editableMetadata.file_name.trim();
+
+        if (editedFileNameStem !== currentFileNameWithoutExtension) {
+            if (!editedFileNameStem) {
+                await message('File name (stem) cannot be empty.', { title: 'Invalid File Name', type: 'error' });
+                editableMetadata.file_name = currentFileNameWithoutExtension; // revert
+                return;
+            }
+            let nameToSend;
+            if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
+                nameToSend = editedFileNameStem;
+            } else if (itemType === 'imported_transcript') {
+                nameToSend = editedFileNameStem.endsWith('.json') ? editedFileNameStem : `${editedFileNameStem}.json`;
+            } else {
+                nameToSend = currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem;
+            }
+
+            let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'imported_transcript' : itemType);
+
+            try {
+                await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
+                // Rely on itemPath prop change from ProjectView/NotesView to trigger full reload if name change affects path
+            } catch (err) {
+                await message(`Error renaming item: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
+            }
+        }
+    }
+
+    async function saveTextMetadata() {
         let renameProcessed = false;
         if (!currentFileMetadata || !currentFileMetadata.file_path || !itemType) {
             await message('Cannot save: Missing file path or item type.', { title: 'Save Error', type: 'error' });
@@ -247,76 +295,41 @@
 
         try {
             const assetRelativePath = currentFileMetadata.file_path;
-            const currentFullFileName = currentFileMetadata.file_name;
-            const currentFileExtension = await getFileExtname(currentFullFileName).then(ext => ext ? ext.substring(1).toLowerCase() : '');
-            const currentFileNameWithoutExtension = currentFileExtension ? currentFullFileName.substring(0, currentFullFileName.lastIndexOf('.')) : currentFullFileName;
-            const editedFileNameStem = editableMetadata.file_name.trim();
+            const projectStoreState = get(project);
+            const metadataPayloadForDb = {
+                file_name: currentFileMetadata.file_name,
+                file_path: currentFileMetadata.db_absolute_file_path,
+                last_modified: new Date().toISOString(),
+                title: editableMetadata.title.trim(), description: editableMetadata.description.trim(), summary: editableMetadata.summary.trim(),
+                duration_seconds: currentFileMetadata.duration_seconds, width: currentFileMetadata.width, height: currentFileMetadata.height,
+                frame_rate: currentFileMetadata.frame_rate, bit_rate: currentFileMetadata.bit_rate,
+                audio_codec: currentFileMetadata.audio_codec, video_codec: currentFileMetadata.video_codec,
+                creation_time: currentFileMetadata.creation_time,
+            };
+            const customFieldsToSaveForDb = editableMetadata.customFields || [];
+            try {
+                await invoke('update_asset_metadata_command', {
+                    projectXmlPathStr: projectStoreState.xmlPath,
+                    assetRelativePath: assetRelativePath,
+                    metadataPayload: metadataPayloadForDb,
+                    customFieldsPayload: customFieldsToSaveForDb,
+                    assetType: itemType
+                });
+                // Update local state optimistically
+                currentFileMetadata.title = metadataPayloadForDb.title;
+                currentFileMetadata.description = metadataPayloadForDb.description;
+                currentFileMetadata.summary = metadataPayloadForDb.summary;
+                currentFileMetadata.last_modified = metadataPayloadForDb.last_modified;
+                currentFileMetadata.customFields = JSON.parse(JSON.stringify(customFieldsToSaveForDb));
 
-            if (editedFileNameStem !== currentFileNameWithoutExtension) {
-                if (!editedFileNameStem) {
-                    await message('File name (stem) cannot be empty.', { title: 'Invalid File Name', type: 'error' });
-                    isEditing = true; return;
-                }
-                let nameToSend;
-                if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
-                    nameToSend = editedFileNameStem;
-                } else if (itemType === 'imported_transcript') {
-                    nameToSend = editedFileNameStem.endsWith('.json') ? editedFileNameStem : `${editedFileNameStem}.json`;
-                } else {
-                    nameToSend = currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem;
-                }
-
-                let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'imported_transcript' : itemType);
-
-                try {
-                    await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
-                    isEditing = false; renameProcessed = true;
-                    project.update(p => ({...p, isDocumentMetadataDirty: false, isMediaNoteMetadataDirty: false}));
-                    // Rely on itemPath prop change from ProjectView/NotesView to trigger full reload if name change affects path
-                } catch (err) {
-                    await message(`Error renaming item: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
-                    isEditing = true; return;
-                }
-            }
-
-            if (!renameProcessed) {
-                const projectStoreState = get(project);
-                const metadataPayloadForDb = {
-                    file_name: currentFileMetadata.file_name,
-                    file_path: currentFileMetadata.db_absolute_file_path,
-                    last_modified: new Date().toISOString(),
-                    title: editableMetadata.title.trim(), description: editableMetadata.description.trim(), summary: editableMetadata.summary.trim(),
-                    duration_seconds: currentFileMetadata.duration_seconds, width: currentFileMetadata.width, height: currentFileMetadata.height,
-                    frame_rate: currentFileMetadata.frame_rate, bit_rate: currentFileMetadata.bit_rate,
-                    audio_codec: currentFileMetadata.audio_codec, video_codec: currentFileMetadata.video_codec,
-                    creation_time: currentFileMetadata.creation_time,
-                };
-                const customFieldsToSaveForDb = editableMetadata.customFields || [];
-                try {
-                    await invoke('update_asset_metadata_command', {
-                        projectXmlPathStr: projectStoreState.xmlPath,
-                        assetRelativePath: assetRelativePath,
-                        metadataPayload: metadataPayloadForDb,
-                        customFieldsPayload: customFieldsToSaveForDb,
-                        assetType: itemType
-                    });
-                    // Update local state optimistically if not renamed
-                    currentFileMetadata.title = metadataPayloadForDb.title;
-                    currentFileMetadata.description = metadataPayloadForDb.description;
-                    currentFileMetadata.summary = metadataPayloadForDb.summary;
-                    currentFileMetadata.last_modified = metadataPayloadForDb.last_modified;
-                    currentFileMetadata.customFields = JSON.parse(JSON.stringify(customFieldsToSaveForDb));
-                    isEditing = false;
-                    project.update(p => ({...p, isDocumentMetadataDirty: false, isMediaNoteMetadataDirty: false}));
-                } catch (err) {
-                    console.error("Error saving metadata:", err);
-                    await message(`Error saving metadata: ${err}.`, { title: 'Save Failed', type: 'error' });
-                }
+                project.update(p => ({...p, isDocumentMetadataDirty: false, isMediaNoteMetadataDirty: false}));
+            } catch (err) {
+                console.error("Error saving metadata:", err);
+                await message(`Error saving metadata: ${err}.`, { title: 'Save Failed', type: 'error' });
             }
         } catch (err) {
-            console.error("Unexpected error in handleSaveMetadata:", err);
+            console.error("Unexpected error in saveTextMetadata:", err);
             await message(`An unexpected error occurred: ${err.message || err}.`, { title: 'Error', type: 'error' });
-            isEditing = true;
         }
     }
 
@@ -391,7 +404,6 @@
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
                 if (newDerivedRelativePath && newDerivedRelativePath !== previousProcessedItemPath) {
-                    isEditing = false;
                     currentOriginalAssetDetails = newOriginalDetails; // Store details
                     currentAssetRelativePathForGroups = newDerivedRelativePath;
 
@@ -411,7 +423,6 @@
                     currentAssetRelativePathForGroups = null;
                     fileAssignedGroups = [];
                     previousProcessedItemPath = null; // Explicitly clear if itemPath prop becomes null
-                    if(isEditing) isEditing = false;
                 }
                 // If newDerivedRelativePath === previousProcessedItemPath, we do nothing to prevent reloads for the same item.
             } else {
@@ -423,7 +434,6 @@
                 if (itemPath === null) { // Only clear previous if itemPath is definitively null
                     previousProcessedItemPath = null;
                 }
-                if(isEditing) isEditing = false;
             }
         })();
     }
@@ -432,7 +442,6 @@
         if (currentFileMetadata && $customFieldDefinitionsStore) {
             const assetCustomValues = currentFileMetadata.customFields || [];
             let newEditableCustomFields = [];
-            let newDisplayableCustomFields = [];
             for (const def of $customFieldDefinitionsStore) {
                 let isApplicable = false;
                 if (typeof def.scope === 'string') {
@@ -445,23 +454,16 @@
                 if (isApplicable) {
                     const existingAssetField = assetCustomValues.find(cf => cf.key === def.field_key);
                     const valueToUse = existingAssetField?.value ?? def.default_value ?? '';
-                    if (isEditing) {
-                        newEditableCustomFields.push({ key: def.field_key, name: def.field_name, type: def.field_type, value: valueToUse });
-                    } else {
-                        newDisplayableCustomFields.push({ key: def.field_key, name: def.field_name, type: def.field_type, value: valueToUse });
-                    }
+                    newEditableCustomFields.push({ key: def.field_key, name: def.field_name, type: def.field_type, value: valueToUse });
                 }
             }
             newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
-            newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
             editableMetadata.customFields = newEditableCustomFields;
-            displayableCustomFields = newDisplayableCustomFields;
         } else {
             editableMetadata.customFields = [];
-            displayableCustomFields = [];
         }
 
-        if (isEditing && currentFileMetadata) {
+        if (currentFileMetadata) {
             if (currentFileMetadata.file_name) {
                 const ext = currentFileMetadata.file_name.includes('.') ? currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.') + 1) : '';
                 const nameWithoutExt = ext ? currentFileMetadata.file_name.substring(0, currentFileMetadata.file_name.length - (ext.length + (ext ? 1:0)) ) : currentFileMetadata.file_name;
@@ -472,7 +474,7 @@
             editableMetadata.title = currentFileMetadata.title || '';
             editableMetadata.description = currentFileMetadata.description || '';
             editableMetadata.summary = currentFileMetadata.summary || '';
-        } else if (!isEditing) {
+        } else {
             editableMetadata.file_name = '';
             editableMetadata.title = '';
             editableMetadata.description = '';
@@ -480,31 +482,8 @@
         }
     }
 
-    $: if (isEditing && currentFileMetadata) {
-        const originalNameStem = currentFileMetadata.file_name.includes('.') ? currentFileMetadata.file_name.substring(0, currentFileMetadata.file_name.lastIndexOf('.')) : currentFileMetadata.file_name;
-        const nameChanged = editableMetadata.file_name.trim() !== originalNameStem;
-        const titleChanged = editableMetadata.title.trim() !== (currentFileMetadata.title || '');
-        const descriptionChanged = editableMetadata.description.trim() !== (currentFileMetadata.description || '');
-        const summaryChanged = editableMetadata.summary.trim() !== (currentFileMetadata.summary || '');
-        let customFieldsChanged = false;
-        if (editableMetadata.customFields.length !== (currentFileMetadata.customFields || []).length) {
-            customFieldsChanged = true;
-        } else {
-            for (const editableField of editableMetadata.customFields) {
-                const originalField = (currentFileMetadata.customFields || []).find(cf => cf.key === editableField.key);
-                if (!originalField || (originalField.value || '') !== (editableField.value || '')) {
-                    customFieldsChanged = true;
-                    break;
-                }
-            }
-        }
-        const isDirty = nameChanged || titleChanged || descriptionChanged || summaryChanged || customFieldsChanged;
-        if (itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript') {
-            project.update(p => ({ ...p, isDocumentMetadataDirty: isDirty }));
-        } else if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
-            project.update(p => ({ ...p, isMediaNoteMetadataDirty: isDirty }));
-        }
-    } else {
+    // Always clear dirty flags since we don't have manual saves anymore
+    $: {
         const currentProjectState = get(project);
         if (itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript') {
             if (currentProjectState.isDocumentMetadataDirty) project.update(p => ({ ...p, isDocumentMetadataDirty: false }));
@@ -519,19 +498,6 @@
         <div class="flex items-center space-x-2">
             <span class="ml-1">Metadata</span>
         </div>
-        {#if currentFileMetadata}
-            <button
-                on:click={toggleEditMode}
-                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
-                title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
-            >
-                {#if isEditing}
-                    <XSquare class="w-4 h-4" />
-                {:else}
-                    <SquarePen class="w-4 h-4" />
-                {/if}
-            </button>
-        {/if}
     </div>
 
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
@@ -539,15 +505,11 @@
             <div class="space-y-3 mt-1 pb-4">
                 <div>
                     <Label for="fileNameInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">File Name</Label>
-                    {#if isEditing}
-                        <Input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} class="text-xs !py-1.5" size="sm" placeholder="Enter name without extension" autocorrect="off" autocomplete="off" />
-                        {#if currentFileMetadata.file_name && currentFileMetadata.file_name.includes('.')}
-                            <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                                Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
-                            </p>
-                        {/if}
-                    {:else}
-                        <div id="fileNameInput" class="text-xs text-gray-900 dark:text-gray-100 break-words px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.file_name || 'N/A'}</div>
+                    <Input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} class="text-xs !py-1.5" size="sm" placeholder="Enter name without extension" autocorrect="off" autocomplete="off" on:blur={handleFileNameBlur} on:keydown={handleFileNameKeydown} />
+                    {#if currentFileMetadata.file_name && currentFileMetadata.file_name.includes('.')}
+                        <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                            Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
+                        </p>
                     {/if}
                 </div>
 
@@ -577,29 +539,17 @@
 
                 <div>
                     <Label for="titleInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Title</Label>
-                    {#if isEditing}
-                        <Input type="text" id="titleInput" bind:value={editableMetadata.title} class="text-xs !py-1.5" size="sm" autocorrect="off" autocomplete="off" />
-                    {:else}
-                        <div id="titleInput" class="text-xs text-gray-900 dark:text-gray-100 break-words px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[30px]">{currentFileMetadata.title || ''}</div>
-                    {/if}
+                    <Input type="text" id="titleInput" bind:value={editableMetadata.title} on:input={debouncedSaveMetadata} class="text-xs !py-1.5" size="sm" autocorrect="off" autocomplete="off" />
                 </div>
 
                 <div>
                     <Label for="descriptionInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Description</Label>
-                    {#if isEditing}
-                        <Textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
-                    {:else}
-                        <div id="descriptionInput" class="text-xs text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[50px]">{currentFileMetadata.description || ''}</div>
-                    {/if}
+                    <Textarea id="descriptionInput" bind:value={editableMetadata.description} on:input={debouncedSaveMetadata} rows="3" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
                 </div>
 
                 <div>
                     <Label for="summaryInput" class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">Summary</Label>
-                    {#if isEditing}
-                        <Textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
-                    {:else}
-                        <div id="summaryInput" class="text-xs text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md min-h-[50px]">{currentFileMetadata.summary || ''}</div>
-                    {/if}
+                    <Textarea id="summaryInput" bind:value={editableMetadata.summary} on:input={debouncedSaveMetadata} rows="2" class="text-xs !py-1.5" autocorrect="off" autocomplete="off" />
                 </div>
 
                 <!-- Attachments Section -->
@@ -679,107 +629,73 @@
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-1">Groups</h3>
                         {#if isLoadingFileGroups}
                             <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
-                        {:else if isEditing}
+                        {:else}
                             <MultiSelect
                                 itemType="group"
                                 allOptions={allProjectGroupsForPanel.map(g => g.name)}
                                 assignedOptions={fileAssignedGroups.map(g => g.name)}
-                                isEditable={isEditing}
+                                isEditable={true}
                                 placeholder="No groups assigned."
                                 on:update={handleGroupsUpdate}
                                 on:create={handleCreateGroup}
                             />
-                        {:else}
-                            {#if fileAssignedGroups && fileAssignedGroups.length > 0}
-                                <div class="flex flex-wrap gap-1 mt-1">
-                                    {#each fileAssignedGroups as group (group.id)}
-                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-full">
-                                            {group.name}
-                                        </span>
-                                    {/each}
-                                </div>
-                            {:else}
-                                <p class="text-xs text-gray-400 dark:text-gray-500 italic mt-1">No groups assigned.</p>
-                            {/if}
                         {/if}
                     </div>
                 {/if}
 
-                {#if $customFieldDefinitionsStore && ($customFieldDefinitionsStore.length > 0 || isEditing)}
+                {#if $customFieldDefinitionsStore}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
-                        {#if isEditing}
-                            <button
-                                on:click={() => showAddFieldModal = true}
-                                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
-                                title="Add Custom Field Definition"
-                                aria-label="Add Custom Field Definition"
-                            >
-                                <PlusCircle class="w-4 h-4" />
-                            </button>
-                        {/if}
+                        <button
+                            on:click={() => showAddFieldModal = true}
+                            class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
+                            title="Add Custom Field Definition"
+                            aria-label="Add Custom Field Definition"
+                        >
+                            <PlusCircle class="w-4 h-4" />
+                        </button>
                     </div>
-                {/if}
 
-                {#if !isEditing}
-                    {#each displayableCustomFields as field, index (field.key + '-' + index)}
-                        <div>
-                            <Label for={`custom-field-display-${index}`} class="mb-1 text-xs text-gray-500 font-semibold uppercase tracking-wide">{field.name || field.key}</Label>
-                            <div id={`custom-field-display-${index}`} class="text-xs text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all min-h-[50px]' : 'break-words break-all min-h-[30px]'} px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md">
-                                {field.value || ''}
+                    <div class="space-y-3">
+                        {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <Label for={`custom-field-edit-${field.key}`} class="text-xs text-gray-500 font-semibold uppercase tracking-wide">{field.name || field.key}</Label>
+                                    <button
+                                        on:click={() => handleDeleteCustomField(field.key)}
+                                        title={`Delete '${field.name || field.key}' definition`}
+                                        class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 flex items-center justify-center rounded"
+                                    >
+                                        <Trash2 class="w-3 h-3" />
+                                    </button>
+                                </div>
+                                {#if field.type === 'small_text'}
+                                    <Input
+                                        type="text"
+                                        id={`custom-field-edit-${field.key}`}
+                                        bind:value={editableMetadata.customFields[index].value}
+                                        on:input={debouncedSaveMetadata}
+                                        class="text-xs !py-1.5"
+                                        size="sm"
+                                        placeholder={`Enter value for ${field.name || field.key}`}
+                                        autocorrect="off" autocomplete="off" />
+                                {:else if field.type === 'long_text'}
+                                    <Textarea
+                                        id={`custom-field-edit-${field.key}`}
+                                        rows="3"
+                                        class="text-xs !py-1.5"
+                                        bind:value={editableMetadata.customFields[index].value}
+                                        on:input={debouncedSaveMetadata}
+                                        placeholder={`Enter value for ${field.name || field.key}`}
+                                        autocorrect="off" autocomplete="off" />
+                                {/if}
                             </div>
-                        </div>
-                    {/each}
-                    {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 italic mt-2">No custom field values set for this item. Edit to add.</p>
-                    {/if}
-                {/if}
-
-                {#if isEditing}
-                    {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <Label for={`custom-field-edit-${field.key}`} class="text-xs text-gray-500 font-semibold uppercase tracking-wide">{field.name || field.key}</Label>
-                                <button
-                                    on:click={() => handleDeleteCustomField(field.key)}
-                                    title={`Delete '${field.name || field.key}' definition`}
-                                    class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 flex items-center justify-center rounded"
-                                >
-                                    <Trash2 class="w-3 h-3" />
-                                </button>
-                            </div>
-                            {#if field.type === 'small_text'}
-                                <Input
-                                    type="text"
-                                    id={`custom-field-edit-${field.key}`}
-                                    bind:value={editableMetadata.customFields[index].value}
-                                    class="text-xs !py-1.5"
-                                    size="sm"
-                                    placeholder={`Enter value for ${field.name || field.key}`}
-                                    autocorrect="off" autocomplete="off" />
-                            {:else if field.type === 'long_text'}
-                                <Textarea
-                                    id={`custom-field-edit-${field.key}`}
-                                    rows="3"
-                                    class="text-xs !py-1.5"
-                                    bind:value={editableMetadata.customFields[index].value}
-                                    placeholder={`Enter value for ${field.name || field.key}`}
-                                    autocorrect="off" autocomplete="off" />
-                            {/if}
-                        </div>
-                    {/each}
+                        {/each}
+                    </div>
                      {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Edit to add.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Add a definition above.</p>
                     {/if}
-                {/if}
-
-                {#if isEditing}
-                    <div class="mt-4 flex justify-end items-center">
-                        <Button color="blue" size="xs" on:click={handleSaveMetadata}>
-                            Save Changes
-                        </Button>
-                    </div>
                 {/if}
             </div>
         {:else}
