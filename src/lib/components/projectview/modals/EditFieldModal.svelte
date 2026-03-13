@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/EditFieldModal.svelte -->
 <script>
     import { createEventDispatcher } from 'svelte';
-import { Modal } from 'flowbite-svelte';
+
     import { 
         Type as TypeIcon, 
         Hash, 
