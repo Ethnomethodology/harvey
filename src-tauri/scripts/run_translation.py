@@ -238,6 +238,45 @@ def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=
             
     return translated
 
+def translate_with_sentence_splitting(segments, engine, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None, ct2_tgt_prefix=None):
+    """
+    Translates segments by splitting them into individual sentences for Helsinki models
+    which often struggle with multi-sentence inputs.
+    """
+    all_sentences = []
+    segment_map = [] # stores number of sentences per original segment
+    
+    sentence_splitter = re.compile(r'(?<=[.!?])\s+')
+    
+    for seg in segments:
+        text = seg.strip()
+        if not text:
+            segment_map.append(0)
+            continue
+            
+        sents = [s.strip() for s in sentence_splitter.split(text) if s.strip()]
+        segment_map.append(len(sents))
+        all_sentences.extend(sents)
+        
+    if not all_sentences:
+        return ["" for _ in segments]
+        
+    # Use standard bulk translation for the flat list of sentences
+    translated_sents = translate_bulk(all_sentences, engine, tokenizer, device, batch_size, src_lang, tgt_lang, ct2_tgt_prefix)
+    
+    final_results = []
+    curr = 0
+    for count in segment_map:
+        if count == 0:
+            final_results.append("")
+            continue
+        
+        segment_translation = " ".join(translated_sents[curr : curr + count])
+        final_results.append(segment_translation)
+        curr += count
+        
+    return final_results
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", required=True)
@@ -387,8 +426,12 @@ if __name__ == "__main__":
             sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Document mode (bulk)...")
             results = translate_bulk(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
         else:
-            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...")
-            results = translate_sliding_window(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
+            if is_nllb:
+                sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...")
+                results = translate_sliding_window(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
+            else:
+                sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sentence splitting)...")
+                results = translate_with_sentence_splitting(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=None, tgt_lang=None, ct2_tgt_prefix=None)
             
         print(json.dumps(results, ensure_ascii=False))
 
