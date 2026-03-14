@@ -468,17 +468,23 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
 		<div class="flex items-center">
-			{#if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
+			{#if selectedEngine === 'faster-whisper' && !$configStatus.python_libraries_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
+			{:else if selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">FASTER-WHISPER LIBRARIES MISSING</span>
+			{:else if selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">WHISPER.CPP LIBRARY MISSING</span>
+			{:else if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
 					{selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount} {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} {(selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span>
+				<span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase">NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
 
-	{#if $configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper}
+	{#if $configStatus.isInitialized && selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">
@@ -501,7 +507,7 @@
 		</div>
 	{/if}
 
-	{#if $configStatus.isInitialized && !$configStatus.whisper_cpp_installed && hasDownloadedWhisperCpp}
+	{#if $configStatus.isInitialized && selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">

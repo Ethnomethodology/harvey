@@ -140,12 +140,14 @@
   <div class="flex justify-between items-center mb-2 px-1">
     <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">
-      {#if isLoading}
-        <span class="text-xs text-gray-500 dark:text-gray-400">Checking...</span>
+      {#if !$configStatus.python_libraries_installed}
+        <span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
+      {:else if isLoading}
+        <span class="text-xs text-gray-500 dark:text-gray-400 uppercase">CHECKING...</span>
       {:else if hasAccess}
-        <span class="text-sm font-medium text-green-600 dark:text-green-400">Downloaded</span>
+        <span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">MODEL DOWNLOADED</span>
       {:else}
-        <span class="text-sm font-medium text-red-600 dark:text-red-400">Download Required</span>
+        <span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase">NO MODEL DOWNLOADED</span>
       {/if}
     </div>
   </div>

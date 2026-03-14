@@ -13,7 +13,7 @@
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
-	import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
+	import { Input, Label, Button, Select } from 'flowbite-svelte';
 	import { FolderOpen, Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
@@ -111,99 +111,97 @@
 	}
 </script>
 
-<div class="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
-		<ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
-			<li class="me-2">
-				<button
-					type="button"
-					on:click={() => (activeTab = 'application')}
-					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'application' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
-				>
-					<Settings2 size={18} class="me-2 {activeTab === 'application' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
-					Application
-					{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
-						<TriangleAlert size={14} class="ms-2 text-red-500" />
-					{/if}
-				</button>
-			</li>
-			<li class="me-2">
-				<button
-					type="button"
-					on:click={() => (activeTab = 'transcription')}
-					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'transcription' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
-				>
-					<Mic size={18} class="me-2 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
-					Transcription
-					{#if ($configStatus.selected_transcription_engine === 'whisper-cpp' && (!$configStatus.whisper_cpp_installed || !$configStatus.whisper_cpp_models_downloaded)) || ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_dependencies_installed || !$configStatus.faster_whisper_models_downloaded || !$configStatus.python_libraries_installed))}
-						<TriangleAlert size={14} class="ms-2 text-yellow-500" />
-					{/if}
-				</button>
-			</li>
-			<li class="me-2">
-				<button
-					type="button"
-					on:click={() => (activeTab = 'diarization')}
-					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'diarization' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
-				>
-					<Users size={18} class="me-2 {activeTab === 'diarization' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
-					Diarization
-					{#if !$configStatus.diarization_model_downloaded}
-						<TriangleAlert size={14} class="ms-2 text-yellow-500" />
-					{/if}
-				</button>
-			</li>
-			<li class="me-2">
-				<button
-					type="button"
-					on:click={() => (activeTab = 'translation')}
-					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'translation' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
-				>
-					<Languages size={18} class="me-2 {activeTab === 'translation' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
-					Translation
-					{#if ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) || ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded)}
-						<TriangleAlert size={14} class="ms-2 text-yellow-500" />
-					{/if}
-				</button>
-			</li>
-			<li class="me-2">
-				<button
-					type="button"
-					on:click={() => (activeTab = 'advanced')}
-					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'advanced' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
-				>
-					<SlidersHorizontal size={18} class="me-2 {activeTab === 'advanced' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
-					Advanced
-				</button>
-			</li>
-		</ul>
+<div class="flex h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+	<!-- Sidebar Navigation -->
+	<div class="w-64 border-r border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 flex-shrink-0 py-4 flex flex-col">
+		<nav class="flex-1 space-y-1 px-3">
+			<button
+				on:click={() => (activeTab = 'application')}
+				class="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {activeTab === 'application' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-white'}"
+			>
+				<Settings2 size={18} class="mr-3 flex-shrink-0 {activeTab === 'application' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500'}" />
+				<span class="truncate text-left flex-grow">Application</span>
+				{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
+					<TriangleAlert size={14} class="flex-shrink-0 text-red-500" />
+				{/if}
+			</button>
+
+			<button
+				on:click={() => (activeTab = 'transcription')}
+				class="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {activeTab === 'transcription' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-white'}"
+			>
+				<Mic size={18} class="mr-3 flex-shrink-0 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500'}" />
+				<span class="truncate text-left flex-grow">Transcription</span>
+				{#if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed) || ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_dependencies_installed || !$configStatus.python_libraries_installed))}
+					<TriangleAlert size={14} class="flex-shrink-0 text-red-500" title="Missing required libraries" />
+				{:else if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_models_downloaded) || ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.faster_whisper_models_downloaded)}
+					<TriangleAlert size={14} class="flex-shrink-0 text-yellow-500" title="No models downloaded" />
+				{/if}
+			</button>
+
+			<button
+				on:click={() => (activeTab = 'diarization')}
+				class="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {activeTab === 'diarization' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-white'}"
+			>
+				<Users size={18} class="mr-3 flex-shrink-0 {activeTab === 'diarization' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500'}" />
+				<span class="truncate text-left flex-grow">Diarization</span>
+				{#if !$configStatus.python_libraries_installed}
+					<TriangleAlert size={14} class="flex-shrink-0 text-red-500" title="Missing required Python libraries" />
+				{:else if !$configStatus.diarization_model_downloaded}
+					<TriangleAlert size={14} class="flex-shrink-0 text-yellow-500" title="No model downloaded" />
+				{/if}
+			</button>
+
+			<button
+				on:click={() => (activeTab = 'translation')}
+				class="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {activeTab === 'translation' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-white'}"
+			>
+				<Languages size={18} class="mr-3 flex-shrink-0 {activeTab === 'translation' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500'}" />
+				<span class="truncate text-left flex-grow">Translation</span>
+				{#if !$configStatus.python_libraries_installed}
+					<TriangleAlert size={14} class="flex-shrink-0 text-red-500" title="Missing required Python libraries" />
+				{:else if ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) || ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded)}
+					<TriangleAlert size={14} class="flex-shrink-0 text-yellow-500" title="No models downloaded" />
+				{/if}
+			</button>
+
+			<button
+				on:click={() => (activeTab = 'advanced')}
+				class="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {activeTab === 'advanced' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-white'}"
+			>
+				<SlidersHorizontal size={18} class="mr-3 flex-shrink-0 {activeTab === 'advanced' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500'}" />
+				<span class="truncate text-left flex-grow">Advanced</span>
+			</button>
+		</nav>
 	</div>
 
-	<!-- Tab Content Area -->
-	<div class="flex-grow min-h-0 overflow-y-auto p-6">
-		{#if activeTab === 'application'}
-            <div class="space-y-4">
-                {#if isLoadingConfig}
-                    <p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
-                {:else if configError}
-                    <p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
-						<span class="font-medium">Error:</span> {configError}
-					</p>
-                {/if}
+	<!-- Main Content Area -->
+	<div class="flex-1 min-w-0 overflow-y-auto p-8">
+		<div class="max-w-3xl mx-auto">
+			{#if activeTab === 'application'}
+				<div class="space-y-8">
+					{#if isLoadingConfig}
+						<p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
+					{:else if configError}
+						<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words">
+							<span class="font-medium">Error:</span> {configError}
+						</p>
+					{/if}
 
-				<Accordion class="w-full">
-					<AccordionItem open>
-						<span slot="header" class="text-base flex gap-2 font-semibold">
-							<Settings2 size={20} class="text-gray-500" />
-							General Settings
-						</span>
-						<div class="space-y-6">
+					<!-- General Settings Card -->
+					<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+							<h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+								<Settings2 size={18} class="text-blue-600 dark:text-blue-400" />
+								General Settings
+							</h3>
+						</div>
+						<div class="p-6 space-y-6">
 							<div class="space-y-2">
 								<Label for="theme-select">Theme</Label>
 								<Select
 									id="theme-select"
-									class="w-48"
+									class="max-w-xs"
 									items={[
 										{value: 'system', name: 'System'},
 										{value: 'light', name: 'Light'},
@@ -217,7 +215,7 @@
 								<Label for="download-location-input">
 									Local Model Download Location
 								</Label>
-								<div class="flex items-center gap-2">
+								<div class="flex items-center gap-2 max-w-2xl">
 									<Input
 										id="download-location-input"
 										type="text"
@@ -253,34 +251,37 @@
 								{/if}
 							</div>
 						</div>
-					</AccordionItem>
+					</div>
 
-					<AccordionItem>
-						<span slot="header" class="text-base flex items-center gap-2 font-semibold">
-							<Settings2 size={20} class="text-gray-500" />
-							Required Tools
+					<!-- Required Tools Card -->
+					<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center">
+							<h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+								<Settings2 size={18} class="text-blue-600 dark:text-blue-400" />
+								Required Tools
+							</h3>
 							{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
-								<TriangleAlert size={14} class="text-red-500" />
+								<span class="flex items-center text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-md border border-red-200 dark:border-red-800">
+									<TriangleAlert size={12} class="mr-1.5" /> Action Required
+								</span>
 							{/if}
-						</span>
-						<div class="space-y-6">
+						</div>
+						<div class="p-6 space-y-6">
 							<LibrariesPanel />
 							<HuggingFacePanel />
 						</div>
-					</AccordionItem>
-				</Accordion>
-            </div>
-		{:else if activeTab === 'transcription'}
-			<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
-		{:else if activeTab === 'diarization'}
-			<div class="p-1">
+					</div>
+				</div>
+			{:else if activeTab === 'transcription'}
+				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
+			{:else if activeTab === 'diarization'}
 				<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
-			</div>
-		{:else if activeTab === 'translation'}
-			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
-		{:else if activeTab === 'advanced'}
-			<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
-		{/if}
+			{:else if activeTab === 'translation'}
+				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
+			{:else if activeTab === 'advanced'}
+				<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
+			{/if}
+		</div>
 	</div>
 </div>
 

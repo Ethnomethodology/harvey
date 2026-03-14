@@ -485,12 +485,14 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Translation Models</h3>
 		<div class="flex items-center">
-			{#if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
+			{#if !$configStatus.python_libraries_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
+			{:else if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
 					{selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount} {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} {(selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
+				<span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
