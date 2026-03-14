@@ -91,6 +91,7 @@
     let diarizationLogs = $state([]);
     let showModelDetails = $state(false);
     let isCleaningUp = $state(false);
+    let isCheckingDiarization = $state(false);
 
     function resetWizard() {
         currentStep = 1;
@@ -118,6 +119,7 @@
         diarizationLogs = [];
         showModelDetails = false;
         isCleaningUp = false;
+        isCheckingDiarization = false;
     }
 
     let selectedModelsSummary = $derived.by(() => {
@@ -204,6 +206,7 @@
     });
 
     async function checkDiarizationStatus() {
+        isCheckingDiarization = true;
         try {
             diarizationDownloaded = await invoke('check_diarization_model_access');
             const hasToken = await invoke('check_hf_auth_status');
@@ -212,6 +215,11 @@
             }
         } catch (e) {
             console.error('Error checking diarization status:', e);
+        } finally {
+            // Small delay to prevent a flash if it returns too fast
+            setTimeout(() => {
+                isCheckingDiarization = false;
+            }, 600);
         }
     }
 
@@ -1079,112 +1087,119 @@
                         <Users class="w-6 h-6 text-amber-600 dark:text-amber-400" />
                     </div>
                     <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Diarization Setup</h3>
-                </div>                
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-8">
-                    Speaker diarization automatically identifies and separates different speakers in an audio file. Harvey uses the gated <button on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline font-medium">pyannote/speaker-diarization-3.1</button> model. Follow the steps below to authenticate and download the model.
-                </p>
+                </div>
 
-                <ol class="relative text-gray-700 dark:text-gray-300 border-s border-gray-200 dark:border-gray-700 ml-3.5">
-                    <!-- Step 1: Create Account -->
-                    <li class="mb-10 ms-8">
-                        <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
-                            <span class="font-medium text-sm">1</span>
-                        </span>
-                        <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Create HuggingFace Account</h3>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">If you don't have one, create a free HuggingFace account on their <button on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">website</button>.</p>
-                    </li>
+                {#if isCheckingDiarization}
+                    <div class="flex flex-col items-center justify-center py-12 space-y-4" in:fade>
+                        <Loader2 class="w-10 h-10 animate-spin text-amber-500" />
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Verifying existing setup...</p>
+                    </div>
+                {:else}
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-8">
+                        Speaker diarization automatically identifies and separates different speakers in an audio file. Harvey uses the gated <button on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline font-medium">pyannote/speaker-diarization-3.1</button> model. Follow the steps below to authenticate and download the model.
+                    </p>
 
-                    <!-- Step 2: Accept Agreement -->
-                    <li class="mb-10 ms-8">
-                        <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
-                            <span class="font-medium text-sm">2</span>
-                        </span>
-                        <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Accept Diarization Agreement</h3>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Accept the user agreement on the Pyannote HuggingFace page to unlock access to the model.</p>
-                        <button on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center">
-                            Open Pyannote Agreement <ExternalLink class="w-3 h-3 ml-1" />
-                        </button>
-                    </li>
+                    <ol class="relative text-gray-700 dark:text-gray-300 border-s border-gray-200 dark:border-gray-700 ml-3.5">
+                        <!-- Step 1: Create Account -->
+                        <li class="mb-10 ms-8">
+                            <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
+                                <span class="font-medium text-sm">1</span>
+                            </span>
+                            <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Create HuggingFace Account</h3>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">If you don't have one, create a free HuggingFace account on their <button on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">website</button>.</p>
+                        </li>
 
-                    <!-- Step 3: Generate Token -->
-                    <li class="mb-10 ms-8">
-                        <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
-                            <span class="font-medium text-sm">3</span>
-                        </span>
-                        <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Generate Access Token</h3>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">Generate an access token (Read access) from your HuggingFace account <button on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">settings</button>.</p>
-                    </li>
-
-                    <!-- Step 4: Verify Token -->
-                    <li class="mb-10 ms-8">
-                        <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}">
-                            <span class="font-medium text-sm">4</span>
-                        </span>
-                        <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Save Token to Harvey</h3>
-                        <div class="flex space-x-2 max-w-md">
-                            <input 
-                                type="password" 
-                                bind:value={hfToken} 
-                                on:input={() => { diarizationAccessGranted = false; diarizationError = ''; }} 
-                                placeholder="hf_..." 
-                                class="flex-grow border rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-gray-100" 
-                            />
-                            <button 
-                                on:click={verifyHfToken} 
-                                disabled={!hfToken || isVerifyingToken || isDownloadingDiarization || diarizationAccessGranted} 
-                                class="px-4 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg text-sm font-bold disabled:opacity-50 flex items-center transition-colors"
-                            >
-                                {#if isVerifyingToken}<Loader2 class="w-3.5 h-3.5 animate-spin mr-1.5" />{/if}
-                                {diarizationAccessGranted ? 'Verified' : 'Verify'}
+                        <!-- Step 2: Accept Agreement -->
+                        <li class="mb-10 ms-8">
+                            <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
+                                <span class="font-medium text-sm">2</span>
+                            </span>
+                            <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Accept Diarization Agreement</h3>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Accept the user agreement on the Pyannote HuggingFace page to unlock access to the model.</p>
+                            <button on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center">
+                                Open Pyannote Agreement <ExternalLink class="w-3 h-3 ml-1" />
                             </button>
-                        </div>
-                        {#if diarizationError && !isDownloadingDiarization}
-                            <p class="text-[10px] text-red-600 dark:text-red-400 font-medium mt-2 flex items-center"><AlertTriangle class="w-3 h-3 mr-1" /> {diarizationError}</p>
-                        {/if}
-                    </li>
+                        </li>
 
-                    <!-- Step 5: Download Model -->
-                    <li class="ms-8">
-                        <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (diarizationAccessGranted ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400')}">
-                            <span class="font-medium text-sm">5</span>
-                        </span>
-                        <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Download Model</h3>
-                        
-                        {#if diarizationDownloaded}
-                            <div class="flex items-center space-x-2 text-green-600 dark:text-green-400 text-sm font-bold" in:fade>
-                                <Check class="w-4 h-4" />
-                                <span>Model is successfully downloaded.</span>
-                            </div>
-                        {:else}
-                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Once authenticated and approved, download the model to your machine.</p>
-                            <button 
-                                on:click={downloadDiarization} 
-                                disabled={!diarizationAccessGranted || isDownloadingDiarization} 
-                                class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 shadow-lg transition-all"
-                            >
-                                {#if isDownloadingDiarization}<Loader2 class="w-4 h-4 animate-spin mr-2" />{:else}<Download class="w-4 h-4" />{/if}
-                                <span>{isDownloadingDiarization ? 'Downloading...' : 'Download Model'}</span>
-                            </button>
-                        {/if}
+                        <!-- Step 3: Generate Token -->
+                        <li class="mb-10 ms-8">
+                            <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
+                                <span class="font-medium text-sm">3</span>
+                            </span>
+                            <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Generate Access Token</h3>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">Generate an access token (Read access) from your HuggingFace account <button on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">settings</button>.</p>
+                        </li>
 
-                        {#if diarizationLogs.length > 0}
-                            <div class="mt-4 bg-gray-900 rounded-lg p-4 font-mono text-[10px] text-gray-300 h-40 overflow-y-auto scrollbar-hide border border-gray-800">
-                                {#each diarizationLogs as log}
-                                    <div class="mb-1 opacity-80"><span class="text-blue-500 mr-2">›</span>{log.message}</div>
-                                {/each}
-                                {#if isDownloadingDiarization}
-                                    <div class="flex items-center text-blue-400 mt-1">
-                                        <Loader2 class="w-3 h-3 animate-spin mr-2" />
-                                        <span>Processing...</span>
-                                    </div>
-                                {/if}
+                        <!-- Step 4: Verify Token -->
+                        <li class="mb-10 ms-8">
+                            <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationAccessGranted || diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}">
+                                <span class="font-medium text-sm">4</span>
+                            </span>
+                            <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Save Token to Harvey</h3>
+                            <div class="flex space-x-2 max-w-md">
+                                <input 
+                                    type="password" 
+                                    bind:value={hfToken} 
+                                    on:input={() => { diarizationAccessGranted = false; diarizationError = ''; }} 
+                                    placeholder="hf_..." 
+                                    class="flex-grow border rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-gray-100" 
+                                />
+                                <button 
+                                    on:click={verifyHfToken} 
+                                    disabled={!hfToken || isVerifyingToken || isDownloadingDiarization || diarizationAccessGranted} 
+                                    class="px-4 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg text-sm font-bold disabled:opacity-50 flex items-center transition-colors"
+                                >
+                                    {#if isVerifyingToken}<Loader2 class="w-3.5 h-3.5 animate-spin mr-1.5" />{/if}
+                                    {diarizationAccessGranted ? 'Verified' : 'Verify'}
+                                </button>
                             </div>
-                        {/if}
-                    </li>
-                </ol>
+                            {#if diarizationError && !isDownloadingDiarization}
+                                <p class="text-[10px] text-red-600 dark:text-red-400 font-medium mt-2 flex items-center"><AlertTriangle class="w-3 h-3 mr-1" /> {diarizationError}</p>
+                            {/if}
+                        </li>
+
+                        <!-- Step 5: Download Model -->
+                        <li class="ms-8">
+                            <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {diarizationDownloaded ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (diarizationAccessGranted ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400')}">
+                                <span class="font-medium text-sm">5</span>
+                            </span>
+                            <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Download Model</h3>
+
+                            {#if diarizationDownloaded}
+                                <div class="flex items-center space-x-2 text-green-600 dark:text-green-400 text-sm font-bold" in:fade>
+                                    <Check class="w-4 h-4" />
+                                    <span>Model is successfully downloaded.</span>
+                                </div>
+                            {:else}
+                                <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Once authenticated and approved, download the model to your machine.</p>
+                                <button 
+                                    on:click={downloadDiarization} 
+                                    disabled={!diarizationAccessGranted || isDownloadingDiarization} 
+                                    class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 shadow-lg transition-all"
+                                >
+                                    {#if isDownloadingDiarization}<Loader2 class="w-4 h-4 animate-spin mr-2" />{:else}<Download class="w-4 h-4" />{/if}
+                                    <span>{isDownloadingDiarization ? 'Downloading...' : 'Download Model'}</span>
+                                </button>
+                            {/if}
+
+                            {#if diarizationLogs.length > 0}
+                                <div class="mt-4 bg-gray-900 rounded-lg p-4 font-mono text-[10px] text-gray-300 h-40 overflow-y-auto scrollbar-hide border border-gray-800">
+                                    {#each diarizationLogs as log}
+                                        <div class="mb-1 opacity-80"><span class="text-blue-500 mr-2">›</span>{log.message}</div>
+                                    {/each}
+                                    {#if isDownloadingDiarization}
+                                        <div class="flex items-center text-blue-400 mt-1">
+                                            <Loader2 class="w-3 h-3 animate-spin mr-2" />
+                                            <span>Processing...</span>
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </li>
+                    </ol>
+                {/if}
             </div>
-        {/if}
-    </div>
+        {/if}    </div>
 
     <!-- Footer Area -->
     <svelte:fragment slot="footer">
