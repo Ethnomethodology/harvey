@@ -1,8 +1,8 @@
 <script>
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
-    import { Input, Label, Button, Select } from 'flowbite-svelte';
-    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight, Mic, Users, Languages } from 'lucide-svelte';
+    import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
+    import { CheckCircle, AlertTriangle, MessageSquareText, Users, Languages } from 'lucide-svelte';
 
     export let isBusy = false;
 
@@ -24,16 +24,6 @@
     let statusMessage = '';
     let statusType = 'info'; // info, success, error
     
-    // Collapsible panel states
-    let activePanel = 'transcription'; // transcription, diarization, translation
-
-    function togglePanel(panelName) {
-        if (activePanel === panelName) {
-            activePanel = '';
-        } else {
-            activePanel = panelName;
-        }
-    }
 
     const deviceOptions = [
         { value: 'auto', name: 'Auto (Recommended)' },
@@ -213,25 +203,15 @@
         </div>
     {/if}
 
-    <div class="space-y-4">
+    <Accordion class="w-full space-y-4 bg-transparent border-0" flush multiple={false}>
         <!-- Transcription Panel -->
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <button
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => togglePanel('transcription')}
-            >
-                <div class="flex items-center">
-                    <Mic size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
-                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
-                </div>
-                {#if activePanel === 'transcription'}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+            <AccordionItem open defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
+                    <MessageSquareText size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    Transcription Engine Parameters
+                </span>
 
-            {#if activePanel === 'transcription'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <!-- General Settings -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -269,27 +249,17 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
 
         <!-- Diarization Panel -->
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <button
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => togglePanel('diarization')}
-            >
-                <div class="flex items-center">
+            <AccordionItem defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
                     <Users size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
-                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
-                </div>
-                {#if activePanel === 'diarization'}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+                    Diarization Engine Parameters
+                </span>
 
-            {#if activePanel === 'diarization'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device -->
@@ -312,27 +282,17 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
 
         <!-- Translation Panel -->
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <button 
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => togglePanel('translation')}
-            >
-                <div class="flex items-center">
+            <AccordionItem defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
                     <Languages size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
-                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
-                </div>
-                {#if activePanel === 'translation'}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+                    Translation Engine Parameters
+                </span>
 
-            {#if activePanel === 'translation'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device & Backend -->
@@ -402,9 +362,9 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
-    </div>
+    </Accordion>
 </div>
 
 <style lang="postcss">

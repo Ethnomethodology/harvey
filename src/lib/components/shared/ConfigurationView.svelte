@@ -14,7 +14,7 @@
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
 	import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
-	import { FolderOpen, Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
+	import { FolderOpen, Settings2, MonitorCog, MessageSquareText, Users, Languages, SlidersHorizontal, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
@@ -32,6 +32,8 @@
 	let configError = '';
 	let isMovingModels = false;
 	let statusMessage = '';
+
+	let isGeneralOpen = true;
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
@@ -121,7 +123,7 @@
 					on:click={() => (activeTab = 'application')}
 					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'application' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
 				>
-					<Settings2 size={18} class="me-2 {activeTab === 'application' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					<MonitorCog size={18} class="me-2 {activeTab === 'application' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
 					Application
 					{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
 						<TriangleAlert size={14} class="ms-2 text-red-500" />
@@ -134,7 +136,7 @@
 					on:click={() => (activeTab = 'transcription')}
 					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'transcription' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
 				>
-					<Mic size={18} class="me-2 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					<MessageSquareText size={18} class="me-2 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
 					Transcription
 					{#if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed) || ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_dependencies_installed || !$configStatus.python_libraries_installed))}
 						<TriangleAlert size={14} class="ms-2 text-red-500" title="Missing required libraries" />
@@ -196,13 +198,13 @@
 					{/if}
 					<LibrariesPanel />
 
-					<Accordion class="w-full">
-						<AccordionItem>
-							<span slot="header" class="text-base flex items-center gap-2 font-semibold">
+					<Accordion class="w-full bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden" flush>
+						<AccordionItem bind:open={isGeneralOpen} defaultClass="w-full flex items-center justify-between px-6 py-4 text-left font-semibold text-gray-900 dark:text-gray-200 bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors border-b dark:border-gray-700">
+							<span slot="header" class="flex items-center gap-2 text-gray-900 dark:text-gray-200 text-base">
 								<Settings2 size={18} class="text-gray-500" />
 								General Settings
 							</span>
-							<div class="space-y-6 p-2">
+							<div class="p-6 space-y-6">
 								<div class="space-y-2">
 									<Label for="theme-select">Theme</Label>
 									<Select
