@@ -3,6 +3,7 @@
   import { createEventDispatcher } from 'svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
   import { Modal, Button } from 'flowbite-svelte';
+  import { Settings } from 'lucide-svelte';
 
   export let showModal = false;
 
@@ -13,18 +14,32 @@
   }
 </script>
 
-<Modal bind:open={showModal} size="3xl" autoclose={false} outsideclose={true} class="w-full z-50" style="height: 90vh;" on:close={close}>
-  <h2 id="configuration-modal-title" class="text-lg font-semibold text-gray-800" slot="header">Configurations</h2>
+<Modal
+  bind:open={showModal}
+  autoclose={false}
+  outsideclose={true}
+  class="w-full md:w-[50vw] md:max-w-[50vw] h-[50vh] flex flex-col p-0 overflow-hidden"
+  bodyClass="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-950 p-4"
+  headerClass="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
+  footerClass="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md"
+  on:close={close}
+>
+  <svelte:fragment slot="header">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+        <Settings size={20} class="text-blue-600 dark:text-blue-400" />
+      </div>
+      <h3 id="configuration-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate">
+        Configurations
+      </h3>
+    </div>
+  </svelte:fragment>
 
-  <div class="flex-grow overflow-y-auto my-4 pr-2 -mr-2 h-full">
-    <ConfigurationView />
-  </div>
+  <ConfigurationView />
 
   <svelte:fragment slot="footer">
-    <div class="flex justify-end space-x-3 w-full">
-      <Button color="alternative" on:click={close}>
-        Close
-      </Button>
-    </div>
+    <Button color="alternative" on:click={close} title="Close Configuration">
+      Close
+    </Button>
   </svelte:fragment>
 </Modal>

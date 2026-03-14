@@ -13,6 +13,8 @@
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
+	import { Input, Label, Button, Select } from 'flowbite-svelte';
+	import { FolderOpen } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
@@ -237,40 +239,49 @@
 					</p>
                 {/if}
 
-				<div class="mb-6 flex-shrink-0">
-					<label for="theme-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme</label>
-					<Dropdown
-						containerClasses="w-48"
-						options={[{value: 'system', label: 'System'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]}
+				<div class="mb-6 flex-shrink-0 space-y-2">
+					<Label for="theme-select">Theme</Label>
+					<Select
+						id="theme-select"
+						class="w-48"
+						items={[
+							{value: 'system', name: 'System'},
+							{value: 'light', name: 'Light'},
+							{value: 'dark', name: 'Dark'}
+						]}
 						bind:value={$themePreference}
 					/>
 				</div>
 
-                <div class="mb-6 flex-shrink-0">
-                    <label for="download-location-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div class="mb-6 flex-shrink-0 space-y-2">
+                    <Label for="download-location-input">
 						Local Model Download Location
-					</label>
-                    <div class="flex items-center space-x-2">
-                        <input
+					</Label>
+                    <div class="flex items-center gap-2">
+                        <Input
 							id="download-location-input"
 							type="text"
 							bind:value={downloadLocation}
-							class="input w-full flex-grow"
+							class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
 							readonly
 							placeholder="Set a location..."
 							title={downloadLocation || 'No location set'}
 							autocomplete="off"
 							autocorrect="off"
 						/>
-                        <button
-							type="button"
-							class="btn-blue flex-shrink-0"
+                        <Button
+							color="alternative"
+							class="px-3"
 							on:click={pickDownloadLocation}
 							disabled={isBusy}
 							title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
 						>
-							{#if isMovingModels} Moving... {:else} Browse {/if}
-						</button>
+							{#if isMovingModels}
+								Moving...
+							{:else}
+								<FolderOpen size={18} />
+							{/if}
+						</Button>
                     </div>
                     {#if isBusy && !isMovingModels}
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
