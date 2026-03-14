@@ -25,9 +25,15 @@
     let statusType = 'info'; // info, success, error
     
     // Collapsible panel states
-    let isDiarizationOpen = false;
-    let isTranslationOpen = false;
-    let isTranscriptionOpen = false;
+    let activePanel = 'transcription'; // transcription, diarization, translation
+
+    function togglePanel(panelName) {
+        if (activePanel === panelName) {
+            activePanel = '';
+        } else {
+            activePanel = panelName;
+        }
+    }
 
     const deviceOptions = [
         { value: 'auto', name: 'Auto (Recommended)' },
@@ -212,17 +218,17 @@
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isTranscriptionOpen = !isTranscriptionOpen}
+                on:click={() => togglePanel('transcription')}
             >
                 <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
-                {#if isTranscriptionOpen}
+                {#if activePanel === 'transcription'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
                     <ChevronRight class="w-4 h-4 text-gray-500" />
                 {/if}
             </button>
 
-            {#if isTranscriptionOpen}
+            {#if activePanel === 'transcription'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <!-- General Settings -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -267,17 +273,17 @@
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isDiarizationOpen = !isDiarizationOpen}
+                on:click={() => togglePanel('diarization')}
             >
                 <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
-                {#if isDiarizationOpen}
+                {#if activePanel === 'diarization'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
                     <ChevronRight class="w-4 h-4 text-gray-500" />
                 {/if}
             </button>
 
-            {#if isDiarizationOpen}
+            {#if activePanel === 'diarization'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device -->
@@ -307,17 +313,17 @@
         <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button 
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isTranslationOpen = !isTranslationOpen}
+                on:click={() => togglePanel('translation')}
             >
                 <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
-                {#if isTranslationOpen}
+                {#if activePanel === 'translation'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
                     <ChevronRight class="w-4 h-4 text-gray-500" />
                 {/if}
             </button>
 
-            {#if isTranslationOpen}
+            {#if activePanel === 'translation'}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device & Backend -->
