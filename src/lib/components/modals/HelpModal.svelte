@@ -160,7 +160,7 @@
   outsideclose
   on:close={close}
   dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[150] w-full p-4 flex"
-  class="w-full md:w-[80vw] md:max-w-[1200px] lg:w-[80vw] lg:max-w-[1200px] xl:w-[80vw] xl:max-w-[1200px] h-[80vh] flex flex-col p-0 overflow-hidden"
+  class="w-full md:w-[75vw] lg:w-[75vw] xl:w-[75vw] min-w-[75vw] max-w-[95vw] h-[80vh] flex flex-col p-0 overflow-hidden"
   bodyClass="flex-grow overflow-y-auto bg-white dark:bg-gray-900 p-0"
   headerClass="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
 >
