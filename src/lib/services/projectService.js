@@ -104,24 +104,6 @@ export function normalizePath(path) {
     return normalized;
 }
 
-/**
- * Updates the name and description for a specific tag.
- * @param {string} projectId - The ID of the project.
- * @param {string} projectRootPath - The root path of the project.
- * @param {string} oldName - The current name of the tag.
- * @param {string} newName - The new name for the tag.
- * @param {string} newDescription - The new description for the tag.
- */
-export async function updateTag(projectId, projectRootPath, oldName, newName, newDescription) {
-    return await invoke('update_tag', {
-        projectId,
-        projectRootPathStr: projectRootPath,
-        oldName,
-        newName,
-        newDescription,
-    });
-}
-
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     const currentProject = get(project);
     const projectId = currentProject.id;
@@ -562,8 +544,9 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
-              if (node.file_type === 'media' && node.transcripts) {
-                 node.transcripts = node.transcripts.map(t => {
+              if (node.file_type === 'media') {
+                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
+                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
                     let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
@@ -588,7 +571,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                         }
                     }
                     return {
-                        path: absolutePath, // This will be null if construction failed
+                        path: absolutePath ? normalizePath(absolutePath) : null,
                         relativePath: t.relativePath, // Always preserve the original relativePath
                         language_code: t.language_code, // Pass the language code
                         name: name // Add the name property

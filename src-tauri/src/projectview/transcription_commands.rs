@@ -1427,7 +1427,7 @@ pub async fn transcribe_media_command<R: Runtime>(
         .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
 
     let original_lang_code_to_save = match payload.language_code.as_deref() {
-        None | Some("") | Some("auto") => Some("original".to_string()),
+        None | Some("") | Some("auto") => Some("auto".to_string()),
         Some(lang) => Some(lang.to_string()),
     };
 

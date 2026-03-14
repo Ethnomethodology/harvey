@@ -492,16 +492,22 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const mediaFile = ts.selectedMediaFile;
-        const projectRootPath = get(projectMainStore).projectRootPath;
+        const projectRootPath = get(projectMainStore).baseDirectory;
 
         let relativePathToMatch = normalizedInputPath;
         if (projectRootPath && normalizedInputPath.startsWith(projectRootPath)) {
             relativePathToMatch = normalizedInputPath.substring(projectRootPath.length).replace(/^[\\/]/, '');
         }
+        
+        // Ensure relativePathToMatch doesn't have a leading slash for comparison
+        relativePathToMatch = relativePathToMatch.replace(/^[\\/]/, '');
 
         const transcriptInfo = mediaFile?.associated_transcripts?.find(t => {
+            if (!t) return false;
             // Compare against relativePath if available, otherwise fallback to path
-            return t.relativePath === relativePathToMatch || t.path === normalizedInputPath;
+            const tRel = (t.relativePath || '').replace(/^[\\/]/, '').replace(/\\/g, '/');
+            const tPath = normalizePath(t.path || '');
+            return (tRel && tRel === relativePathToMatch) || (tPath && tPath === normalizedInputPath);
         });
 
         if (!transcriptInfo) {

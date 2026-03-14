@@ -175,7 +175,14 @@
 			// Smarter default for source language
 			const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
 			if (activeTranscript && activeTranscript.language_code) {
-				selectedSourceLanguage = activeTranscript.language_code;
+				const langCode = activeTranscript.language_code;
+				if (langCode === 'original') {
+					selectedSourceLanguage = 'auto';
+				} else {
+					// Check if it's a valid code we have in our list
+					const exists = nllbLanguageOptions.some(opt => opt.value === langCode);
+					selectedSourceLanguage = exists ? langCode : 'auto';
+				}
 			} else {
 				selectedSourceLanguage = 'auto';
 			}
