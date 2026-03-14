@@ -184,7 +184,8 @@
 </script>
 
 <div class="flex flex-col space-y-4 pt-2">
-  <div class="flex justify-end items-center mb-2 px-1">
+  <div class="flex justify-between items-center mb-2 px-1">
+    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">
       {#if !$configStatus.python_libraries_installed}
         <span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
