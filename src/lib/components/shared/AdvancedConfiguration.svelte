@@ -26,7 +26,6 @@
     };
 
     let platformInfo = null; // Initialize as null to indicate loading
-    let statusMessage = '';
     let statusType = 'info'; // info, success, error
     
     // Collapsible panel states
