@@ -1,14 +1,27 @@
+<!-- src/lib/components/projectview/modals/TranslateModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { CheckCircle, XCircle, Clock, Loader, AlertTriangle } from 'lucide-svelte';
+	import { 
+        CheckCircle, 
+        XCircle, 
+        Clock, 
+        Loader, 
+        AlertTriangle, 
+        Languages, 
+        X 
+    } from 'lucide-svelte';
 	import { invoke } from '@tauri-apps/api/core';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import { getSelectedTranslationEngine } from '$lib/services/configureActions';
-	import { message } from '@tauri-apps/plugin-dialog';
+    import { 
+        Button, 
+        Label, 
+        Select, 
+        Helper 
+    } from 'flowbite-svelte';
 
 	export let availableTranscripts = [];
 	export let activeTranscriptPath = null;
@@ -63,11 +76,11 @@
 
 	// Mapping for NLLB language options (based on supported list)
 	const nllbLanguageOptions = [
-		{ value: 'auto', label: 'Auto-detect' },
+		{ value: 'auto', name: 'Auto-detect' },
 		...Array.from(languageMap.entries())
 			.filter(([code, name]) => code.length === 2) // Keep standard 2-letter codes
-			.map(([code, name]) => ({ value: code, label: name }))
-			.sort((a, b) => a.label.localeCompare(b.label))
+			.map(([code, name]) => ({ value: code, name: name }))
+			.sort((a, b) => a.name.localeCompare(b.name))
 	];
 
 	// Filtered list for target (remove auto-detect)
@@ -116,7 +129,7 @@
 	$: if (availableTranscripts.length > 0) {
 		transcriptOptions = availableTranscripts.map(t => ({
 			value: t.relativePath,
-			label: t.name || t.relativePath
+			name: t.name || t.relativePath
 		}));
 
 		const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
@@ -135,7 +148,7 @@
 		if (filteredModels.length > 0) {
 			modelOptions = filteredModels.map(model => ({
 				value: model.name,
-				label: formatModelDisplayName(model.name)
+				name: formatModelDisplayName(model.name)
 			}));
 			if (!selectedModel || !filteredModels.some(m => m.name === selectedModel)) {
 				selectedModel = filteredModels[0]?.name || '';
@@ -221,7 +234,7 @@
 	$: currentErrorMessage = $transcriptStore.translationErrorMessage;
 
 	$: modalTitle = (!isTranslating && jobStatus === null) ? 'Translate Transcript' :
-					 (isTranslating && jobStatus === 'initiating') ? 'Initiating Translation...' :
+					 (isTranslating && jobStatus === 'initiating') ? 'Initiating Translation' :
 					 (isTranslating && jobStatus === 'running') ? 'Translation Status' :
 					 (jobStatus === 'cancelling') ? 'Cancelling Job' :
 					 (!isTranslating && jobStatus === 'done') ? 'Translation Complete' :
@@ -261,239 +274,219 @@
 
 {#if showModal}
     <div
-        class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         role="dialog"
         aria-modal="true"
         aria-labelledby="translate-modal-title"
-        on:click={handleCloseAndReset}
+        on:click={() => {
+            if (!(isTranslating && (jobStatus === 'running' || jobStatus === 'initiating'))) {
+                handleCloseAndReset();
+            }
+        }}
         tabindex="-1"
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
             role="document"
             tabindex="-1"
             on:click|stopPropagation
         >
-            <h2 id="translate-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
-
-            {#if !isTranslating && jobStatus === null}
-                <!-- CONFIRM VIEW -->
-                <div class="space-y-4 mb-6">
-                    <div class="space-y-1">
-                        <label for="transcriptSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcript to Translate:</label>
-                        <Dropdown
-                            containerClasses="w-full"
-                            options={transcriptOptions}
-                            bind:value={selectedTranscript}
-                            placeholder="Select a Transcript"
-                            disabled={availableTranscripts.length === 0}
-                        />
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        {#if !isTranslating && jobStatus === null}
+                            <Languages size={20} class="text-blue-600 dark:text-blue-400" />
+                        {:else if isTranslating}
+                            <Loader size={20} class="text-blue-600 dark:text-blue-400 animate-spin" />
+                        {:else if jobStatus === 'done'}
+                            <CheckCircle size={20} class="text-green-600 dark:text-green-400" />
+                        {:else if jobStatus === 'error'}
+                            <XCircle size={20} class="text-red-600 dark:text-red-400" />
+                        {:else}
+                            <Clock size={20} class="text-orange-600 dark:text-orange-400" />
+                        {/if}
                     </div>
-                    <div class="space-y-1">
-                        {#if modelOptions.length === 0}
-							<div
-								class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-md text-center space-y-3 my-4"
-							>
-								<p class="text-blue-800 dark:text-blue-300 font-medium">No {selectedEngine === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available.</p>
-								<div class="flex items-center justify-center space-x-2">
-									<p class="text-xs text-blue-600 dark:text-blue-400">Please download a model in the</p>
-									<button
-										type="button"
-										on:click={handleOpenConfig}
-										class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-									>
-                                        <AlertTriangle class="w-4 h-4 {hasCriticalConfigIssues ? 'text-red-500' : hasNonCriticalConfigIssues ? 'text-yellow-500' : 'text-gray-500'}" />
-										<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">Configure</span>
-									</button>
-									<p class="text-xs text-blue-600 dark:text-blue-400">screen.</p>
-								</div>
-							</div>
-						{:else}
-							<label for="modelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translation Model:</label>
-							<Dropdown
-								containerClasses="w-full"
-								options={modelOptions}
-								bind:value={selectedModel}
-								placeholder="Select a Model"
-							/>
-						{/if}
-                    </div>
-
-					{#if selectedModel.toLowerCase().includes('nllb')}
-						<div class="grid grid-cols-2 gap-4">
-							<div class="space-y-1">
-								<label class="block font-medium text-gray-900 dark:text-gray-100">From:</label>
-								<Dropdown
-									containerClasses="w-full"
-									options={nllbLanguageOptions}
-									bind:value={selectedSourceLanguage}
-									placeholder="Source"
-								/>
-							</div>
-							<div class="space-y-1">
-								<label class="block font-medium text-gray-900 dark:text-gray-100">To:</label>
-								<Dropdown
-									containerClasses="w-full"
-									options={nllbTargetLanguageOptions}
-									bind:value={selectedTargetLanguage}
-									placeholder="Target"
-								/>
-							</div>
-						</div>
-					{/if}
+                    <h3 id="translate-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+                        {modalTitle}
+                    </h3>
                 </div>
-                <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
-                    <button class="btn-primary" on:click={handleConfirm} disabled={availableTranscripts.length === 0 || !selectedTranscript || !selectedModel}>Start Translation</button>
-                </div>
+                {#if !(isTranslating && (jobStatus === 'running' || jobStatus === 'initiating'))}
+                    <button on:click={handleCloseAndReset} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
+                        <X size={20} />
+                    </button>
+                {/if}
+            </div>
 
-            {:else if isTranslating && (jobStatus === 'running' || jobStatus === 'initiating')}
-				<!-- RUNNING OR INITIATING VIEW -->
-				<div class="flex flex-col items-center space-y-4 mb-6">
-                    <div class="w-16 h-16">
-                        <Loader class="w-full h-full text-blue-500 animate-spin" />
+            <div class="p-6 overflow-y-auto max-h-[70vh]">
+                {#if !isTranslating && jobStatus === null}
+                    <!-- CONFIRM VIEW -->
+                    <div class="space-y-5">
+                        <div class="space-y-2">
+                            <Label for="transcriptSelect">Transcript to Translate</Label>
+                            <Select
+                                id="transcriptSelect"
+                                items={transcriptOptions}
+                                bind:value={selectedTranscript}
+                                placeholder="Select a Transcript"
+                                disabled={availableTranscripts.length === 0}
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            {#if modelOptions.length === 0}
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl text-center space-y-3">
+                                    <p class="text-blue-800 dark:text-blue-300 font-medium">
+                                        No {selectedEngine === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available
+                                    </p>
+                                    <Button color="alternative" size="xs" on:click={handleOpenConfig} title="Go to Configuration">
+                                        <AlertTriangle size={14} class="mr-2 {hasCriticalConfigIssues ? 'text-red-500' : hasNonCriticalConfigIssues ? 'text-yellow-500' : 'text-gray-500'}" />
+                                        Configure
+                                    </Button>
+                                </div>
+                            {:else}
+                                <Label for="modelSelect">Translation Model</Label>
+                                <Select
+                                    id="modelSelect"
+                                    items={modelOptions}
+                                    bind:value={selectedModel}
+                                    placeholder="Select a Model"
+                                />
+                            {/if}
+                        </div>
+
+                        {#if selectedModel.toLowerCase().includes('nllb')}
+                            <div class="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <div class="space-y-2">
+                                    <Label>Source Language</Label>
+                                    <Select
+                                        items={nllbLanguageOptions}
+                                        bind:value={selectedSourceLanguage}
+                                    />
+                                </div>
+                                <div class="space-y-2">
+                                    <Label>Target Language</Label>
+                                    <Select
+                                        items={nllbTargetLanguageOptions}
+                                        bind:value={selectedTargetLanguage}
+                                    />
+                                </div>
+                            </div>
+                        {/if}
                     </div>
-					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-                        {progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : 'Processing...')}
-					</p>
-					{#if elapsedText}
-						<p class="text-xs text-center text-gray-500 dark:text-gray-500 font-mono mt-1">
-							{elapsedText}
-						</p>
-					{/if}
-				</div>
-				<div class="flex justify-center space-x-2 mt-auto">
-					<button class="btn-secondary" on:click={handleRunInBackgroundAndClose} disabled={jobStatus === 'initiating'}>
-						Run in background
-					</button>
-					<button class="btn-action-cancel" on:click={handleCancelRequest} disabled={jobStatus === 'initiating'}>
-						Request Cancellation
-					</button>
-				</div>
+                {:else if isTranslating && (jobStatus === 'running' || jobStatus === 'initiating')}
+                    <!-- RUNNING OR INITIATING VIEW -->
+                    <div class="flex flex-col items-center py-8 space-y-6 text-center">
+                        <div class="relative">
+                            <div class="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                                <Loader size={40} class="text-blue-600 dark:text-blue-400 animate-spin" />
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2 w-full px-4">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">
+                                {jobStatus === 'initiating' ? 'Preparing Job...' : 'Translating...'}
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 h-10 flex items-center justify-center">
+                                {progressMessage || 'Processing translation segments...'}
+                            </p>
+                        </div>
 
-			{:else if jobStatus === 'cancelling'}
-				<!-- CANCELLING VIEW -->
-				<div class="flex flex-col items-center space-y-4 mb-6">
-                    <div class="w-16 h-16">
-                        <Clock class="w-full h-full text-orange-500" />
+                        {#if elapsedText}
+                            <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full font-mono text-xs text-gray-600 dark:text-gray-400">
+                                Elapsed: {elapsedText}
+                            </div>
+                        {/if}
                     </div>
-					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{progressMessage || 'Attempting to cancel...'}
-					</p>
-				</div>
-				<div class="flex justify-center space-x-2 mt-auto">
-					<button class="btn-secondary" disabled>Cancelling...</button>
-				</div>
+                {:else if jobStatus === 'cancelling'}
+                    <div class="flex flex-col items-center py-12 space-y-4 text-center">
+                        <Clock size={48} class="text-orange-500 animate-pulse" />
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Stopping Translation</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Attempting to gracefully cancel the process...</p>
+                        </div>
+                    </div>
+                {:else if !isTranslating && jobStatus === 'done'}
+                    <div class="flex flex-col items-center py-8 space-y-4 text-center">
+                        <div class="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+                            <CheckCircle size={40} class="text-green-600 dark:text-green-400" />
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Translation Complete!</p>
+                            {#if durationText}
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Total processing time: {durationText}</p>
+                            {/if}
+                        </div>
+                    </div>
+                {:else if !isTranslating && jobStatus === 'cancelled'}
+                    <div class="flex flex-col items-center py-8 space-y-4 text-center">
+                        <div class="w-20 h-20 bg-orange-50 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                            <XCircle size={40} class="text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Translation Cancelled</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{progressMessage || 'The job was stopped by user.'}</p>
+                        </div>
+                    </div>
+                {:else if !isTranslating && jobStatus === 'error'}
+                    <div class="flex flex-col items-center py-6 space-y-4">
+                        <div class="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                            <XCircle size={32} class="text-red-600 dark:text-red-400" />
+                        </div>
+                        <p class="text-lg font-bold text-gray-900 dark:text-white">An Error Occurred</p>
+                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-4 rounded-xl w-full">
+                            <p class="text-xs font-mono text-red-700 dark:text-red-300 break-words whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                {currentErrorMessage || 'Unknown error during translation.'}
+                            </p>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="flex flex-col items-center py-12 space-y-4">
+                        <Loader size={32} class="text-gray-400 animate-spin" />
+                        <p class="text-sm text-gray-500">Checking status...</p>
+                    </div>
+                {/if}
+            </div>
 
-			{:else if !isTranslating && jobStatus === 'done'}
-				<!-- DONE VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<CheckCircle class="w-16 h-16 text-green-500" />
-					<p class="text-sm font-medium">Translation Complete!</p>
-					{#if durationText}
-						<p class="text-xs text-gray-500 dark:text-gray-400">Time taken: {durationText}</p>
-					{/if}
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-primary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-
-			{:else if !isTranslating && jobStatus === 'cancelled'}
-                <!-- CANCELLED VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<XCircle class="w-16 h-16 text-orange-500" />
-					<p class="text-sm font-medium">{progressMessage || 'Translation Cancelled'}</p>
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-
-			{:else if !isTranslating && jobStatus === 'error'}
-				<!-- ERROR VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<XCircle class="w-16 h-16 text-red-500" />
-					<p class="text-sm font-medium">An Error Occurred</p>
-					<p class="text-xs bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-2 rounded w-full text-left overflow-x-auto max-h-32">
-						{currentErrorMessage || 'Unknown error during translation.'}
-					</p>
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-			{:else}
-				<!-- Fallback or initial brief loading state -->
-				<div class="flex flex-col items-center space-y-4 py-8">
-					<Loader class="w-12 h-12 text-gray-400 animate-spin" />
-					<p class="text-sm text-gray-500">Loading status...</p>
-				</div>
-			{/if}
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+                {#if !isTranslating && jobStatus === null}
+                    <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
+                    <Button
+                        color="blue"
+                        on:click={handleConfirm}
+                        title="Start Translation"
+                        disabled={availableTranscripts.length === 0 || !selectedTranscript || !selectedModel}
+                    >
+                        Start Translation
+                    </Button>
+                {:else if isTranslating && (jobStatus === 'running' || jobStatus === 'initiating')}
+                    <Button
+                        color="alternative"
+                        on:click={handleRunInBackgroundAndClose}
+                        disabled={jobStatus === 'initiating'}
+                        title="Run in Background"
+                    >
+                        Run in Background
+                    </Button>
+                    <Button 
+                        color="red" 
+                        on:click={handleCancelRequest} 
+                        disabled={jobStatus === 'initiating'}
+                        title="Stop Translation"
+                    >
+                        Stop
+                    </Button>
+                {:else if jobStatus === 'cancelling'}
+                    <Button color="alternative" disabled title="Stopping...">Stopping...</Button>
+                {:else}
+                    <Button color="blue" on:click={handleCloseAndReset} title="Close">Close</Button>
+                {/if}
+            </div>
         </div>
     </div>
 {/if}
 
-<style>
-	.btn-primary,
-	.btn-secondary,
-	.btn-action-cancel {
-		padding: 0.5rem 1rem;
-		border: none;
-		border-radius: 0.375rem; /* 6px */
-		cursor: pointer;
-		font-size: 0.875rem; /* 14px */
-		font-weight: 500;
-		transition: background-color 0.15s ease-in-out, opacity 0.15s ease-in-out;
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.btn-primary {
-		background-color: #3b82f6;
-		color: white;
-	}
-	.btn-primary:hover:not(:disabled) {
-		background-color: #2563eb;
-	}
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.btn-secondary {
-		background-color: #e5e7eb;
-		color: #374151;
-		border: 1px solid #d1d5db;
-	}
-	.dark .btn-secondary {
-		background-color: #4b5563;
-		color: #e5e7eb;
-		border-color: #6b7280;
-	}
-	.btn-secondary:hover:not(:disabled) {
-		background-color: #d1d5db;
-	}
-	.dark .btn-secondary:hover:not(:disabled) {
-		background-color: #6b7280;
-	}
-	.btn-secondary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.btn-action-cancel {
-		background-color: #ef4444;
-		color: white;
-	}
-	.btn-action-cancel:hover:not(:disabled) {
-		background-color: #dc2626;
-	}
-	.btn-action-cancel:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-    .dark .btn-action-cancel {
-         background-color: #dc2626;
-    }
-    .dark .btn-action-cancel:hover:not(:disabled) {
-        background-color: #b91c1c;
-    }
+<style lang="postcss">
 </style>
