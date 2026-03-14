@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { Input, Label, Button, Select } from 'flowbite-svelte';
-    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-svelte';
+    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight, Mic, Users, Languages } from 'lucide-svelte';
 
     export let isBusy = false;
 
@@ -220,7 +220,10 @@
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => togglePanel('transcription')}
             >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
+                <div class="flex items-center">
+                    <Mic size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
+                </div>
                 {#if activePanel === 'transcription'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
@@ -275,7 +278,10 @@
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => togglePanel('diarization')}
             >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
+                <div class="flex items-center">
+                    <Users size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
+                </div>
                 {#if activePanel === 'diarization'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
@@ -315,7 +321,10 @@
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => togglePanel('translation')}
             >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
+                <div class="flex items-center">
+                    <Languages size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
+                </div>
                 {#if activePanel === 'translation'}
                     <ChevronDown class="w-4 h-4 text-gray-500" />
                 {:else}
