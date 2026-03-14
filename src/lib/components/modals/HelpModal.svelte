@@ -155,13 +155,21 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<Modal bind:open={showModal} size="xl" outsideclose on:close={close} class="w-[80vw] max-w-[1200px] h-[80vh] p-0 overflow-hidden flex flex-col z-[150]">
+<Modal
+  bind:open={showModal}
+  outsideclose
+  on:close={close}
+  dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[150] w-full p-4 flex"
+  class="w-full md:w-[80vw] md:max-w-[1200px] lg:w-[80vw] lg:max-w-[1200px] xl:w-[80vw] xl:max-w-[1200px] h-[80vh] flex flex-col p-0 overflow-hidden"
+  bodyClass="flex-grow overflow-y-auto bg-white dark:bg-gray-900 p-0"
+  headerClass="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
+>
       <!-- Main Modal Header -->
-      <div slot="header" class="flex-shrink-0 flex justify-between items-center bg-gray-50 dark:bg-gray-900 w-full m-0 p-0 rounded-t-lg">
-        <div class="flex items-center justify-between w-full px-2">
+      <svelte:fragment slot="header">
+    <div class="flex items-center justify-between w-full pr-1">
             <div class="flex items-center space-x-3">
                 <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
-                <h2 id="help-modal-title" class="text-xl font-bold text-gray-800 dark:text-white">Help Center</h2>
+                <h3 id="help-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate">Help Center</h3>
             </div>
 
             <div class="flex items-center space-x-4 flex-grow justify-end">
@@ -203,10 +211,10 @@
                 </div>
             </div>
         </div>
-      </div>
+      </svelte:fragment>
 
       <!-- Main Body -->
-      <div class="flex flex-grow overflow-hidden -m-6 h-full">
+      <div class="flex flex-grow overflow-hidden h-full">
         <!-- Sidebar -->
         <div class="{isCompact ? 'w-32' : 'w-64'} bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 {isCompact ? 'p-2' : 'p-4'} flex flex-col flex-shrink-0 overflow-y-auto font-sans transition-all duration-300">
           <nav class="flex flex-col space-y-1">
