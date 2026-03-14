@@ -48,12 +48,18 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
         let input_json = serde_json::to_string(&texts)
             .map_err(|e| CommandError::from(format!("Failed to serialize texts: {}", e)))?;
 
+        // Create a temporary file for the input text to avoid CLI argument length limits
+        let temp_dir = std::env::temp_dir();
+        let temp_file_path = temp_dir.join(format!("translation_input_{}.json", job_id));
+        std::fs::write(&temp_file_path, input_json)
+            .map_err(|e| CommandError::from(format!("Failed to write temporary translation input file: {}", e)))?;
+
         let mut python_args: Vec<String> = vec![
             script_path.to_string_lossy().to_string(),
             "--model-path".to_string(),
             model_path.to_string_lossy().to_string(),
-            "--text".to_string(),
-            input_json,
+            "--text-file".to_string(),
+            temp_file_path.to_string_lossy().to_string(),
             "--mode".to_string(),
             mode.to_string(),
         ];
@@ -66,6 +72,8 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
             python_args.push("--tgt-lang".to_string());
             python_args.push(t.to_string());
         }
+
+        // ... (rest of the logic including cleanup of the temp file)
 
         // Read advanced config
         if let Ok(config) = read_config() {
@@ -153,8 +161,13 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
 
         if python_error.is_some() || python_exit_code != Some(0) {
             let stderr_output = String::from_utf8_lossy(&python_stderr);
+            // Cleanup temp file even on error
+            let _ = std::fs::remove_file(&temp_file_path);
             return Err(CommandError::from(format!("Translation script failed. Code: {:?}. Error: {:?}. Stderr: {}", python_exit_code, python_error, stderr_output)));
         }
+
+        // Cleanup temp file after success
+        let _ = std::fs::remove_file(&temp_file_path);
 
         let translated_output = String::from_utf8_lossy(&python_stdout);
         let translated_texts: Vec<String> = serde_json::from_str(&translated_output)

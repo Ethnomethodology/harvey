@@ -248,6 +248,16 @@ pub fn read_config() -> Result<Config, CommandError> {
                             config.verification_status = vs;
                         }
                     }
+                    "advanced_translation" => {
+                        if let Ok(at) = serde_json::from_str::<AdvancedTranslationConfig>(&value) {
+                            config.advanced_translation = Some(at);
+                        }
+                    }
+                    "advanced_transcription" => {
+                        if let Ok(at) = serde_json::from_str::<AdvancedTranscriptionConfig>(&value) {
+                            config.advanced_transcription = Some(at);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -328,6 +338,18 @@ pub fn write_config(config: &Config) -> Result<(), CommandError> {
 
         if let Ok(vs) = serde_json::to_string(&config.verification_status) {
             stmt.execute(params!["verification_status", vs]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        }
+
+        if let Some(at) = &config.advanced_translation {
+            if let Ok(at_json) = serde_json::to_string(at) {
+                stmt.execute(params!["advanced_translation", at_json]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+            }
+        }
+
+        if let Some(at) = &config.advanced_transcription {
+            if let Ok(at_json) = serde_json::to_string(at) {
+                stmt.execute(params!["advanced_transcription", at_json]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+            }
         }
     }
 
