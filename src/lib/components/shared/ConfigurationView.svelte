@@ -13,7 +13,8 @@
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
-	import { Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
+	import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
+	import { FolderOpen, Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
@@ -194,6 +195,70 @@
 						<p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
 					{/if}
 					<LibrariesPanel />
+
+					<Accordion class="w-full">
+						<AccordionItem>
+							<span slot="header" class="text-base flex items-center gap-2 font-semibold">
+								<Settings2 size={18} class="text-gray-500" />
+								General Settings
+							</span>
+							<div class="space-y-6 p-2">
+								<div class="space-y-2">
+									<Label for="theme-select">Theme</Label>
+									<Select
+										id="theme-select"
+										class="max-w-xs"
+										items={[
+											{value: 'system', name: 'System'},
+											{value: 'light', name: 'Light'},
+											{value: 'dark', name: 'Dark'}
+										]}
+										bind:value={$themePreference}
+									/>
+								</div>
+
+								<div class="space-y-2">
+									<Label for="download-location-input">
+										Local Model Download Location
+									</Label>
+									<div class="flex items-center gap-2 max-w-2xl">
+										<Input
+											id="download-location-input"
+											type="text"
+											bind:value={downloadLocation}
+											class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
+											readonly
+											placeholder="Set a location..."
+											title={downloadLocation || 'No location set'}
+											autocomplete="off"
+											autocorrect="off"
+										/>
+										<Button
+											color="alternative"
+											class="px-3"
+											on:click={pickDownloadLocation}
+											disabled={isBusy}
+											title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
+										>
+											{#if isMovingModels}
+												Moving...
+											{:else}
+												<FolderOpen size={18} />
+											{/if}
+										</Button>
+									</div>
+									{#if isBusy && !isMovingModels}
+										<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+											Download in progress. Cannot change location now.
+										</p>
+									{/if}
+									{#if statusMessage}
+										<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
+									{/if}
+								</div>
+							</div>
+						</AccordionItem>
+					</Accordion>
 				</div>
 			{:else if activeTab === 'transcription'}
 				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
@@ -203,14 +268,7 @@
 				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
 			{:else if activeTab === 'advanced'}
 				<div class="pb-8">
-					<AdvancedConfiguration
-						bind:isBusy={isAdvancedBusy}
-						bind:themePreference={$themePreference}
-						bind:downloadLocation={downloadLocation}
-						isMovingModels={isMovingModels}
-						statusMessage={statusMessage}
-						onPickLocation={pickDownloadLocation}
-					/>
+					<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
 				</div>
 			{/if}
 		</div>
