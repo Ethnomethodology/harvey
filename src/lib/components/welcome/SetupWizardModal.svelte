@@ -155,18 +155,32 @@
         helsinkiModels.forEach(id => {
             const m = allAvailableTranslationModels.find(am => am.id === id);
             if (m) {
-                models.push({ name: formatModelDisplayName(m.id), size: 'Variable', type: 'Helsinki-NLP' });
-                // Helsinki sizes aren't explicitly in the object, usually small ~30-50MB
-                totalSizeMiB += 45; 
+                const isBig = m.id.toLowerCase().includes('tc-big');
+                const estSize = isBig ? '~580 MiB' : '~300 MiB';
+                const sizeVal = isBig ? 580 : 300;
+                
+                models.push({ name: formatModelDisplayName(m.id), size: estSize, type: 'Helsinki-NLP' });
+                totalSizeMiB += sizeVal; 
             }
         });
         nllbModels.forEach(id => {
             const m = allAvailableTranslationModels.find(am => am.id === id);
             if (m) {
-                models.push({ name: formatModelDisplayName(m.id), size: 'Variable', type: 'NLLB' });
-                if (m.id.includes('600M')) totalSizeMiB += 1200;
-                else if (m.id.includes('1.3B')) totalSizeMiB += 2600;
-                else totalSizeMiB += 5000;
+                let estSize = '~2.5 GiB';
+                if (m.id.includes('600M')) {
+                    estSize = '~2.5 GiB';
+                    totalSizeMiB += 2560;
+                } else if (m.id.includes('1.3B')) {
+                    estSize = '~5.5 GiB';
+                    totalSizeMiB += 5632;
+                } else if (m.id.includes('3.3B')) {
+                    estSize = '~17.6 GiB';
+                    totalSizeMiB += 18022;
+                } else {
+                    estSize = '~2.5 GiB';
+                    totalSizeMiB += 2560;
+                }
+                models.push({ name: formatModelDisplayName(m.id), size: estSize, type: 'NLLB' });
             }
         });
 
@@ -1003,7 +1017,7 @@
                             </div>
 
                             {#if showModelDetails && selectedModelsSummary.count > 0}
-                                <div class="max-h-48 overflow-y-auto p-2 space-y-1 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/30" in:fade={{ duration: 200 }}>
+                                <div class="p-2 space-y-1 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/30" in:fade={{ duration: 200 }}>
                                     {#each selectedModelsSummary.models as model}
                                         <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors">
                                             <div class="flex flex-col">
@@ -1174,7 +1188,7 @@
 
     <!-- Footer Area -->
     <svelte:fragment slot="footer">
-        <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization || isCleaningUp} class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 disabled:opacity-30 flex items-center transition-colors hover:text-gray-900 dark:hover:text-gray-200">
+        <button on:click={prevStep} disabled={currentStep === 1 || isInstalling || isDownloadingDiarization || isCleaningUp || currentStep === 3 || (currentStep === 2 && installProgress.phase === 'complete')} class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 disabled:opacity-30 flex items-center transition-colors hover:text-gray-900 dark:hover:text-gray-200">
             <ChevronLeft class="w-4 h-4 mr-1" /> Back
         </button>
         <div class="flex space-x-3">
