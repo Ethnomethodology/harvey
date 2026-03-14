@@ -30,21 +30,21 @@
     let isTranscriptionOpen = false;
 
     const deviceOptions = [
-        { value: 'auto', label: 'Auto (Recommended)' },
-        { value: 'cpu', label: 'CPU' },
-        { value: 'cuda', label: 'NVIDIA GPU (CUDA)' },
-        { value: 'mps', label: 'Apple Silicon (MPS/Metal)' }
+        { value: 'auto', name: 'Auto (Recommended)' },
+        { value: 'cpu', name: 'CPU' },
+        { value: 'cuda', name: 'NVIDIA GPU (CUDA)' },
+        { value: 'mps', name: 'Apple Silicon (MPS/Metal)' }
     ];
 
     const quantizationOptions = [
-        { value: 'int8', label: 'Int8 (Fastest - Recommended)' },
-        { value: 'float16', label: 'Float16 (Higher Precision)' }
+        { value: 'int8', name: 'Int8 (Fastest - Recommended)' },
+        { value: 'float16', name: 'Float16 (Higher Precision)' }
     ];
 
     const computeTypeOptions = [
-        { value: 'int8', label: 'Int8 (Fastest)' },
-        { value: 'int8_float16', label: 'Int8 + Float16 (Hybrid)' },
-        { value: 'float16', label: 'Float16 (Higher Precision)' }
+        { value: 'int8', name: 'Int8 (Fastest)' },
+        { value: 'int8_float16', name: 'Int8 + Float16 (Hybrid)' },
+        { value: 'float16', name: 'Float16 (Higher Precision)' }
     ];
 
     let originalQuantization = 'int8'; // To track changes
@@ -228,7 +228,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.transcription_device_preference} />
+                            <Select items={deviceOptions} bind:value={config.transcription_device_preference} />
                             <p class="text-[10px] text-gray-500">Auto will use GPU if available. 'CPU' bypasses GPU for both engines.</p>
                         </div>
                         <div class="space-y-1">
@@ -244,7 +244,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Compute Type (Quantization)</label>
-                            <Dropdown options={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
+                            <Select items={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
                             <p class="text-[10px] text-gray-500">Precision of model weights. Int8 is fastest on CPU.</p>
                         </div>
                         <div class="space-y-1">
@@ -283,7 +283,7 @@
                         <!-- Device -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
+                            <Select items={deviceOptions} bind:value={config.diarization_device} />
                             <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                         </div>
 
@@ -323,7 +323,7 @@
                         <!-- Device & Backend -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.device_preference} />
+                            <Select items={deviceOptions} bind:value={config.device_preference} />
                             <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                         </div>
                         
@@ -337,7 +337,7 @@
                         <!-- Quantization -->
                         <div class="space-y-1 md:col-span-2 border-t pt-2 mt-2 dark:border-gray-800">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model Optimization (Quantization)</label>
-                            <Dropdown options={quantizationOptions} bind:value={config.quantization_preference} />
+                            <Select items={quantizationOptions} bind:value={config.quantization_preference} />
                             <p class="text-[10px] text-gray-500">
                                 'Int8' is significantly faster on CPU. 'Float16' is higher precision.
                             </p>
