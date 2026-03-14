@@ -18,8 +18,9 @@
   bind:open={showModal}
   autoclose={false}
   outsideclose={true}
-  dialogClass="fixed inset-0 z-[200] flex items-center justify-center p-4 w-full h-full"
-  class="w-full md:w-[80vw] md:max-w-[80vw] lg:w-[70vw] lg:max-w-[70vw] xl:w-[60vw] xl:max-w-[60vw] min-w-[60vw] h-[80vh] flex flex-col p-0 overflow-hidden"
+  placement="center"
+  size="xl"
+  class="h-[80vh] flex flex-col p-0 overflow-hidden mx-auto z-[200]"
   bodyClass="flex-grow overflow-y-auto bg-white dark:bg-gray-900 p-0 pb-8"
   headerClass="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
   on:close={close}
