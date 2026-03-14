@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/ManualSettingsModal.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { X, Mic, Plus, Minus } from 'lucide-svelte';
+	import { X, Settings2, Plus, Minus } from 'lucide-svelte';
     import { 
         Button, 
         Label, 
@@ -18,13 +18,20 @@
 
     let duration = 60;
     let speakerMode = 'unassigned';
+    let isInitialized = false;
 
     // Sync local state when modal opens
-	$: if (showModal) {
+	$: if (showModal && !isInitialized) {
         duration = currentSettings.duration || 60;
         speakerMode = currentSettings.speakerMode || 'unassigned';
         if (speakerMode === 'unselected') speakerMode = 'unassigned'; // Migration
+        isInitialized = true;
 	}
+
+    // Reset initialization flag when modal closes
+    $: if (!showModal) {
+        isInitialized = false;
+    }
 
     $: speakerOptions = [
         { value: 'unassigned', label: 'Unassigned' },
@@ -67,7 +74,7 @@
             <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center space-x-3">
                     <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <Mic size={20} class="text-blue-600 dark:text-blue-400" />
+                        <Settings2 size={20} class="text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 id="manual-settings-title" class="text-lg font-bold text-gray-900 dark:text-white">
                         Manual Settings
