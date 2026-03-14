@@ -188,17 +188,23 @@
 
 	<!-- Main Content Area -->
 	<div class="flex-grow min-h-0 overflow-y-auto p-8">
-		<div class="max-w-3xl mx-auto">
+		<div class="max-w-3xl mx-auto h-full">
 			{#if activeTab === 'application'}
-				<div class="space-y-8">
+				<div class="space-y-6">
 					{#if isLoadingConfig}
 						<p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
-					{:else if configError}
-						<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words">
-							<span class="font-medium">Error:</span> {configError}
-						</p>
 					{/if}
-
+					<LibrariesPanel />
+					<HuggingFacePanel />
+				</div>
+			{:else if activeTab === 'transcription'}
+				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
+			{:else if activeTab === 'diarization'}
+				<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
+			{:else if activeTab === 'translation'}
+				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
+			{:else if activeTab === 'advanced'}
+				<div class="space-y-8 pb-8">
 					<!-- General Settings Card -->
 					<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
 						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
@@ -264,33 +270,8 @@
 						</div>
 					</div>
 
-					<!-- Required Tools Card -->
-					<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center">
-							<h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-								<Settings2 size={18} class="text-blue-600 dark:text-blue-400" />
-								Required Tools
-							</h3>
-							{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
-								<span class="flex items-center text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-md border border-red-200 dark:border-red-800">
-									<TriangleAlert size={12} class="mr-1.5" /> Action Required
-								</span>
-							{/if}
-						</div>
-						<div class="p-6 space-y-6">
-							<LibrariesPanel />
-							<HuggingFacePanel />
-						</div>
-					</div>
+					<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
 				</div>
-			{:else if activeTab === 'transcription'}
-				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
-			{:else if activeTab === 'diarization'}
-				<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
-			{:else if activeTab === 'translation'}
-				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
-			{:else if activeTab === 'advanced'}
-				<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
 			{/if}
 		</div>
 	</div>
