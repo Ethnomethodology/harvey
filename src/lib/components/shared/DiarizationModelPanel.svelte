@@ -74,12 +74,17 @@
     error = '';
     try {
       await invoke('delete_diarization_model');
-      await checkAccessStatus(); // Re-check status after deletion
+      hasAccess = false;
+      cachePath = '';
       setDiarizationModelDownloaded(false);
+      // Wait a bit before refreshing config to let filesystem settle
+      setTimeout(async () => {
+          await updateConfigStatus(true);
+          isDeleting = false;
+      }, 500);
     } catch (e) {
       console.error('Error deleting diarization model:', e);
       error = `Failed to delete model: ${e.message || e}`;
-    } finally {
       isDeleting = false;
     }
   }
@@ -183,7 +188,7 @@
   }
 </script>
 
-<div class="flex flex-col space-y-4 pt-2">
+<div class="flex flex-col space-y-4 pt-2 pb-8">
   <div class="flex justify-between items-center mb-2 px-1">
     <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">

@@ -94,19 +94,24 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config_changed = true;
     }
 
-    if translation_models_downloaded && !has_translation {
-        translation_models_downloaded = false;
-        config.verification_status.translation_models_verified = false;
-        config_changed = true;
-    } else if !translation_models_downloaded && has_translation {
-        translation_models_downloaded = true;
-        config.verification_status.translation_models_verified = true;
-        config_changed = true;
+    if has_translation {
+        if !translation_models_downloaded {
+            translation_models_downloaded = true;
+            config.verification_status.translation_models_verified = true;
+            config_changed = true;
+        }
+    } else {
+        if translation_models_downloaded {
+            translation_models_downloaded = false;
+            config.verification_status.translation_models_verified = false;
+            config_changed = true;
+        }
     }
 
     if diarization_model_downloaded {
-        let hf_hub_path = dirs::home_dir().map(|h| h.join(".cache/huggingface/hub")).unwrap_or_default();
-        if !hf_hub_path.exists() {
+        let config_copy = config.clone();
+        let diarization_hub_path = std::path::PathBuf::from(&config_copy.download_location).join("diarization").join("hub");
+        if !diarization_hub_path.exists() {
             diarization_model_downloaded = false;
             config.verification_status.diarization_model_verified = false;
             config_changed = true;
@@ -166,9 +171,10 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config_changed = true;
     }
     // (Transcription and Translation checks removed here as they are covered above)
-    if !diarization_model_downloaded && check_diarization_model_access(app_handle.clone()).await.unwrap_or(false) {
-        diarization_model_downloaded = true;
-        config.verification_status.diarization_model_verified = true;
+    let current_diarization_status = check_diarization_model_access(app_handle.clone()).await.unwrap_or(false);
+    if diarization_model_downloaded != current_diarization_status {
+        diarization_model_downloaded = current_diarization_status;
+        config.verification_status.diarization_model_verified = diarization_model_downloaded;
         config_changed = true;
     }
 

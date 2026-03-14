@@ -1819,6 +1819,11 @@ async fn run_diarization_script<R: Runtime>(
     }
 
     let mut command = get_python_command(app_handle).map_err(|e| CommandError::from(e.to_string()))?;
+    
+    if let Ok(hf_home) = crate::welcome::diarization::get_diarization_hub_path(app_handle) {
+        command = command.env("HF_HOME", hf_home.to_string_lossy().to_string());
+    }
+
     command = command.args(args);
 
     if cfg!(target_os = "macos") {
