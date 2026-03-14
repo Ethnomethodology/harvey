@@ -2,10 +2,16 @@
 <script>
     import { onMount } from 'svelte';
     import { transcriptStore, activateDualMode, setDualTranscriptModal } from '$lib/stores/transcriptStore.js';
-    import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
-    import { AlertTriangle } from 'lucide-svelte';
+    import { 
+        Button, 
+        Label, 
+        Select, 
+        Badge,
+        Alert
+    } from 'flowbite-svelte';
+    import { AlertTriangle, Rows2, X, Info } from 'lucide-svelte';
 
     let primaryPath = '';
     let secondaryPath = '';
@@ -15,12 +21,12 @@
     let isLoadingCounts = false;
 
     $: transcriptOptions = ($transcriptStore.selectedMediaFile?.associated_transcripts || []).map(t => {
-        let label = t.language_code || 'Original';
-        if (t.name) label += ` (${t.name})`;
+        let name = t.language_code || 'Original';
+        if (t.name) name += ` (${t.name})`;
         // IMPORTANT: Use absolute path (t.path) for loading, but keep relativePath for matching
         return {
             value: t.path,
-            label: label,
+            name: name,
             relPath: t.relativePath
         };
     });
@@ -154,84 +160,110 @@
 
 {#if $transcriptStore.showDualTranscriptModal}
     <div
-        class="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="dual-transcript-modal-title"
         on:click={handleClose}
         tabindex="-1"
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
             on:click|stopPropagation
+            role="document"
         >
-            <h2 class="text-lg font-semibold mb-4 text-center">Dual Transcript Mode</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <Rows2 size={20} class="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 id="dual-transcript-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+                        Dual Transcript Mode
+                    </h3>
+                </div>
+                <button on:click={handleClose} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
+                    <X size={20} />
+                </button>
+            </div>
 
-            <div class="space-y-4 mb-6">
-                <div class="flex flex-col space-y-1">
-                    <label for="primarySelect" class="text-sm font-medium text-gray-500 dark:text-gray-400">Primary Transcript</label>
-                    <Dropdown
-                        containerClasses="w-full"
-                        options={transcriptOptions}
-                        bind:value={primaryPath}
-                        placeholder="Select Primary Transcript"
-                    />
-                    {#if primarySegmentCount > 0}
-                        <div class="flex justify-end mt-1">
-                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{primarySegmentCount} segments</span>
-                        </div>
-                    {/if}
+            <div class="p-6 space-y-5">
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 p-3 rounded-lg flex gap-3">
+                    <Info size={18} class="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <p class="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                        Compare two transcripts side-by-side. Transcripts must have an identical number of segments to be compatible.
+                    </p>
                 </div>
 
-                <div class="flex flex-col space-y-1">
-                    <label for="secondarySelect" class="text-sm font-medium text-gray-500 dark:text-gray-400">Secondary Transcript</label>
-                    <Dropdown
-                        containerClasses="w-full"
-                        options={transcriptOptions}
-                        bind:value={secondaryPath}
-                        placeholder="Select Secondary Transcript"
-                    />
-                    {#if secondarySegmentCount > 0}
-                        <div class="flex justify-end mt-1">
-                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{secondarySegmentCount} segments</span>
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <Label for="primarySelect">Primary Transcript</Label>
+                            {#if primarySegmentCount > 0}
+                                <Badge color="blue" size="xs" class="font-mono">{primarySegmentCount} segments</Badge>
+                            {/if}
                         </div>
-                    {/if}
+                        <Select
+                            id="primarySelect"
+                            items={transcriptOptions}
+                            bind:value={primaryPath}
+                            placeholder="Select Primary Transcript"
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <Label for="secondarySelect">Secondary Transcript</Label>
+                            {#if secondarySegmentCount > 0}
+                                <Badge color="indigo" size="xs" class="font-mono">{secondarySegmentCount} segments</Badge>
+                            {/if}
+                        </div>
+                        <Select
+                            id="secondarySelect"
+                            items={transcriptOptions}
+                            bind:value={secondaryPath}
+                            placeholder="Select Secondary Transcript"
+                        />
+                    </div>
                 </div>
 
                 {#if hasMismatch}
-                    <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md flex gap-3 text-red-800 dark:text-red-200 transition-all">
-                        <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
-                        <div class="flex flex-col gap-1">
-                            <span class="text-xs font-bold">Segment Mismatch</span>
-                            <p class="text-[11px] leading-relaxed">
-                                The number of segments must match between the two transcripts ({primarySegmentCount} vs {secondarySegmentCount}).
-                            </p>
+                    <Alert color="red" class="mt-4">
+                        <div class="flex items-start gap-3">
+                            <AlertTriangle size={18} class="shrink-0 mt-0.5" />
+                            <div class="space-y-1">
+                                <span class="text-xs font-bold">Segment Mismatch</span>
+                                <p class="text-[11px] leading-relaxed">
+                                    Transcripts must have identical segment counts ({primarySegmentCount} vs {secondarySegmentCount}).
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    </Alert>
                 {:else if isSame && primaryPath}
-                    <p class="text-xs text-orange-500 text-center">Please select two different transcripts.</p>
+                    <div class="text-center p-2">
+                        <p class="text-xs text-orange-500 font-medium italic">Please select two different transcripts.</p>
+                    </div>
                 {/if}
             </div>
 
-            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button class="btn-secondary" on:click={handleClose}>Cancel</button>
-                <button 
-                    class="btn-primary" 
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+                <Button color="alternative" on:click={handleClose} title="Cancel">
+                    Cancel
+                </Button>
+                <Button 
+                    color="blue" 
                     on:click={handleView} 
                     disabled={!canView}
+                    title={!canView ? 'Transcripts are not compatible' : 'Activate dual view'}
                 >
-                    View
-                </button>
+                    Enable Dual View
+                </Button>
             </div>
         </div>
     </div>
 {/if}
 
 <style lang="postcss">
-    .btn-primary {
-        @apply px-4 py-2 rounded-md font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed;
-    }
-    .btn-secondary {
-        @apply px-4 py-2 rounded-md font-medium transition-colors bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600;
-    }
 </style>
