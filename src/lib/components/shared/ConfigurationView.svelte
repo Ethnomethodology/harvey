@@ -195,7 +195,6 @@
 						<p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
 					{/if}
 					<LibrariesPanel />
-					<HuggingFacePanel />
 				</div>
 			{:else if activeTab === 'transcription'}
 				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />

@@ -5,8 +5,9 @@
   import { ask } from "@tauri-apps/plugin-dialog";
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
-  import { configStatus, setDiarizationModelDownloaded, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+  import { configStatus, setDiarizationModelDownloaded, updateConfigStatus, setHfTokenPresent } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
+  import { Input, Button } from 'flowbite-svelte';
 
   export let arePythonLibrariesInstalled = false;
   let hasAccess = false;
@@ -20,6 +21,51 @@
   let unlistenLog;
   let unlistenFinished;
   let isDeleting = false;
+
+  // HF Auth State
+  let isAuthenticated = false;
+  let isAuthLoading = true;
+  let authToken = '';
+  const MASKED_TOKEN = '**********';
+
+  async function checkAuthStatus() {
+    isAuthLoading = true;
+    try {
+        isAuthenticated = await invoke('check_hf_auth_status');
+        if (isAuthenticated) {
+            authToken = MASKED_TOKEN;
+            setHfTokenPresent(true);
+        } else {
+            authToken = '';
+            setHfTokenPresent(false);
+        }
+    } catch (e) {
+        console.error('Error checking HuggingFace auth status:', e);
+        isAuthenticated = false;
+        setHfTokenPresent(false);
+    } finally {
+        isAuthLoading = false;
+    }
+  }
+
+  async function saveAuthToken() {
+    if (authToken === MASKED_TOKEN || authToken.trim() === '') {
+        return;
+    }
+    try {
+        await invoke('save_hf_auth_token', { token: authToken });
+        await checkAuthStatus();
+    } catch (e) {
+        console.error('Error saving HuggingFace auth token:', e);
+        error = `Failed to save auth token: ${e.message || e}`;
+    }
+  }
+
+  function handleFocus() {
+      if (authToken === MASKED_TOKEN) {
+          authToken = '';
+      }
+  }
 
   async function handleDeleteModel() {
     const confirmed = await ask("Are you sure you want to delete the diarization model? This will remove it from your disk.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
@@ -90,6 +136,7 @@
   }
 
   onMount(async () => {
+    await checkAuthStatus();
     unlistenFinished = await listen('diarization-installation-finished', async () => {
         isDownloading = false;
         isChecking = true;
@@ -136,13 +183,13 @@
   }
 </script>
 
-<div class="flex flex-col space-y-4 p-1">
+<div class="flex flex-col space-y-4">
   <div class="flex justify-between items-center mb-2 px-1">
     <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     <div class="flex items-center">
       {#if !$configStatus.python_libraries_installed}
         <span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
-      {:else if isLoading}
+      {:else if isLoading || isAuthLoading}
         <span class="text-xs text-gray-500 dark:text-gray-400 uppercase">CHECKING...</span>
       {:else if hasAccess}
         <span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">MODEL DOWNLOADED</span>
@@ -152,54 +199,119 @@
     </div>
   </div>
 
-  <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm text-gray-700 dark:text-gray-300">
-    <div class="mb-4">
-        <p class="mb-2">
-            Speaker diarization is the process of automatically identifying and separating different speakers in an audio file.
-        </p>
-        <p class="mb-2">
-            Harvey uses the <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline">pyannote/speaker-diarization-3.1</a> model for this purpose.
-        </p>
-        <p class="mb-4">
-            Access is gated, so you must first accept the user agreement on the model's HuggingFace page before you can download it.
-        </p>
-        <button class="btn-blue" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>
-            Request Access on HuggingFace
-        </button>
-    </div>
+  <div class="p-6 bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm text-sm text-gray-700 dark:text-gray-300">
+    <p class="mb-8 text-gray-600 dark:text-gray-400">
+      Speaker diarization automatically identifies and separates different speakers in an audio file. Harvey uses the gated <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline font-medium">pyannote/speaker-diarization-3.1</a> model for this purpose. Follow the steps below to authenticate and download the model.
+    </p>
 
-    {#if $configStatus.python_libraries_installed}
-    <div class="flex items-center space-x-2">
-        {#if !hasAccess}
-            <button on:click={handleDownload} class="btn-blue" disabled={isDownloading}>
+    <ol class="relative text-gray-700 dark:text-gray-300 border-s border-gray-200 dark:border-gray-700 ml-3.5">
+      <!-- Step 1: Create HF Account -->
+      <li class="mb-10 ms-8">
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
+              {#if isAuthenticated}
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
+              {:else}
+                <span class="font-medium text-sm">1</span>
+              {/if}
+          </span>
+          <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Create HuggingFace Account</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">If you don't have one, create a free HuggingFace account on their <a href="https://huggingface.co/join" on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">website</a>.</p>
+      </li>
+
+      <!-- Step 2: Create Auth Token -->
+      <li class="mb-10 ms-8">
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
+              {#if isAuthenticated}
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
+              {:else}
+                <span class="font-medium text-sm">2</span>
+              {/if}
+          </span>
+          <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Generate Access Token</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Generate an access token from your HuggingFace account settings. You can find it under <a href="https://huggingface.co/settings/tokens" on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">Access Tokens</a>.</p>
+      </li>
+
+      <!-- Step 3: Validate Token -->
+      <li class="mb-10 ms-8">
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}">
+              {#if isAuthenticated}
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
+              {:else}
+                <span class="font-medium text-sm">3</span>
+              {/if}
+          </span>
+          <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Save Token to Harvey</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Paste your HuggingFace access token below.</p>
+          <div class="flex items-center gap-2 max-w-md">
+            <Input
+              type="password"
+              bind:value={authToken}
+              on:focus={handleFocus}
+              placeholder={isAuthenticated ? 'Token is set' : 'Enter your HuggingFace token'}
+              autocomplete="off"
+              autocorrect="off"
+            />
+            <Button color="alternative" on:click={saveAuthToken}>Save</Button>
+          </div>
+          {#if error && error.includes('auth')}
+            <p class="text-red-600 dark:text-red-400 mt-2 text-xs">{error}</p>
+          {/if}
+      </li>
+
+      <!-- Step 4: Accept User Agreement -->
+      <li class="mb-10 ms-8">
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')}">
+              {#if hasAccess}
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
+              {:else}
+                <span class="font-medium text-sm">4</span>
+              {/if}
+          </span>
+          <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Accept Diarization Agreement</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Accept the user agreement on the Pyannote HuggingFace page to unlock access to the model.</p>
+          <Button color="alternative" size="xs" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>
+             Open Pyannote Agreement
+          </Button>
+      </li>
+
+      <!-- Step 5: Download Model -->
+      <li class="ms-8">
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated && !$configStatus.python_libraries_installed ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')}">
+              {#if hasAccess}
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
+              {:else}
+                <span class="font-medium text-sm">5</span>
+              {/if}
+          </span>
+          <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Download Model</h3>
+
+          {#if !$configStatus.python_libraries_installed}
+            <p class="text-sm text-orange-600 dark:text-orange-400 mb-3">
+              Python libraries are missing. Please install them in the General Settings before downloading.
+            </p>
+          {:else if hasAccess && cachePath}
+            <p class="text-sm text-green-600 dark:text-green-400 mb-3">Model is successfully downloaded.</p>
+            <div class="flex items-center gap-4">
+                <code class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-2 py-1 flex-grow truncate">{cachePath}</code>
+                <Button color="red" size="xs" on:click={handleDeleteModel} disabled={isDeleting} class="flex-shrink-0">
+                    {#if isDeleting}Deleting...{:else}Delete Model{/if}
+                </Button>
+            </div>
+          {:else}
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Once authenticated and approved, download the model to your machine.</p>
+            <Button color="blue" on:click={handleDownload} disabled={isDownloading || !isAuthenticated}>
                 {#if isDownloading}
                     Downloading...
                 {:else}
                     Download Model
                 {/if}
-            </button>
-        {/if}
-    </div>
-
-    {#if hasAccess && cachePath}
-        <div class="flex items-center justify-between mt-2">
-            <p class="text-green-600 dark:text-green-400 text-xs truncate mr-2">
-                Model downloaded at <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">{cachePath}</code>
-            </p>
-            <button on:click={handleDeleteModel} class="btn-red-small flex-shrink-0" disabled={isDeleting}>
-                {#if isDeleting}Deleting...{:else}Delete{/if}
-            </button>
-        </div>
-    {/if}
-    {:else}
-        <p class="text-orange-600 dark:text-orange-400 text-sm">
-            Please install the required Python libraries first to enable model downloads.
-        </p>
-    {/if}
-
-    {#if error && !showInstallModal}
-      <p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
-    {/if}
+            </Button>
+            {#if error && !error.includes('auth')}
+              <p class="text-red-600 dark:text-red-400 mt-3 text-xs">{error}</p>
+            {/if}
+          {/if}
+      </li>
+    </ol>
   </div>
 </div>
 
