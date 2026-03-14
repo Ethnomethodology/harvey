@@ -2968,6 +2968,7 @@ $: if (editor && activeLayout) {
   on:replace={handleReplace}
   on:replaceall={handleReplaceAll}
   on:findnext={navigateToNextResult}
+  on:findprev={navigateToPreviousResult}
   on:findchange={(e) => executeSearch(e.detail.term, { isCaseSensitive: e.detail.isCaseSensitive, isRegex: e.detail.isRegex, isWholeWord: e.detail.isWholeWord })}
   on:close={() => showFindReplaceModal = false}
 />

@@ -17,8 +17,8 @@
   export let totalMatches = 0;
 
   let modalElement;
-  let findInput;
-  let replaceInput;
+  let findInputElement;
+  let replaceInputElement;
   
   let findTerm = '';
   let replaceTerm = '';
@@ -33,8 +33,12 @@
   let startX, startY;
 
   let lastShowModal = false;
+  let prevInitialSearchTerm = '';
+
+  // Initialize on open
   $: if (showModal && !lastShowModal) {
     findTerm = initialSearchTerm || '';
+    prevInitialSearchTerm = initialSearchTerm || '';
     replaceTerm = ''; 
     // Reset position when opening
     x = 0;
@@ -45,19 +49,20 @@
 
     setTimeout(() => {
       tick().then(() => {
-        if (findTerm && replaceInput) {
-            replaceInput.focus();
-        } else if (findInput) {
-            findInput.focus();
+        if (findTerm && replaceInputElement) {
+            replaceInputElement.focus();
+        } else if (findInputElement) {
+            findInputElement.focus();
         }
       });
     }, 0);
   }
   $: lastShowModal = showModal;
 
-  // Keep findTerm in sync with initialSearchTerm if initialSearchTerm changes from parent
-  $: if (showModal && initialSearchTerm !== undefined && initialSearchTerm !== findTerm) {
-      findTerm = initialSearchTerm;
+  // Sync if initialSearchTerm changes externally while modal is open
+  $: if (showModal && initialSearchTerm !== prevInitialSearchTerm) {
+      findTerm = initialSearchTerm || '';
+      prevInitialSearchTerm = initialSearchTerm;
   }
 
   const dispatch = createEventDispatcher();
@@ -182,16 +187,22 @@
                 {/if}
             </div>
             <div class="flex gap-2">
-                <Input
-                    bind:el={findInput}
-                    id="find-term-input"
-                    type="text"
-                    bind:value={findTerm}
-                    on:input={handleFindChange}
-                    placeholder="Search text..."
-                    autocomplete="off"
-                    class="flex-grow"
-                />
+                <div class="flex-grow">
+                    <Input
+                        id="find-term-input"
+                        type="text"
+                        bind:value={findTerm}
+                        on:input={handleFindChange}
+                        placeholder="Search text..."
+                        autocomplete="off"
+                    >
+                        <svelte:fragment slot="left">
+                            <Search class="w-4 h-4 text-gray-400" />
+                        </svelte:fragment>
+                    </Input>
+                    <!-- Internal binding hack for focus since Flowbite doesn't easily expose the input ref -->
+                    <input type="hidden" bind:this={findInputElement} />
+                </div>
                 <div class="flex gap-1">
                     <Button color="alternative" size="xs" class="px-2" on:click={() => dispatch('findprev')} disabled={totalMatches === 0} title="Previous match">
                         <ChevronUp size={16} />
@@ -238,7 +249,6 @@
         <div class="space-y-2 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
             <Label for="replace-term-input">Replace with</Label>
             <Input
-                bind:el={replaceInput}
                 id="replace-term-input"
                 type="text"
                 bind:value={replaceTerm}
@@ -252,6 +262,7 @@
                 }}
                 autocomplete="off"
             />
+            <input type="hidden" bind:this={replaceInputElement} />
             <Helper class="text-[10px] italic">Press Enter to replace, Shift+Enter for Replace All</Helper>
         </div>
       </div>
