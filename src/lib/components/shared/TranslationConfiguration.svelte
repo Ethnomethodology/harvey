@@ -236,14 +236,9 @@
 
 	onMount(async () => {
 		configError = '';
-		
-		// If libraries aren't installed, don't even try to load local models
-		// as it will trigger a technical error message.
-		if (!$configStatus.python_libraries_installed) {
-			return;
-		}
 
 		try {
+			// Load local models regardless of python library status so we can check what's already on disk.
 			downloadedModels = await getLocalTranslationModels();
 			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {

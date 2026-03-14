@@ -168,17 +168,12 @@
 	onMount(async () => {
 		configError = '';
 
-		// If libraries aren't installed, don't even try to load local models
-		// as it will trigger a technical error message.
-		if (!$configStatus.python_libraries_installed) {
-			return;
-		}
-
 		try {
 			const persistedEngine = await getSelectedTranscriptionEngine();
 			if (persistedEngine) {
 				setSelectedTranscriptionEngineStore(persistedEngine);
 			}
+			// Load local models regardless of python library status so we can check what's already on disk.
 			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
@@ -468,7 +463,7 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
 		<div class="flex items-center">
-			{#if selectedEngine === 'faster-whisper' && !$configStatus.python_libraries_installed}
+			{#if !$configStatus.python_libraries_installed}
 				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
 			{:else if selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed}
 				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">FASTER-WHISPER LIBRARIES MISSING</span>
@@ -516,9 +511,13 @@
 					</svg>
 					<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Whisper.cpp library is missing.</span>
 				</div>
-				<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
-					Install Now
-				</button>
+				{#if $configStatus.python_libraries_installed}
+					<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
+						Install Now
+					</button>
+				{:else}
+					<span class="text-[10px] text-orange-700/80 dark:text-orange-400/80 italic">Install Python libraries in General Settings first</span>
+				{/if}
 			</div>
 		</div>
 	{/if}
