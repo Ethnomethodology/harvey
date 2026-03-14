@@ -13,7 +13,9 @@
         X, 
         Mic, 
         UserPen, 
-        SlidersHorizontal 
+        SlidersHorizontal,
+        Cpu,
+        PencilLine
     } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
@@ -32,7 +34,8 @@
         Tabs, 
         TabItem,
         Radio,
-        Progressbar
+        Progressbar,
+        Alert
     } from 'flowbite-svelte';
 
 	// Props
@@ -193,8 +196,13 @@
 	let isInitialized = false;
 	// When the modal is about to show the confirm view, initialize local states from the store
 	$: if (showModal && !isTranscribing && jobStatus === null && !isInitialized) {
-		modalSelectedModel =
-			$transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
+		modalSelectedModel = $transcriptStore.selectedModelName || '';
+        
+        // Ensure a valid model is selected if possible
+        if (downloadedModelsList.length > 0 && (!modalSelectedModel || !downloadedModelsList.some(m => m.name === modalSelectedModel))) {
+            modalSelectedModel = downloadedModelsList[0].name;
+        }
+
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTab = $transcriptStore.transcriptionMode || 'automatic'; // Initialize tab from store
 
@@ -216,9 +224,11 @@
 		isInitialized = true;
 	}
 
-	// Update modalSelectedModel if downloadedModelsList changes and it's empty
-	$: if (showModal && !modalSelectedModel && downloadedModelsList.length > 0) {
-		modalSelectedModel = downloadedModelsList[0].name;
+	// Update modalSelectedModel if downloadedModelsList changes and it's empty or no longer valid
+	$: if (showModal && downloadedModelsList.length > 0) {
+        if (!modalSelectedModel || !downloadedModelsList.some(m => m.name === modalSelectedModel)) {
+            modalSelectedModel = downloadedModelsList[0].name;
+        }
 	}
 
 	// Reset the initialization flag when the modal is closed
@@ -332,9 +342,37 @@
                             <p class="text-sm font-mono text-gray-900 dark:text-gray-200 break-all">{fileName || 'N/A'}</p>
                         </div>
 
-                        <Tabs style="underline" class="mt-4">
-                            <TabItem open={modalTab === 'automatic'} title="Automatic" on:click={() => (modalTab = 'automatic')}>
-                                <div class="space-y-4 pt-2">
+                        <!-- Tabs -->
+                        <div class="border-b border-gray-200 dark:border-gray-700 mt-4">
+                            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
+                                <li class="me-2">
+                                    <button 
+                                        type="button"
+                                        on:click={() => (modalTab = 'automatic')}
+                                        class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {modalTab === 'automatic' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+                                        title="Automatic Transcription"
+                                    >
+                                        <Cpu size={18} class="me-2 {modalTab === 'automatic' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+                                        Automatic
+                                    </button>
+                                </li>
+                                <li class="me-2">
+                                    <button 
+                                        type="button"
+                                        on:click={() => (modalTab = 'manual')}
+                                        class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {modalTab === 'manual' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+                                        title="Manual Transcription"
+                                    >
+                                        <PencilLine size={18} class="me-2 {modalTab === 'manual' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+                                        Manual
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="mt-6">
+                            {#if modalTab === 'automatic'}
+                                <div class="space-y-4">
                                     {#if hasCriticalConfigIssues}
                                         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-xl text-center space-y-3">
                                             <p class="text-red-800 dark:text-red-300 font-medium">Required libraries missing</p>
@@ -353,7 +391,7 @@
                                     {:else}
                                         <div class="space-y-2">
                                             <div class="flex items-center justify-between">
-                                                <Label for="modalModelSelect">Transcription Model</Label>
+                                                <Label for="modalModelSelect" color={!modalSelectedModel ? 'red' : 'gray'}>Transcription Model</Label>
                                                 {#if modalSelectedModel}
                                                     {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
                                                     {#if selectedModelObj?.info_url}
@@ -372,7 +410,14 @@
                                                 id="modalModelSelect"
                                                 items={downloadedModelsList.map((m) => ({ value: m.name, name: `${m.name} (${m.family || 'whisper.cpp'})` }))}
                                                 bind:value={modalSelectedModel}
+                                                placeholder="Select a model"
                                             />
+                                            {#if !modalSelectedModel}
+                                                <div class="flex items-center space-x-2 text-red-600 dark:text-red-400 mt-1 animate-pulse">
+                                                    <AlertTriangle size={14} />
+                                                    <Helper color="red" class="italic text-[11px] font-medium">Please select a model from the list above to proceed.</Helper>
+                                                </div>
+                                            {/if}
                                             {#if modalSelectedModel}
                                                 {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
                                                 {#if selectedModelObj?.description}
@@ -405,10 +450,15 @@
                                             {#if $configStatus.diarization_model_downloaded}
                                                 <div class="flex items-start space-x-3 p-1">
                                                     <Checkbox bind:checked={modalEnableDiarization} id="diarize-check" class="mt-0.5" />
-                                                    <div class="space-y-1">
+                                                    <div class="space-y-1 w-full">
                                                         <Label for="diarize-check" class="cursor-pointer">Identify different speakers (diarize)</Label>
                                                         {#if modalEnableDiarization}
-                                                            <Helper color="yellow" class="text-[11px]">Note: This significantly increases processing time.</Helper>
+                                                            <Alert color="yellow" class="mt-2 py-2 px-3 text-[11px] border border-yellow-200 dark:border-yellow-900/50 bg-yellow-50/50 dark:bg-yellow-900/20" rounded={false}>
+                                                                <div class="flex items-center gap-2">
+                                                                    <AlertTriangle size={14} class="flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
+                                                                    <span class="text-yellow-800 dark:text-yellow-300">Note: This significantly increases processing time.</span>
+                                                                </div>
+                                                            </Alert>
                                                         {/if}
                                                     </div>
                                                 </div>
@@ -433,9 +483,8 @@
                                         </div>
                                     {/if}
                                 </div>
-                            </TabItem>
-                            <TabItem open={modalTab === 'manual'} title="Manual" on:click={() => (modalTab = 'manual')}>
-                                <div class="space-y-4 pt-2">
+                            {:else}
+                                <div class="space-y-4">
                                     <div class="grid grid-cols-2 gap-4">
                                         <div class="space-y-2">
                                             <Label for="manualSegCount">Segments</Label>
@@ -480,7 +529,7 @@
 
                                     <div class="space-y-3 pt-2">
                                         <Label>Speaker Assignment</Label>
-                                        <div class="grid grid-cols-1 gap-2">
+                                        <div class="grid grid-cols-2 gap-2">
                                             {#each manualSpeakerOptions as option}
                                                 <Radio
                                                     name="manualSpeakerMode"
@@ -509,8 +558,8 @@
                                         </Button>
                                     </div>
                                 </div>
-                            </TabItem>
-                        </Tabs>
+                            {/if}
+                        </div>
                     </div>
                 {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
                     <!-- RUNNING OR INITIATING VIEW -->
@@ -593,7 +642,7 @@
                     <Button
                         color="blue"
                         on:click={handleConfirm}
-                        title="Start Transcription"
+                        title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
                         disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
                             (modalTab === 'manual' && !isManualDurationValid)}
                     >
