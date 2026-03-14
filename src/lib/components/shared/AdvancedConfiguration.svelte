@@ -1,10 +1,15 @@
 <script>
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
-    import Dropdown from '$lib/components/shared/Dropdown.svelte';
-    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-svelte';
+    import { Input, Label, Button, Select } from 'flowbite-svelte';
+    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight, FolderOpen } from 'lucide-svelte';
 
     export let isBusy = false;
+    export let themePreference = 'system';
+    export let downloadLocation = '';
+    export let isMovingModels = false;
+    export let statusMessage = '';
+    export let onPickLocation = () => {};
 
     let config = {
         diarization_device: 'auto',
@@ -25,6 +30,7 @@
     let statusType = 'info'; // info, success, error
     
     // Collapsible panel states
+    let isGeneralOpen = true;
     let isDiarizationOpen = false;
     let isTranslationOpen = false;
     let isTranscriptionOpen = false;
@@ -194,22 +200,95 @@
     }
 </script>
 
-<div class="p-1 h-full overflow-y-auto">
-    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-        <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
+<div class="h-full overflow-y-auto">
+    <div class="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+        <p class="text-xs font-medium text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
     
     <!-- Status Message Area (Moved up) -->
-    {#if statusMessage}
-        <div class="mb-4 flex items-center p-2 rounded-md" class:bg-green-100={statusType === 'success'} class:text-green-700={statusType === 'success'} class:bg-red-100={statusType === 'error'} class:text-red-700={statusType === 'error'} class:bg-gray-100={statusType === 'info'} class:text-gray-700={statusType === 'info'} class:dark:bg-green-900={statusType === 'success'} class:dark:text-green-300={statusType === 'success'} class:dark:bg-red-900={statusType === 'error'} class:dark:text-red-300={statusType === 'error'} class:dark:bg-gray-800={statusType === 'info'} class:dark:text-gray-300={statusType === 'info'}>
+    {#if statusMessage && statusType !== 'info'}
+        <div class="mb-4 flex items-center p-2 rounded-md" class:bg-green-100={statusType === 'success'} class:text-green-700={statusType === 'success'} class:bg-red-100={statusType === 'error'} class:text-red-700={statusType === 'error'} class:dark:bg-green-900={statusType === 'success'} class:dark:text-green-300={statusType === 'success'} class:dark:bg-red-900={statusType === 'error'} class:dark:text-red-300={statusType === 'error'}>
             {#if statusType === 'success'} <CheckCircle class="w-4 h-4 mr-2"/> {:else if statusType === 'error'} <AlertTriangle class="w-4 h-4 mr-2"/> {/if}
             <span class="text-sm">{statusMessage}</span>
         </div>
     {/if}
 
-    <div class="space-y-6">
+    <div class="space-y-4">
+        <!-- General Settings Panel -->
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <button
+                class="w-full flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30 px-6 py-4 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                on:click={() => isGeneralOpen = !isGeneralOpen}
+            >
+                <h3 class="font-semibold text-gray-900 dark:text-gray-200">General Settings</h3>
+                {#if isGeneralOpen}
+                    <ChevronDown class="w-4 h-4 text-gray-500" />
+                {:else}
+                    <ChevronRight class="w-4 h-4 text-gray-500" />
+                {/if}
+            </button>
+
+            {#if isGeneralOpen}
+                <div class="p-6 space-y-6">
+                    <div class="space-y-2">
+                        <Label for="theme-select">Theme</Label>
+                        <Select
+                            id="theme-select"
+                            class="max-w-xs"
+                            items={[
+                                {value: 'system', name: 'System'},
+                                {value: 'light', name: 'Light'},
+                                {value: 'dark', name: 'Dark'}
+                            ]}
+                            bind:value={themePreference}
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="download-location-input">
+                            Local Model Download Location
+                        </Label>
+                        <div class="flex items-center gap-2 max-w-2xl">
+                            <Input
+                                id="download-location-input"
+                                type="text"
+                                bind:value={downloadLocation}
+                                class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
+                                readonly
+                                placeholder="Set a location..."
+                                title={downloadLocation || 'No location set'}
+                                autocomplete="off"
+                                autocorrect="off"
+                            />
+                            <Button
+                                color="alternative"
+                                class="px-3"
+                                on:click={onPickLocation}
+                                disabled={isBusy}
+                                title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
+                            >
+                                {#if isMovingModels}
+                                    Moving...
+                                {:else}
+                                    <FolderOpen size={18} />
+                                {/if}
+                            </Button>
+                        </div>
+                        {#if isBusy && !isMovingModels}
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Download in progress. Cannot change location now.
+                            </p>
+                        {/if}
+                        {#if statusMessage && statusType === 'info'}
+                            <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+        </div>
+
         <!-- Transcription Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => isTranscriptionOpen = !isTranscriptionOpen}
@@ -264,7 +343,7 @@
         </div>
 
         <!-- Diarization Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => isDiarizationOpen = !isDiarizationOpen}
@@ -304,7 +383,7 @@
         </div>
 
         <!-- Translation Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <button 
                 class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 on:click={() => isTranslationOpen = !isTranslationOpen}

@@ -183,9 +183,8 @@
   }
 </script>
 
-<div class="flex flex-col space-y-4">
-  <div class="flex justify-between items-center mb-2 px-1">
-    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
+<div class="flex flex-col space-y-4 pt-2">
+  <div class="flex justify-end items-center mb-2 px-1">
     <div class="flex items-center">
       {#if !$configStatus.python_libraries_installed}
         <span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
@@ -199,7 +198,7 @@
     </div>
   </div>
 
-  <div class="p-6 bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm text-sm text-gray-700 dark:text-gray-300">
+  <div class="text-sm text-gray-700 dark:text-gray-300">
     <p class="mb-8 text-gray-600 dark:text-gray-400">
       Speaker diarization automatically identifies and separates different speakers in an audio file. Harvey uses the gated <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 dark:text-blue-400 hover:underline font-medium">pyannote/speaker-diarization-3.1</a> model for this purpose. Follow the steps below to authenticate and download the model.
     </p>
@@ -207,12 +206,8 @@
     <ol class="relative text-gray-700 dark:text-gray-300 border-s border-gray-200 dark:border-gray-700 ml-3.5">
       <!-- Step 1: Create HF Account -->
       <li class="mb-10 ms-8">
-          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
-              {#if isAuthenticated}
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
-              {:else}
-                <span class="font-medium text-sm">1</span>
-              {/if}
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
+              <span class="font-medium text-sm">1</span>
           </span>
           <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Create HuggingFace Account</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400">If you don't have one, create a free HuggingFace account on their <a href="https://huggingface.co/join" on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">website</a>.</p>
@@ -220,12 +215,8 @@
 
       <!-- Step 2: Create Auth Token -->
       <li class="mb-10 ms-8">
-          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
-              {#if isAuthenticated}
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
-              {:else}
-                <span class="font-medium text-sm">2</span>
-              {/if}
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">
+              <span class="font-medium text-sm">2</span>
           </span>
           <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Generate Access Token</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400">Generate an access token from your HuggingFace account settings. You can find it under <a href="https://huggingface.co/settings/tokens" on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline dark:text-blue-400 font-medium">Access Tokens</a>.</p>
@@ -233,12 +224,8 @@
 
       <!-- Step 3: Validate Token -->
       <li class="mb-10 ms-8">
-          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}">
-              {#if isAuthenticated}
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
-              {:else}
-                <span class="font-medium text-sm">3</span>
-              {/if}
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {isAuthenticated ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}">
+              <span class="font-medium text-sm">3</span>
           </span>
           <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Save Token to Harvey</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Paste your HuggingFace access token below.</p>
@@ -260,12 +247,8 @@
 
       <!-- Step 4: Accept User Agreement -->
       <li class="mb-10 ms-8">
-          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')}">
-              {#if hasAccess}
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
-              {:else}
-                <span class="font-medium text-sm">4</span>
-              {/if}
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400')}">
+              <span class="font-medium text-sm">4</span>
           </span>
           <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Accept Diarization Agreement</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Accept the user agreement on the Pyannote HuggingFace page to unlock access to the model.</p>
@@ -276,12 +259,8 @@
 
       <!-- Step 5: Download Model -->
       <li class="ms-8">
-          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-800 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated && !$configStatus.python_libraries_installed ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')}">
-              {#if hasAccess}
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11.917 9.724 16.5 19 7.5"/></svg>
-              {:else}
-                <span class="font-medium text-sm">5</span>
-              {/if}
+          <span class="absolute flex items-center justify-center w-8 h-8 rounded-full -start-4 ring-4 ring-white dark:ring-gray-900 {hasAccess ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : (isAuthenticated && !$configStatus.python_libraries_installed ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400')}">
+              <span class="font-medium text-sm">5</span>
           </span>
           <h3 class="font-medium leading-tight text-gray-900 dark:text-white mb-2">Download Model</h3>
 

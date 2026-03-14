@@ -79,42 +79,21 @@
 	});
 </script>
 
-<div class="border-y border-gray-200 dark:border-gray-700">
-	<button
-		on:click={() => (isPanelOpen = !isPanelOpen)}
-		class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
-	>
-		<div class="flex items-center">
-			<h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">Libraries</h3>
-		</div>
+<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+	<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center">
+		<h3 class="text-base font-semibold text-gray-900 dark:text-white">Libraries</h3>
 		<div class="flex items-center">
 			{#if !$configStatus.isInitialized}
-				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
+				<span class="text-xs text-gray-500 dark:text-gray-400 uppercase">Checking...</span>
 			{:else if $configStatus.python_libraries_installed}
-				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Installed</span>
+				<span class="text-xs font-medium text-green-600 dark:text-green-400 uppercase">Installed</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2"
-					>Installation Required</span
-				>
+				<span class="text-xs font-medium text-red-600 dark:text-red-400 uppercase">Installation Required</span>
 			{/if}
-			<svg
-				class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen
-					? 'rotate-180'
-					: ''} text-gray-500 dark:text-gray-400"
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke-width="2"
-				stroke="currentColor"
-			>
-				<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-			</svg>
 		</div>
-	</button>
-</div>
+	</div>
 
-{#if isPanelOpen}
-	<div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
+	<div class="p-6 text-sm text-gray-700 dark:text-gray-300">
 		<p class="mb-2">
 			Harvey uses <strong>micromamba</strong> to install and manage a few required libraries.
 			<button class="text-blue-600 dark:text-blue-400 hover:underline ml-1 focus:outline-none" on:click={() => showInfo = !showInfo}>
@@ -131,19 +110,19 @@
 			</ul>
 		{/if}
 
-		<p class="mb-4 text-xs text-gray-500 dark:text-gray-500">
+		<p class="mb-6 text-xs text-gray-500 dark:text-gray-500">
 			Once downloaded, everything runs offline on your device to ensure privacy.
 		</p>
 		<div class="flex items-center">
 			{#if !$configStatus.isInitialized}
 				<p class="text-gray-500 dark:text-gray-400">Checking...</p>
 			{:else if $configStatus.python_libraries_installed}
-				<p class="text-green-600 dark:text-green-400 mr-4">Libraries are installed.</p>
+				<p class="text-green-600 dark:text-green-400 mr-4 font-medium">Libraries are installed.</p>
 				<button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
 					{#if isDeleting}Deleting...{:else}Delete{/if}
 				</button>
 			{:else}
-				<p class="text-red-600 dark:text-red-400 mr-4">Required libraries are not installed.</p>
+				<p class="text-red-600 dark:text-red-400 mr-4 font-medium">Required libraries are not installed.</p>
 				<button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling || isDeleting}>
 					{#if isInstalling}Installing...{:else}Install{/if}
 				</button>
@@ -153,7 +132,7 @@
 			<p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
 		{/if}
 	</div>
-{/if}
+</div>
 
 <InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} isChecking={isChecking} title="Installation Logs" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
 

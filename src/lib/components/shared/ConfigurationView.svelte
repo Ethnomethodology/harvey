@@ -13,8 +13,7 @@
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
-	import { Input, Label, Button, Select } from 'flowbite-svelte';
-	import { FolderOpen, Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
+	import { Settings2, Mic, Users, Languages, SlidersHorizontal, TriangleAlert } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
@@ -203,73 +202,15 @@
 			{:else if activeTab === 'translation'}
 				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
 			{:else if activeTab === 'advanced'}
-				<div class="space-y-8 pb-8">
-					<!-- General Settings Card -->
-					<div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-						<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-							<h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-								<Settings2 size={18} class="text-blue-600 dark:text-blue-400" />
-								General Settings
-							</h3>
-						</div>
-						<div class="p-6 space-y-6">
-							<div class="space-y-2">
-								<Label for="theme-select">Theme</Label>
-								<Select
-									id="theme-select"
-									class="max-w-xs"
-									items={[
-										{value: 'system', name: 'System'},
-										{value: 'light', name: 'Light'},
-										{value: 'dark', name: 'Dark'}
-									]}
-									bind:value={$themePreference}
-								/>
-							</div>
-
-							<div class="space-y-2">
-								<Label for="download-location-input">
-									Local Model Download Location
-								</Label>
-								<div class="flex items-center gap-2 max-w-2xl">
-									<Input
-										id="download-location-input"
-										type="text"
-										bind:value={downloadLocation}
-										class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
-										readonly
-										placeholder="Set a location..."
-										title={downloadLocation || 'No location set'}
-										autocomplete="off"
-										autocorrect="off"
-									/>
-									<Button
-										color="alternative"
-										class="px-3"
-										on:click={pickDownloadLocation}
-										disabled={isBusy}
-										title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
-									>
-										{#if isMovingModels}
-											Moving...
-										{:else}
-											<FolderOpen size={18} />
-										{/if}
-									</Button>
-								</div>
-								{#if isBusy && !isMovingModels}
-									<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-										Download in progress. Cannot change location now.
-									</p>
-								{/if}
-								{#if statusMessage}
-									<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
-								{/if}
-							</div>
-						</div>
-					</div>
-
-					<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
+				<div class="pb-8">
+					<AdvancedConfiguration
+						bind:isBusy={isAdvancedBusy}
+						bind:themePreference={$themePreference}
+						bind:downloadLocation={downloadLocation}
+						isMovingModels={isMovingModels}
+						statusMessage={statusMessage}
+						onPickLocation={pickDownloadLocation}
+					/>
 				</div>
 			{/if}
 		</div>
