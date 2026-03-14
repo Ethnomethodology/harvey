@@ -479,7 +479,7 @@
 		</div>
 	</div>
 
-	{#if $configStatus.isInitialized && selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed}
+	{#if $configStatus.isInitialized && selectedEngine === 'faster-whisper' && $configStatus.python_libraries_installed && !$configStatus.faster_whisper_dependencies_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">
@@ -502,7 +502,7 @@
 		</div>
 	{/if}
 
-	{#if $configStatus.isInitialized && selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed}
+	{#if $configStatus.isInitialized && selectedEngine === 'whisper-cpp' && $configStatus.python_libraries_installed && !$configStatus.whisper_cpp_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">
@@ -562,13 +562,15 @@
 
 		{#if selectedEngine === 'whisper-cpp'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Native Metal support on Mac, extremely fast, lightweight, high accuracy with GGML models.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openExternal('https://github.com/ggerganov/whisper.cpp')}>whisper.cpp</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, fast on Mac (Metal) and Windows (CPU).</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Less optimized for NVIDIA GPUs than faster-whisper.</p>
 			</div>
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Blazing fast on NVIDIA GPUs, supports integer8 quantization for lower memory usage.</p>
-				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Macs compared to whisper.cpp, larger library dependencies.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openExternal('https://github.com/SYSTRAN/faster-whisper')}>faster-whisper</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Faster on NVIDIA GPUs.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Mac (Metal) compared to whisper.cpp.</p>
 			</div>
 		{/if}
 	</div>

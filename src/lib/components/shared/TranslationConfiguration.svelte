@@ -533,7 +533,8 @@
 		
 		{#if selectedEngine === 'helsinki'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed mb-2">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common language pairs.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openLink('https://huggingface.co/Helsinki-NLP')}>Helsinki-NLP</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, performs better for common language pairs.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
 			</div>
 
@@ -552,6 +553,7 @@
 			{/if}
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openLink('https://huggingface.co/facebook/nllb-200-distilled-600M')}>NLLB (Meta)</button></p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Very heavy resource usage, large file size, and slower on CPUs. Best with GPU.</p>
                 {#if !ct2Installed && translationModelCount > 0}

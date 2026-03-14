@@ -4,6 +4,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { ask } from "@tauri-apps/plugin-dialog";
 	import { listen } from '@tauri-apps/api/event';
+	import { open as openExternal } from '@tauri-apps/plugin-shell';
 	import { configStatus, updateConfigStatus, setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
 
@@ -17,6 +18,10 @@
 	let unlistenLog;
     let unlistenFinished;
 	let isDeleting = false;
+
+	function openLink(url) {
+        openExternal(url).catch((err) => console.error(`Failed to open link: ${err}`));
+    }
 
 	async function handleDelete() {
 		const confirmed = await ask("Are you sure you want to delete the local library environment? This will require a full re-installation to use AI features again.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
@@ -95,7 +100,7 @@
 
 	<div class="p-6 text-sm text-gray-700 dark:text-gray-300">
 		<p class="mb-2">
-			Harvey uses <strong>micromamba</strong> to install and manage a few required libraries.
+			Harvey uses <strong><button class="text-blue-600 dark:text-blue-400 hover:underline focus:outline-none font-bold" on:click={() => openLink('https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html')}>micromamba</button></strong> to install and manage a few required libraries.
 			<button class="text-blue-600 dark:text-blue-400 hover:underline ml-1 focus:outline-none" on:click={() => showInfo = !showInfo}>
 				{showInfo ? 'Hide info' : 'More info'}
 			</button>
@@ -103,10 +108,33 @@
 		
 		{#if showInfo}
 			<ul class="list-disc list-inside mb-4 pl-2 space-y-1 text-gray-600 dark:text-gray-400">
-				<li><strong>PyTorch & Transformers:</strong> The AI engine for running translation and analysis models locally.</li>
-				<li><strong>pyannote.audio:</strong> Specifically for speaker identification (diarization).</li>
-				<li><strong>FFmpeg:</strong> For processing audio and video files.</li>
-				<li><strong>Pandoc:</strong> For converting and importing documents (e.g., MS Word).</li>
+				<li>
+					<strong>
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://www.python.org/')}>Python</button> & 
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html')}>micromamba</button>:
+					</strong> Core runtime for executing AI models locally.
+				</li>
+				<li>
+					<strong>
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://pytorch.org/')}>PyTorch</button> & 
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://huggingface.co/docs/transformers/index')}>Transformers</button>:
+					</strong> The AI engine for running translation and analysis models locally.
+				</li>
+				<li>
+					<strong>
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://github.com/pyannote/pyannote-audio')}>pyannote.audio</button>:
+					</strong> Specifically for speaker identification (diarization).
+				</li>
+				<li>
+					<strong>
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://ffmpeg.org/')}>FFmpeg</button>:
+					</strong> For processing audio and video files.
+				</li>
+				<li>
+					<strong>
+						<button class="text-blue-600 hover:underline" on:click={() => openLink('https://pandoc.org/')}>Pandoc</button>:
+					</strong> For converting and importing documents (e.g., MS Word).
+				</li>
 			</ul>
 		{/if}
 

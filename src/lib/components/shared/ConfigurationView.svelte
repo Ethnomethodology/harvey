@@ -33,7 +33,7 @@
 	let isMovingModels = false;
 	let statusMessage = '';
 
-	let isGeneralOpen = true;
+	let isGeneralOpen = false;
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
@@ -138,7 +138,7 @@
 				>
 					<MessageSquareText size={18} class="me-2 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
 					Transcription
-					{#if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed) || ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_dependencies_installed || !$configStatus.python_libraries_installed))}
+					{#if !$configStatus.python_libraries_installed || ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed) || ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed)}
 						<TriangleAlert size={14} class="ms-2 text-red-500" title="Missing required libraries" />
 					{:else if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_models_downloaded) || ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.faster_whisper_models_downloaded)}
 						<TriangleAlert size={14} class="ms-2 text-yellow-500" title="No models downloaded" />

@@ -167,13 +167,13 @@
 >
       <!-- Main Modal Header -->
       <svelte:fragment slot="header">
-    <div class="flex items-center justify-between w-full pr-1">
+        <div class="flex items-center justify-between flex-grow mr-8">
             <div class="flex items-center space-x-3">
                 <img src="/logo.png" alt="Harvey Logo" class="w-8 h-8 rounded-lg" />
                 <h3 id="help-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate">Help Center</h3>
             </div>
 
-            <div class="flex items-center space-x-4 flex-grow justify-end">
+            <div class="flex items-center space-x-4">
                 <!-- Search Bar -->
                 <div class="relative w-64 help-search-container">
                     <div class="relative">
