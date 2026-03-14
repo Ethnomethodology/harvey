@@ -237,41 +237,37 @@
                 <div class="flex items-end space-x-3">
                     <div class="flex-grow space-y-2">
                         <Label for="speaker-count-input">Number of Speakers</Label>
-                        <div class="flex items-center space-x-1">
-                            <Button
-                                color="alternative"
+                        <div class="relative flex items-center w-full">
+                            <button 
+                                type="button" 
                                 on:click={decrement}
-                                class="px-3"
-                                title="Decrease"
+                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
                                 disabled={localCount <= MIN_SPEAKERS}
                             >
-                                <Minus size={16} />
-                            </Button>
-                            <Input
-                                id="speaker-count-input"
-                                type="number"
-                                min={MIN_SPEAKERS}
-                                max={MAX_SPEAKERS}
-                                step="1"
+                                <Minus size={16} class="text-gray-900 dark:text-white" />
+                            </button>
+                            <input 
+                                type="text" 
+                                id="speaker-count-input" 
+                                class="bg-gray-50 border-x-0 border-gray-300 h-10 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
                                 bind:value={localCount}
                                 placeholder="0-11"
-                                class="text-center"
+                                required 
                             />
-                            <Button
-                                color="alternative"
+                            <button 
+                                type="button" 
                                 on:click={increment}
-                                class="px-3"
-                                title="Increase"
+                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
                                 disabled={localCount >= MAX_SPEAKERS}
                             >
-                                <Plus size={16} />
-                            </Button>
+                                <Plus size={16} class="text-gray-900 dark:text-white" />
+                            </button>
                         </div>
                     </div>
                     <Button
                         color="alternative"
                         on:click={updateRenderedRows}
-                        class="px-4"
+                        class="px-4 h-10"
                         title="Generate speaker name fields"
                     >
                         <UserPlus size={18} class="mr-2" />

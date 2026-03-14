@@ -15,7 +15,9 @@
         UserPen, 
         SlidersHorizontal,
         Cpu,
-        PencilLine
+        PencilLine,
+        Plus,
+        Minus
     } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
@@ -79,15 +81,41 @@
         }
     }
 
+    // Helper functions for custom buttons
+    function incrementCount() {
+        manualSegmentCount = Math.min(100, manualSegmentCount + 1);
+        if (mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / manualSegmentCount));
+        }
+    }
+    function decrementCount() {
+        manualSegmentCount = Math.max(1, manualSegmentCount - 1);
+        if (mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / manualSegmentCount));
+        }
+    }
+    function incrementDuration() {
+        manualSegmentDuration = manualSegmentDuration + 1;
+        if (mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / manualSegmentDuration)));
+        }
+    }
+    function decrementDuration() {
+        manualSegmentDuration = Math.max(1, manualSegmentDuration - 1);
+        if (mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / manualSegmentDuration)));
+        }
+    }
+
 	// Derived state for manual validation
 	$: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
 	// For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
 	// So we validate against total media duration, not remaining space.
 	$: isManualDurationValid = totalDurationNeeded <= mediaDuration + 0.001;
 
-	const manualSpeakerOptions = [
+	$: manualSpeakerOptions = [
 		{ value: 'unassigned', label: 'Unassigned' },
-		{ value: 'alternate', label: 'Alternate Speakers', disabled: (speakers?.names?.length || 0) < 2 },
+		{ value: 'alternate', label: 'Alternate Speakers', disabled: (modalSpeakersConfig?.names?.length || 0) < 2 },
 	];
 
 	function formatDuration(seconds) {
@@ -486,26 +514,62 @@
                             {:else}
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-2 gap-4">
+                                        <!-- Segments Input with custom buttons -->
                                         <div class="space-y-2">
                                             <Label for="manualSegCount">Segments</Label>
-                                            <Input
-                                                id="manualSegCount"
-                                                type="number"
-                                                min="1"
-                                                max="100"
-                                                bind:value={manualSegmentCount}
-                                                on:input={handleManualSegCountInput}
-                                            />
+                                            <div class="relative flex items-center w-full">
+                                                <button 
+                                                    type="button" 
+                                                    on:click={decrementCount}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Minus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                                <input 
+                                                    type="text" 
+                                                    id="manualSegCount" 
+                                                    class="bg-gray-50 border-x-0 border-gray-300 h-9 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                                                    value={manualSegmentCount}
+                                                    on:input={handleManualSegCountInput}
+                                                    required 
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    on:click={incrementCount}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Plus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        <!-- Duration Input with custom buttons -->
                                         <div class="space-y-2">
                                             <Label for="manualSegDuration">Duration (sec)</Label>
-                                            <Input
-                                                id="manualSegDuration"
-                                                type="number"
-                                                min="1"
-                                                bind:value={manualSegmentDuration}
-                                                on:input={handleManualSegDurationInput}
-                                            />
+                                            <div class="relative flex items-center w-full">
+                                                <button 
+                                                    type="button" 
+                                                    on:click={decrementDuration}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Minus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                                <input 
+                                                    type="text" 
+                                                    id="manualSegDuration" 
+                                                    class="bg-gray-50 border-x-0 border-gray-300 h-9 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                                                    value={manualSegmentDuration}
+                                                    on:input={handleManualSegDurationInput}
+                                                    required 
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    on:click={incrementDuration}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Plus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -552,10 +616,10 @@
                                             <p class="text-xs text-gray-500 dark:text-gray-400">Configured Speakers</p>
                                             <p class="text-sm font-bold text-gray-900 dark:text-white">{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</p>
                                         </div>
-                                        <Button color="alternative" size="xs" on:click={() => (showNestedSpeakersModal = true)} title="Edit Speakers">
+                                        <button color="alternative" size="xs" on:click={() => (showNestedSpeakersModal = true)} title="Edit Speakers" class="text-xs flex items-center px-2.5 py-1.5 font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
                                             <UserPen size={14} class="mr-1.5" />
                                             Edit
-                                        </Button>
+                                        </button>
                                     </div>
                                 </div>
                             {/if}
@@ -724,4 +788,14 @@
 {/if}
 
 <style lang="postcss">
+    /* Re-enable spin buttons for specific inputs */
+    :global(input.show-spinners::-webkit-outer-spin-button),
+    :global(input.show-spinners::-webkit-inner-spin-button) {
+        -webkit-appearance: inner-spin-button !important;
+        opacity: 1 !important;
+    }
+
+    :global(input.show-spinners[type=number]) {
+        -moz-appearance: number-input !important;
+    }
 </style>

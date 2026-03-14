@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/ManualSettingsModal.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { X, Mic } from 'lucide-svelte';
+	import { X, Mic, Plus, Minus } from 'lucide-svelte';
     import { 
         Button, 
         Label, 
@@ -30,6 +30,13 @@
         { value: 'unassigned', label: 'Unassigned' },
         { value: 'alternate', label: 'Alternate Speakers', disabled: speakerList.length < 2 }
     ];
+
+    function incrementDuration() {
+        duration = duration + 1;
+    }
+    function decrementDuration() {
+        duration = Math.max(1, duration - 1);
+    }
 
 	function handleConfirm() {
 		dispatch('confirm', {
@@ -76,17 +83,33 @@
                     Configure defaults for new segments added manually.
                 </p>
 
-				<!-- Duration Input -->
+				<!-- Duration Input with custom buttons -->
 				<div class="space-y-2">
 					<Label for="segDuration">Default Segment Duration (seconds)</Label>
 					<div class="flex items-center gap-3">
-                        <Input
-                            id="segDuration"
-                            type="number"
-                            min="1"
-                            class="flex-1"
-                            bind:value={duration}
-                        />
+                        <div class="relative flex items-center w-full max-w-[9rem]">
+                            <button 
+                                type="button" 
+                                on:click={decrementDuration}
+                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                            >
+                                <Minus size={14} class="text-gray-900 dark:text-white" />
+                            </button>
+                            <input 
+                                type="text" 
+                                id="segDuration" 
+                                class="bg-gray-50 border-x-0 border-gray-300 h-9 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                                bind:value={duration}
+                                required 
+                            />
+                            <button 
+                                type="button" 
+                                on:click={incrementDuration}
+                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                            >
+                                <Plus size={14} class="text-gray-900 dark:text-white" />
+                            </button>
+                        </div>
                         <div class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg font-mono text-xs text-gray-600 dark:text-gray-400 min-w-[4.5rem] text-center border border-gray-200 dark:border-gray-700">
                             {Math.floor(duration / 60)}m {duration % 60}s
                         </div>
