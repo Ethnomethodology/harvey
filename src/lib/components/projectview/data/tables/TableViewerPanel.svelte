@@ -2766,12 +2766,18 @@
                 clipboardCopyRowRange:"range",
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
-            footerElement: createTabulatorFooterElement(),
             });
             tabulatorInstance.on("tableBuilt", () => {
                 tableReady = true;
                 detectDuplicates();
                 checkValidationErrors();
+                addFloatingAddRowButton();
+            });
+            tabulatorInstance.on("renderComplete", () => {
+                updateFloatingAddRowButtonPosition();
+            });
+            tabulatorInstance.on("scrollVertical", () => {
+                updateFloatingAddRowButtonPosition();
             });
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
@@ -2914,45 +2920,91 @@
         tabulatorInstance.addRange(currentCell, currentCell);
     }
 
-    function createTabulatorFooterElement() {
-        const footerContainer = document.createElement("div");
-        footerContainer.className = "tabulator-custom-footer flex items-center w-full bg-white dark:bg-[#030712] cursor-pointer group";
-        footerContainer.style.height = "40px";
-        footerContainer.style.borderTop = "1px solid var(--ui-select-border)";
+    let addRowButtonEl = null;
+
+    function addFloatingAddRowButton() {
+        if (!tableContainer || addRowButtonEl) return;
+
+        // By appending to the `.tabulator-tableholder` and manipulating `top` explicitly,
+        // we can scroll *with* the virtual DOM natively while avoiding its garbage collection.
+        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
+        if (!scrollHolder) return;
         
-        // Match the 50px frozen number column styling
+        addRowButtonEl = document.createElement("div");
+        addRowButtonEl.className = "absolute left-0 z-10 flex items-center transition-colors cursor-pointer border-t border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#030712] hover:bg-gray-50 dark:hover:bg-gray-900/50";
+        addRowButtonEl.style.height = "38px";
+        addRowButtonEl.title = "Add New Entry";
+
+        const contentWrapper = document.createElement("div");
+        contentWrapper.className = "flex items-center w-full h-full";
+
+        // The pinned frozen number column part
         const numberColEl = document.createElement("div");
-        numberColEl.className = "flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-colors group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20";
+        numberColEl.className = "flex items-center justify-center border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900";
         numberColEl.style.width = "50px";
+        numberColEl.style.height = "100%";
         numberColEl.style.minWidth = "50px";
-        numberColEl.style.flexShrink = "0";
+        numberColEl.style.position = "sticky";
+        numberColEl.style.left = "0";
+        numberColEl.style.zIndex = "4"; // Match tabulator frozen column index
 
         mount(TableIcon, {
             target: numberColEl,
-            props: { icon: Plus, size: 16, customClass: "text-blue-500 opacity-70 group-hover:opacity-100 transition-opacity" }
+            props: { icon: Plus, size: 16, customClass: "text-blue-500" }
         });
 
-        // The dashed body spanning the rest of the area
+        // The dashed body part
         const bodyEl = document.createElement("div");
-        bodyEl.className = "flex-1 h-[30px] mx-2 border-2 border-dashed border-transparent group-hover:border-blue-400 dark:group-hover:border-blue-600 rounded-lg flex items-center justify-center text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-all bg-transparent group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10";
+        bodyEl.className = "flex-1 h-full mx-2 my-1 border-2 border-dashed border-blue-400 dark:border-blue-600 rounded flex items-center justify-center hover:bg-blue-50/50 dark:hover:bg-blue-900/10 text-blue-500 font-medium";
         bodyEl.innerHTML = `<span>Add New Entry</span>`;
 
-        footerContainer.appendChild(numberColEl);
-        footerContainer.appendChild(bodyEl);
+        contentWrapper.appendChild(numberColEl);
+        contentWrapper.appendChild(bodyEl);
+        addRowButtonEl.appendChild(contentWrapper);
 
-        footerContainer.onclick = () => {
+        addRowButtonEl.onclick = () => {
             if (!tabulatorInstance) return;
             const rows = tabulatorInstance.getRows();
             const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
             insertRow(lastRow, 'after');
 
             setTimeout(() => {
-                const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
                 if (scrollHolder) scrollHolder.scrollTop = scrollHolder.scrollHeight;
             }, 50);
         };
 
-        return footerContainer;
+        scrollHolder.appendChild(addRowButtonEl);
+        updateFloatingAddRowButtonPosition();
+    }
+
+    function updateFloatingAddRowButtonPosition() {
+        if (!tabulatorInstance || !addRowButtonEl) return;
+
+        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
+        if (!scrollHolder) return;
+
+        // Ensure button lives inside the scroll holder
+        if (addRowButtonEl.parentNode !== scrollHolder) {
+            scrollHolder.appendChild(addRowButtonEl);
+        }
+
+        // Dynamically compute width to match full table width
+        const header = tableContainer.querySelector(".tabulator-header");
+        if (header) {
+            const innerHeader = header.querySelector('.tabulator-headers');
+            if (innerHeader) {
+                addRowButtonEl.style.width = innerHeader.style.width || `${innerHeader.offsetWidth}px`;
+            }
+        }
+
+        // Align vertically precisely below the last row in the entire DOM
+        // Tabulator's virtual DOM heights are controlled by `.tabulator-table` height
+        const tableVirtualWrapper = tableContainer.querySelector(".tabulator-table");
+        if (tableVirtualWrapper) {
+            // Position right at the end of the total virtual height
+            const totalHeight = parseInt(tableVirtualWrapper.style.paddingTop || '0') + tableVirtualWrapper.offsetHeight;
+            addRowButtonEl.style.top = `${totalHeight}px`;
+        }
     }
 
     function goToNextMatch() {
