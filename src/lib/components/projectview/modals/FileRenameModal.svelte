@@ -2,6 +2,7 @@
 <script>
 	import { createEventDispatcher, onMount, tick } from 'svelte';
 	import { Modal, Label, Input, Button, Helper } from 'flowbite-svelte';
+	import { PencilLine } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let currentName = '';
@@ -21,6 +22,8 @@
 	let currentBaseName = '';
 	let currentExtension = '';
     let currentDisplayName = '';
+
+	$: titleType = itemType === 'imported_transcript' ? 'Transcript' : (itemType ? itemType.charAt(0).toUpperCase() + itemType.slice(1) : 'Item');
 
 	function updateNameParts() {
 		if (currentName) {
@@ -138,8 +141,25 @@
 	}
 </script>
 
-<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full z-[120]" on:close={closeModal}>
-	<h2 id="rename-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white" slot="header">Rename Item</h2>
+<Modal
+	bind:open={showModal}
+	size="sm"
+	autoclose={false}
+	outsideclose={true}
+	class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+	on:close={closeModal}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<PencilLine class="w-5 h-5 text-gray-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			Rename {titleType}
+		</h3>
+	</div>
 
 	<div class="space-y-4">
 		<div>
@@ -192,13 +212,11 @@
 	</div>
 
 	<svelte:fragment slot="footer">
-		<div class="flex justify-end space-x-3 w-full">
-			<Button color="alternative" on:click={closeModal}>
-				Cancel
-			</Button>
-			<Button color="blue" on:click={handleConfirm} disabled={!newNameBase.trim() || !!errorMessage}>
-				Rename
-			</Button>
-		</div>
+		<Button color="alternative" on:click={closeModal} title="Cancel renaming">
+			Cancel
+		</Button>
+		<Button color="blue" on:click={handleConfirm} disabled={!newNameBase.trim() || !!errorMessage} title="Save changes">
+			Rename
+		</Button>
 	</svelte:fragment>
 </Modal>

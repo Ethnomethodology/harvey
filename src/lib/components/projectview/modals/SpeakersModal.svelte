@@ -3,12 +3,13 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { updateSpeakerConfig } from '$lib/stores/transcriptStore.js';
     import { 
+		Modal,
         Input, 
         Label, 
         Button, 
         Checkbox
     } from 'flowbite-svelte';
-    import { Users, X, Plus, Trash2, Minus, UserPlus } from 'lucide-svelte';
+    import { Users, Plus, Trash2, Minus, UserPlus } from 'lucide-svelte';
 
 	// Props
 	export let showModal = false;
@@ -34,7 +35,6 @@
 	  }
 	}
 
-	let modalElement;
 	let hasInitialized = false;
 	let listGenerated = false; // NEW: Tracks if the 'Add' button has been clicked for the current count
 
@@ -93,17 +93,13 @@
 	// Helper to synchronize localNames array with a specific count
 	function updateLocalNames(count, currentNames) {
 		const names = Array.isArray(currentNames) ? currentNames : [];
-		// Only rebuild if needed
-		// if (count !== localNames.length) { // Original check - might not be sufficient if names changed
-			const updatedNames = Array.from({ length: count }, (_, i) =>
-				names[i] !== undefined && names[i] !== null ? names[i] : `Speaker-${i + 1}`
-			);
-			// Avoid unnecessary reactivity trigger if array content is identical
-			if (JSON.stringify(localNames) !== JSON.stringify(updatedNames)) {
-				localNames = updatedNames;
-				console.log('Updated localNames array:', localNames);
-			}
-		// }
+		const updatedNames = Array.from({ length: count }, (_, i) =>
+			names[i] !== undefined && names[i] !== null ? names[i] : `Speaker-${i + 1}`
+		);
+		// Avoid unnecessary reactivity trigger if array content is identical
+		if (JSON.stringify(localNames) !== JSON.stringify(updatedNames)) {
+			localNames = updatedNames;
+		}
 	}
 
 	// Reactive statement JUST for clamping localCount as user types
@@ -127,7 +123,6 @@
 
 	// NEW: Reactive statement to disable confirm if count changes after list was generated
 	$: if (hasInitialized && localCount !== renderedCount) {
-		console.log(`[SpeakersModal] localCount (${localCount}) differs from renderedCount (${renderedCount}). Disabling confirm.`);
 		listGenerated = false; // Disable confirm, user must click 'Add' again
 	}
 
@@ -141,7 +136,6 @@
 		updateLocalNames(renderedCount, localNames);
 		updateLocalSecondNames(renderedCount, localSecondNames);
 		listGenerated = true; // NEW: Enable confirm button after clicking Add
-		console.log(`Updating rendered rows to ${renderedCount}. Confirm enabled: ${listGenerated}`);
 	}
 
     function removeSpeaker(index) {
@@ -152,17 +146,12 @@
     }
 
 
-	// Handle direct edit of a speaker name
-	
-
-
 	// --- Modal Actions ---
 	function confirm() {
 		// Important: Confirm should use the *renderedCount* and *localNames*
 		// which were set when "Add" was last clicked.
 		// Only proceed if confirm is enabled
 		if (!listGenerated) {
-			console.warn("Confirm button clicked while disabled. This shouldn't happen.");
 			return;
 		}
 
@@ -181,6 +170,7 @@
 
 	function closeModal() {
 		showModal = false; // This will trigger the reactive block to reset flags
+		dispatch('close');
 	}
 
 	// --- Keyboard Handling ---
@@ -206,153 +196,143 @@
 	});
 </script>
 
-{#if showModal}
-	<div
-		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-		on:click|self={cancel}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="speakers-modal-title"
-        tabindex="-1"
-	>
-		<div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden" role="document" on:click|stopPropagation>
-            <!-- Header -->
-            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
-                <div class="flex items-center space-x-3">
-                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <Users size={20} class="text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 id="speakers-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
-                        Configure Speakers
-                    </h3>
-                </div>
-                <button on:click={cancel} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
-                    <X size={20} />
-                </button>
-            </div>
+<Modal
+	bind:open={showModal}
+	size="md"
+	autoclose={false}
+	outsideclose={true}
+	class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-6 space-y-5 bg-white dark:bg-gray-900"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+	on:close={closeModal}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<Users class="w-5 h-5 text-gray-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			Configure Speakers
+		</h3>
+	</div>
 
-            <div class="p-6 space-y-5">
-                <!-- Speaker Count Input and Update Button -->
-                <div class="flex items-end space-x-3">
-                    <div class="flex-grow space-y-2">
-                        <Label for="speaker-count-input">Number of Speakers</Label>
-                        <div class="relative flex items-center w-full">
-                            <button 
-                                type="button" 
-                                on:click={decrement}
-                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
-                                disabled={localCount <= MIN_SPEAKERS}
-                            >
-                                <Minus size={16} class="text-gray-900 dark:text-white" />
-                            </button>
-                            <input 
-                                type="text" 
-                                id="speaker-count-input" 
-                                class="bg-gray-50 border-x-0 border-gray-300 h-10 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
-                                bind:value={localCount}
-                                placeholder="0-11"
-                                required 
-                            />
-                            <button 
-                                type="button" 
-                                on:click={increment}
-                                class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
-                                disabled={localCount >= MAX_SPEAKERS}
-                            >
-                                <Plus size={16} class="text-gray-900 dark:text-white" />
-                            </button>
-                        </div>
-                    </div>
-                    <Button
-                        color="alternative"
-                        on:click={updateRenderedRows}
-                        class="px-4 h-10"
-                        title="Generate speaker name fields"
-                    >
-                        <UserPlus size={18} class="mr-2" />
-                        Add
-                    </Button>
-                </div>
-
-                <!-- Speaker Names Table/List -->
-                <div class="space-y-4 pt-2">
-                    {#if renderedCount > 0}
-                        <div class="flex justify-between items-center">
-                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Speaker Names</h4>
-                            <Checkbox bind:checked={addSecondNames}>
-                                Add names in 2nd language
-                            </Checkbox>
-                        </div>
-                        
-                        <div class="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
-                            {#each { length: renderedCount } as _, i (i)}
-                                <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
-                                    <span class="text-xs font-mono text-gray-500 dark:text-gray-400 w-20 flex-shrink-0">
-                                        Speaker {i + 1}
-                                    </span>
-                                    <div class="flex-grow flex gap-2">
-                                        <Input
-                                            size="sm"
-                                            type="text"
-                                            bind:value={localNames[i]}
-                                            placeholder={`Name`}
-                                        />
-                                        {#if addSecondNames}
-                                            <Input
-                                                size="sm"
-                                                type="text"
-                                                bind:value={localSecondNames[i]}
-                                                placeholder={`2nd Language Name`}
-                                            />
-                                        {/if}
-                                    </div>
-                                    <button 
-                                        on:click={() => removeSpeaker(i)} 
-                                        class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                        title="Remove Speaker"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            {/each}
-                        </div>
-                    {:else if listGenerated && renderedCount === 0}
-                        <div class="text-center py-8 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Zero speakers specified.</p>
-                        </div>
-                    {:else}
-                        <div class="text-center py-8 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Enter speaker count and click "Add" to configure.</p>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
-				<Button color="alternative" on:click={cancel} title="Cancel">
-					Cancel
-				</Button>
-				<Button
-					color="blue"
-					on:click={confirm}
-					disabled={!listGenerated}
-					title={!listGenerated ? 'Click Add button first' : 'Save speaker settings'}
-				>
-					Confirm
-				</Button>
+	<div class="space-y-5">
+		<!-- Speaker Count Input and Update Button -->
+		<div class="flex items-end space-x-3">
+			<div class="flex-grow space-y-2">
+				<Label for="speaker-count-input">Number of Speakers</Label>
+				<div class="relative flex items-center w-full">
+					<button 
+						type="button" 
+						on:click={decrement}
+						class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+						disabled={localCount <= MIN_SPEAKERS}
+						title="Decrease speaker count"
+					>
+						<Minus size={16} class="text-gray-900 dark:text-white" />
+					</button>
+					<input 
+						type="text" 
+						id="speaker-count-input" 
+						class="bg-gray-50 border-x-0 border-gray-300 h-10 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+						bind:value={localCount}
+						placeholder="0-11"
+						required 
+					/>
+					<button 
+						type="button" 
+						on:click={increment}
+						class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2.5 h-10 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+						disabled={localCount >= MAX_SPEAKERS}
+						title="Increase speaker count"
+					>
+						<Plus size={16} class="text-gray-900 dark:text-white" />
+					</button>
+				</div>
 			</div>
+			<Button
+				color="alternative"
+				on:click={updateRenderedRows}
+				class="px-4 h-10"
+				title="Generate speaker name fields"
+			>
+				<UserPlus size={18} class="mr-2" />
+				Add
+			</Button>
+		</div>
+
+		<!-- Speaker Names Table/List -->
+		<div class="space-y-4 pt-2">
+			{#if renderedCount > 0}
+				<div class="flex justify-between items-center">
+					<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Speaker Names</h4>
+					<Checkbox bind:checked={addSecondNames}>
+						Add names in 2nd language
+					</Checkbox>
+				</div>
+				
+				<div class="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+					{#each { length: renderedCount } as _, i (i)}
+						<div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+							<span class="text-xs font-mono text-gray-500 dark:text-gray-400 w-20 flex-shrink-0">
+								Speaker {i + 1}
+							</span>
+							<div class="flex-grow flex gap-2">
+								<Input
+									size="sm"
+									type="text"
+									bind:value={localNames[i]}
+									placeholder={`Name`}
+								/>
+								{#if addSecondNames}
+									<Input
+										size="sm"
+										type="text"
+										bind:value={localSecondNames[i]}
+										placeholder={`2nd Language Name`}
+									/>
+								{/if}
+							</div>
+							<button 
+								on:click={() => removeSpeaker(i)} 
+								class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+								title="Remove Speaker"
+							>
+								<Trash2 size={16} />
+							</button>
+						</div>
+					{/each}
+				</div>
+			{:else if listGenerated && renderedCount === 0}
+				<div class="text-center py-8 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+					<p class="text-sm text-gray-500 dark:text-gray-400">Zero speakers specified.</p>
+				</div>
+			{:else}
+				<div class="text-center py-8 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+					<p class="text-sm text-gray-500 dark:text-gray-400">Enter speaker count and click "Add" to configure.</p>
+				</div>
+			{/if}
 		</div>
 	</div>
-{/if}
+
+	<svelte:fragment slot="footer">
+		<Button color="alternative" on:click={cancel} title="Cancel">
+			Cancel
+		</Button>
+		<Button
+			color="blue"
+			on:click={confirm}
+			disabled={!listGenerated}
+			title={!listGenerated ? 'Click Add button first' : 'Save speaker settings'}
+		>
+			Confirm
+		</Button>
+	</svelte:fragment>
+</Modal>
 
 <style lang="postcss">
     .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-        @apply bg-transparent;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
         @apply bg-transparent;

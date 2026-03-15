@@ -3,6 +3,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
+    import { GalleryVerticalEnd } from 'lucide-svelte';
     import { updateProjectGroupsList } from '$lib/stores/projectStore.js';
 
     export let showModal = false;
@@ -89,8 +90,25 @@
 
 <svelte:window on:keydown={handleKeydown}/>
 
-<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full z-[60]" on:close={closeModal}>
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" slot="header">Create New Group</h2>
+<Modal
+    bind:open={showModal}
+    size="sm"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={closeModal}
+>
+    <div slot="header" class="flex items-center gap-2">
+        <GalleryVerticalEnd class="w-5 h-5 text-gray-500" />
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            Create New Group
+        </h3>
+    </div>
 
     <div class="space-y-4">
         <div>
@@ -111,17 +129,15 @@
     </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex justify-end space-x-3 w-full">
-            <Button color="alternative" on:click={closeModal} disabled={isSaving}>
-                Cancel
-            </Button>
-            <Button color="blue" on:click={handleSave} disabled={isSaving || !groupName.trim()}>
-                {#if isSaving}
-                    Saving...
-                {:else}
-                    Save Group
-                {/if}
-            </Button>
-        </div>
+        <Button color="alternative" on:click={closeModal} disabled={isSaving} title="Cancel group creation">
+            Cancel
+        </Button>
+        <Button color="blue" on:click={handleSave} disabled={isSaving || !groupName.trim()} title="Create new group">
+            {#if isSaving}
+                Saving...
+            {:else}
+                Save Group
+            {/if}
+        </Button>
     </svelte:fragment>
 </Modal>

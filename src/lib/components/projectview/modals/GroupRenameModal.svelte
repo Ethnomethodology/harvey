@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { message } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
+    import { PencilLine } from 'lucide-svelte';
 
     export let showModal = false;
     export let groupData = { id: null, name: '', description: '' }; // Incoming group data
@@ -48,9 +49,7 @@
     }
 
     function handleKeydown(event) {
-        if (event.key === 'Escape') {
-            closeModal();
-        } else if (event.key === 'Enter' && currentName.trim()) {
+        if (event.key === 'Enter' && currentName.trim()) {
             event.preventDefault(); // Prevent form submission if inside a form
             handleSave();
         }
@@ -67,20 +66,42 @@
 
 </script>
 
-<svelte:window on:keydown={handleKeydown}/>
-
-<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full z-[60]" on:close={closeModal}>
-    <h2 id="rename-group-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4" slot="header">Rename Group</h2>
+<Modal
+    bind:open={showModal}
+    size="sm"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={closeModal}
+>
+    <div slot="header" class="flex items-center gap-2">
+        <PencilLine class="w-5 h-5 text-gray-500" />
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            Rename Group
+        </h3>
+    </div>
 
     <div class="space-y-4">
         <div>
             <Label for="groupRenameName" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Group Name <span class="text-red-500">*</span></Label>
-            <Input bind:this={nameInputRef} type="text" id="groupRenameName" bind:value={currentName} placeholder="Enter group name"
-                   required
-                   autocomplete="off"
-                   autocorrect="off"
-                   autocapitalize="off"
-                   spellcheck="false" />
+            <Input
+                bind:this={nameInputRef}
+                type="text"
+                id="groupRenameName"
+                bind:value={currentName}
+                placeholder="Enter group name"
+                required
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                on:keydown={handleKeydown}
+            />
         </div>
         <div>
             <Label for="groupRenameDescription" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
@@ -91,17 +112,15 @@
     </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex justify-end space-x-3 w-full">
-            <Button color="alternative" on:click={closeModal} disabled={isSaving}>
-                Cancel
-            </Button>
-            <Button color="blue" on:click={handleSave} disabled={isSaving || !currentName.trim()}>
-                {#if isSaving}
-                    Saving...
-                {:else}
-                    Save Changes
-                {/if}
-            </Button>
-        </div>
+        <Button color="alternative" on:click={closeModal} disabled={isSaving} title="Cancel renaming">
+            Cancel
+        </Button>
+        <Button color="blue" on:click={handleSave} disabled={isSaving || !currentName.trim()} title="Save changes">
+            {#if isSaving}
+                Saving...
+            {:else}
+                Save Changes
+            {/if}
+        </Button>
     </svelte:fragment>
 </Modal>

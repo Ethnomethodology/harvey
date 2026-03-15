@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
+    import { Tag, Trash2 } from 'lucide-svelte';
 
     export let showModal = false;
     export let tag = null;
@@ -10,8 +11,7 @@
 
     let currentName = '';
     let currentDescription = '';
-    let isLoading = false;
-    let errorMessage = '';
+    let isLoading = false;    let errorMessage = '';
 
     onMount(() => {
         if (tag) {
@@ -64,16 +64,33 @@
     }
 </script>
 
-<Modal bind:open={showModal} size="sm" autoclose={false} outsideclose={true} class="w-full" on:close={closeModal}>
-    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" slot="header">Edit Tag</h2>
+<Modal
+    bind:open={showModal}
+    size="sm"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={closeModal}
+>
+    <div slot="header" class="flex items-center gap-2">
+        <Tag class="w-5 h-5 text-gray-500" />
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            Edit Tag
+        </h3>
+    </div>
 
     {#if errorMessage}
-        <div class="mb-4 p-3 bg-red-100 dark:bg-red-700 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-100 rounded-md text-sm">
+        <div class="p-3 bg-red-100 dark:bg-red-700 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-100 rounded-md text-sm">
             {errorMessage}
         </div>
     {/if}
 
-    <form on:submit|preventDefault={handleSave} class="space-y-4">
+    <div class="space-y-4">
         <div>
             <Label for="editTagName" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Tag Name</Label>
             <Input
@@ -94,38 +111,41 @@
                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
             ></Textarea>
         </div>
-    </form>
+    </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex justify-between items-center w-full">
+        <Button
+            color="red"
+            outline
+            on:click={handleDelete}
+            disabled={isLoading}
+            title="Delete this tag"
+            class="px-3"
+        >
+            <Trash2 class="w-4 h-4 mr-2" />
+            Delete
+        </Button>
+        <div class="flex space-x-3">
             <Button
-                color="red"
-                outline
-                on:click={handleDelete}
+                color="alternative"
+                on:click={closeModal}
                 disabled={isLoading}
+                title="Cancel editing"
             >
-                Delete
+                Cancel
             </Button>
-            <div class="flex space-x-3">
-                <Button
-                    color="alternative"
-                    on:click={closeModal}
-                    disabled={isLoading}
-                >
-                    Cancel
-                </Button>
-                <Button
-                    color="blue"
-                    on:click={handleSave}
-                    disabled={isLoading || !currentName.trim()}
-                >
-                    {#if isLoading}
-                        Saving...
-                    {:else}
-                        Save Changes
-                    {/if}
-                </Button>
-            </div>
+            <Button
+                color="blue"
+                on:click={handleSave}
+                disabled={isLoading || !currentName.trim()}
+                title="Save changes"
+            >
+                {#if isLoading}
+                    Saving...
+                {:else}
+                    Save Changes
+                {/if}
+            </Button>
         </div>
     </svelte:fragment>
 </Modal>
