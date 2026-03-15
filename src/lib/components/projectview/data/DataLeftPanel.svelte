@@ -295,6 +295,8 @@
         sourceFilePath: '',
         projectXmlPath: ''
     };
+
+    let pendingSheetNamesToImport = [];
     let pendingTableImports = [];
     let importedTablePathsToRevert = [];
 
@@ -427,37 +429,12 @@
             return;
         }
 
-        try {
-            pendingTableImports = [];
-            importedTablePathsToRevert = [];
+        pendingSheetNamesToImport = [...selectedSheets];
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
 
-            // Import each selected sheet using the backend, show spinner
-            setAssetImportStatus(true, `Extracting ${selectedSheets.length} sheets...`);
-
-            for (const sheet of selectedSheets) {
-                const result = await importTableSheet(
-                    tableSheetSelectionData.sourceFilePath,
-                    tableSheetSelectionData.projectXmlPath,
-                    sheet,
-                    tableSheetSelectionData.filename
-                );
-                if (result && result.table_path) {
-                    pendingTableImports.push(result);
-                }
-            }
-
-            setAssetImportStatus(false, ''); // Clear loading state once extraction finishes
-
-            if (pendingTableImports.length > 0) {
-                processNextTableImport();
-            }
-        } catch (e) {
-            console.error(`[DataLeftPanel] Error importing table sheets:`, e);
-            const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
-            message(`Error importing table sheets: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-            setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
-            isActivelyImportingTable = false;
-        }
+        // Start processing the first sheet immediately
+        await processNextTableImport();
     }
 
     async function handleTableSheetSelectionCancel() {
@@ -468,26 +445,63 @@
         setAssetImportStatus(false, 'Table import cancelled.');
     }
 
-    function processNextTableImport() {
-        if (pendingTableImports.length === 0) {
-            // All imports completed successfully
-            if (importedTablePathsToRevert.length > 0) {
-                // Select the last imported table
-                const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
-                handleItemSelect(lastImported, 'table');
+    async function processNextTableImport() {
+        // If we still have sheets to extract, pull the next one and extract it
+        if (pendingSheetNamesToImport.length > 0) {
+            const nextSheet = pendingSheetNamesToImport.shift();
+            try {
+                setAssetImportStatus(true, `Extracting sheet ${nextSheet}...`);
+                const result = await importTableSheet(
+                    tableSheetSelectionData.sourceFilePath,
+                    tableSheetSelectionData.projectXmlPath,
+                    nextSheet,
+                    tableSheetSelectionData.filename
+                );
 
-                const count = importedTablePathsToRevert.length;
-                message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
+                setAssetImportStatus(false, '');
+
+                if (result && result.table_path) {
+                    pendingTableImports.push(result);
+                    // Open the header configuration modal for the newly extracted sheet
+                    showNextHeaderConfirmation();
+                } else {
+                    // Skip to next if extraction failed but didn't throw
+                    await processNextTableImport();
+                }
+            } catch (e) {
+                console.error(`[DataLeftPanel] Error extracting sheet ${nextSheet}:`, e);
+                const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
+                message(`Error extracting sheet ${nextSheet}: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+                // We've hit an error during sheet extraction. Abort the remaining imports safely.
+                await triggerHeaderConfirmationCancel();
             }
-            importedTablePathsToRevert = [];
-            isActivelyImportingTable = false;
             return;
         }
 
+        // If no more sheets to extract, check if we have any pending header confirmations
+        if (pendingTableImports.length > 0) {
+            showNextHeaderConfirmation();
+            return;
+        }
+
+        // All imports and configurations completed successfully
+        if (importedTablePathsToRevert.length > 0) {
+            // Select the last imported table
+            const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
+            handleItemSelect(lastImported, 'table');
+
+            const count = importedTablePathsToRevert.length;
+            message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
+        }
+        importedTablePathsToRevert = [];
+        isActivelyImportingTable = false;
+        setAssetImportStatus(false, '');
+    }
+
+    function showNextHeaderConfirmation() {
         const nextImport = pendingTableImports[0];
         headerConfirmationData.tablePath = nextImport.table_path;
         headerConfirmationData.previewData = nextImport.preview_data;
-        // Also pass filename for better context in modal if needed, though HeaderConfirmationModal might not use it currently.
         headerConfirmationData.filename = nextImport.filename;
 
         showHeaderConfirmationModal = true;
