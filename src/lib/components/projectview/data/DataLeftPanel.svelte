@@ -387,6 +387,9 @@
                 return;
             }
 
+            // Mark import process as active to handle safe cancellations
+            isActivelyImportingTable = true;
+
             // Check if it's the intermediate state (multiple sheets found)
             if (importResult.sheets && importResult.sheets.length > 1) {
                 tableSheetSelectionData = {
@@ -449,6 +452,7 @@
     async function handleTableSheetSelectionCancel() {
         console.log(`[DataLeftPanel] Table sheet selection cancelled.`);
         showTableSheetSelectionModal = false;
+        isActivelyImportingTable = false;
         // No cleanup needed since we haven't extracted/imported any files yet.
         project.update(p => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
     }
@@ -465,6 +469,7 @@
                 message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
             }
             importedTablePathsToRevert = [];
+            isActivelyImportingTable = false;
             return;
         }
 
@@ -476,6 +481,8 @@
 
         showHeaderConfirmationModal = true;
     }
+
+    let isActivelyImportingTable = false;
 
     async function handleHeaderConfirmation(event) {
         const { hasHeaders, schema } = event.detail;
@@ -506,18 +513,21 @@
             console.error('[DataLeftPanel] Error confirming headers/schema:', error);
             message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
             // Abort remaining imports on error
-            await handleHeaderConfirmationCancel();
+            await triggerHeaderConfirmationCancel();
         }
     }
 
     async function handleHeaderConfirmationCancel() {
+        // This is strictly bound to the modal's internal cancel/close button event
+        await triggerHeaderConfirmationCancel();
+    }
+
+    async function triggerHeaderConfirmationCancel() {
         console.log(`[DataLeftPanel] Header confirmation cancelled. Aborting entire import process.`);
         showHeaderConfirmationModal = false;
 
-        // Prevent firing on initial load or empty close events
-        if (pendingTableImports.length === 0 && importedTablePathsToRevert.length === 0 && !headerConfirmationData.tablePath) {
-            return;
-        }
+        if (!isActivelyImportingTable) return;
+        isActivelyImportingTable = false;
 
         try {
             // Gather all paths we need to delete (the ones fully processed + the current one + the remaining pending ones)
