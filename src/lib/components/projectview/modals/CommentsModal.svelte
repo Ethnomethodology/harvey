@@ -101,7 +101,7 @@
             <div class="space-y-3">
                 <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 relative group">
                     {#if editingCommentId === comment.id}
-                        <Textarea bind:value={editingText} rows="3" class="mb-2" placeholder="Edit comment..." />
+                        <Textarea bind:value={editingText} rows="3" class="mb-2" placeholder="Edit comment..." autocomplete="off" autocorrect="off" />
                         <div class="flex justify-end gap-2">
                             <Button size="xs" color="alternative" on:click={handleCancelEdit}>Cancel</Button>
                             <Button size="xs" color="blue" on:click={handleSaveEdit}>Save</Button>
@@ -145,7 +145,7 @@
                 {#each comments.filter(r => r.parentId === comment.id) as reply}
                     <div class="ml-8 p-4 rounded-xl bg-gray-100/50 dark:bg-gray-800/30 border border-gray-200/50 dark:border-gray-700/50 relative group">
                         {#if editingCommentId === reply.id}
-                            <Textarea bind:value={editingText} rows="2" class="mb-2" placeholder="Edit reply..." />
+                            <Textarea bind:value={editingText} rows="2" class="mb-2" placeholder="Edit reply..." autocomplete="off" autocorrect="off" />
                             <div class="flex justify-end gap-2">
                                 <Button size="xs" color="alternative" on:click={handleCancelEdit}>Cancel</Button>
                                 <Button size="xs" color="blue" on:click={handleSaveEdit}>Save</Button>
@@ -210,6 +210,8 @@
             placeholder={replyingToCommentId ? 'Write a reply...' : 'Add a comment...'}
             rows="3"
             class="bg-white dark:bg-gray-800"
+            autocomplete="off"
+            autocorrect="off"
         />
     </div>
 

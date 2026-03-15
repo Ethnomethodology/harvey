@@ -146,6 +146,7 @@
 				bind:value={exportFileName}
 				placeholder="e.g., MyExportedImage"
 				autocomplete="off"
+				autocorrect="off"
 			/>
 		</div>
 

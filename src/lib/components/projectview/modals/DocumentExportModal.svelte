@@ -163,6 +163,8 @@
 				type="text"
 				bind:value={exportFileName}
 				placeholder="e.g., MyDocument"
+				autocomplete="off"
+				autocorrect="off"
 			/>
 		</div>
 

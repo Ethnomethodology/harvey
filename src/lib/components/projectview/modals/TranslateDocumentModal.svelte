@@ -283,6 +283,8 @@
 						disabled 
 						value={documentName}
 						class="cursor-not-allowed bg-gray-50 dark:bg-gray-800 font-mono text-xs"
+						autocomplete="off"
+						autocorrect="off"
 					/>
 				</div>
 

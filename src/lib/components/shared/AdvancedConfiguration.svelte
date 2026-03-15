@@ -222,7 +222,7 @@
                         </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Threads for inference (Faster-Whisper & Whisper.cpp).</p>
                         </div>
                     </div>
@@ -238,7 +238,7 @@
                         </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Beam Size</label>
-                            <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" />
+                            <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Number of paths to search. 1 is greedy (fastest), 5 is standard.</p>
                         </div>
                     </div>
@@ -272,7 +272,7 @@
                         <!-- Threads -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
                     </div>
@@ -305,7 +305,7 @@
                         <!-- Threads -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
 

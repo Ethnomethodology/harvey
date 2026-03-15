@@ -195,6 +195,7 @@
                         on:input={handleFindChange}
                         placeholder="Search text..."
                         autocomplete="off"
+                        autocorrect="off"
                     >
                         <svelte:fragment slot="left">
                             <Search class="w-4 h-4 text-gray-400" />

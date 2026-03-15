@@ -533,6 +533,8 @@
                                                     value={manualSegmentCount}
                                                     on:input={handleManualSegCountInput}
                                                     required 
+                                                    autocomplete="off"
+                                                    autocorrect="off"
                                                 />
                                                 <button 
                                                     type="button" 
@@ -562,6 +564,8 @@
                                                     value={manualSegmentDuration}
                                                     on:input={handleManualSegDurationInput}
                                                     required 
+                                                    autocomplete="off"
+                                                    autocorrect="off"
                                                 />
                                                 <button 
                                                     type="button" 

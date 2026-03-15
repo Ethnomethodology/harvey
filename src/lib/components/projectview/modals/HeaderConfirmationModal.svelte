@@ -286,7 +286,7 @@ import { Modal } from 'flowbite-svelte';
                                 </TableBodyCell>
                                 <TableBodyCell>
                                     {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
-                                        <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
+                                        <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." autocomplete="off" autocorrect="off" />
                                     {:else if field.type === 'Numeric'}
                                         <div class="flex flex-col gap-1">
                                             <div class="flex gap-1">
@@ -297,7 +297,7 @@ import { Modal } from 'flowbite-svelte';
                                                 <div class="flex flex-col gap-1">
                                                     <Select size="sm" items={currencyOptions} bind:value={field.currency} />
                                                     {#if field.currency === 'OTHER'}
-                                                        <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO" maxlength="3" />
+                                                        <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO" maxlength="3" autocomplete="off" autocorrect="off" />
                                                     {/if}
                                                 </div>
                                             {/if}
@@ -307,7 +307,7 @@ import { Modal } from 'flowbite-svelte';
                                     {/if}
                                 </TableBodyCell>
                                 <TableBodyCell>
-                                    <Input size="sm" bind:value={field.description} placeholder="Tooltip text" />
+                                    <Input size="sm" bind:value={field.description} placeholder="Tooltip text" autocomplete="off" autocorrect="off" />
                                 </TableBodyCell>
                             </TableBodyRow>
                         {/each}

@@ -177,6 +177,7 @@
 				bind:value={exportFileName}
 				placeholder="e.g., MyMeetingTranscript"
 				autocomplete="off"
+				autocorrect="off"
 			/>
 		</div>
 

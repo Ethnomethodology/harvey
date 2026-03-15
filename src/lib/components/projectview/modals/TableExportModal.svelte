@@ -173,6 +173,8 @@
 				type="text"
 				bind:value={exportFileName}
 				placeholder="e.g., MyTable"
+				autocomplete="off"
+				autocorrect="off"
 			/>
 		</div>
 

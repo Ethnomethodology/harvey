@@ -68,6 +68,8 @@
 					bind:value={localInitialPrompt}
 					rows="3"
 					placeholder="e.g. Welcome to the AI podcast."
+					autocomplete="off"
+					autocorrect="off"
 				/>
 				<Helper class="italic">
 					Guides the model's style and vocabulary. Provide a sample sentence demonstrating desired formatting or technical terms.

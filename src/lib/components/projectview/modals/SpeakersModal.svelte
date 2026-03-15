@@ -238,6 +238,8 @@
 						bind:value={localCount}
 						placeholder="0-11"
 						required 
+						autocomplete="off"
+						autocorrect="off"
 					/>
 					<button 
 						type="button" 
@@ -283,6 +285,8 @@
 									type="text"
 									bind:value={localNames[i]}
 									placeholder={`Name`}
+									autocomplete="off"
+									autocorrect="off"
 								/>
 								{#if addSecondNames}
 									<Input
@@ -290,6 +294,8 @@
 										type="text"
 										bind:value={localSecondNames[i]}
 										placeholder={`2nd Language Name`}
+										autocomplete="off"
+										autocorrect="off"
 									/>
 								{/if}
 							</div>
