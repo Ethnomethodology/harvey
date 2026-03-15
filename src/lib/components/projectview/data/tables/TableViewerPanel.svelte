@@ -2924,16 +2924,27 @@
 
     function addFloatingAddRowButton() {
         if (!tableContainer || addRowButtonEl) return;
+
+        // Instead of making it absolute to the container, we will append it directly
+        // to the bottom of the Tabulator inner scrollable holder so it flows naturally.
+        const tableHolder = tableContainer.querySelector(".tabulator-table");
+        if (!tableHolder) return;
         
-        addRowButtonEl = document.createElement("button");
-        addRowButtonEl.className = "absolute z-30 flex items-center justify-center w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md text-blue-500 hover:text-blue-600 transition-all hover:scale-110";
-        addRowButtonEl.style.left = "9px"; // Centered under the 50px width row number column
+        addRowButtonEl = document.createElement("div");
+        addRowButtonEl.className = "tabulator-row hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer flex items-center justify-center border-b border-gray-200 dark:border-gray-700";
+        addRowButtonEl.style.height = "38px";
+        addRowButtonEl.style.width = "100%";
         addRowButtonEl.title = "Add New Entry";
         
+        const iconWrapper = document.createElement("div");
+        iconWrapper.className = "text-blue-500 opacity-60 hover:opacity-100 flex items-center justify-center h-full w-full";
+
         mount(TableIcon, {
-            target: addRowButtonEl,
-            props: { icon: Plus, size: 18 }
+            target: iconWrapper,
+            props: { icon: Plus, size: 16 }
         });
+
+        addRowButtonEl.appendChild(iconWrapper);
 
         addRowButtonEl.onclick = () => {
             const rows = tabulatorInstance.getRows();
@@ -2941,36 +2952,16 @@
             insertRow(lastRow, 'after');
         };
 
-        tableContainer.appendChild(addRowButtonEl);
-        updateFloatingAddRowButtonPosition();
+        tableHolder.appendChild(addRowButtonEl);
     }
 
     function updateFloatingAddRowButtonPosition() {
         if (!tabulatorInstance || !addRowButtonEl) return;
         
-        const rows = tabulatorInstance.getRows("active");
-        if (rows.length === 0) {
-            addRowButtonEl.style.top = "45px"; // Just below header
-            return;
-        }
-
-        const lastRow = rows[rows.length - 1];
-        const lastRowEl = lastRow.getElement();
-        const tableHeaderHeight = tableContainer.querySelector(".tabulator-header")?.offsetHeight || 0;
-        
-        // Position it just below the last row
-        const topPos = lastRowEl.offsetTop + lastRowEl.offsetHeight + tableHeaderHeight - tabulatorInstance.rowManager.element.scrollTop;
-        
-        addRowButtonEl.style.top = `${topPos + 5}px`;
-        
-        // Hide if it would be outside the visible area of the holder
-        const holderHeight = tableContainer.querySelector(".tabulator-tableholder")?.offsetHeight || 0;
-        if (topPos > holderHeight + tableHeaderHeight || topPos < tableHeaderHeight) {
-            addRowButtonEl.style.opacity = "0";
-            addRowButtonEl.style.pointerEvents = "none";
-        } else {
-            addRowButtonEl.style.opacity = "1";
-            addRowButtonEl.style.pointerEvents = "auto";
+        // Ensure it always stays at the absolute bottom of the table DOM even after sorting/filtering
+        const tableHolder = tableContainer.querySelector(".tabulator-table");
+        if (tableHolder && addRowButtonEl.parentNode === tableHolder) {
+            tableHolder.appendChild(addRowButtonEl); // Moves it to the end
         }
     }
 
