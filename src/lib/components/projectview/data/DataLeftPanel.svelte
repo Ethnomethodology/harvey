@@ -3,13 +3,14 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
+	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
 	    import FileRenameModal from '../modals/FileRenameModal.svelte';
 		import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	    import GroupRenameModal from '../modals/GroupRenameModal.svelte'; // Added GroupRenameModal
+        import TableSheetSelectionModal from '../modals/TableSheetSelectionModal.svelte';
 		import { confirm, message } from '@tauri-apps/plugin-dialog';	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
@@ -286,6 +287,17 @@
     let showImportTranscriptModal = false;
     let showHeaderConfirmationModal = false;
     let headerConfirmationData = {};
+
+    let showTableSheetSelectionModal = false;
+    let tableSheetSelectionData = {
+        sheets: [],
+        filename: '',
+        sourceFilePath: '',
+        projectXmlPath: ''
+    };
+    let pendingTableImports = [];
+    let importedTablePathsToRevert = [];
+
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -367,23 +379,101 @@
     async function handleTableImport() {
         let isLoading = true;
         try {
-            const importResult = await importTableFile(); // No arguments needed, projectService handles file selection
+            const importResult = await importTableFile();
             console.log(`[DataLeftPanel] importResult from importTableFile:`, importResult);
-            if (importResult) {
-                headerConfirmationData.tablePath = importResult.table_path;
-                headerConfirmationData.previewData = importResult.preview_data;
-                showHeaderConfirmationModal = true;
-            } else {
-                // If result is null, it means the user cancelled the file selection.
-                // No error, just return.
+
+            if (!importResult) {
+                // User cancelled the file selection.
                 return;
             }
+
+            // Check if it's the intermediate state (multiple sheets found)
+            if (importResult.sheets && importResult.sheets.length > 1) {
+                tableSheetSelectionData = {
+                    sheets: importResult.sheets,
+                    filename: importResult.filename,
+                    sourceFilePath: importResult.sourceFilePath,
+                    projectXmlPath: importResult.projectXmlPath
+                };
+                showTableSheetSelectionModal = true;
+                return;
+            }
+
+            // Otherwise, it's an array of imported files (one item for CSV/single sheet XLSX)
+            if (Array.isArray(importResult) && importResult.length > 0) {
+                pendingTableImports = importResult;
+                importedTablePathsToRevert = [];
+                processNextTableImport();
+            }
+
         } catch (e) {
             console.error(`[DataLeftPanel] Error importTableFile:`, e);
             message(e.message, { title: 'Import Error', type: 'error' });
         } finally {
             isLoading = false;
         }
+    }
+
+    async function handleTableSheetSelectionConfirm(event) {
+        const { selectedSheets } = event.detail;
+        console.log(`[DataLeftPanel] Selected sheets for import:`, selectedSheets);
+        showTableSheetSelectionModal = false;
+
+        if (!selectedSheets || selectedSheets.length === 0) return;
+
+        try {
+            pendingTableImports = [];
+            importedTablePathsToRevert = [];
+
+            // Import each selected sheet using the backend
+            for (const sheet of selectedSheets) {
+                const result = await importTableSheet(
+                    tableSheetSelectionData.sourceFilePath,
+                    tableSheetSelectionData.projectXmlPath,
+                    sheet,
+                    tableSheetSelectionData.filename
+                );
+                if (result && result.table_path) {
+                    pendingTableImports.push(result);
+                }
+            }
+
+            if (pendingTableImports.length > 0) {
+                processNextTableImport();
+            }
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error importing table sheets:`, e);
+        }
+    }
+
+    async function handleTableSheetSelectionCancel() {
+        console.log(`[DataLeftPanel] Table sheet selection cancelled.`);
+        showTableSheetSelectionModal = false;
+        // No cleanup needed since we haven't extracted/imported any files yet.
+    }
+
+    function processNextTableImport() {
+        if (pendingTableImports.length === 0) {
+            // All imports completed successfully
+            if (importedTablePathsToRevert.length > 0) {
+                // Select the last imported table
+                const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
+                handleItemSelect(lastImported, 'table');
+
+                const count = importedTablePathsToRevert.length;
+                message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
+            }
+            importedTablePathsToRevert = [];
+            return;
+        }
+
+        const nextImport = pendingTableImports[0];
+        headerConfirmationData.tablePath = nextImport.table_path;
+        headerConfirmationData.previewData = nextImport.preview_data;
+        // Also pass filename for better context in modal if needed, though HeaderConfirmationModal might not use it currently.
+        headerConfirmationData.filename = nextImport.filename;
+
+        showHeaderConfirmationModal = true;
     }
 
     async function handleHeaderConfirmation(event) {
@@ -403,14 +493,59 @@
                 await saveTableSchema(headerConfirmationData.tablePath, schema);
             }
 
+            // Mark this specific import as fully processed
+            importedTablePathsToRevert.push(headerConfirmationData.tablePath);
+            pendingTableImports.shift(); // Remove the successfully processed item
+
             await refreshProjectFiles();
-            // Automatically select and open the newly imported table
-            dispatch('requestviewchange', { viewType: 'tables', itemPath: headerConfirmationData.tablePath, hasHeaders: hasHeaders });
-            
-            message('Table imported and configured successfully.', { title: 'Import Success', type: 'info' });
+
+            // Proceed to the next one
+            processNextTableImport();
         } catch (error) {
             console.error('[DataLeftPanel] Error confirming headers/schema:', error);
             message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
+            // Abort remaining imports on error
+            await handleHeaderConfirmationCancel();
+        }
+    }
+
+    async function handleHeaderConfirmationCancel() {
+        console.log(`[DataLeftPanel] Header confirmation cancelled. Aborting entire import process.`);
+        showHeaderConfirmationModal = false;
+
+        try {
+            // Gather all paths we need to delete (the ones fully processed + the current one + the remaining pending ones)
+            const pathsToDelete = [...importedTablePathsToRevert];
+
+            // Add current one being cancelled if it's not already in the revert list
+            if (headerConfirmationData.tablePath && !pathsToDelete.includes(headerConfirmationData.tablePath)) {
+                pathsToDelete.push(headerConfirmationData.tablePath);
+            }
+
+            // Add any remaining pending imports that were extracted but not yet configured
+            for (const pending of pendingTableImports) {
+                if (pending.table_path && !pathsToDelete.includes(pending.table_path)) {
+                    pathsToDelete.push(pending.table_path);
+                }
+            }
+
+            // Clean up: Delete them sequentially
+            for (const path of pathsToDelete) {
+                console.log(`[DataLeftPanel] Reverting partially imported table: ${path}`);
+                try {
+                    await deleteProjectItem(path);
+                } catch (e) {
+                    console.error(`[DataLeftPanel] Failed to delete table during rollback: ${path}`, e);
+                }
+            }
+
+            await refreshProjectFiles();
+            message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error during import rollback:`, e);
+        } finally {
+            pendingTableImports = [];
+            importedTablePathsToRevert = [];
         }
     }
 
@@ -1330,6 +1465,14 @@
     tablePath={headerConfirmationData.tablePath} 
     previewData={headerConfirmationData.previewData}
     on:confirm={handleHeaderConfirmation}
+    on:close={handleHeaderConfirmationCancel}
+/>
+<TableSheetSelectionModal
+    bind:showModal={showTableSheetSelectionModal}
+    sheets={tableSheetSelectionData.sheets}
+    filename={tableSheetSelectionData.filename}
+    on:confirm={handleTableSheetSelectionConfirm}
+    on:cancel={handleTableSheetSelectionCancel}
 />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={(event) => handleImportTranscriptConfirm(event)} on:close={() => showImportTranscriptModal = false} />
 

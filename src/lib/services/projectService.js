@@ -910,6 +910,28 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
 
+export async function importTableSheet(sourceFilePath, projectXmlPath, sheetName, filename) {
+    setAssetImportStatus(true, `Importing sheet ${sheetName} from ${filename}...`);
+    try {
+        const result = await invoke('import_table_file', {
+            sourcePathStr: sourceFilePath,
+            projectXmlPathStr: projectXmlPath,
+            sheetNameOpt: sheetName
+        });
+        if (result && result.table_path && result.preview_data) {
+            setAssetImportStatus(false, `${sheetName} imported successfully.`);
+            return { ...result, filename: `${filename} (${sheetName})` };
+        } else {
+            throw new Error('Invalid response from backend during table sheet import.');
+        }
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        await message(`Error importing table sheet: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
+        throw error;
+    }
+}
+
 export async function importTableFile(hasHeaders) {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
@@ -943,18 +965,37 @@ export async function importTableFile(hasHeaders) {
         const sourceFilePath = selected;
         console.log(`[ProjectService] importTableFile: sourceFilePath = ${sourceFilePath}`);
         const sourceFilename = await basename(sourceFilePath);
+        setAssetImportStatus(true, `Inspecting table ${sourceFilename}...`);
+
+        let selectedSheets = null;
+        if (sourceFilePath.toLowerCase().endsWith('.xlsx')) {
+            console.log(`[ProjectService] Invoking 'get_xlsx_sheets' for ${sourceFilePath}`);
+            const sheets = await invoke('get_xlsx_sheets', { sourcePathStr: sourceFilePath });
+            if (sheets && sheets.length > 1) {
+                // If there are multiple sheets, we stop here and return them to the UI
+                // so the UI can prompt the user to select which ones to import.
+                setAssetImportStatus(false, `Select sheets to import from ${sourceFilename}`);
+                return { sheets, sourceFilePath, filename: sourceFilename, projectXmlPath };
+            } else if (sheets && sheets.length === 1) {
+                // Single sheet, proceed directly
+                selectedSheets = [sheets[0]];
+            }
+        }
+
+        // If it's a CSV or an XLSX with a single sheet, we can import it right away
         setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
 
         console.log(`[ProjectService] Invoking 'import_table_file' with sourcePathStr: ${sourceFilePath}, projectXmlPathStr: ${projectXmlPath}`);
         const result = await invoke('import_table_file', {
             sourcePathStr: sourceFilePath,
-            projectXmlPathStr: projectXmlPath
+            projectXmlPathStr: projectXmlPath,
+            sheetNameOpt: selectedSheets ? selectedSheets[0] : null
         });
         console.log(`[ProjectService] Result from 'import_table_file':`, result);
 
         if (result && result.table_path && result.preview_data) {
             setAssetImportStatus(false, `${sourceFilename} imported successfully.`);
-            return { ...result, filename: sourceFilename };
+            return [{ ...result, filename: sourceFilename }];
         } else {
             throw new Error('Invalid response from backend during table import.');
         }

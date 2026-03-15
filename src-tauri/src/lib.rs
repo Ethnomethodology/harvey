@@ -463,6 +463,7 @@ pub fn run() {
             projectview::table_handler::create_new_table,
             projectview::table_handler::save_table_schema,
             projectview::table_handler::load_table_schema,
+            projectview::table_handler::get_xlsx_sheets,
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
             projectview::table_handler::set_table_headers,

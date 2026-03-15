@@ -16,9 +16,25 @@ use calamine::{Reader, Xlsx, open_workbook, Data};
 use rust_xlsxwriter::Workbook;
 
 #[tauri::command]
+pub async fn get_xlsx_sheets(
+    source_path_str: String,
+) -> Result<Vec<String>, CommandError> {
+    let source_path = PathBuf::from(&source_path_str);
+    if !source_path.exists() || !source_path.is_file() {
+        return Err(CommandError::from(format!("Source file not found: {}", source_path_str)));
+    }
+
+    let mut workbook: Xlsx<_> = open_workbook(&source_path)
+        .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", source_path.display(), e)))?;
+
+    Ok(workbook.sheet_names().to_vec())
+}
+
+#[tauri::command]
 pub async fn import_table_file(
     source_path_str: String,
     project_xml_path_str: String,
+    sheet_name_opt: Option<String>,
 ) -> Result<Value, CommandError> {
     info!("[import_table_file] Importing table from: {}, Project XML Path: {}", source_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_path_str);
@@ -79,14 +95,19 @@ pub async fn import_table_file(
         return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
-    let truncated_table_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
-    info!("[import_table_file] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, truncated_table_filename_with_ext);
+    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+        let original_stem = Path::new(&original_source_filename_with_ext).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let combined = format!("{}_{}", original_stem, sheet_name_opt.as_ref().unwrap());
+        truncate_filename_stem(&format!("{}.csv", combined), MAX_FILENAME_STEM_LENGTH)
+    } else {
+        truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH)
+    };
 
-    let table_file_stem_truncated = Path::new(&truncated_table_filename_with_ext).file_stem()
+    let table_file_stem_truncated = Path::new(&stem_base).file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| {
-            error!("[import_table_file] Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext);
-            CommandError::from(format!("Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext))
+            error!("[import_table_file] Could not get stem from truncated table filename: {}", stem_base);
+            CommandError::from(format!("Could not get stem from truncated table filename: {}", stem_base))
         })?;
     debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
@@ -122,7 +143,8 @@ pub async fn import_table_file(
         });
 
         if !candidate_folder.exists() && !name_conflict {
-            let file_name = format!("{}.{}", folder_name, original_source_extension);
+            let target_extension = if original_source_extension == "xlsx" && sheet_name_opt.is_some() { "csv" } else { &original_source_extension };
+            let file_name = format!("{}.{}", folder_name, target_extension);
             debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
             break (candidate_folder, file_name);
         }
@@ -149,12 +171,19 @@ pub async fn import_table_file(
     let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
     debug!("[import_table_file] Final table name: {}", final_table_name);
 
-    info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
-    fs::copy(&source_path, &final_table_path).map_err(|e| {
-        error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
-        CommandError::from(format!("Failed to copy table file: {}", e))
-    })?;
-    debug!("File copied to: {}", final_table_path.display());
+    if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+        let sheet_name = sheet_name_opt.as_ref().unwrap();
+        info!("[import_table_file] Extracting sheet '{}' from '{}' to '{}'", sheet_name, source_path.display(), final_table_path.display());
+        extract_xlsx_sheet_to_csv(&source_path, sheet_name, &final_table_path)?;
+        debug!("Sheet extracted to: {}", final_table_path.display());
+    } else {
+        info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
+        fs::copy(&source_path, &final_table_path).map_err(|e| {
+            error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
+            CommandError::from(format!("Failed to copy table file: {}", e))
+        })?;
+        debug!("File copied to: {}", final_table_path.display());
+    }
 
     let relative_path_for_xml = final_table_path
         .strip_prefix(project_base_dir)
@@ -231,12 +260,13 @@ pub async fn import_table_file(
 
     // For preview, we always load WITHOUT assuming headers first
     // This allows the user to see the first row and decide if it's a header or not.
-    let preview_data = match original_source_extension.as_str() {
+    let target_extension = final_table_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let preview_data = match target_extension {
         "csv" => load_csv_data(&final_table_path, false, Some(5)),
         "xlsx" => load_xlsx_data(&final_table_path, false, Some(5)),
         _ => {
-            error!("[import_table_file] Unsupported table extension for preview: {}", original_source_extension);
-            return Err(CommandError::from(format!("Unsupported table extension for preview: {}", original_source_extension)))
+            error!("[import_table_file] Unsupported table extension for preview: {}", target_extension);
+            return Err(CommandError::from(format!("Unsupported table extension for preview: {}", target_extension)))
         },
     }?;
     debug!("[import_table_file] Preview data loaded (no headers assumed).");
@@ -500,6 +530,42 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
     }
 
     to_json_response(headers, records)
+}
+
+fn extract_xlsx_sheet_to_csv(source_path: &Path, sheet_name: &str, final_table_path: &Path) -> Result<(), CommandError> {
+    let mut workbook: Xlsx<_> = open_workbook(source_path)
+        .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", source_path.display(), e)))?;
+
+    let range_opt = workbook.worksheet_range(sheet_name);
+    let range: calamine::Range<Data> = match range_opt {
+        Ok(r) => r,
+        Err(calamine::XlsxError::WorksheetNotFound(msg)) => return Err(CommandError::from(format!("Sheet '{}' not found in XLSX: {}", sheet_name, msg))),
+        Err(e) => return Err(CommandError::from(format!("Failed to read sheet '{}': {}", sheet_name, e))),
+    };
+
+    let mut wtr = csv::Writer::from_path(final_table_path)
+        .map_err(|e| CommandError::from(format!("Failed to create CSV at '{}': {}", final_table_path.display(), e)))?;
+
+    for row in range.rows() {
+        let row_strs: Vec<String> = row.iter().map(|cell: &Data| -> String {
+            match cell {
+                Data::String(s) => s.clone(),
+                Data::Float(f) => f.to_string(),
+                Data::Int(i) => i.to_string(),
+                Data::Bool(b) => b.to_string(),
+                Data::DateTime(e) => e.as_f64().to_string(),
+                Data::DateTimeIso(s) => s.clone(),
+                Data::DurationIso(s) => s.clone(),
+                Data::Error(e) => format!("Error:{:?}", e),
+                Data::Empty => String::new(),
+            }
+        }).collect();
+        wtr.write_record(&row_strs)
+            .map_err(|e| CommandError::from(format!("Failed to write row to CSV: {}", e)))?;
+    }
+    wtr.flush()
+        .map_err(|e| CommandError::from(format!("Failed to flush CSV at '{}': {}", final_table_path.display(), e)))?;
+    Ok(())
 }
 
 fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
