@@ -42,6 +42,16 @@
             selectedSheets = [];
         }
     }
+
+    function toggleSheet(sheet, isChecked) {
+        if (isChecked) {
+            if (!selectedSheets.includes(sheet)) {
+                selectedSheets = [...selectedSheets, sheet];
+            }
+        } else {
+            selectedSheets = selectedSheets.filter((s) => s !== sheet);
+        }
+    }
 </script>
 
 <Modal title={`Import Sheets from ${filename}`} bind:open={showModal} size="md" outsideclose={false} on:close={handleCancel}>
@@ -58,7 +68,7 @@
         </p>
 
         <div class="flex items-center mb-2">
-            <Checkbox checked={selectedSheets.length === sheets.length} indeterminate={selectedSheets.length > 0 && selectedSheets.length < sheets.length} on:change={toggleAll}>
+            <Checkbox checked={selectedSheets.length === sheets.length && sheets.length > 0} indeterminate={selectedSheets.length > 0 && selectedSheets.length < sheets.length} on:change={toggleAll}>
                 <span class="font-medium">Select All</span>
             </Checkbox>
         </div>
@@ -67,7 +77,14 @@
             {#each sheets as sheet}
                 <div class="flex">
                     <div class="flex items-center h-5">
-                        <Checkbox id={`sheet-${sheet}`} bind:group={selectedSheets} value={sheet} aria-describedby={`helper-text-${sheet}`} class="w-4 h-4 text-neutral-primary border-default-medium bg-neutral-secondary-medium rounded focus:ring-2 focus:outline-none focus:ring-brand-subtle border border-default appearance-none" />
+                        <Checkbox
+                            id={`sheet-${sheet}`}
+                            checked={selectedSheets.includes(sheet)}
+                            on:change={(e) => toggleSheet(sheet, e.target.checked)}
+                            value={sheet}
+                            aria-describedby={`helper-text-${sheet}`}
+                            class="w-4 h-4 text-neutral-primary border-default-medium bg-neutral-secondary-medium rounded focus:ring-2 focus:outline-none focus:ring-brand-subtle border border-default appearance-none"
+                        />
                     </div>
                     <div class="ms-2 text-sm select-none">
                         <label for={`sheet-${sheet}`} class="font-medium text-heading mb-1">{sheet}</label>
