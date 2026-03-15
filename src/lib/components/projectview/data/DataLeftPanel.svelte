@@ -513,6 +513,11 @@
         console.log(`[DataLeftPanel] Header confirmation cancelled. Aborting entire import process.`);
         showHeaderConfirmationModal = false;
 
+        // Prevent firing on initial load or empty close events
+        if (pendingTableImports.length === 0 && importedTablePathsToRevert.length === 0 && !headerConfirmationData.tablePath) {
+            return;
+        }
+
         try {
             // Gather all paths we need to delete (the ones fully processed + the current one + the remaining pending ones)
             const pathsToDelete = [...importedTablePathsToRevert];
@@ -527,6 +532,10 @@
                 if (pending.table_path && !pathsToDelete.includes(pending.table_path)) {
                     pathsToDelete.push(pending.table_path);
                 }
+            }
+
+            if (pathsToDelete.length === 0) {
+                return; // Nothing to cancel/revert
             }
 
             // Clean up: Delete them sequentially
