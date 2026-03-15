@@ -54,7 +54,7 @@
     }
 </script>
 
-<Modal title={`Import Sheets from ${filename}`} bind:open={showModal} size="md" outsideclose={false} on:close={handleCancel}>
+<Modal title={`Import Sheets from ${filename}`} bind:open={showModal} size="md" outsideclose={false} dismissable={false} on:close={() => {}}>
     <svelte:fragment slot="header">
         <div class="flex items-center space-x-2">
             <Sheet class="w-5 h-5 text-gray-500" />

@@ -167,7 +167,7 @@ import { Modal } from 'flowbite-svelte';
 	function handleConfirm() {
 		if (!tablePath) {
 			console.error("[HeaderConfirmationModal] Cannot confirm: tablePath is missing.");
-			closeModal();
+			handleCancelClick();
 			return;
 		}
 
@@ -195,10 +195,6 @@ import { Modal } from 'flowbite-svelte';
 	}
 
 	function handleModalClose() {
-        if (wasOpen && !confirmed) {
-            dispatch('cancel'); // Only dispatch a specific cancel event if it was opened and wasn't a confirmed close.
-        }
-
         // Reset states for the next open.
         step = 1;
 		fields = [];
@@ -206,12 +202,13 @@ import { Modal } from 'flowbite-svelte';
         wasOpen = false;
 	}
 
-	function closeModal() {
+	function handleCancelClick() {
+        dispatch('cancel');
 		showModal = false; // Will trigger `on:close` natively.
 	}
 </script>
 
-<Modal bind:open={showModal} size="xl" outsideclose on:close={handleModalClose} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[130]">
+<Modal bind:open={showModal} size="xl" outsideclose on:close={handleModalClose} dismissable={false} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[130]">
     <div slot="header" class="flex items-center space-x-3 w-full">
         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
             <Info size={20} class="text-blue-600 dark:text-blue-400" />
@@ -342,7 +339,7 @@ import { Modal } from 'flowbite-svelte';
             {/if}
         </div>
         <div class="flex gap-3">
-            <Button color="alternative" on:click={closeModal}>Cancel</Button>
+            <Button color="alternative" on:click={handleCancelClick}>Cancel</Button>
             <Button color="blue" on:click={step === 1 ? goToStep2 : handleConfirm}>
                 {step === 1 ? 'Next: Define Field Types' : 'Confirm and Import'}
             </Button>
