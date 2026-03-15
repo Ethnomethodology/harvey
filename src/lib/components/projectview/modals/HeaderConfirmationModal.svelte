@@ -158,6 +158,11 @@ import { Modal } from 'flowbite-svelte';
 	}
 
     let confirmed = false;
+    let wasOpen = false;
+
+    $: if (showModal) {
+        wasOpen = true;
+    }
 
 	function handleConfirm() {
 		if (!tablePath) {
@@ -190,14 +195,15 @@ import { Modal } from 'flowbite-svelte';
 	}
 
 	function handleModalClose() {
-        if (!confirmed) {
-            dispatch('cancel'); // Only dispatch a specific cancel event if it wasn't a confirmed close.
+        if (wasOpen && !confirmed) {
+            dispatch('cancel'); // Only dispatch a specific cancel event if it was opened and wasn't a confirmed close.
         }
 
         // Reset states for the next open.
         step = 1;
 		fields = [];
         confirmed = false;
+        wasOpen = false;
 	}
 
 	function closeModal() {
