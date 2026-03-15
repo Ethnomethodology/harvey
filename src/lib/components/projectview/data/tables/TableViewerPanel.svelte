@@ -2925,19 +2925,19 @@
     function addFloatingAddRowButton() {
         if (!tableContainer || addRowButtonEl) return;
 
-        // Instead of making it absolute to the container, we will append it directly
-        // to the bottom of the Tabulator inner scrollable holder so it flows naturally.
-        const tableHolder = tableContainer.querySelector(".tabulator-table");
-        if (!tableHolder) return;
+        // Instead of injecting into the virtual DOM, we place it in the scrollable holder
+        // but OUTSIDE the virtualized .tabulator-table, or below it via Tabulator events.
+        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
+        if (!scrollHolder) return;
         
         addRowButtonEl = document.createElement("div");
-        addRowButtonEl.className = "tabulator-row hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer flex items-center justify-center border-b border-gray-200 dark:border-gray-700";
-        addRowButtonEl.style.height = "38px";
-        addRowButtonEl.style.width = "100%";
+        addRowButtonEl.className = "hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer flex items-center justify-center border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg mx-2 my-2";
+        addRowButtonEl.style.height = "34px";
         addRowButtonEl.title = "Add New Entry";
         
         const iconWrapper = document.createElement("div");
-        iconWrapper.className = "text-blue-500 opacity-60 hover:opacity-100 flex items-center justify-center h-full w-full";
+        iconWrapper.className = "text-blue-500 font-medium flex items-center justify-center h-full w-full gap-2";
+        iconWrapper.innerHTML = `<span>Add Entry</span>`;
 
         mount(TableIcon, {
             target: iconWrapper,
@@ -2950,18 +2950,23 @@
             const rows = tabulatorInstance.getRows();
             const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
             insertRow(lastRow, 'after');
+
+            // Scroll to bottom after adding row to see the new entry
+            setTimeout(() => {
+                if (scrollHolder) scrollHolder.scrollTop = scrollHolder.scrollHeight;
+            }, 50);
         };
 
-        tableHolder.appendChild(addRowButtonEl);
+        scrollHolder.appendChild(addRowButtonEl);
     }
 
     function updateFloatingAddRowButtonPosition() {
         if (!tabulatorInstance || !addRowButtonEl) return;
         
-        // Ensure it always stays at the absolute bottom of the table DOM even after sorting/filtering
-        const tableHolder = tableContainer.querySelector(".tabulator-table");
-        if (tableHolder && addRowButtonEl.parentNode === tableHolder) {
-            tableHolder.appendChild(addRowButtonEl); // Moves it to the end
+        // Ensure it always stays at the absolute bottom of the scroll holder DOM
+        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
+        if (scrollHolder && addRowButtonEl.parentNode === scrollHolder) {
+            scrollHolder.appendChild(addRowButtonEl); // Moves it to the end logically
         }
     }
 
