@@ -450,6 +450,7 @@
         console.log(`[DataLeftPanel] Table sheet selection cancelled.`);
         showTableSheetSelectionModal = false;
         // No cleanup needed since we haven't extracted/imported any files yet.
+        project.update(p => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
     }
 
     function processNextTableImport() {
@@ -534,27 +535,27 @@
                 }
             }
 
-            if (pathsToDelete.length === 0) {
-                return; // Nothing to cancel/revert
-            }
-
-            // Clean up: Delete them sequentially
-            for (const path of pathsToDelete) {
-                console.log(`[DataLeftPanel] Reverting partially imported table: ${path}`);
-                try {
-                    await deleteProjectItem(path);
-                } catch (e) {
-                    console.error(`[DataLeftPanel] Failed to delete table during rollback: ${path}`, e);
+            if (pathsToDelete.length > 0) {
+                // Clean up: Delete them sequentially
+                for (const path of pathsToDelete) {
+                    console.log(`[DataLeftPanel] Reverting partially imported table: ${path}`);
+                    try {
+                        await deleteProjectItem(path);
+                    } catch (e) {
+                        console.error(`[DataLeftPanel] Failed to delete table during rollback: ${path}`, e);
+                    }
                 }
-            }
 
-            await refreshProjectFiles();
-            message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+                await refreshProjectFiles();
+                message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+            }
         } catch (e) {
             console.error(`[DataLeftPanel] Error during import rollback:`, e);
         } finally {
             pendingTableImports = [];
             importedTablePathsToRevert = [];
+            headerConfirmationData = { tablePath: '', previewData: null };
+            project.update(p => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
         }
     }
 
