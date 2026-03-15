@@ -9,7 +9,7 @@
         Select, 
         Helper
     } from 'flowbite-svelte';
-    import { LayoutDashboard, X, Waves, FileText } from 'lucide-svelte';
+    import { LayoutDashboard, X, Waves } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
@@ -119,12 +119,8 @@
 
 				<!-- DOCX Export Layout Section -->
 				<div class="space-y-4">
-                    <div class="flex items-center gap-2 text-gray-900 dark:text-white font-semibold">
-                        <FileText size={18} class="text-blue-500" />
-                        <span>Transcript Export Layout</span>
-                    </div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">
-						This changes the layout for DOCX exports of the current transcript.
+						This changes the layout of the transcript on screen.
 					</p>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 						{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
