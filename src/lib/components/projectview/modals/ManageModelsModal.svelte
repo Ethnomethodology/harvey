@@ -1,21 +1,15 @@
-<!-- src/lib/components/projectview/ManageModelsModal.svelte -->
+<!-- src/lib/components/projectview/modals/ManageModelsModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte'; // Import the configure component
-    import { X } from 'lucide-svelte';
+    import { Modal, Button } from 'flowbite-svelte';
+    import { X, Cpu } from 'lucide-svelte';
 
 	export let showModal = false;
 
-	let modalElement; // Reference to the modal container DOM element
 	let isConfigureBusy = false; // Local state bound to Configure's busy state
 
 	const dispatch = createEventDispatcher();
-
-	// --- MODAL ACTIONS ---
-	function close() {
-		// Attempt to close, will be prevented by handleCloseAttempt if busy
-		handleCloseAttempt();
-	}
 
 	function handleCloseAttempt() {
 		if (isConfigureBusy) {
@@ -30,80 +24,58 @@
 		dispatch('close'); // DISPATCH EVENT
 		console.log('ManageModelsModal: Closing and dispatched event.');
 	}
-
-	// --- KEYBOARD HANDLING ---
-	function handleKeydown(event) {
-		if (showModal && event.key === 'Escape') {
-			// Only handle if modal is shown
-			handleCloseAttempt();
-		}
-	}
-
-	// --- Lifecycle for Keyboard Listener ---
-	// Add/remove listener only when modal is shown/hidden might be slightly more efficient
-	// but global listener is simpler here.
-	onMount(() => {
-		window.addEventListener('keydown', handleKeydown);
-	});
-
-	onDestroy(() => {
-		window.removeEventListener('keydown', handleKeydown);
-	});
 </script>
 
-{#if showModal}
-	<div
-		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
-		on:click|self={handleCloseAttempt}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="manage-models-title"
-		tabindex="-1"
-		on:keydown={handleKeydown}
-	>
-		<div
-			class="bg-white rounded-lg shadow-xl w-full max-w-3xl m-4 flex flex-col max-h-[80vh]"
-			role="document"
-		>
-			<!-- Modal Header -->
-			<div class="flex justify-between items-center p-4 border-b border-gray-200 flex-shrink-0">
-				<h2 id="manage-models-title" class="text-lg font-semibold text-gray-800">
-					Manage Models
-				</h2>
-				<button
-					on:click={handleCloseAttempt}
-					class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
-					aria-label="Close model manager"
-					disabled={isConfigureBusy}
-				>
-					<!-- Close icon -->
-					<X class="w-5 h-5" />
-				</button>
-			</div>
-
-			<!-- Modal Body (Contains Configure Component) -->
-			<div class="flex-grow overflow-y-auto">
-				<!-- Bind the isBusy state from Configure -->
-				<ConfigurationView bind:isBusy={isConfigureBusy} />
-			</div>
-
-			<!-- Modal Footer -->
-			<div
-				class="flex justify-end space-x-3 p-4 border-t border-gray-200 flex-shrink-0 bg-gray-50 rounded-b-lg"
-			>
-				<button
-					type="button"
-					on:click={handleCloseAttempt}
-					class="px-4 py-2 bg-gray-600 text-white rounded-md shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 transition duration-150 ease-in-out text-sm font-medium"
-					class:opacity-50={isConfigureBusy}
-					class:cursor-not-allowed={isConfigureBusy}
-					disabled={isConfigureBusy}
-					title={isConfigureBusy ? 'Operation in progress...' : 'Close Model Manager'}
-				>
-					{isConfigureBusy ? 'Working...' : 'Close'}
-				</button>
-			</div>
-		</div>
+<Modal
+	bind:open={showModal}
+	size="lg"
+	autoclose={false}
+	outsideclose={!isConfigureBusy}
+	class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-0 bg-white dark:bg-gray-900 overflow-hidden flex flex-col"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+	on:close={handleCloseAttempt}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<Cpu class="w-5 h-5 text-gray-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			Manage Models
+		</h3>
 	</div>
-{/if}
+
+	<!-- Modal Body (Contains Configure Component) -->
+	<div class="flex-grow overflow-y-auto custom-scrollbar max-h-[70vh]">
+		<!-- Bind the isBusy state from Configure -->
+		<ConfigurationView bind:isBusy={isConfigureBusy} />
+	</div>
+
+	<svelte:fragment slot="footer">
+		<Button
+			color="alternative"
+			on:click={handleCloseAttempt}
+			disabled={isConfigureBusy}
+			title={isConfigureBusy ? 'Operation in progress...' : 'Close Model Manager'}
+			class="px-8"
+		>
+			{isConfigureBusy ? 'Working...' : 'Close'}
+		</Button>
+	</svelte:fragment>
+</Modal>
+
+<style lang="postcss">
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-300 dark:bg-gray-600;
+    }
+</style>

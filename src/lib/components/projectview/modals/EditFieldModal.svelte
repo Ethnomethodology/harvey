@@ -20,7 +20,8 @@
         X,
         Link2,
         TextInitial,
-        Star
+        Star,
+		Settings2
     } from 'lucide-svelte';
     import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
@@ -209,16 +210,30 @@
     $: isPrimaryDisabled = currentPrimaryField && currentPrimaryField !== fieldName && !editedSchema.primary;
 </script>
 
-<Modal open={true} size="md" autoclose={false} outsideclose={true} class="w-full z-[150]" on:close={() => dispatch('cancel')}>
-    <div class="flex items-center gap-2" slot="header">
-        <svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} class="text-blue-500" size={20} />
-        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Edit Field Settings</h3>
-    </div>
+<Modal
+    open={true}
+    size="md"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-5 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={() => dispatch('cancel')}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<svelte:component this={getIcon(editedSchema.type, editedSchema.subType)} class="w-5 h-5 text-blue-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			Edit Field Settings
+		</h3>
+	</div>
 
-    <div class="space-y-5">
+    <div class="space-y-5 overflow-y-auto max-h-[65vh] custom-scrollbar pr-2">
         <!-- Field Name -->
         <div class="space-y-1">
-            <Label for="field-name" class="mb-2">FIELD NAME</Label>
+            <Label for="field-name" class="text-xs font-bold uppercase tracking-wider text-gray-500">Field Name</Label>
             <Input
                 id="field-name"
                 type="text"
@@ -231,7 +246,7 @@
         <div class="grid grid-cols-2 gap-4">
             <!-- Type Selection -->
             <div class="space-y-1">
-                <Label for="field-type" class="mb-2">DATA TYPE</Label>
+                <Label for="field-type" class="text-xs font-bold uppercase tracking-wider text-gray-500">Data Type</Label>
                 <Select
                     id="field-type"
                     items={types}
@@ -242,7 +257,7 @@
 
             <!-- SubType Selection -->
             <div class="space-y-1">
-                <Label for="field-subtype" class="mb-2">SUB-TYPE</Label>
+                <Label for="field-subtype" class="text-xs font-bold uppercase tracking-wider text-gray-500">Sub-Type</Label>
                 <Select
                     id="field-subtype"
                     items={(subTypes[editedSchema.type] || []).map(st => ({name: st, value: st}))}
@@ -255,7 +270,7 @@
         <!-- Toggles Area -->
         <div class="grid grid-cols-2 gap-4">
             <!-- Primary Toggle -->
-            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800"
+            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-xl border border-gray-100 dark:border-gray-800"
                     class:opacity-50={isPrimaryDisabled}
                     title={isPrimaryDisabled ? "Another field is already primary" : ""}>
                 <Checkbox
@@ -269,7 +284,7 @@
             </div>
 
             <!-- Required Toggle -->
-            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-md border border-gray-100 dark:border-gray-800">
+            <div class="flex items-center space-x-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
                 <Checkbox
                     id="field-required"
                     bind:checked={editedSchema.required}
@@ -285,7 +300,7 @@
             {#if editedSchema.type === 'Numeric'}
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
-                        <Label for="field-min" class="mb-2">{editedSchema.subType === 'Rating' ? 'MIN STARS' : 'MIN VALUE'}</Label>
+                        <Label for="field-min" class="text-xs font-bold uppercase tracking-wider text-gray-500">{editedSchema.subType === 'Rating' ? 'Min Stars' : 'Min Value'}</Label>
                         <Input
                             id="field-min"
                             type="number"
@@ -294,7 +309,7 @@
                         />
                     </div>
                     <div class="space-y-1">
-                        <Label for="field-max" class="mb-2">{editedSchema.subType === 'Rating' ? 'MAX STARS' : 'MAX VALUE'}</Label>
+                        <Label for="field-max" class="text-xs font-bold uppercase tracking-wider text-gray-500">{editedSchema.subType === 'Rating' ? 'Max Stars' : 'Max Value'}</Label>
                         <Input
                             id="field-max"
                             type="number"
@@ -305,7 +320,7 @@
                 </div>
                 {#if editedSchema.subType === 'Currency'}
                     <div class="space-y-1">
-                        <Label for="field-currency" class="mb-2">CURRENCY / COUNTRY</Label>
+                        <Label for="field-currency" class="text-xs font-bold uppercase tracking-wider text-gray-500">Currency / Country</Label>
                         <div class="space-y-2">
                             <Select
                                 id="field-currency"
@@ -320,14 +335,13 @@
                                     placeholder="Enter 3-letter ISO Code (e.g. BTC)"
                                     maxlength="3"
                                 />
-                            {#if true}{""}{/if}
                             {/if}
                         </div>
                     </div>
                 {/if}
             {:else if editedSchema.subType === 'Selectbox' || editedSchema.subType === 'Multiselect'}
                 <div class="space-y-1">
-                    <Label for="field-options" class="mb-2">OPTIONS (Comma separated)</Label>
+                    <Label for="field-options" class="text-xs font-bold uppercase tracking-wider text-gray-500">Options (Comma separated)</Label>
                     <Input
                         id="field-options"
                         type="text"
@@ -338,7 +352,7 @@
                 </div>
             {:else if editedSchema.type === 'DateTime'}
                 <div class="space-y-1">
-                    <Label for="field-format" class="mb-2">DISPLAY FORMAT</Label>
+                    <Label for="field-format" class="text-xs font-bold uppercase tracking-wider text-gray-500">Display Format</Label>
                     <Select
                         id="field-format"
                         items={dateTimeFormats[editedSchema.subType] || []}
@@ -348,8 +362,8 @@
             {/if}
 
             <!-- Description -->
-            <div class="space-y-1 pt-2">
-                <Label for="field-desc" class="mb-2">DESCRIPTION</Label>
+            <div class="space-y-1">
+                <Label for="field-desc" class="text-xs font-bold uppercase tracking-wider text-gray-500">Description</Label>
                 <Textarea
                     id="field-desc"
                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
@@ -362,9 +376,26 @@
     </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex justify-end space-x-3 w-full">
-            <Button color="alternative" on:click={() => dispatch('cancel')}>Cancel</Button>
-            <Button color="blue" on:click={handleSave}>Save Settings</Button>
-        </div>
+		<Button color="alternative" on:click={() => dispatch('cancel')} title="Cancel changes">
+			Cancel
+		</Button>
+		<Button color="blue" on:click={handleSave} title="Save field settings">
+			Save Settings
+		</Button>
     </svelte:fragment>
 </Modal>
+
+<style lang="postcss">
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-300 dark:bg-gray-600;
+    }
+</style>

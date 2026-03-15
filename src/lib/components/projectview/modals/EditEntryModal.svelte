@@ -27,6 +27,7 @@
     } from 'lucide-svelte';
     import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
+		Modal,
         Input, 
         Label, 
         Select, 
@@ -44,7 +45,6 @@
     export let rowIndex = 0;
 
     const dispatch = createEventDispatcher();
-    let modalInner;
 
     function sanitizeId(id) {
         return String(id).replace(/[^a-zA-Z0-9]/g, '_');
@@ -147,8 +147,6 @@
             if (str.includes('T')) {
                 [dateStr, timeStr] = str.split('T');
             } else {
-                // For space separator, we assume the date part is the first block
-                // (which works for YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
                 const firstSpace = str.indexOf(' ');
                 if (firstSpace !== -1) {
                     dateStr = str.substring(0, firstSpace);
@@ -158,7 +156,7 @@
 
             if (dateStr && timeStr) {
                 const dateD = parseDate(dateStr, { type: 'DateTime', subType: 'Date', format: format.split(/[T ]/)[0] });
-                const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') });
+                const timeD = parseDate(timeStr, { type: 'DateTime', subType: 'Time', format: format.split(/[T ]/).slice(1).join(' ') || '' });
                 
                 if (dateD && timeD) {
                     dateD.setHours(timeD.getHours(), timeD.getMinutes(), timeD.getSeconds());
@@ -299,6 +297,7 @@
 
     let projectAssets = [];
     onMount(async () => {
+        const { invoke } = await import('@tauri-apps/api/core');
         const currentProject = get(project);
         if (currentProject?.id) {
             const { getProjectAssetsForLink } = await import('$lib/services/projectService.js');
@@ -341,7 +340,6 @@
                 clearBtn: true,
                 container: 'body'
             });
-            // Ensure picker shows immediately when initialized
             picker.show();
         };
 
@@ -365,7 +363,6 @@
             } else {
                 editedData[field] = dateStr;
             }
-            // Auto-hide will hide it, but we can also destroy it
             destroyPicker();
             node.blur();
         };
@@ -381,7 +378,7 @@
 
             if (!isClickInsideInput && !isClickInsidePicker) {
                 destroyPicker();
-                node.blur(); // Ensure the input loses focus so clicking it again reopens the picker
+                node.blur();
             }
         };
 
@@ -401,7 +398,6 @@
         };
     }
 
-    // Rolling Timepicker constants
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
     const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
     const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
@@ -410,7 +406,6 @@
         const colSchema = schema[field] || {};
         const format = colSchema.format || '';
         const timePartFormat = isDateTime ? (format.split(/[T ]/).slice(1).join(' ') || 'HH:mm') : (format || 'HH:mm');
-        const hasSeconds = format.includes(':ss');
         
         let currentTimeStr = isDateTime ? (formatDate(parseDate(editedData[field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: timePartFormat })) : editedData[field];
         let d = parseDate(currentTimeStr, { ...colSchema, subType: 'Time', format: timePartFormat }) || new Date();
@@ -429,303 +424,306 @@
     }
 </script>
 
-<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" on:click|self={() => dispatch('cancel')}>
-    <div bind:this={modalInner} class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden">
-        <!-- Header -->
-        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <Pencil size={20} class="text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Edit Entry</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Update the fields below</p>
-                </div>
-            </div>
-            <button on:click={() => dispatch('cancel')} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all">
-                <X size={20} />
-            </button>
-        </div>
+<Modal
+    open={true}
+    size="md"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-0 overflow-hidden bg-white dark:bg-gray-900"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={() => dispatch('cancel')}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<Pencil class="w-5 h-5 text-blue-500" />
+		<div class="flex flex-col">
+			<h3 class="text-lg font-semibold text-gray-900 dark:text-white leading-tight">Edit Entry</h3>
+			<p class="text-xs text-gray-500 dark:text-gray-400">Update the fields below</p>
+		</div>
+	</div>
 
-        <!-- Form Content -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-            {#each columns as col}
-                {#if col.field && col.field !== 'harvey_internal_id'}
-                    {@const colSchema = schema[col.field] || {}}
-                    <div class="group space-y-2">
-                        <Label class="mb-2 flex items-center gap-2">
-                            <svelte:component this={getSubtypeIcon(colSchema)} size={14} class="text-gray-500 dark:text-gray-400" />
-                            {col.field}
-                            {#if colSchema.required}<span class="text-red-500">*</span>{/if}
-                        </Label>
+    <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar max-h-[70vh]">
+        {#each columns as col}
+            {#if col.field && col.field !== 'harvey_internal_id'}
+                {@const colSchema = schema[col.field] || {}}
+                <div class="group space-y-2">
+                    <Label class="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+                        <svelte:component this={getSubtypeIcon(colSchema)} size={14} class="text-gray-400" />
+                        {col.field}
+                        {#if colSchema.required}<span class="text-red-500">*</span>{/if}
+                    </Label>
 
-                        {#if colSchema.type === 'DateTime'}
-                            <div class="space-y-3">
-                                {#if colSchema.subType === 'Date'}
-                                    <div class="relative">
-                                        <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
-                                            <CalendarDays class="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                                        </div>
-                                        <input 
-                                            use:flowbiteDatepicker={{field: col.field}}
-                                            type="text" 
-                                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                            value={editedData[col.field] || ""} 
-                                            placeholder="Select date"
-                                            class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500 ring-red-500' : ''}"
-                                            on:keydown={(e) => e.preventDefault()}
-                                        />
+                    {#if colSchema.type === 'DateTime'}
+                        <div class="space-y-3">
+                            {#if colSchema.subType === 'Date'}
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
+                                        <CalendarDays class="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     </div>
-                                {:else if colSchema.subType === 'Time'}
-                                    {@const hasSeconds = (colSchema.format || '').includes(':ss')}
-                                    {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
-                                    {@const curH = currentD.getHours().toString().padStart(2, '0')}
-                                    {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
-                                    {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
-                                    <div class="relative max-w-[12rem]">
-                                        <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
-                                            <Clock class="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                                        </div>
-                                        <input 
-                                            id="time_input_{sanitizeId(col.field)}"
-                                            type="text" 
-                                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                            bind:value={editedData[col.field]} 
-                                            placeholder="00:00"
-                                            class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500' : ''}" 
-                                            on:keydown={(e) => e.preventDefault()}
-                                        />
-                                        <Dropdown triggeredBy="#time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                                            <div class="flex h-64">
-                                                <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
-                                                    {#each hours as h}
-                                                        <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                            on:click={() => selectTimePart(col.field, 'h', h)}
-                                                        >{h}</button>
-                                                    {/each}
-                                                </div>
+                                    <input 
+                                        use:flowbiteDatepicker={{field: col.field}}
+                                        type="text" 
+                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                        value={editedData[col.field] || ""} 
+                                        placeholder="Select date"
+                                        class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500 ring-red-500' : ''}"
+                                        on:keydown={(e) => e.preventDefault()}
+                                    />
+                                </div>
+                            {:else if colSchema.subType === 'Time'}
+                                {@const hasSeconds = (colSchema.format || '').includes(':ss')}
+                                {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
+                                {@const curH = currentD.getHours().toString().padStart(2, '0')}
+                                {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
+                                {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
+                                <div class="relative max-w-[12rem]">
+                                    <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-3.5 pointer-events-none">
+                                        <Clock class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    </div>
+                                    <input 
+                                        id="time_input_{sanitizeId(col.field)}"
+                                        type="text" 
+                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                        bind:value={editedData[col.field]} 
+                                        placeholder="00:00"
+                                        class="cursor-pointer bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {errors[col.field] ? 'border-red-500' : ''}" 
+                                        on:keydown={(e) => e.preventDefault()}
+                                    />
+                                    <Dropdown triggeredBy="#time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[10002]" strategy="fixed">
+                                        <div class="flex h-64 border dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden">
+                                            <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
+                                                {#each hours as h}
+                                                    <button 
+                                                        class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                        on:click={() => selectTimePart(col.field, 'h', h)}
+                                                    >{h}</button>
+                                                {/each}
+                                            </div>
+                                            <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                            <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
+                                                {#each minutes as m}
+                                                    <button 
+                                                        class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                        on:click={() => selectTimePart(col.field, 'm', m)}
+                                                    >{m}</button>
+                                                {/each}
+                                            </div>
+                                            {#if hasSeconds}
                                                 <div class="w-px bg-gray-200 dark:border-gray-700"></div>
-                                                <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
-                                                    {#each minutes as m}
+                                                <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
+                                                    {#each seconds as s}
                                                         <button 
-                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                            on:click={() => selectTimePart(col.field, 'm', m)}
-                                                        >{m}</button>
+                                                            class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                            on:click={() => selectTimePart(col.field, 's', s)}
+                                                        >{s}</button>
                                                     {/each}
                                                 </div>
-                                                {#if hasSeconds}
-                                                    <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                            {/if}
+                                        </div>
+                                    </Dropdown>
+                                </div>
+                            {:else}
+                                {@const hasSeconds = (colSchema.format || '').includes(':ss')}
+                                {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
+                                {@const curH = currentD.getHours().toString().padStart(2, '0')}
+                                {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
+                                {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
+                                <div class="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <div class="space-y-1.5">
+                                        <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Date</Label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                                                <CalendarDays class="w-3.5 h-3.5 text-blue-500" />
+                                            </div>
+                                            <input 
+                                                use:flowbiteDatepicker={{field: col.field, isDateTime: true}}
+                                                type="text" 
+                                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                                value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Date', format: (colSchema.format || '').split(/[T ]/)[0] })} 
+                                                class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-8 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                on:keydown={(e) => e.preventDefault()}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Time</Label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-2.5 pointer-events-none">
+                                                <Clock class="w-3.5 h-3.5 text-blue-500" />
+                                            </div>
+                                            <input 
+                                                id="dt_time_input_{sanitizeId(col.field)}"
+                                                type="text" 
+                                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                                value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: (colSchema.format || '').split(/[T ]/).slice(1).join(' ') })} 
+                                                class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 pe-7 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                on:keydown={(e) => e.preventDefault()}
+                                            />
+                                            <Dropdown triggeredBy="#dt_time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[10002]" strategy="fixed">
+                                                <div class="flex h-64 border dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden">
                                                     <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
-                                                        {#each seconds as s}
+                                                        {#each hours as h}
                                                             <button 
-                                                                class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                                on:click={() => selectTimePart(col.field, 's', s)}
-                                                            >{s}</button>
+                                                                class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                                on:click={() => selectTimePart(col.field, 'h', h, true)}
+                                                            >{h}</button>
                                                         {/each}
                                                     </div>
-                                                {/if}
-                                            </div>
-                                        </Dropdown>
-                                    </div>
-                                {:else}
-                                    {@const hasSeconds = (colSchema.format || '').includes(':ss')}
-                                    {@const currentD = parseDate(editedData[col.field], colSchema) || new Date()}
-                                    {@const curH = currentD.getHours().toString().padStart(2, '0')}
-                                    {@const curM = currentD.getMinutes().toString().padStart(2, '0')}
-                                    {@const curS = currentD.getSeconds().toString().padStart(2, '0')}
-                                    <div class="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                                        <div class="space-y-1.5">
-                                            <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Date</Label>
-                                            <div class="relative">
-                                                <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-                                                    <CalendarDays class="w-3.5 h-3.5 text-blue-500" />
-                                                </div>
-                                                <input 
-                                                    use:flowbiteDatepicker={{field: col.field, isDateTime: true}}
-                                                    type="text" 
-                                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                                    value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Date', format: (colSchema.format || '').split(/[T ]/)[0] })} 
-                                                    class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-8 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                                    on:keydown={(e) => e.preventDefault()}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="space-y-1.5">
-                                            <Label class="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Time</Label>
-                                            <div class="relative">
-                                                <div class="absolute inset-y-0 end-0 top-0 flex items-center pe-2.5 pointer-events-none">
-                                                    <Clock class="w-3.5 h-3.5 text-blue-500" />
-                                                </div>
-                                                <input 
-                                                    id="dt_time_input_{sanitizeId(col.field)}"
-                                                    type="text" 
-                                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                                    value={formatDate(parseDate(editedData[col.field], colSchema) || new Date(), { ...colSchema, subType: 'Time', format: (colSchema.format || '').split(/[T ]/).slice(1).join(' ') })} 
-                                                    class="cursor-pointer bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 pe-7 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                                    on:keydown={(e) => e.preventDefault()}
-                                                />
-                                                <Dropdown triggeredBy="#dt_time_input_{sanitizeId(col.field)}" class="{hasSeconds ? 'w-36' : 'w-24'} p-0 z-[110] shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                                                    <div class="flex h-64">
-                                                        <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
-                                                            {#each hours as h}
-                                                                <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curH === h ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                                    on:click={() => selectTimePart(col.field, 'h', h, true)}
-                                                                >{h}</button>
-                                                            {/each}
-                                                        </div>
-                                                        <div class="w-px bg-gray-200 dark:border-gray-700"></div>
-                                                        <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
-                                                            {#each minutes as m}
-                                                                <button 
-                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                                    on:click={() => selectTimePart(col.field, 'm', m, true)}
-                                                                >{m}</button>
-                                                            {/each}
-                                                        </div>
-                                                        {#if hasSeconds}
-                                                            <div class="w-px bg-gray-200 dark:border-gray-700"></div>
-                                                            <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
-                                                                {#each seconds as s}
-                                                                    <button 
-                                                                        class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
-                                                                        on:click={() => selectTimePart(col.field, 's', s, true)}
-                                                                    >{s}</button>
-                                                                {/each}
-                                                            </div>
-                                                        {/if}
+                                                    <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                                    <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900">
+                                                        {#each minutes as m}
+                                                            <button 
+                                                                class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curM === m ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                                on:click={() => selectTimePart(col.field, 'm', m, true)}
+                                                            >{m}</button>
+                                                        {/each}
                                                     </div>
-                                                </Dropdown>
-                                            </div>
+                                                    {#if hasSeconds}
+                                                        <div class="w-px bg-gray-200 dark:border-gray-700"></div>
+                                                        <div class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-gray-800">
+                                                            {#each seconds as s}
+                                                                <button 
+                                                                    class="w-full py-2 text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30 {curS === s ? 'bg-blue-500 text-white font-bold' : ''}"
+                                                                    on:click={() => selectTimePart(col.field, 's', s, true)}
+                                                                >{s}</button>
+                                                            {/each}
+                                                        </div>
+                                                    {/if}
+                                                </div>
+                                            </Dropdown>
                                         </div>
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    {:else if colSchema.type === 'Misc'}
+                        {#if colSchema.subType === 'Checkbox'}
+                            <div class="flex items-center h-10 ps-1">
+                                <input 
+                                    type="checkbox" 
+                                    bind:checked={editedData[col.field]} 
+                                    class="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" 
+                                />
+                            </div>
+                        {:else if colSchema.subType === 'Multiselect'}
+                            <MultiSelect items={(colSchema.options || []).map(o => ({name: o, value: o}))} bind:value={editedData[col.field]} placeholder="Select options..." />
+                        {:else if colSchema.subType === 'Selectbox'}
+                            <Select items={[{name: '-- None --', value: ''}, ...(colSchema.options || []).map(o => ({name: o, value: o}))]} bind:value={editedData[col.field]} placeholder="Select option..." color={errors[col.field] ? 'red' : 'base'} />
+                        {:else if colSchema.subType === 'Project Link'}
+                            <Select items={[{name: '-- None --', value: ''}, ...projectAssets.map(a => ({name: a.label, value: a.value}))]} bind:value={editedData[col.field]} placeholder="Select asset..." color={errors[col.field] ? 'red' : 'base'} />
+                        {/if}
+                    {:else if colSchema.type === 'Numeric'}
+                        {#if colSchema.subType === 'Progress'}
+                            {@const min = colSchema.min ?? 0}
+                            {@const max = colSchema.max ?? 100}
+                            {@const val = editedData[col.field] ?? min}
+                            {@const percentage = ((val - min) / (max - min)) * 100}
+                            <div class="flex items-center gap-3 h-10 relative">
+                                <div class="relative flex-grow h-full flex items-center group">
+                                    <input
+                                        type="range"
+                                        {min} {max} step="1"
+                                        bind:value={editedData[col.field]}
+                                        style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
+                                        class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                    />
+                                    <div
+                                        class="absolute -top-6 -ml-3 w-8 text-center text-xs font-semibold text-white bg-gray-900 dark:bg-gray-700 rounded py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                                        style="left: {percentage}%;"
+                                    >
+                                        {val}
+                                        <div class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 -bottom-1 left-1/2 -translate-x-1/2"></div>
+                                    </div>
+                                </div>
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-right">
+                                    {val}/{max}
+                                </span>
+                            </div>
+                        {:else if colSchema.subType === 'Rating'}
+                            <div class="flex items-center gap-1 h-10">
+                                {#each Array(colSchema.max || 5) as _, i}
+                                    <button
+                                        type="button"
+                                        class="focus:outline-none transition-colors"
+                                        on:click={() => editedData[col.field] = i + 1}
+                                    >
+                                        <Star class="w-6 h-6 {(editedData[col.field] || 0) > i ? 'text-yellow-400 dark:text-yellow-300 fill-current' : 'text-gray-300 dark:text-gray-600'}" />
+                                    </button>
+                                {/each}
+                            </div>
+                        {:else}
+                            <div class="relative group/input">
+                                {#if colSchema.subType === 'Currency'}
+                                    <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
+                                        <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
+                                    </div>
+                                {/if}
+                                <input
+                                    type="number"
+                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                    step="any"
+                                    id="field-{col.field}"
+                                    bind:value={editedData[col.field]}
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {colSchema.subType === 'Currency' ? 'ps-10' : ''} {colSchema.subType === 'Percent' ? 'pe-10' : ''} {errors[col.field] ? 'border-red-500' : ''}"
+                                />
+                                {#if colSchema.subType === 'Percent'}
+                                    <div class="absolute inset-y-0 end-0 flex items-center pe-3.5 pointer-events-none">
+                                        <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
                                     </div>
                                 {/if}
                             </div>
-                        {:else if colSchema.type === 'Misc'}
-                            {#if colSchema.subType === 'Checkbox'}
-                                <div class="flex items-center h-10 ps-1">
-                                    <input 
-                                        type="checkbox" 
-                                        bind:checked={editedData[col.field]} 
-                                        class="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" 
-                                    />
-                                </div>
-                            {:else if colSchema.subType === 'Multiselect'}
-                                <MultiSelect items={(colSchema.options || []).map(o => ({name: o, value: o}))} bind:value={editedData[col.field]} placeholder="Select options..." />
-                            {:else if colSchema.subType === 'Selectbox'}
-                                <Select items={[{name: '-- None --', value: ''}, ...(colSchema.options || []).map(o => ({name: o, value: o}))]} bind:value={editedData[col.field]} placeholder="Select option..." color={errors[col.field] ? 'red' : 'base'} />
-                            {:else if colSchema.subType === 'Project Link'}
-                                <Select items={[{name: '-- None --', value: ''}, ...projectAssets.map(a => ({name: a.label, value: a.value}))]} bind:value={editedData[col.field]} placeholder="Select asset..." color={errors[col.field] ? 'red' : 'base'} />
-                            {/if}
-                        {:else if colSchema.type === 'Numeric'}
-                            {#if colSchema.subType === 'Progress'}
-                                {@const min = colSchema.min ?? 0}
-                                {@const max = colSchema.max ?? 100}
-                                {@const val = editedData[col.field] ?? min}
-                                {@const percentage = ((val - min) / (max - min)) * 100}
-                                <div class="flex items-center gap-3 h-10 relative">
-                                    <div class="relative flex-grow h-full flex items-center group">
-                                        <input
-                                            type="range"
-                                            {min} {max} step="1"
-                                            bind:value={editedData[col.field]}
-                                            style="background: linear-gradient(to right, #3b82f6 {percentage}%, #e5e7eb {percentage}%);"
-                                            class="progress-range w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                                        />
-                                        <div
-                                            class="absolute -top-6 -ml-3 w-8 text-center text-xs font-semibold text-white bg-gray-900 dark:bg-gray-700 rounded py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                                            style="left: {percentage}%;"
-                                        >
-                                            {val}
-                                            <!-- Tooltip caret -->
-                                            <div class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 -bottom-1 left-1/2 -translate-x-1/2"></div>
-                                        </div>
-                                    </div>
-                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-right">
-                                        {val}/{max}
-                                    </span>
-                                </div>
-                            {:else if colSchema.subType === 'Rating'}
-                                <div class="flex items-center gap-1 h-10">
-                                    {#each Array(colSchema.max || 5) as _, i}
-                                        <button
-                                            type="button"
-                                            class="focus:outline-none transition-colors"
-                                            on:click={() => editedData[col.field] = i + 1}
-                                        >
-                                            <Star class="w-6 h-6 {(editedData[col.field] || 0) > i ? 'text-yellow-400 dark:text-yellow-300 fill-current' : 'text-gray-300 dark:text-gray-600'}" />
-                                        </button>
-                                    {/each}
-                                </div>
-                            {:else}
-                                <div class="relative group/input">
-                                    {#if colSchema.subType === 'Currency'}
-                                        <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
-                                            <span class="text-gray-500 dark:text-gray-400 font-bold">{getCurrencySymbol(colSchema.currency)}</span>
-                                        </div>
-                                    {/if}
-                                    <input
-                                        type="number"
-                                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                        step="any"
-                                        id="field-{col.field}"
-                                        bind:value={editedData[col.field]}
-                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 {colSchema.subType === 'Currency' ? 'ps-10' : ''} {colSchema.subType === 'Percent' ? 'pe-10' : ''} {errors[col.field] ? 'border-red-500' : ''}"
-                                    />
-                                    {#if colSchema.subType === 'Percent'}
-                                        <div class="absolute inset-y-0 end-0 flex items-center pe-3.5 pointer-events-none">
-                                            <span class="text-gray-500 dark:text-gray-400 font-bold">%</span>
-                                        </div>
-                                    {/if}
-                                </div>
-                            {/if}
-                        {:else if colSchema.type === 'Contact'}
-                            <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} 
-                                id="field-{col.field}" bind:value={editedData[col.field]} 
-                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                color={errors[col.field] ? 'red' : 'base'}>
-                                <svelte:fragment slot="left">
-                                    {#if colSchema.subType === 'Email'}
-                                        <Mail size={18} class="text-gray-400" />
-                                    {:else if colSchema.subType === 'Phone'}
-                                        <Phone size={18} class="text-gray-400" />
-                                    {:else}
-                                        <Link2 size={18} class="text-gray-400" />
-                                    {/if}
-                                </svelte:fragment>
-                            </Input>
-                        {:else if colSchema.type === 'Text' && colSchema.subType === 'Small Text'}
-                            <Input type="text" id="field-{col.field}" bind:value={editedData[col.field]} 
-                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                color={errors[col.field] ? 'red' : 'base'} />
-                        {:else}
-                            <Textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3"
-                                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                                color={errors[col.field] ? 'red' : 'base'} class="resize-none"
-                                on:keydown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} />
                         {/if}
+                    {:else if colSchema.type === 'Contact'}
+                        <Input type={colSchema.subType === 'Email' ? 'email' : (colSchema.subType === 'Phone' ? 'tel' : 'url')} 
+                            id="field-{col.field}" bind:value={editedData[col.field]} 
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                            color={errors[col.field] ? 'red' : 'base'}>
+                            <svelte:fragment slot="left">
+                                {#if colSchema.subType === 'Email'}
+                                    <Mail size={18} class="text-gray-400" />
+                                {:else if colSchema.subType === 'Phone'}
+                                    <Phone size={18} class="text-gray-400" />
+                                {:else}
+                                    <Link2 size={18} class="text-gray-400" />
+                                {/if}
+                            </svelte:fragment>
+                        </Input>
+                    {:else if colSchema.type === 'Text' && colSchema.subType === 'Small Text'}
+                        <Input type="text" id="field-{col.field}" bind:value={editedData[col.field]} 
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                            color={errors[col.field] ? 'red' : 'base'} />
+                    {:else}
+                        <Textarea id="field-{col.field}" bind:value={editedData[col.field]} rows="3"
+                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                            color={errors[col.field] ? 'red' : 'base'} class="resize-none"
+                            on:keydown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} />
+                    {/if}
 
-                        {#if errors[col.field]}
-                            <Helper color="red" class="mt-2 flex items-center gap-1">
-                                <AlertCircle size={12} /> {errors[col.field]}
-                            </Helper>
-                        {/if}
-                        {#if colSchema.description}
-                            <Helper class="italic text-gray-400 dark:text-gray-500">{colSchema.description}</Helper>
-                        {/if}
-                    </div>
-                {/if}
-            {/each}
-        </div>
-
-        <!-- Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
-            <Button color="alternative" on:click={() => dispatch('cancel')}>Cancel</Button>
-            <Button color="blue" on:click={handleSave}>Save Changes</Button>
-        </div>
+                    {#if errors[col.field]}
+                        <Helper color="red" class="mt-2 flex items-center gap-1">
+                            <AlertCircle size={12} /> {errors[col.field]}
+                        </Helper>
+                    {/if}
+                    {#if colSchema.description}
+                        <Helper class="italic text-gray-400 dark:text-gray-500">{colSchema.description}</Helper>
+                    {/if}
+                </div>
+            {/if}
+        {/each}
     </div>
-</div>
+
+    <svelte:fragment slot="footer">
+		<Button color="alternative" on:click={() => dispatch('cancel')} title="Cancel changes">
+			Cancel
+		</Button>
+		<Button color="blue" on:click={handleSave} title="Save entry changes">
+			Save Changes
+		</Button>
+    </svelte:fragment>
+</Modal>
 
 <style lang="postcss">
     .custom-scrollbar::-webkit-scrollbar {
@@ -735,10 +733,9 @@
         @apply bg-transparent;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
     }
 
-    /* Target inputs specifically in this modal to hide spin buttons */
     input::-webkit-outer-spin-button,
     input::-webkit-inner-spin-button {
         -webkit-appearance: none;
@@ -748,17 +745,14 @@
         -moz-appearance: textfield;
     }
 
-    /* Beautiful focus states for the native pickers */
     input[type="date"]:focus, input[type="time"]:focus {
         @apply ring-2 ring-blue-500/20 border-blue-500 outline-none;
     }
 
-    /* Hide the native date icon to let the Flowbite one shine */
     input[type="date"]::-webkit-calendar-picker-indicator {
         @apply opacity-0 absolute inset-0 cursor-pointer;
     }
 
-    /* Progress Editor Styling */
     .progress-range {
         -webkit-appearance: none;
         background: #e5e7eb;
@@ -777,7 +771,7 @@
         cursor: pointer;
         border: 2px solid white;
         box-shadow: 0 0 2px rgba(0,0,0,0.3);
-        margin-top: -4px; /* Center thumb on track */
+        margin-top: -4px;
     }
     .progress-range::-moz-range-thumb {
         width: 14px;
