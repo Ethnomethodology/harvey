@@ -377,7 +377,7 @@ function createConversionEditor(instanceId) {
     });
 }
 
-export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect = null) {
+export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect = null, targetTranscriptPathToSelect = null) {
     if (!projectXmlPath || projectXmlPath.trim() === '') {
         console.error('[ProjectService] loadProjectDataAndUpdateStore called without a valid projectXmlPath');
         project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));
@@ -520,7 +520,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 
         if (mediaFileToSelect) {
             
-            selectMedia(mediaFileToSelect);
+            selectMedia(mediaFileToSelect, targetTranscriptPathToSelect);
         
             
         }
@@ -1376,7 +1376,7 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
     return JSON.stringify(editor.getEditorState().toJSON());
 }
 
-export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
+export async function refreshProjectFiles(targetPathToSelect = null, targetTranscriptPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect, targetTranscriptPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
     const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
     await refreshProjectFiles(); // Refresh the file list after rename

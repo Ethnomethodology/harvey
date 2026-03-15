@@ -1349,7 +1349,9 @@ export async function switchTranscript(path) {
 listen('media_renamed', (event) => {
     if (!event.payload) return;
 
-    const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
+    const { old_media_stem, new_media_stem, new_media_file_relative_path: rawRelativePath, new_absolute_path: rawAbsolutePath } = event.payload;
+    const new_media_file_relative_path = normalizePath(rawRelativePath);
+    const new_absolute_path = normalizePath(rawAbsolutePath);
 
     transcriptStore.update(ts => {
         if (ts.selectedMediaFile && ts.selectedMediaFile.media_xml_identifier === old_media_stem) {
@@ -1371,7 +1373,11 @@ listen('media_renamed', (event) => {
 
 listen('custom_transcription_job_completed', async (event) => {
     if (!event.payload) return;
-    const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
+    const { status, jobFinishedPath: rawJobFinishedPath, transcriptFilePath: rawTranscriptFilePath, translatedTranscriptFilePath: rawTranslatedTranscriptFilePath, errorMessage } = event.payload;
+    const jobFinishedPath = normalizePath(rawJobFinishedPath);
+    const transcriptFilePath = normalizePath(rawTranscriptFilePath);
+    const translatedTranscriptFilePath = normalizePath(rawTranslatedTranscriptFilePath);
+    
     const currentStore = get(transcriptStore);
 
     if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
@@ -1444,27 +1450,11 @@ listen('custom_transcription_job_completed', async (event) => {
         transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
 
         if (status === 'done' && currentStore.selectedMediaFile?.path === jobFinishedPath) {
-            if (activePathToLoad) {
-                try {
-                    const service = await import('../services/projectService.js');
-                    if (service.loadTranscriptFile) {
-
-                        await service.loadTranscriptFile(activePathToLoad);
-                    } else {
-                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
-                        updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
-                    }
-                } catch (e) {
-                    console.error(`[TranscriptStore] Error auto-loading transcript ${activePathToLoad}:`, e);
-                    updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}`});
-                }
-            }
-
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
                     console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
-                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path, activePathToLoad);
 
                     const latestProjectStore = get(projectMainStore);
                     const allFiles = latestProjectStore.files;
@@ -1512,7 +1502,10 @@ listen('custom_transcription_job_completed', async (event) => {
 
 listen('translation_job_completed', async (event) => {
     if (!event.payload) return;
-    const { jobId, status, originalTranscriptPath, newTranscriptPath, errorMessage } = event.payload;
+    const { jobId, status, originalTranscriptPath: rawOriginalTranscriptPath, newTranscriptPath: rawNewTranscriptPath, errorMessage } = event.payload;
+    const originalTranscriptPath = normalizePath(rawOriginalTranscriptPath);
+    const newTranscriptPath = normalizePath(rawNewTranscriptPath);
+    
     const currentStore = get(transcriptStore);
 
     if (currentStore.isTranslating && jobId === currentStore.translationJobId) {
