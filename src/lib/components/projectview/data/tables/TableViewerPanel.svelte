@@ -2766,18 +2766,12 @@
                 clipboardCopyRowRange:"range",
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
+            footerElement: createTabulatorFooterElement(),
             });
             tabulatorInstance.on("tableBuilt", () => {
                 tableReady = true;
-                addFloatingAddRowButton();
                 detectDuplicates();
                 checkValidationErrors();
-            });
-            tabulatorInstance.on("renderComplete", () => {
-                updateFloatingAddRowButtonPosition();
-            });
-            tabulatorInstance.on("scrollVertical", () => {
-                updateFloatingAddRowButtonPosition();
             });
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
@@ -2920,49 +2914,34 @@
         tabulatorInstance.addRange(currentCell, currentCell);
     }
 
-    let addRowButtonEl = null;
-
-    function addFloatingAddRowButton() {
-        if (!tableContainer || addRowButtonEl) return;
-
-        // We place the add button in the table virtual DOM container so it respects table scroll width,
-        // but we manage its vertical position manually.
-        const tableHolder = tableContainer.querySelector(".tabulator-table");
-        if (!tableHolder) return;
+    function createTabulatorFooterElement() {
+        const footerContainer = document.createElement("div");
+        footerContainer.className = "tabulator-custom-footer flex items-center w-full bg-white dark:bg-[#030712] cursor-pointer group";
+        footerContainer.style.height = "40px";
+        footerContainer.style.borderTop = "1px solid var(--ui-select-border)";
         
-        addRowButtonEl = document.createElement("div");
-        // Inherit grid styling but float left content, mirroring the width of the main canvas
-        addRowButtonEl.className = "add-row-footer transition-colors cursor-pointer border-t border-gray-200 dark:border-gray-700 flex items-center bg-white dark:bg-[#030712]";
-        addRowButtonEl.style.height = "38px";
-        
-        const contentWrapper = document.createElement("div");
-        contentWrapper.className = "flex items-center w-full h-full";
-
-        // The pinned frozen number column part
+        // Match the 50px frozen number column styling
         const numberColEl = document.createElement("div");
-        numberColEl.className = "add-row-number-col flex items-center justify-center border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[#030712] hover:bg-gray-50 dark:hover:bg-gray-900";
+        numberColEl.className = "flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-colors group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20";
         numberColEl.style.width = "50px";
-        numberColEl.style.height = "100%";
         numberColEl.style.minWidth = "50px";
-        numberColEl.style.position = "sticky";
-        numberColEl.style.left = "0";
-        numberColEl.style.zIndex = "4"; // Match tabulator frozen column index
+        numberColEl.style.flexShrink = "0";
 
         mount(TableIcon, {
             target: numberColEl,
-            props: { icon: Plus, size: 16, customClass: "text-blue-500" }
+            props: { icon: Plus, size: 16, customClass: "text-blue-500 opacity-70 group-hover:opacity-100 transition-opacity" }
         });
 
-        // The dashed body part
+        // The dashed body spanning the rest of the area
         const bodyEl = document.createElement("div");
-        bodyEl.className = "flex-1 h-full mx-2 my-1 border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-50/50 dark:hover:bg-blue-900/10 text-blue-500 font-medium";
+        bodyEl.className = "flex-1 h-[30px] mx-2 border-2 border-dashed border-transparent group-hover:border-blue-400 dark:group-hover:border-blue-600 rounded-lg flex items-center justify-center text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-all bg-transparent group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10";
         bodyEl.innerHTML = `<span>Add New Entry</span>`;
 
-        contentWrapper.appendChild(numberColEl);
-        contentWrapper.appendChild(bodyEl);
-        addRowButtonEl.appendChild(contentWrapper);
+        footerContainer.appendChild(numberColEl);
+        footerContainer.appendChild(bodyEl);
 
-        addRowButtonEl.onclick = () => {
+        footerContainer.onclick = () => {
+            if (!tabulatorInstance) return;
             const rows = tabulatorInstance.getRows();
             const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
             insertRow(lastRow, 'after');
@@ -2973,28 +2952,7 @@
             }, 50);
         };
 
-        tableHolder.appendChild(addRowButtonEl);
-        updateFloatingAddRowButtonPosition();
-    }
-
-    function updateFloatingAddRowButtonPosition() {
-        if (!tabulatorInstance || !addRowButtonEl) return;
-        
-        // Ensure it always stays at the absolute bottom of the virtualized table DOM
-        const tableHolder = tableContainer.querySelector(".tabulator-table");
-        if (tableHolder && addRowButtonEl.parentNode === tableHolder) {
-            tableHolder.appendChild(addRowButtonEl); // Moves it to the end
-        }
-
-        // Dynamically calculate width so the dashed box spans all data columns
-        const header = tableContainer.querySelector(".tabulator-header");
-        if (header) {
-            const innerHeader = header.querySelector('.tabulator-headers');
-            if (innerHeader) {
-                // Ensure the footer matches the full computed width of all columns, preventing cutoff
-                addRowButtonEl.style.width = innerHeader.style.width || `${innerHeader.offsetWidth}px`;
-            }
-        }
+        return footerContainer;
     }
 
     function goToNextMatch() {
