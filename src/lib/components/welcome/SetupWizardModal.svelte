@@ -1143,6 +1143,8 @@
                                     on:input={() => { diarizationAccessGranted = false; diarizationError = ''; }} 
                                     placeholder="hf_..." 
                                     class="flex-grow border rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-gray-100" 
+                                    autocomplete="off"
+                                    autocorrect="off"
                                 />
                                 <button 
                                     on:click={verifyHfToken} 
