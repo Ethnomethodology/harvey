@@ -4,7 +4,7 @@
 
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { Plus, Trash2, X, Table as TableIcon } from 'lucide-svelte';
+    import { Plus, Trash2, X, Sheet } from 'lucide-svelte';
     import { 
         Input, 
         Label, 
@@ -17,7 +17,6 @@
         TableBody, 
         TableBodyRow, 
         TableBodyCell,
-        Tooltip,
         Modal
     } from 'flowbite-svelte';
 
@@ -169,10 +168,18 @@
     }
 </script>
 
-<Modal bind:open={showModal} size="xl" outsideclose on:close={closeModal} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[150]">
+<Modal 
+    bind:open={showModal} 
+    size="xl" 
+    outsideclose 
+    on:close={closeModal} 
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
+    class="w-full p-0 overflow-hidden flex flex-col h-[50vh] max-h-[50vh] relative"
+>
     <div slot="header" class="flex items-center space-x-3 w-full">
         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-            <TableIcon size={20} class="text-blue-600 dark:text-blue-400" />
+            <Sheet size={20} class="text-blue-600 dark:text-blue-400" />
         </div>
         <div>
             <h3 class="text-lg font-bold text-gray-900 dark:text-white">Create New Table</h3>
@@ -242,10 +249,10 @@
                                 on:click={() => removeField(i)}
                                 class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                 disabled={fields.length <= 1}
+                                title="Remove Field"
                             >
                                 <Trash2 size={16} />
                             </button>
-                            <Tooltip>Remove Field</Tooltip>
                         </TableBodyCell>
                     </TableBodyRow>
                 {/each}

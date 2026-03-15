@@ -259,3 +259,11 @@ input[type=number] {
 .datepicker {
   z-index: 9999 !important;
 }
+
+/* Ensure Flowbite Modals and their backdrops are always on top of everything including topbars and editor toolbars */
+div[role="dialog"] {
+  z-index: 10000 !important;
+}
+div[role="presentation"].fixed.inset-0 {
+  z-index: 9999 !important;
+}
