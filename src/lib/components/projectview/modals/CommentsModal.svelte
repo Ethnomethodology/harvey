@@ -1,7 +1,15 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher } from 'svelte';
     import { v4 as uuidv4 } from 'uuid';
-    import { X, MoreVertical } from 'lucide-svelte';
+    import { X, MoreVertical, MessageCircle, Reply, Pencil, Trash2, Clock } from 'lucide-svelte';
+    import { 
+        Modal, 
+        Button, 
+        Textarea, 
+        Dropdown, 
+        DropdownItem,
+        Avatar
+    } from 'flowbite-svelte';
 
     export let showModal = false;
     export let comments = [];
@@ -10,18 +18,12 @@
     const dispatch = createEventDispatcher();
 
     let newCommentText = '';
-    let activeMenuId = null;
     let editingCommentId = null;
     let editingText = '';
     let replyingToCommentId = null;
     let replyingToCommentText = '';
 
-    function toggleMenu(commentId) {
-        activeMenuId = activeMenuId === commentId ? null : commentId;
-    }
-
     function handleAction(action, comment) {
-        activeMenuId = null; // Close menu regardless of action
         if (action === 'delete') {
             dispatch('deletecomment', { highlightId, commentId: comment.id });
         } else if (action === 'edit') {
@@ -30,8 +32,6 @@
         } else if (action === 'reply') {
             replyingToCommentId = comment.id;
             replyingToCommentText = comment.text;
-        } else {
-            console.log(action, comment);
         }
     }
 
@@ -76,101 +76,166 @@
     }
 </script>
 
-{#if showModal}
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={closeModal}>
-    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-lg" on:click|stopPropagation>
-        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Comments</h2>
+<Modal
+    bind:open={showModal}
+    size="md"
+    autoclose={false}
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    on:close={closeModal}
+>
+    <div slot="header" class="flex items-center gap-2">
+        <MessageCircle class="w-5 h-5 text-gray-500" />
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            Comments
+        </h3>
+    </div>
 
-        <div class="space-y-4 max-h-96 overflow-y-auto pr-2">
-            {#each comments.filter(c => !c.parentId) as comment}
-                <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 relative group">
+    <div class="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+        {#each comments.filter(c => !c.parentId) as comment}
+            <div class="space-y-3">
+                <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 relative group">
                     {#if editingCommentId === comment.id}
-                        <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-900 text-black dark:text-white border-gray-300 dark:border-gray-700" rows="3" autocomplete="off" autocorrect="off"></textarea>
-                        <div class="mt-2 flex justify-end gap-2">
-                            <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
-                            <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
+                        <Textarea bind:value={editingText} rows="3" class="mb-2" placeholder="Edit comment..." />
+                        <div class="flex justify-end gap-2">
+                            <Button size="xs" color="alternative" on:click={handleCancelEdit}>Cancel</Button>
+                            <Button size="xs" color="blue" on:click={handleSaveEdit}>Save</Button>
                         </div>
                     {:else}
-                        <div class="flex justify-between items-start">
-                            <p class="text-sm text-gray-800 dark:text-gray-200 flex-grow pr-8">{comment.text}</p>
-                            <div class="absolute top-1 right-1">
-                                <button on:click={() => toggleMenu(comment.id)} class="p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                    <MoreVertical class="w-4 h-4" />
-                                </button>
-                                {#if activeMenuId === comment.id}
-                                    <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
-                                        {#if !comment.parentId}
-                                        <button on:click={() => handleAction('reply', comment)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Reply</button>
-                                        {/if}
-                                        <button on:click={() => handleAction('edit', comment)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Edit</button>
-                                        <button on:click={() => handleAction('delete', comment)} class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">Delete</button>
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-right">{new Date(comment.updatedAt).toLocaleString()}</p>
-                    {/if}
-                </div>
-                <!-- Replies would go here -->
-                {#each comments.filter(r => r.parentId === comment.id) as reply}
-                    <div class="ml-8 p-3 rounded-lg bg-gray-200 dark:bg-gray-600 relative group">
-                        {#if editingCommentId === reply.id}
-                            <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-700" rows="2" autocomplete="off" autocorrect="off"></textarea>
-                            <div class="mt-2 flex justify-end gap-2">
-                                <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-300 dark:bg-gray-500 hover:bg-gray-400 dark:hover:bg-gray-400">Cancel</button>
-                                <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
-                            </div>
-                        {:else}
-                            <div class="flex justify-between items-start">
-                                <p class="text-sm text-gray-800 dark:text-gray-200 flex-grow pr-8">{reply.text}</p>
-                                <div class="absolute top-1 right-1">
-                                    <button on:click={() => toggleMenu(reply.id)} class="p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                        <MoreVertical class="w-4 h-4" />
-                                    </button>
-                                    {#if activeMenuId === reply.id}
-                                        <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
-                                            <button on:click={() => handleAction('edit', reply)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Edit</button>
-                                            <button on:click={() => handleAction('delete', reply)} class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">Delete</button>
-                                        </div>
-                                    {/if}
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex items-center gap-2">
+                                <Avatar size="xs" border />
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-semibold text-gray-900 dark:text-white">User</span>
+                                    <span class="text-[10px] text-gray-500 flex items-center gap-1">
+                                        <Clock class="w-3 h-3" />
+                                        {new Date(comment.updatedAt).toLocaleString()}
+                                    </span>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-right">{new Date(reply.updatedAt).toLocaleString()}</p>
+                            <button class="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                <MoreVertical class="w-4 h-4 text-gray-500" />
+                            </button>
+                            <Dropdown placement="left-start" class="w-32 z-[10002]" strategy="fixed">
+                                {#if !comment.parentId}
+                                    <DropdownItem class="flex items-center gap-2" on:click={() => handleAction('reply', comment)}>
+                                        <Reply class="w-3.5 h-3.5" /> Reply
+                                    </DropdownItem>
+                                {/if}
+                                <DropdownItem class="flex items-center gap-2" on:click={() => handleAction('edit', comment)}>
+                                    <Pencil class="w-3.5 h-3.5" /> Edit
+                                </DropdownItem>
+                                <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={() => handleAction('delete', comment)}>
+                                    <Trash2 class="w-3.5 h-3.5" /> Delete
+                                </DropdownItem>
+                            </Dropdown>
+                        </div>
+                        <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {comment.text}
+                        </p>
+                    {/if}
+                </div>
+
+                <!-- Replies -->
+                {#each comments.filter(r => r.parentId === comment.id) as reply}
+                    <div class="ml-8 p-4 rounded-xl bg-gray-100/50 dark:bg-gray-800/30 border border-gray-200/50 dark:border-gray-700/50 relative group">
+                        {#if editingCommentId === reply.id}
+                            <Textarea bind:value={editingText} rows="2" class="mb-2" placeholder="Edit reply..." />
+                            <div class="flex justify-end gap-2">
+                                <Button size="xs" color="alternative" on:click={handleCancelEdit}>Cancel</Button>
+                                <Button size="xs" color="blue" on:click={handleSaveEdit}>Save</Button>
+                            </div>
+                        {:else}
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex items-center gap-2">
+                                    <Avatar size="xs" border />
+                                    <div class="flex flex-col">
+                                        <span class="text-xs font-semibold text-gray-900 dark:text-white">User</span>
+                                        <span class="text-[10px] text-gray-500 flex items-center gap-1">
+                                            <Clock class="w-3 h-3" />
+                                            {new Date(reply.updatedAt).toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button class="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                    <MoreVertical class="w-4 h-4 text-gray-500" />
+                                </button>
+                                <Dropdown placement="left-start" class="w-32 z-[10002]" strategy="fixed">
+                                    <DropdownItem class="flex items-center gap-2" on:click={() => handleAction('edit', reply)}>
+                                        <Pencil class="w-3.5 h-3.5" /> Edit
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={() => handleAction('delete', reply)}>
+                                        <Trash2 class="w-3.5 h-3.5" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                            <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                {reply.text}
+                            </p>
                         {/if}
                     </div>
                 {/each}
-            {/each}
+            </div>
+        {/each}
 
-            {#if comments.length === 0}
-                <p class="text-sm text-gray-500 dark:text-gray-400">No comments yet.</p>
-            {/if}
-        </div>
+        {#if comments.length === 0}
+            <div class="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-600">
+                <MessageCircle class="w-12 h-12 mb-2 opacity-20" />
+                <p class="text-sm italic">No comments yet.</p>
+            </div>
+        {/if}
+    </div>
 
-        <div class="mt-6">
-            {#if replyingToCommentId}
-                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    Replying to:
-                    <blockquote class="border-l-4 border-gray-300 dark:border-gray-700 pl-2 my-1 text-gray-500 italic truncate">
-                        {replyingToCommentText}
-                    </blockquote>
-                    <button on:click={cancelReply} class="text-blue-500 hover:underline text-xs">(Cancel Reply)</button>
+    <div class="mt-4 pt-4 border-t dark:border-gray-700">
+        {#if replyingToCommentId}
+            <div class="flex items-center justify-between mb-2 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <Reply class="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span class="text-[11px] text-blue-800 dark:text-blue-300 truncate italic">
+                        Replying to: "{replyingToCommentText}"
+                    </span>
                 </div>
-            {/if}
-            <textarea
-                bind:value={newCommentText}
-                class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-700"
-                placeholder={replyingToCommentId ? 'Add a reply...' : 'Add a comment...'}
-                rows="3"
-                autocomplete="off"
-                autocorrect="off"
-            ></textarea>
-            <div class="mt-2 flex justify-end gap-2">
-                <button on:click={closeModal} class="px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
-                <button on:click={handleAddComment} class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">
-                    {replyingToCommentId ? 'Add Reply' : 'Add Comment'}
+                <button on:click={cancelReply} class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors">
+                    <X class="w-3 h-3 text-blue-600 dark:text-blue-400" />
                 </button>
             </div>
-        </div>
+        {/if}
+        <Textarea
+            bind:value={newCommentText}
+            placeholder={replyingToCommentId ? 'Write a reply...' : 'Add a comment...'}
+            rows="3"
+            class="bg-white dark:bg-gray-800"
+        />
     </div>
-</div>
-{/if}
+
+    <svelte:fragment slot="footer">
+        <Button color="alternative" on:click={closeModal}>Close</Button>
+        <Button 
+            color="blue" 
+            on:click={handleAddComment} 
+            disabled={!newCommentText.trim()}
+        >
+            {replyingToCommentId ? 'Post Reply' : 'Post Comment'}
+        </Button>
+    </svelte:fragment>
+</Modal>
+
+<style lang="postcss">
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-300 dark:bg-gray-600;
+    }
+</style>
