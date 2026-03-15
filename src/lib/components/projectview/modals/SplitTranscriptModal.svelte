@@ -2,11 +2,18 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { project, setImportedTranscriptSplit } from '$lib/stores/projectStore.js';
-    import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    import { 
+        Button, 
+        Label, 
+        Select, 
+        Helper,
+        Badge,
+        Alert
+    } from 'flowbite-svelte';
     import { basename } from '@tauri-apps/api/path';
     import { normalizePath } from '$lib/services/projectService.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { AlertTriangle } from 'lucide-svelte';
+    import { AlertTriangle, Split, X, FileText, LayoutColumns, LayoutRows } from 'lucide-svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -36,7 +43,7 @@
                     .filter(f => f.path !== currentPath)
                     .map(f => ({
                         value: f.path,
-                        label: f.name
+                        name: f.name
                     }));
             } else if (p.activeTranscriptPathInDataTab) {
                 // Find associated media file to get its transcripts
@@ -65,7 +72,7 @@
                             if (t.name) label += ` (${t.name})`;
                             return {
                                 value: t.path,
-                                label: label
+                                name: label
                             };
                         });
                 }
@@ -112,8 +119,6 @@
         try {
             const parsed = JSON.parse(jsonString);
             const table = parsed.root.children.find(c => c.type === 'table');
-            // Subtract 1 for header row if needed? Standard split transcripts have headers.
-            // Let's just compare total children (rows) for structural similarity.
             return table?.children?.length || 0;
         } catch (e) { return 0; }
     }
@@ -122,12 +127,11 @@
         if (!content) return 0;
         try {
             const parsed = JSON.parse(content);
-            // Handle both Lexical format and raw segment array
             if (parsed.root) {
                 const table = parsed.root.children.find(c => c.type === 'table');
                 return table?.children?.length || 0;
             } else if (Array.isArray(parsed)) {
-                return parsed.length + 1; // +1 for the header we generate on import
+                return parsed.length + 1;
             }
             return 0;
         } catch (e) { return 0; }
@@ -160,83 +164,118 @@
 
 {#if $project.showSplitTranscriptModal}
     <div
-        class="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="split-transcript-modal-title"
         on:click={handleClose}
         tabindex="-1"
         on:keydown={handleKeydown}
     >
         <div
-            class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+            class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
             on:click|stopPropagation
         >
-            <h2 class="text-lg font-semibold mb-4 text-center">Split Transcript View</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        {#if $project.pendingSplitOrientation === 'vertical'}
+                            <LayoutRows size={20} class="text-blue-600 dark:text-blue-400" />
+                        {:else}
+                            <LayoutColumns size={20} class="text-blue-600 dark:text-blue-400" />
+                        {/if}
+                    </div>
+                    <h3 id="split-transcript-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+                        Split Transcript View
+                    </h3>
+                </div>
+                <button on:click={handleClose} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
+                    <X size={20} />
+                </button>
+            </div>
 
-            <div class="space-y-4 mb-6">
-                <div class="flex flex-col space-y-1">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Current Transcript</span>
-                    <div class="flex justify-between items-center">
-                        <span class="text-md font-semibold truncate flex-grow" title={currentFileName}>{currentFileName}</span>
+            <!-- Body -->
+            <div class="p-6 space-y-6">
+                <div class="space-y-2">
+                    <Label class="text-gray-500 dark:text-gray-400">Current Transcript</Label>
+                    <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-lg">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <FileText size={16} class="text-gray-400 shrink-0" />
+                            <span class="text-sm font-semibold truncate text-gray-700 dark:text-gray-200" title={currentFileName}>
+                                {currentFileName}
+                            </span>
+                        </div>
                         {#if currentTranscriptRowCount > 0}
-                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{currentTranscriptRowCount} rows</span>
+                            <Badge color="dark" rounded class="px-2 py-0.5 text-[10px]">
+                                {currentTranscriptRowCount} rows
+                            </Badge>
                         {/if}
                     </div>
                 </div>
 
-                <div class="flex flex-col space-y-1">
-                    <label for="partnerSelect" class="text-sm font-medium text-gray-500 dark:text-gray-400">Select Partner Transcript</label>
-                    <Dropdown
-                        containerClasses="w-full"
-                        options={transcriptOptions}
+                <div class="space-y-2">
+                    <Label for="partnerSelect">Select Partner Transcript</Label>
+                    <Select
+                        id="partnerSelect"
+                        items={transcriptOptions}
                         bind:value={selectedPartnerPath}
-                        placeholder="Select a Transcript"
                         disabled={transcriptOptions.length === 0}
+                        placeholder="Choose a transcript to compare..."
                     />
-                    <div class="flex justify-end mt-1">
+                    <div class="flex justify-between items-center mt-1">
+                        {#if transcriptOptions.length === 0}
+                            <Helper color="orange" class="italic">
+                                No other transcripts available to split with.
+                            </Helper>
+                        {:else}
+                            <Helper>Choose the second transcript for side-by-side view.</Helper>
+                        {/if}
+                        
                         {#if partnerTranscriptRowCount > 0}
-                            <span class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">{partnerTranscriptRowCount} rows</span>
+                            <Badge color="dark" rounded class="px-2 py-0.5 text-[10px]">
+                                {partnerTranscriptRowCount} rows
+                            </Badge>
                         {/if}
                     </div>
-                    
-                    {#if transcriptOptions.length === 0}
-                        <p class="text-xs text-orange-500 mt-1">No other imported transcripts available to split with.</p>
-                    {/if}
                 </div>
 
                 {#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
-                    <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-md flex gap-3 text-amber-800 dark:text-amber-200 transition-all">
-                        <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
-                        <div class="flex flex-col gap-1">
-                            <span class="text-xs font-bold">Row Count Mismatch</span>
+                    <Alert color="amber" class="items-start">
+                        <AlertTriangle slot="icon" class="w-5 h-5 shrink-0" />
+                        <div class="flex flex-col gap-1 ml-2">
+                            <span class="text-xs font-bold uppercase tracking-wider">Row Count Mismatch</span>
                             <p class="text-[11px] leading-relaxed">
                                 These transcripts have different row counts ({currentTranscriptRowCount} vs {partnerTranscriptRowCount}). 
                                 Scroll synchronization may not align perfectly.
                             </p>
                         </div>
-                    </div>
+                    </Alert>
                 {/if}
             </div>
 
-            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button class="btn-secondary" on:click={handleClose}>Cancel</button>
-                <button 
-                    class="btn-primary" 
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+                <Button color="alternative" on:click={handleClose} title="Cancel and close">
+                    Cancel
+                </Button>
+                <Button 
+                    color="blue" 
                     on:click={handleConfirm} 
                     disabled={!selectedPartnerPath || isLoadingCounts}
+                    title={!selectedPartnerPath ? "Please select a partner transcript" : "Open split view"}
                 >
-                    Split
-                </button>
+                    {#if isLoadingCounts}
+                        Checking...
+                    {:else}
+                        <Split size={18} class="mr-2" />
+                        Split View
+                    {/if}
+                </Button>
             </div>
         </div>
     </div>
 {/if}
 
 <style lang="postcss">
-    .btn-primary {
-        @apply px-4 py-2 rounded-md font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed;
-    }
-    .btn-secondary {
-        @apply px-4 py-2 rounded-md font-medium transition-colors bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600;
-    }
 </style>
