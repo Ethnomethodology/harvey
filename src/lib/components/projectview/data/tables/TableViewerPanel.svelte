@@ -207,6 +207,12 @@
     let isColorDropdownOpen = false;
     let colorDropdownRef;
 
+    function handleOutsideClick(event) {
+        if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
+            isColorDropdownOpen = false;
+        }
+    }
+
     function toggleColorDropdown() {
         if (!tabulatorInstance) return;
         isColorDropdownOpen = !isColorDropdownOpen;
@@ -3137,6 +3143,8 @@
         }, 100)();
     }
 </script>
+
+<svelte:window on:mousedown={handleOutsideClick}/>
 
 {#if showEditFieldModal}
     <EditFieldModal
