@@ -289,6 +289,9 @@
                     bind:value={title}
                     placeholder="Enter title"
                     autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
                 />
             </div>
             <div class="mb-3">
@@ -299,6 +302,10 @@
                     bind:value={description}
                     placeholder="Enter description"
                     rows="2"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
                 ></textarea>
             </div>
         {/if}

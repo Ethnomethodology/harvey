@@ -172,6 +172,8 @@
 				class="cursor-not-allowed bg-gray-100 dark:bg-gray-700"
 				autocomplete="off"
 				autocorrect="off"
+				autocapitalize="off"
+				spellcheck="false"
 			/>
 		</div>
 
@@ -186,6 +188,8 @@
 				required
 				autocomplete="off"
 				autocorrect="off"
+				autocapitalize="off"
+				spellcheck="false"
 			/>
 			{#if isStemInputMode}
 				<Helper class="mt-1 text-xs text-gray-500 dark:text-gray-400">

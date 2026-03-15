@@ -203,7 +203,7 @@
                 {#each fields as field, i}
                     <TableBodyRow class="group">
                         <TableBodyCell class="px-3 py-2">
-                            <Input size="sm" bind:value={field.name} placeholder="Name" />
+                            <Input size="sm" bind:value={field.name} placeholder="Name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                         </TableBodyCell>
                         <TableBodyCell class="px-3 py-2">
                             <Select size="sm" items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} bind:value={field.type} on:change={() => handleTypeChange(i)} />
@@ -219,18 +219,18 @@
                         </TableBodyCell>
                         <TableBodyCell class="px-3 py-2">
                             {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
-                                <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." />
+                                <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                             {:else if field.type === 'Numeric'}
                                 <div class="flex flex-col gap-1">
                                     <div class="flex gap-1">
-                                        <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
-                                        <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
+                                        <Input size="sm" type="number" bind:value={field.min} placeholder="Min" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                        <Input size="sm" type="number" bind:value={field.max} placeholder="Max" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                                     </div>
                                     {#if field.subType === 'Currency'}
                                         <div class="flex flex-col gap-1">
                                             <Select size="sm" items={currencyOptions} bind:value={field.currency} />
                                             {#if field.currency === 'OTHER'}
-                                                <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO Code" maxlength="3" />
+                                                <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO Code" maxlength="3" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                                             {/if}
                                         </div>
                                     {/if}
@@ -242,7 +242,7 @@
                             {/if}
                         </TableBodyCell>
                         <TableBodyCell class="px-3 py-2">
-                            <Input size="sm" bind:value={field.description} placeholder="Purpose of this field" />
+                            <Input size="sm" bind:value={field.description} placeholder="Purpose of this field" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                         </TableBodyCell>
                         <TableBodyCell class="px-3 py-2 text-center">
                             <button

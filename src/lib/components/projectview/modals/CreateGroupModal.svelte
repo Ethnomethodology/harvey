@@ -124,7 +124,9 @@
             <Label for="groupDescription" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
             <Textarea id="groupDescription" bind:value={groupDescription} rows="3" placeholder="Enter group description"
                       autocomplete="off"
-                      autocorrect="off"></Textarea>
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"></Textarea>
         </div>
     </div>
 

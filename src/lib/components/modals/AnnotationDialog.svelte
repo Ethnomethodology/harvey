@@ -57,6 +57,8 @@
             bind:value={title}
             autocomplete="off"
             autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
         />
     </div>
     <div class="mb-3">
@@ -68,6 +70,8 @@
             bind:value={description}
             autocomplete="off"
             autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
         ></textarea>
     </div>
     <div class="mb-4">

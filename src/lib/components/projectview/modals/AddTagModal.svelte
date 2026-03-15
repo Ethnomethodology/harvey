@@ -72,6 +72,9 @@
                 bind:value={name}
                 required
                 autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
                 placeholder="e.g., Important, Review"
             />
         </div>
@@ -82,6 +85,10 @@
                 id="tagDescription"
                 bind:value={description}
                 rows="3"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
                 placeholder="Describe this tag..."
             ></Textarea>
         </div>

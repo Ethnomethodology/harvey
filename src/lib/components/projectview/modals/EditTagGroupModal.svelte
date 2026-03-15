@@ -75,7 +75,7 @@
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
     bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
     headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
-    footerClass="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+    footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
     on:close={closeModal}
 >
     <div slot="header" class="flex items-center gap-2">
@@ -100,6 +100,9 @@
                 bind:value={name}
                 required
                 autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
             />
         </div>
 
@@ -109,6 +112,10 @@
                 id="groupDescription"
                 bind:value={description}
                 rows="3"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
             ></Textarea>
         </div>
     </div>

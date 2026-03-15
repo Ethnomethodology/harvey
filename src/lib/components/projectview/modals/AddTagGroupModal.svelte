@@ -72,6 +72,9 @@
                 bind:value={name}
                 required
                 autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
                 placeholder="e.g., Themes, Speakers"
             />
         </div>
@@ -82,6 +85,10 @@
                 id="groupDescription"
                 bind:value={description}
                 rows="3"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
                 placeholder="Describe what this group represents..."
             ></Textarea>
         </div>
