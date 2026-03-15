@@ -446,6 +446,11 @@
     }
 
     async function processNextTableImport() {
+        if (!isActivelyImportingTable) {
+            console.log("[DataLeftPanel] Import cancelled, halting processNextTableImport.");
+            return;
+        }
+
         // If we still have sheets to extract, pull the next one and extract it
         if (pendingSheetNamesToImport.length > 0) {
             const nextSheet = pendingSheetNamesToImport.shift();
@@ -458,6 +463,7 @@
                     tableSheetSelectionData.filename
                 );
 
+                if (!isActivelyImportingTable) return; // User cancelled during extraction
                 setAssetImportStatus(false, '');
 
                 if (result && result.table_path) {
@@ -470,10 +476,12 @@
                 }
             } catch (e) {
                 console.error(`[DataLeftPanel] Error extracting sheet ${nextSheet}:`, e);
-                const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
-                message(`Error extracting sheet ${nextSheet}: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-                // We've hit an error during sheet extraction. Abort the remaining imports safely.
-                await triggerHeaderConfirmationCancel();
+                if (isActivelyImportingTable) {
+                    const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
+                    message(`Error extracting sheet ${nextSheet}: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+                    // We've hit an error during sheet extraction. Abort the remaining imports safely.
+                    await triggerHeaderConfirmationCancel();
+                }
             }
             return;
         }
