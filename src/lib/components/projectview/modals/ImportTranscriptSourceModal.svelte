@@ -2,7 +2,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { Button, Label, Helper, Alert } from 'flowbite-svelte';
-    import { FileUp, X, Info, FileText, CheckCircle2 } from 'lucide-svelte';
+    import { FilePlus2, X, Info, FileText, CheckCircle2 } from 'lucide-svelte';
 
     export let showModal = false;
 
@@ -47,7 +47,7 @@
             <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center space-x-3">
                     <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <FileUp size={20} class="text-blue-600 dark:text-blue-400" />
+                        <FilePlus2 size={20} class="text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 id="import-transcript-title" class="text-lg font-bold text-gray-900 dark:text-white">
                         Import Transcript
