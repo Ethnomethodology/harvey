@@ -911,24 +911,17 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
 }
 
 export async function importTableSheet(sourceFilePath, projectXmlPath, sheetName, filename) {
-    setAssetImportStatus(true, `Importing sheet ${sheetName} from ${filename}...`);
-    try {
-        const result = await invoke('import_table_file', {
-            sourcePathStr: sourceFilePath,
-            projectXmlPathStr: projectXmlPath,
-            sheetNameOpt: sheetName
-        });
-        if (result && result.table_path && result.preview_data) {
-            setAssetImportStatus(false, `${sheetName} imported successfully.`);
-            return { ...result, filename: `${filename} (${sheetName})` };
-        } else {
-            throw new Error('Invalid response from backend during table sheet import.');
-        }
-    } catch (error) {
-        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
-        await message(`Error importing table sheet: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
-        throw error;
+    // Only invoke the backend and return the promise so the UI orchestrator
+    // has control over the loading state, preventing loading spinner glitches.
+    const result = await invoke('import_table_file', {
+        sourcePathStr: sourceFilePath,
+        projectXmlPathStr: projectXmlPath,
+        sheetNameOpt: sheetName
+    });
+    if (result && result.table_path && result.preview_data) {
+        return { ...result, filename: `${filename} (${sheetName})` };
+    } else {
+        throw new Error('Invalid response from backend during table sheet import.');
     }
 }
 

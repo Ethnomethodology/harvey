@@ -422,13 +422,18 @@
         console.log(`[DataLeftPanel] Selected sheets for import:`, selectedSheets);
         showTableSheetSelectionModal = false;
 
-        if (!selectedSheets || selectedSheets.length === 0) return;
+        if (!selectedSheets || selectedSheets.length === 0) {
+            isActivelyImportingTable = false;
+            return;
+        }
 
         try {
             pendingTableImports = [];
             importedTablePathsToRevert = [];
 
-            // Import each selected sheet using the backend
+            // Import each selected sheet using the backend, show spinner
+            setAssetImportStatus(true, `Extracting ${selectedSheets.length} sheets...`);
+
             for (const sheet of selectedSheets) {
                 const result = await importTableSheet(
                     tableSheetSelectionData.sourceFilePath,
@@ -441,11 +446,17 @@
                 }
             }
 
+            setAssetImportStatus(false, ''); // Clear loading state once extraction finishes
+
             if (pendingTableImports.length > 0) {
                 processNextTableImport();
             }
         } catch (e) {
             console.error(`[DataLeftPanel] Error importing table sheets:`, e);
+            const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
+            message(`Error importing table sheets: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+            setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
+            isActivelyImportingTable = false;
         }
     }
 
