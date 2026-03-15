@@ -12,10 +12,17 @@
 
     let selectedSheets = [];
 
+    // Track modal open state to run init exactly once per open
+    let wasOpen = false;
+
     // Initialize selectedSheets when modal opens
-    $: if (showModal && sheets.length > 0) {
+    $: if (showModal && !wasOpen && sheets.length > 0) {
+        wasOpen = true;
         // By default, select all sheets
         selectedSheets = [...sheets];
+    } else if (!showModal && wasOpen) {
+        wasOpen = false;
+        selectedSheets = [];
     }
 
     function handleConfirm() {
