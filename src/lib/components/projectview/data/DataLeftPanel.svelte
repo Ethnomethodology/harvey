@@ -454,7 +454,7 @@
         showTableSheetSelectionModal = false;
         isActivelyImportingTable = false;
         // No cleanup needed since we haven't extracted/imported any files yet.
-        project.update(p => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
+        setAssetImportStatus(false, 'Table import cancelled.');
     }
 
     function processNextTableImport() {
@@ -565,8 +565,24 @@
             pendingTableImports = [];
             importedTablePathsToRevert = [];
             headerConfirmationData = { tablePath: '', previewData: null };
-            project.update(p => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
+
+            // Critical fix: ensure global import/loading flags are flipped back!
+            const projectStoreVal = get(project);
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: 'Table import cancelled.'
+            }));
+
+            // Also invoke setAssetImportStatus to guarantee identical lifecycle flow
+            // as other import tasks that properly hide the loading spinner.
+            setAssetImportStatus(false, 'Table import cancelled.');
         }
+    }
+
+    function setAssetImportStatus(isImporting, message) {
+        project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message }));
     }
 
     async function handleRenameConfirm(event) {
