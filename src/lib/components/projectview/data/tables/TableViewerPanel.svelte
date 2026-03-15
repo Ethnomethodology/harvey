@@ -2925,48 +2925,75 @@
     function addFloatingAddRowButton() {
         if (!tableContainer || addRowButtonEl) return;
 
-        // Instead of injecting into the virtual DOM, we place it in the scrollable holder
-        // but OUTSIDE the virtualized .tabulator-table, or below it via Tabulator events.
-        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
-        if (!scrollHolder) return;
+        // We place the add button in the table virtual DOM container so it respects table scroll width,
+        // but we manage its vertical position manually.
+        const tableHolder = tableContainer.querySelector(".tabulator-table");
+        if (!tableHolder) return;
         
         addRowButtonEl = document.createElement("div");
-        addRowButtonEl.className = "hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer flex items-center justify-center border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg mx-2 my-2";
-        addRowButtonEl.style.height = "34px";
-        addRowButtonEl.title = "Add New Entry";
+        // Inherit grid styling but float left content, mirroring the width of the main canvas
+        addRowButtonEl.className = "add-row-footer transition-colors cursor-pointer border-t border-gray-200 dark:border-gray-700 flex items-center bg-white dark:bg-[#030712]";
+        addRowButtonEl.style.height = "38px";
         
-        const iconWrapper = document.createElement("div");
-        iconWrapper.className = "text-blue-500 font-medium flex items-center justify-center h-full w-full gap-2";
-        iconWrapper.innerHTML = `<span>Add Entry</span>`;
+        const contentWrapper = document.createElement("div");
+        contentWrapper.className = "flex items-center w-full h-full";
+
+        // The pinned frozen number column part
+        const numberColEl = document.createElement("div");
+        numberColEl.className = "add-row-number-col flex items-center justify-center border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[#030712] hover:bg-gray-50 dark:hover:bg-gray-900";
+        numberColEl.style.width = "50px";
+        numberColEl.style.height = "100%";
+        numberColEl.style.minWidth = "50px";
+        numberColEl.style.position = "sticky";
+        numberColEl.style.left = "0";
+        numberColEl.style.zIndex = "4"; // Match tabulator frozen column index
 
         mount(TableIcon, {
-            target: iconWrapper,
-            props: { icon: Plus, size: 16 }
+            target: numberColEl,
+            props: { icon: Plus, size: 16, customClass: "text-blue-500" }
         });
 
-        addRowButtonEl.appendChild(iconWrapper);
+        // The dashed body part
+        const bodyEl = document.createElement("div");
+        bodyEl.className = "flex-1 h-full mx-2 my-1 border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-50/50 dark:hover:bg-blue-900/10 text-blue-500 font-medium";
+        bodyEl.innerHTML = `<span>Add New Entry</span>`;
+
+        contentWrapper.appendChild(numberColEl);
+        contentWrapper.appendChild(bodyEl);
+        addRowButtonEl.appendChild(contentWrapper);
 
         addRowButtonEl.onclick = () => {
             const rows = tabulatorInstance.getRows();
             const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
             insertRow(lastRow, 'after');
 
-            // Scroll to bottom after adding row to see the new entry
             setTimeout(() => {
+                const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
                 if (scrollHolder) scrollHolder.scrollTop = scrollHolder.scrollHeight;
             }, 50);
         };
 
-        scrollHolder.appendChild(addRowButtonEl);
+        tableHolder.appendChild(addRowButtonEl);
+        updateFloatingAddRowButtonPosition();
     }
 
     function updateFloatingAddRowButtonPosition() {
         if (!tabulatorInstance || !addRowButtonEl) return;
         
-        // Ensure it always stays at the absolute bottom of the scroll holder DOM
-        const scrollHolder = tableContainer.querySelector(".tabulator-tableholder");
-        if (scrollHolder && addRowButtonEl.parentNode === scrollHolder) {
-            scrollHolder.appendChild(addRowButtonEl); // Moves it to the end logically
+        // Ensure it always stays at the absolute bottom of the virtualized table DOM
+        const tableHolder = tableContainer.querySelector(".tabulator-table");
+        if (tableHolder && addRowButtonEl.parentNode === tableHolder) {
+            tableHolder.appendChild(addRowButtonEl); // Moves it to the end
+        }
+
+        // Dynamically calculate width so the dashed box spans all data columns
+        const header = tableContainer.querySelector(".tabulator-header");
+        if (header) {
+            const innerHeader = header.querySelector('.tabulator-headers');
+            if (innerHeader) {
+                // Ensure the footer matches the full computed width of all columns, preventing cutoff
+                addRowButtonEl.style.width = innerHeader.style.width || `${innerHeader.offsetWidth}px`;
+            }
         }
     }
 
