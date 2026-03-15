@@ -409,7 +409,7 @@
 		<button 
 			on:click="{handleDualModeToggle}" 
 			class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-			title="Dual Transcript Mode"
+			title="Compare Transcripts"
 		>
 			<Rows2 size={16} strokeWidth={2} />
 		</button>

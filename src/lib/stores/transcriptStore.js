@@ -77,7 +77,7 @@ export const initialTranscriptState = {
     initialPrompt: "",
     hotwords: "",
 
-    // Dual Transcript Mode
+    // Compare two transcripts in interleaved mode
     isDualModeActive: loadDualModeState(),
     showDualTranscriptModal: false,
     secondaryTranscriptPath: null,
@@ -1623,7 +1623,7 @@ export function setSpeakerConfig(newSpeakerConfig) {
     }));
 }
 
-// --- Dual Transcript Mode Functions ---
+// --- Compare two transcripts in interleaved mode Functions ---
 
 export function setDualTranscriptModal(show) {
     transcriptStore.update(ts => ({ ...ts, showDualTranscriptModal: !!show }));
@@ -1772,7 +1772,7 @@ export async function setSecondaryTranscript(path) {
 export function toggleDualMode(active) {
     const store = get(transcriptStore);
     if (store.transcriptDirty) {
-        message('Please save your changes before enabling or disabling Dual Transcript Mode.', { title: 'Unsaved Changes', type: 'error' });
+        message('Please save your changes before enabling or disabling Compare Transcripts.', { title: 'Unsaved Changes', type: 'error' });
         return;
     }
 

@@ -180,7 +180,7 @@
                         <Rows2 size={20} class="text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 id="dual-transcript-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
-                        Dual Transcript Mode
+                        Compare Transcripts
                     </h3>
                 </div>
                 <button on:click={handleClose} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
@@ -192,7 +192,7 @@
                 <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 p-3 rounded-lg flex gap-3">
                     <Info size={18} class="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                     <p class="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-                        Compare two transcripts side-by-side. Transcripts must have an identical number of segments to be compatible.
+                        Compare two transcripts in interleaved mode. Transcripts must have an identical number of segments to be compatible.
                     </p>
                 </div>
 

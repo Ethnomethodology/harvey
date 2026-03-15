@@ -13,7 +13,7 @@
     import { basename } from '@tauri-apps/api/path';
     import { normalizePath } from '$lib/services/projectService.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { AlertTriangle, Split, X, FileText, LayoutColumns, LayoutRows } from 'lucide-svelte';
+    import { AlertTriangle, Split, X, FileText, SquareSplitHorizontal, SquareSplitVertical } from 'lucide-svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -181,9 +181,9 @@
                 <div class="flex items-center space-x-3">
                     <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                         {#if $project.pendingSplitOrientation === 'vertical'}
-                            <LayoutRows size={20} class="text-blue-600 dark:text-blue-400" />
+                            <SquareSplitVertical size={20} class="text-blue-600 dark:text-blue-400" />
                         {:else}
-                            <LayoutColumns size={20} class="text-blue-600 dark:text-blue-400" />
+                            <SquareSplitHorizontal size={20} class="text-blue-600 dark:text-blue-400" />
                         {/if}
                     </div>
                     <h3 id="split-transcript-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
@@ -207,7 +207,7 @@
                             </span>
                         </div>
                         {#if currentTranscriptRowCount > 0}
-                            <Badge color="dark" rounded class="px-2 py-0.5 text-[10px]">
+                            <Badge color="dark" rounded class="px-2 py-0.5 text-[10px] shrink-0 whitespace-nowrap">
                                 {currentTranscriptRowCount} rows
                             </Badge>
                         {/if}
@@ -241,7 +241,7 @@
                 </div>
 
                 {#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
-                    <Alert color="amber" class="items-start">
+                    <Alert color="yellow" class="items-start">
                         <AlertTriangle slot="icon" class="w-5 h-5 shrink-0" />
                         <div class="flex flex-col gap-1 ml-2">
                             <span class="text-xs font-bold uppercase tracking-wider">Row Count Mismatch</span>
