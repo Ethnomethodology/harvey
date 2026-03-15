@@ -27,6 +27,7 @@
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
     import { 
+        Modal,
         Input, 
         Label, 
         Select, 

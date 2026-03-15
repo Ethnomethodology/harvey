@@ -5,6 +5,15 @@
     import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions.js';
     import { configStatus } from '$lib/stores/configStatusStore.js';
     import ManageModelsModal from './ManageModelsModal.svelte';
+    import { 
+        Modal, 
+        Button, 
+        Label, 
+        Select, 
+        Checkbox,
+        Alert
+    } from 'flowbite-svelte';
+    import { Mic, Settings2, AlertTriangle, Info } from 'lucide-svelte';
 
     export let showModal = false;
 
@@ -75,80 +84,100 @@
     }
 </script>
 
-{#if showModal}
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md">
-        <h2 class="text-lg font-semibold mb-4">Live Transcription Settings</h2>
+<Modal
+    bind:open={showModal}
+    size="md"
+    autoclose={false}
+    outsideclose={true}
+    on:close={closeModal}
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
+    class="w-full p-0 overflow-hidden flex flex-col"
+    headerClass="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
+>
+    <div slot="header" class="flex items-center space-x-3 w-full">
+        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <Mic size={20} class="text-blue-600 dark:text-blue-400" />
+        </div>
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Live Transcription Settings</h3>
+    </div>
 
+    <div class="p-6 space-y-5">
         {#if !$configStatus.python_libraries_installed}
-            <div class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-md text-center space-y-2">
-                <p class="text-red-800 dark:text-red-300 font-medium">Required libraries are missing.</p>
-                <p class="text-xs text-red-600 dark:text-red-400">Please install Python dependencies in the Configure screen.</p>
-                <div class="flex justify-center mt-2">
-                    <button
+            <Alert color="red" class="items-start">
+                <AlertTriangle slot="icon" class="w-5 h-5 shrink-0" />
+                <div class="ml-2">
+                    <p class="text-sm font-medium">Required libraries are missing.</p>
+                    <p class="text-xs mt-1">Please install Python dependencies in the Configure screen.</p>
+                    <Button
+                        color="red"
+                        size="xs"
+                        class="mt-3"
                         on:click={() => showManageModelsModal = true}
-                        class="px-3 py-1.5 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100 rounded border border-red-300 dark:border-red-600 hover:bg-red-200 dark:hover:bg-red-800 text-xs font-semibold transition-colors"
                     >
                         Configure
-                    </button>
+                    </Button>
                 </div>
-            </div>
+            </Alert>
         {:else if models.length === 0}
-            <div class="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-md text-center space-y-2">
-                <p class="text-blue-800 dark:text-blue-300 font-medium">No transcription models available.</p>
-                <p class="text-xs text-blue-600 dark:text-blue-400">Please download a model in the Configure screen.</p>
-                <div class="flex justify-center mt-2">
-                    <button
+            <Alert color="blue" class="items-start">
+                <Info slot="icon" class="w-5 h-5 shrink-0" />
+                <div class="ml-2">
+                    <p class="text-sm font-medium">No transcription models available.</p>
+                    <p class="text-xs mt-1">Please download a model in the Configure screen.</p>
+                    <Button
+                        color="blue"
+                        size="xs"
+                        class="mt-3"
                         on:click={() => showManageModelsModal = true}
-                        class="px-3 py-1.5 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100 rounded border border-blue-200 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-700 text-xs font-semibold transition-colors"
                     >
                         Configure
-                    </button>
+                    </Button>
                 </div>
-            </div>
+            </Alert>
         {:else}
-            <div class="mb-4">
-                <label for="model" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Model</label>
-                <select id="model" bind:value={selectedModel} class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
-                    <option value="" disabled>Select a model</option>
-                    {#each models as model}
-                        <option value={model.name}>{model.name}</option>
-                    {/each}
-                </select>
+            <div class="space-y-2">
+                <Label for="model-select">Model</Label>
+                <Select
+                    id="model-select"
+                    items={models.map(m => ({ value: m.name, name: m.name }))}
+                    bind:value={selectedModel}
+                    placeholder="Select a model"
+                />
             </div>
         {/if}
 
-        <div class="mb-4">
-            <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Language</label>
-            <select id="language" bind:value={selectedLanguage} class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
-                {#each languageOptions as lang}
-                    <option value={lang.value}>{lang.label}</option>
-                {/each}
-            </select>
+        <div class="space-y-2">
+            <Label for="language-select">Language</Label>
+            <Select
+                id="language-select"
+                items={languageOptions.map(l => ({ value: l.value, name: l.label }))}
+                bind:value={selectedLanguage}
+            />
         </div>
 
-        <div class="mb-4">
-            <label class="flex items-center">
-                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700" autocomplete="off" autocorrect="off">
-                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Save transcription audio</span>
-            </label>
-        </div>
-
-        <div class="mb-4">
-            <label class="flex items-center">
-                <input type="checkbox" bind:checked={addTimestamps} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700" autocomplete="off" autocorrect="off">
-                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Add Timestamps</span>
-            </label>
-        </div>
-        <div class="flex justify-between items-center mt-6">
-            <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 hover:underline">Manage Models</button>
-            <div class="flex space-x-2">
-                <button on:click={closeModal} class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                <button on:click={handleConfirm} disabled={models.length === 0 || !$configStatus.python_libraries_installed} class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
-            </div>
+        <div class="space-y-3 pt-2">
+            <Checkbox bind:checked={saveAudio}>Save transcription audio</Checkbox>
+            <Checkbox bind:checked={addTimestamps}>Add Timestamps</Checkbox>
         </div>
     </div>
-</div>
-{/if}
+
+    <div slot="footer" class="flex justify-between items-center w-full">
+        <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5">
+            <Settings2 size={14} />
+            Manage Models
+        </button>
+        <div class="flex space-x-3">
+            <Button color="alternative" on:click={closeModal}>Cancel</Button>
+            <Button 
+                color="blue" 
+                on:click={handleConfirm} 
+                disabled={models.length === 0 || !$configStatus.python_libraries_installed}
+            >
+                Start
+            </Button>
+        </div>
+    </div>
+</Modal>
 
 <ManageModelsModal bind:showModal={showManageModelsModal} on:modelsChanged={loadModels} />
