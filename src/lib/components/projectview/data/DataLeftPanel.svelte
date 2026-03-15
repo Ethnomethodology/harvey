@@ -1535,7 +1535,7 @@
     tablePath={headerConfirmationData.tablePath} 
     previewData={headerConfirmationData.previewData}
     on:confirm={handleHeaderConfirmation}
-    on:close={handleHeaderConfirmationCancel}
+    on:cancel={handleHeaderConfirmationCancel}
 />
 <TableSheetSelectionModal
     bind:showModal={showTableSheetSelectionModal}

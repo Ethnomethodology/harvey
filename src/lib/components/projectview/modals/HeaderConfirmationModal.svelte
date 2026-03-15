@@ -157,6 +157,8 @@ import { Modal } from 'flowbite-svelte';
 		step = 2;
 	}
 
+    let confirmed = false;
+
 	function handleConfirm() {
 		if (!tablePath) {
 			console.error("[HeaderConfirmationModal] Cannot confirm: tablePath is missing.");
@@ -182,19 +184,28 @@ import { Modal } from 'flowbite-svelte';
             }
 		});
 
+        confirmed = true;
 		dispatch('confirm', { hasHeaders, schema });
-		closeModal();
+        showModal = false; // Trigger close.
+	}
+
+	function handleModalClose() {
+        if (!confirmed) {
+            dispatch('cancel'); // Only dispatch a specific cancel event if it wasn't a confirmed close.
+        }
+
+        // Reset states for the next open.
+        step = 1;
+		fields = [];
+        confirmed = false;
 	}
 
 	function closeModal() {
-		step = 1;
-		fields = [];
-		showModal = false;
-		dispatch('close');
+		showModal = false; // Will trigger `on:close` natively.
 	}
 </script>
 
-<Modal bind:open={showModal} size="xl" outsideclose on:close={closeModal} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[130]">
+<Modal bind:open={showModal} size="xl" outsideclose on:close={handleModalClose} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[130]">
     <div slot="header" class="flex items-center space-x-3 w-full">
         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
             <Info size={20} class="text-blue-600 dark:text-blue-400" />
