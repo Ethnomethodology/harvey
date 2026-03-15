@@ -25,7 +25,7 @@
     }
 </script>
 
-<Modal bind:open={show} size="xs" autoclose={false} outsideclose={true} class="w-full z-[100]" on:close={handleClose}>
+<Modal bind:open={show} size="xs" autoclose={false} outsideclose={true} backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center" class="w-full" on:close={handleClose}>
     <h3 id="color-picker-title" class="text-lg font-bold text-gray-900 dark:text-gray-100" slot="header">{title}</h3>
 
     <div class="grid grid-cols-6 gap-2">

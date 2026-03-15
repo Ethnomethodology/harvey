@@ -161,7 +161,9 @@
   placement="center"
   size="xl"
   on:close={close}
-  class="h-[80vh] flex flex-col p-0 overflow-hidden mx-auto z-[150]"
+  backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+  dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
+  class="h-[80vh] flex flex-col p-0 overflow-hidden mx-auto"
   bodyClass="flex-grow overflow-y-auto bg-white dark:bg-gray-900 p-0"
   headerClass="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50"
 >

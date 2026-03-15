@@ -18,7 +18,7 @@
     }
 </script>
 
-<Modal bind:open={$modalStore.isHeaderConfirmationDialogOpen} size="md" autoclose={false} outsideclose={true} class="w-full z-50" on:close={handleCancel}>
+<Modal bind:open={$modalStore.isHeaderConfirmationDialogOpen} size="md" autoclose={false} outsideclose={true} backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center" class="w-full" on:close={handleCancel}>
     <h2 class="text-lg font-bold" slot="header">Confirm Header Row</h2>
 
     <p class="mb-4">Does the first row of the imported file contain headers?</p>

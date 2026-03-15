@@ -39,7 +39,7 @@
     });
 </script>
 
-<Modal bind:open={showModal} size="lg" autoclose={false} outsideclose={!isInstalling && !isChecking} class="w-full z-50" on:close={closeModal}>
+<Modal bind:open={showModal} size="lg" autoclose={false} outsideclose={!isInstalling && !isChecking} backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center" class="w-full" on:close={closeModal}>
     <h2 id="log-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white" slot="header">
         {title}
     </h2>
