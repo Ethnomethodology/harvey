@@ -572,10 +572,15 @@
 
             if (pathsToDelete.length > 0) {
                 // Clean up: Delete them sequentially
+                // We bypass deleteProjectItem here because deleteProjectItem modifies global loading state
+                // and attempts to refresh the UI in ways that conflict with the cancellation spinner logic.
                 for (const path of pathsToDelete) {
                     console.log(`[DataLeftPanel] Reverting partially imported table: ${path}`);
                     try {
-                        await deleteProjectItem(path);
+                        const projectStoreVal = get(project);
+                        if (projectStoreVal.xmlPath) {
+                            await invoke('delete_project_item', { itemPath: path, projectXmlPath: projectStoreVal.xmlPath });
+                        }
                     } catch (e) {
                         console.error(`[DataLeftPanel] Failed to delete table during rollback: ${path}`, e);
                     }
@@ -592,16 +597,12 @@
             headerConfirmationData = { tablePath: '', previewData: null };
 
             // Critical fix: ensure global import/loading flags are flipped back!
-            const projectStoreVal = get(project);
             project.update(p => ({
                 ...p,
                 isImportingAsset: false,
                 isLoading: false,
                 statusMessage: 'Table import cancelled.'
             }));
-
-            // Also invoke setAssetImportStatus to guarantee identical lifecycle flow
-            // as other import tasks that properly hide the loading spinner.
             setAssetImportStatus(false, 'Table import cancelled.');
         }
     }
