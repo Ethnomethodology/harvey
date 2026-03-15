@@ -276,10 +276,11 @@
 	$: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? "";
 
 	// --- Theme Icons ---
+	$: currentThemeName = $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
 	$: nextThemeName = $themePreference === 'light' ? 'Dark'
 					 : $themePreference === 'dark' ? 'System'
 					 : 'Light';
-	$: themeTitle = `Switch to ${nextThemeName} Mode`;
+	$: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
 
 	// --- Layout Button Icon ---
 	const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
@@ -436,13 +437,13 @@
 
         <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
-                <Moon class="w-4 h-4" />
-            {:else if $themePreference === 'dark'}
-                <Monitor class="w-4 h-4" />
-            {:else}
                 <Sun class="w-4 h-4" />
+            {:else if $themePreference === 'dark'}
+                <Moon class="w-4 h-4" />
+            {:else}
+                <Monitor class="w-4 h-4" />
             {/if}
 		 </button>
 	</div>
