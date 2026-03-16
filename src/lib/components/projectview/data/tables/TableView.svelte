@@ -15,6 +15,16 @@
 		dispatch(event.type, event.detail);
 	}
 
+    let tableViewerPanelRef;
+
+    export async function getExportData() {
+        console.log("[TableView] getExportData called. tableViewerPanelRef:", !!tableViewerPanelRef);
+        if (tableViewerPanelRef) {
+            return await tableViewerPanelRef.getExportData();
+        }
+        return null;
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});
@@ -29,7 +39,12 @@
 <div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800">
     {#key itemPath}
         {#if itemPath}
-            <TableViewerPanel tablePath={itemPath} hasHeaders={hasHeaders} />
+            <TableViewerPanel 
+                bind:this={tableViewerPanelRef} 
+                tablePath={itemPath} 
+                hasHeaders={hasHeaders} 
+                on:requestviewchange={forwardEvent}
+            />
         {:else}
             <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
                 <span>No table path provided to TableView.</span>

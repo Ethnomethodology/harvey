@@ -5,6 +5,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
+    import { FileAudio, PlayCircle, Plus } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -16,10 +17,6 @@
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
-
-    const MUSIC_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-music" viewBox="0 0 16 16"><path d="M11 6.64a1 1 0 0 0-1.243-.97l-1 .25A1 1 0 0 0 8 6.89v4.306A2.6 2.6 0 0 0 7 11c-.5 0-.974.134-1.338.377-.36.24-.662.628-.662 1.123s.301.883.662 1.123c.364.243.839.377 1.338.377s.974-.134 1.338-.377c.36-.24.662.628.662-1.123V8.89l2-.5z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/></svg>`;
-    const PLAY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-circle-fill" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814z"/></svg>`;
-    const ADD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg>`;
 
     function getFileName(path) {
         return path.split(/[\/\\]/).pop() || path;
@@ -136,10 +133,10 @@
         {#if itemType !== 'doc'}
             <button 
                 on:click={handleAddAttachment}
-                class="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-blue-600 dark:text-blue-400"
+                class="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-blue-600 dark:text-blue-400 flex items-center justify-center"
                 title="Add Attachment"
             >
-                {@html ADD_ICON_SVG}
+                <Plus class="w-4 h-4" />
             </button>
         {/if}
     </div>
@@ -156,13 +153,13 @@
                         on:click={() => playTrack(i)}
                     >
                         <div class="flex items-center space-x-3 truncate">
-                            <span class="text-gray-400">{@html MUSIC_ICON_SVG}</span>
+                            <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
                             <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
-                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Play" on:click|stopPropagation={() => playTrack(i)}>
-                            {@html PLAY_ICON_SVG}
+                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
+                            <PlayCircle class="w-4 h-4" />
                         </button>
                     </li>
                 {/each}

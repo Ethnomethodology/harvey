@@ -10,6 +10,15 @@ use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb};
 use crate::projectview::shared_types::FileMetadata;
 
 #[tauri::command]
+pub async fn get_project_assets_for_link_command(
+    project_id: String,
+) -> Result<Vec<db_handler::ProjectAssetLinkOption>, String> {
+    debug!("[CMD] get_project_assets_for_link_command for project_id: {}", project_id);
+    db_handler::get_project_assets_for_link(&project_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_asset_metadata_command(
     _app_handle: AppHandle,
     project_id: String,

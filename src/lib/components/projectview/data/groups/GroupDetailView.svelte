@@ -11,6 +11,9 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from 'lucide-svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -39,8 +42,6 @@
 
     let revealButtonLabelGroupView = 'Open File Location'; // Default reveal label
 
-    const CONTEXT_MENU_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>`;
-
     // Internal State
     let categorizedFiles = {
         audios: [],
@@ -51,31 +52,83 @@
         videos: [],
         others: [] // For any files that don't fit predefined categories
     };
+    let allFiles = []; // Flat list for table view
     let isLoading = false;
     let errorMessage = null;
     let isEditGroupModalOpen = false;
 
-    // Define category order and display names
-    // Placeholder generic icons (SVGs can be inlined or imported as components if they exist)
-    const GENERIC_ICONS = {
-        audios: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-music-note-beamed" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`,
-        videos: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-film" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`,
-        documents: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-file-earmark-text" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1z"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg>`,
-        images: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1z"/></svg>`,
-        tables: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-table" viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/></svg>`,
-        imported_transcripts: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-chat-square-text" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`,
-        others: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-file-earmark" viewBox="0 0 16 16"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zM13.5 4H9V.5A1.5 1.5 0 0 0 7.5 2v1A1.5 1.5 0 0 0 9 4.5h2z"/></svg>`,
-    };
+    // Table List View State
+    let searchQuery = '';
+    let sortKey = 'type';
+    let sortDirection = 1;
+
+    const LS_COLUMNS_KEY = 'harveyGroupListColumns';
+    const defaultColumns = [
+        { key: 'type', label: 'Type', visible: true, disabled: true },
+        { key: 'name', label: 'File Name', visible: true, disabled: true },
+        { key: 'title', label: 'Title', visible: false, disabled: false },
+        { key: 'description', label: 'Description', visible: false, disabled: false },
+        { key: 'createdAt', label: 'Created At', visible: true, disabled: false },
+        { key: 'lastModified', label: 'Last Modified', visible: true, disabled: false }
+    ];
+
+    let columns = [...defaultColumns];
+
+    if (typeof window !== 'undefined') {
+        try {
+            const savedColumns = localStorage.getItem(LS_COLUMNS_KEY);
+            if (savedColumns) {
+                const parsed = JSON.parse(savedColumns);
+                // Merge saved visibility state into the default configuration to ensure all columns exist and correct labels/disabled states are preserved.
+                columns = defaultColumns.map(defCol => {
+                    const savedCol = parsed.find(c => c.key === defCol.key);
+                    if (savedCol && !defCol.disabled) {
+                        return { ...defCol, visible: savedCol.visible };
+                    }
+                    return defCol;
+                });
+            }
+        } catch (e) {
+            console.warn("[GroupDetailView] Failed to load column preferences:", e);
+        }
+    }
+
+    // Reactively save to localStorage when columns change
+    $: {
+        if (typeof window !== 'undefined') {
+            try {
+                // Save only the key and visibility state to reduce storage payload
+                const stateToSave = columns.map(c => ({ key: c.key, visible: c.visible }));
+                localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(stateToSave));
+            } catch (e) {
+                console.warn("[GroupDetailView] Failed to save column preferences:", e);
+            }
+        }
+    }
+
+    $: visibleColumnsCount = columns.filter(c => c.visible).length;
 
     const CATEGORY_ORDER = [
-        { key: 'audios', name: 'Audios', icon: GENERIC_ICONS.audios },
-        { key: 'documents', name: 'Documents', icon: GENERIC_ICONS.documents },
-        { key: 'images', name: 'Images', icon: GENERIC_ICONS.images },
-        { key: 'tables', name: 'Tables', icon: GENERIC_ICONS.tables },
-        { key: 'imported_transcripts', name: 'Transcripts', icon: GENERIC_ICONS.imported_transcripts },
-        { key: 'videos', name: 'Videos', icon: GENERIC_ICONS.videos },
-        { key: 'others', name: 'Others', icon: GENERIC_ICONS.others }
+        { key: 'audios', name: 'Audios', singularName: 'Audio', icon: Music },
+        { key: 'documents', name: 'Documents', singularName: 'Document', icon: FileText },
+        { key: 'images', name: 'Images', singularName: 'Image', icon: ImageIcon },
+        { key: 'tables', name: 'Tables', singularName: 'Table', icon: Sheet },
+        { key: 'imported_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
+        { key: 'videos', name: 'Videos', singularName: 'Video', icon: Film },
+        { key: 'others', name: 'Others', singularName: 'Other', icon: File }
     ];
+
+    function getCategoryInfo(fileType) {
+        switch (fileType) {
+            case 'audio': return CATEGORY_ORDER.find(c => c.key === 'audios');
+            case 'video': return CATEGORY_ORDER.find(c => c.key === 'videos');
+            case 'document': return CATEGORY_ORDER.find(c => c.key === 'documents');
+            case 'image': return CATEGORY_ORDER.find(c => c.key === 'images');
+            case 'table': return CATEGORY_ORDER.find(c => c.key === 'tables');
+            case 'imported_transcript': return CATEGORY_ORDER.find(c => c.key === 'imported_transcripts');
+            default: return CATEGORY_ORDER.find(c => c.key === 'others');
+        }
+    }
 
     async function fetchGroupContents() {
         // Use get(project) to access store values if outside reactive context or component markup
@@ -94,6 +147,7 @@
             });
 
             const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+            allFiles = files || [];
             (files || []).forEach(file => { // Ensure files is an array
                 switch (file.file_type) {
                     case 'audio': newCategorizedFiles.audios.push(file); break;
@@ -106,6 +160,7 @@
                 }
             });
             categorizedFiles = newCategorizedFiles;
+            sortFiles();
         } catch (err) {
             console.error("Error fetching group contents:", err);
             errorMessage = typeof err === 'string' ? err : "Failed to load group contents.";
@@ -145,6 +200,52 @@
         }
     });
 
+    function handleSort(key) {
+        if (sortKey === key) {
+            sortDirection *= -1;
+        } else {
+            sortKey = key;
+            sortDirection = 1;
+        }
+        sortFiles();
+    }
+
+    function sortFiles() {
+        allFiles = [...allFiles].sort((a, b) => {
+            let valA, valB;
+            if (sortKey === 'type') {
+                valA = getCategoryInfo(a.file_type)?.singularName || '';
+                valB = getCategoryInfo(b.file_type)?.singularName || '';
+                if (valA === valB) {
+                    // secondary sort by name
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                }
+            } else if (sortKey === 'name') {
+                valA = a.name.toLowerCase();
+                valB = b.name.toLowerCase();
+            } else if (sortKey === 'createdAt') {
+                valA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                valB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            } else if (sortKey === 'lastModified') {
+                valA = a.last_modified ? new Date(a.last_modified).getTime() : 0;
+                valB = b.last_modified ? new Date(b.last_modified).getTime() : 0;
+            } else if (sortKey === 'title') {
+                valA = (a.title || '').toLowerCase();
+                valB = (b.title || '').toLowerCase();
+            } else if (sortKey === 'description') {
+                valA = (a.description || '').toLowerCase();
+                valB = (b.description || '').toLowerCase();
+            }
+
+            if (valA < valB) return -1 * sortDirection;
+            if (valA > valB) return 1 * sortDirection;
+            return 0;
+        });
+    }
+
+    $: filteredAllFiles = allFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
     // Reactive watch on groupData and specific project properties
     // Using get(projectStore) inside the reactive block might be redundant if $projectStore is used,
     // but ensures access if the block's timing is tricky with store updates.
@@ -153,6 +254,7 @@
         fetchGroupContents();
     } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) { // Added condition to clear if context is lost
         categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+        allFiles = [];
         isLoading = false;
         errorMessage = null;
     }
@@ -202,8 +304,24 @@
         closeContextMenu();
       }
       contextMenuItem = file;
-      contextMenuX = event.clientX;
-      contextMenuY = event.clientY;
+
+      let x = event.clientX;
+      let y = event.clientY;
+
+      // Estimate menu size to keep it in viewport
+      const menuWidthEstimate = 200;
+      const menuHeightEstimate = 250;
+
+      if (x + menuWidthEstimate > window.innerWidth) {
+          x = window.innerWidth - menuWidthEstimate - 10;
+      }
+      if (y + menuHeightEstimate > window.innerHeight) {
+          y = window.innerHeight - menuHeightEstimate - 10;
+      }
+
+      contextMenuX = Math.max(10, x);
+      contextMenuY = Math.max(10, y);
+
       contextMenuVisible = true;
       // Add listener to close on outside click
       if (closeContextMenuListener) document.removeEventListener('click', closeContextMenuListener, { capture: true });
@@ -219,6 +337,8 @@
     function closeContextMenu() {
       contextMenuVisible = false;
       contextMenuItem = null;
+      showAddToGroupSubMenu = false; // also close submenu
+      itemForAddToGroup = null;
       if (closeContextMenuListener) {
         document.removeEventListener('click', closeContextMenuListener, { capture: true });
         closeContextMenuListener = null;
@@ -524,65 +644,169 @@
                 <button
                     on:click={() => isEditGroupModalOpen = true}
                     title="Edit group details"
-                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square w-4 h-4" viewBox="0 0 16 16">
-                        <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
-                        <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
-                    </svg>
+                    <SquarePen class="w-4 h-4" />
                 </button>
             </div>
             {#if groupData.description && groupData.description.trim() !== ''}
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-h-20 overflow-y-auto pr-2">{groupData.description}</p>
             {:else}
                 <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
             {/if}
         </div>
 
+        <!-- Toolbar (Below Header Rule) -->
+        {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
+            <div class="mb-4 flex justify-between items-center">
+                <div class="relative inline-block text-left">
+                    <Button color="alternative" size="sm" class="flex items-center space-x-1">
+                        <span>{visibleColumnsCount} Columns</span>
+                        <ChevronDown class="w-4 h-4" />
+                    </Button>
+                    <Dropdown class="w-48 p-3 space-y-2">
+                        {#each columns as col}
+                            <li>
+                                <Checkbox bind:checked={col.visible} disabled={col.disabled} class="cursor-pointer">{col.label}</Checkbox>
+                            </li>
+                        {/each}
+                    </Dropdown>
+                </div>
+                <div class="w-64">
+                    <Search size="sm" class="bg-gray-50 dark:bg-gray-800" placeholder="Search..." bind:value={searchQuery} />
+                </div>
+            </div>
+        {/if}
+
         <!-- Body -->
-        <div class="flex-grow overflow-y-auto">
+        <div class="flex-grow overflow-y-auto pr-2">
             {#if isLoading}
                 <p class="text-gray-500 dark:text-gray-400 text-center py-8">Loading group contents...</p>
             {:else if errorMessage}
                 <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
             {:else}
-                {#each CATEGORY_ORDER as category}
-                    {@const filesInCategory = categorizedFiles[category.key]}
-                    {#if filesInCategory && filesInCategory.length > 0}
-                    <div class="mb-6">
-                        <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                            {#each filesInCategory as file (file.relative_path)}
-                                <div
-                                    class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
-                                    on:dblclick={() => handleFileDoubleClick(file)}
-                                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
-                                    on:contextmenu={(e) => handleFileContextMenu(e, file)}
-                                    role="button"
-                                    tabindex="0"
-                                    title={file.name}
-                                >
-                                    <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                                        {#if file.file_type === 'image' && file.full_path}
-                                            <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
-                                        {:else}
-                                            {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
-                                        {/if}
-                                    </div>
-                                    <p class="text-sm text-center text-gray-700 dark:text-gray-400 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
-                                    <button
-                                        on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                        class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300/80 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-400 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="More options for {file.name}"
+                {#if $panelStateStore.groupDetailViewMode === 'grid'}
+                    {#each CATEGORY_ORDER as category}
+                        {@const filesInCategory = categorizedFiles[category.key]}
+                        {#if filesInCategory && filesInCategory.length > 0}
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                {#each filesInCategory as file (file.relative_path)}
+                                    <div
+                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        on:dblclick={() => handleFileDoubleClick(file)}
+                                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
+                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
+                                        role="button"
+                                        tabindex="0"
+                                        title={file.name}
                                     >
-                                        {@html CONTEXT_MENU_ICON_SVG}
-                                    </button>
-                                </div>
-                            {/each}
+                                        <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                            {#if file.file_type === 'image' && file.full_path}
+                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
+                                            {:else}
+                                                <svelte:component this={category.icon} class="w-12 h-12" />
+                                            {/if}
+                                        </div>
+                                        <p class="text-sm text-center text-gray-700 dark:text-gray-400 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
+                                        <button
+                                            on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300/80 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-400 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            title="More options for {file.name}"
+                                        >
+                                            <MoreHorizontal class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                {/each}
+                            </div>
                         </div>
-                    </div>
+                        {/if}
+                    {/each}
+                {:else}
+                    <!-- List View -->
+                    {#if filteredAllFiles.length > 0}
+                        <Table hoverable={true}>
+                            <TableHead>
+                                {#each columns as col}
+                                    {#if col.visible}
+                                        <TableHeadCell on:click={() => handleSort(col.key)} class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none">
+                                            <div class="flex items-center space-x-1">
+                                                <span>{col.label}</span>
+                                                {#if sortKey === col.key}
+                                                    <span class="text-xs">{sortDirection === 1 ? '▲' : '▼'}</span>
+                                                {/if}
+                                            </div>
+                                        </TableHeadCell>
+                                    {/if}
+                                {/each}
+                                <TableHeadCell class="w-10"><span class="sr-only">Actions</span></TableHeadCell>
+                            </TableHead>
+                            <TableBody>
+                                {#each filteredAllFiles as file (file.relative_path)}
+                                    <TableBodyRow
+                                        class="cursor-pointer group"
+                                        on:dblclick={() => handleFileDoubleClick(file)}
+                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
+                                    >
+                                        {#if columns.find(c => c.key === 'type').visible}
+                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file.file_type)?.singularName || 'Unknown'}>
+                                                <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
+                                                    <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
+                                                    <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
+                                                </div>
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'name').visible}
+                                            <TableBodyCell class="whitespace-nowrap font-medium text-gray-900 dark:text-white" title={file.name}>
+                                                {file.name}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'title').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400 truncate max-w-[150px]" title={file.title || ''}>
+                                                {file.title || ''}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'description').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400 truncate max-w-[200px]" title={file.description || ''}>
+                                                {file.description || ''}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'createdAt').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400" title={file.created_at ? new Date(file.created_at).toLocaleString() : 'Unknown'}>
+                                                {#if file.created_at}
+                                                    {new Date(file.created_at).toLocaleString()}
+                                                {:else}
+                                                    Unknown
+                                                {/if}
+                                            </TableBodyCell>
+                                        {/if}
+                                        {#if columns.find(c => c.key === 'lastModified').visible}
+                                            <TableBodyCell class="whitespace-nowrap text-gray-500 dark:text-gray-400" title={file.last_modified ? new Date(file.last_modified).toLocaleString() : 'Unknown'}>
+                                                {#if file.last_modified}
+                                                    {new Date(file.last_modified).toLocaleString()}
+                                                {:else}
+                                                    Unknown
+                                                {/if}
+                                            </TableBodyCell>
+                                        {/if}
+                                        <TableBodyCell class="text-right">
+                                            <button
+                                                on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                                class="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-700"
+                                                title="More options"
+                                            >
+                                                <MoreVertical class="w-4 h-4" />
+                                            </button>
+                                        </TableBodyCell>
+                                    </TableBodyRow>
+                                {/each}
+                            </TableBody>
+                        </Table>
+                    {:else}
+                        <p class="text-gray-500 dark:text-gray-400 text-center py-8">No files match your search.</p>
                     {/if}
-                {/each}
+                {/if}
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
                 {#if totalFiles === 0 && !isLoading}

@@ -1,161 +1,348 @@
 <!-- src/lib/components/projectview/modals/HeaderConfirmationModal.svelte -->
 <script>
-	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import { createEventDispatcher } from 'svelte';
+import { Modal } from 'flowbite-svelte';
 	import { fade } from 'svelte/transition';
+    import { 
+        Input, 
+        Label, 
+        Select, 
+        Checkbox, 
+        Button, 
+        Table, 
+        TableHead, 
+        TableHeadCell, 
+        TableBody, 
+        TableBodyRow, 
+        TableBodyCell,
+        Radio,
+        Alert
+    } from 'flowbite-svelte';
+    import { Info } from 'lucide-svelte';
 
 	export let showModal = false;
-	export let previewData = { fields: [], data: [] };
+	export let previewData = { fields: [], headers: [], data: [] };
 	export let tablePath = '';
 
 	const dispatch = createEventDispatcher();
 
-	let hasHeaders = true; // Default to "Yes"
-	let modalElement;
+	let step = 1; // 1: Header Confirmation, 2: Schema Definition
+	let hasHeaders = true;
+	let fields = []; // { name, type, subType, options, required, primary, min, max, description, format, currency, customCurrency }
+
+	const FIELD_TYPES = {
+		'Text': ['Small Text', 'Long Text'],
+		'Numeric': ['Number', 'Currency', 'Percent', 'Progress', 'Rating'],
+		'DateTime': ['Date', 'Date & Time', 'Time'],
+		'Contact': ['Email', 'Phone', 'Hyperlink'],
+		'Misc': ['Selectbox', 'Checkbox', 'Multiselect', 'Project Link']
+	};
+
+	const DATETIME_FORMATS = {
+		'Date': ['None', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'MMMM DD, YYYY', 'YYYY', 'MMMM', 'MMMM YYYY'],
+		'Date & Time': ['None', 'YYYY-MM-DD HH:mm', 'DD/MM/YYYY HH:mm', 'MM/DD/YYYY hh:mm A'],
+		'Time': ['None', 'HH:mm', 'HH:mm:ss', 'hh:mm A']
+	};
+
+    const currencyOptions = [
+        { name: 'USD ($) - US Dollar', value: 'USD' },
+        { name: 'EUR (€) - Euro', value: 'EUR' },
+        { name: 'GBP (£) - British Pound', value: 'GBP' },
+        { name: 'JPY (¥) - Japanese Yen', value: 'JPY' },
+        { name: 'INR (₹) - Indian Rupee', value: 'INR' },
+        { name: 'CNY (¥) - Chinese Yuan', value: 'CNY' },
+        { name: 'AUD ($) - Australian Dollar', value: 'AUD' },
+        { name: 'CAD ($) - Canadian Dollar', value: 'CAD' },
+        { name: 'CHF (CHF) - Swiss Franc', value: 'CHF' },
+        { name: 'SGD ($) - Singapore Dollar', value: 'SGD' },
+        { name: 'HKD ($) - Hong Kong Dollar', value: 'HKD' },
+        { name: 'NZD ($) - New Zealand Dollar', value: 'NZD' },
+        { name: 'KRW (₩) - South Korean Won', value: 'KRW' },
+        { name: 'NOK (kr) - Norwegian Krone', value: 'NOK' },
+        { name: 'MXN ($) - Mexican Peso', value: 'MXN' },
+        { name: 'RUB (₽) - Russian Ruble', value: 'RUB' },
+        { name: 'ZAR (R) - South African Rand', value: 'ZAR' },
+        { name: 'TRY (₺) - Turkish Lira', value: 'TRY' },
+        { name: 'BRL (R$) - Brazilian Real', value: 'BRL' },
+        { name: 'TWD (NT$) - Taiwan Dollar', value: 'TWD' },
+        { name: 'DKK (kr) - Danish Krone', value: 'DKK' },
+        { name: 'PLN (zł) - Polish Zloty', value: 'PLN' },
+        { name: 'THB (฿) - Thai Baht', value: 'THB' },
+        { name: 'IDR (Rp) - Indonesian Rupiah', value: 'IDR' },
+        { name: 'PHP (₱) - Philippine Peso', value: 'PHP' },
+        { name: 'Other (Custom Code)', value: 'OTHER' }
+    ];
+
+    $: availableFields = previewData?.fields || previewData?.headers || [];
+
+	$: if (showModal && availableFields.length > 0 && fields.length === 0) {
+		fields = availableFields.map((f, i) => {
+            let name = `Field ${i + 1}`;
+            if (hasHeaders && previewData.data && previewData.data[0]) {
+                const val = previewData.data[0][f];
+                if (val != null && String(val).trim() !== '') {
+                    name = String(val).trim();
+                }
+            }
+            return {
+                name,
+                type: 'Text',
+                subType: 'Small Text',
+                options: '',
+                required: false,
+                primary: false,
+                min: '',
+                max: '',
+                description: '',
+                format: 'None',
+                currency: 'USD',
+                customCurrency: 'XXX'
+            };
+        });
+	}
+
+	// Update field names if hasHeaders changes
+	$: if (step === 1 && availableFields.length > 0 && fields.length > 0) {
+		fields = availableFields.map((f, i) => {
+            let name = `Field ${i + 1}`;
+            if (hasHeaders && previewData.data && previewData.data[0]) {
+                const val = previewData.data[0][f];
+                if (val != null && String(val).trim() !== '') {
+                    name = String(val).trim();
+                }
+            }
+            return {
+                ...(fields[i] || {}),
+                name
+            };
+        });
+	}
+
+	function handleTypeChange(index) {
+		const type = fields[index].type;
+		fields[index].subType = FIELD_TYPES[type][0];
+		fields[index].format = 'None';
+        if (type !== 'Numeric') {
+            fields[index].min = '';
+            fields[index].max = '';
+        }
+        if (fields[index].subType === 'Currency') {
+            fields[index].currency = fields[index].currency || 'USD';
+        } else {
+            delete fields[index].currency;
+        }
+	}
+
+	function handleSubTypeChange(index) {
+		fields[index].format = 'None';
+        if (fields[index].subType === 'Currency') {
+            fields[index].currency = fields[index].currency || 'USD';
+        } else {
+            delete fields[index].currency;
+        }
+	}
+
+    function handlePrimaryChange(index) {
+        if (fields[index].primary) {
+            fields = fields.map((f, i) => ({
+                ...f,
+                primary: i === index
+            }));
+            // If primary, it must be required
+            fields[index].required = true;
+        }
+    }
+
+	function goToStep2() {
+		step = 2;
+	}
+
+    let confirmed = false;
+    let wasOpen = false;
+
+    $: if (showModal) {
+        wasOpen = true;
+    }
 
 	function handleConfirm() {
 		if (!tablePath) {
-			// Optionally, show a warning to the user that tablePath is missing
 			console.error("[HeaderConfirmationModal] Cannot confirm: tablePath is missing.");
-			// message("Cannot confirm: Table path is missing. Please report this bug.", { title: "Error", type: "error" });
-			closeModal(); // Close the modal anyway to prevent further issues
+			handleCancelClick();
 			return;
 		}
-		dispatch('confirm', { hasHeaders });
-		closeModal();
+
+		const schema = {};
+		fields.forEach(f => {
+			schema[f.name] = {
+				type: f.type,
+				subType: f.subType,
+				options: (f.subType === 'Selectbox' || f.subType === 'Multiselect') ? f.options.split(',').map(o => o.trim()).filter(o => o !== '') : [],
+                required: f.required,
+                primary: f.primary || false,
+                min: f.min !== '' ? parseFloat(f.min) : null,
+                max: f.max !== '' ? parseFloat(f.max) : null,
+                description: f.description.trim(),
+				format: f.format !== 'None' ? f.format : null
+			};
+            if (f.subType === 'Currency') {
+                schema[f.name].currency = f.currency === 'OTHER' ? (f.customCurrency || 'XXX').toUpperCase().substring(0, 3) : f.currency;
+            }
+		});
+
+        confirmed = true;
+		dispatch('confirm', { hasHeaders, schema });
+        showModal = false; // Trigger close.
 	}
 
-	function closeModal() {
-		showModal = false;
-		dispatch('close');
+	function handleModalClose() {
+        // Reset states for the next open.
+        step = 1;
+		fields = [];
+        confirmed = false;
+        wasOpen = false;
 	}
 
-	function handleKeydown(event) {
-		if (showModal && event.key === 'Escape') {
-			closeModal();
-		}
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			handleConfirm();
-		}
+	function handleCancelClick() {
+        dispatch('cancel');
+		showModal = false; // Will trigger `on:close` natively.
 	}
-
-	onMount(() => {
-		window.addEventListener('keydown', handleKeydown);
-	});
-
-	onDestroy(() => {
-		window.removeEventListener('keydown', handleKeydown);
-	});
 </script>
 
-{#if showModal}
-	<div
-		bind:this={modalElement}
-		class="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
-		transition:fade={{ duration: 150 }}
-		on:click|self={closeModal}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="header-modal-title"
-	>
-		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col text-gray-800 dark:text-gray-200"
-			on:click|stopPropagation
-		>
-			<h2 id="header-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
-				Confirm Headers for <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{tablePath.split(/[\/]/).pop()}</span>
-			</h2>
+<Modal bind:open={showModal} size="xl" outsideclose on:close={handleModalClose} dismissable={false} class="w-full p-0 overflow-hidden flex flex-col max-h-[90vh] z-[130]">
+    <div slot="header" class="flex items-center space-x-3 w-full">
+        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <Info size={20} class="text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                {step === 1 ? 'Confirm Import Headers' : 'Define Field Types and Validations'}
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                {step === 1 ? 'Step 1 of 2: Header detection' : 'Step 2 of 2: Schema definition'}
+            </p>
+        </div>
+    </div>
 
-			<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-				Does the first row of your file contain headers? We've assumed the following based on the file content.
-			</p>
+    <div class="flex-1 overflow-auto -m-6 p-6">
+        {#if step === 1}
+            <Alert color="blue" class="mb-6">
+                Confirm if the first row contains headers. Review the preview below.
+            </Alert>
 
-			<!-- Data Preview Table -->
-			<div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-x-auto max-h-60 mb-4">
-				<table class="w-full text-sm text-left">
-					<thead class="bg-gray-50 dark:bg-gray-700 sticky top-0">
-						<tr>
-							{#if previewData && previewData.fields}
-								{#each previewData.fields as header, i}
-									<th scope="col" class="px-4 py-2 font-medium text-gray-600 dark:text-gray-300 truncate">
-										{hasHeaders ? header : `Column ${i + 1}`}
-									</th>
-								{/each}
-							{/if}
-						</tr>
-					</thead>
-					<tbody>
-						{#if previewData && previewData.data}
-							{#each previewData.data.slice(0, 5) as row, rowIndex}
-								<tr class="border-t border-gray-200 dark:border-gray-600">
-									{#each previewData.fields as header, colIndex}
-										<td class="px-4 py-2 whitespace-nowrap truncate max-w-xs">
-											{row[header]}
-										</td>
-									{/each}
-								</tr>
-							{/each}
-						{/if}
-					</tbody>
-				</table>
-			</div>
+            <div class="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden mb-6 bg-white dark:bg-gray-800 shadow-sm">
+                <Table hoverable={true} shadow={false}>
+                    <TableHead class="bg-gray-50 dark:bg-gray-900/50">
+                        {#each availableFields as f, i}
+                            <TableHeadCell>
+                                {#if hasHeaders && previewData.data && previewData.data[0] && previewData.data[0][f] != null && String(previewData.data[0][f]).trim() !== ''}
+                                    {String(previewData.data[0][f]).trim()}
+                                {:else}
+                                    Field {i + 1}
+                                {/if}
+                            </TableHeadCell>
+                        {/each}
+                    </TableHead>
+                    <TableBody>
+                        {#each (hasHeaders ? previewData.data.slice(1, 4) : previewData.data.slice(0, 3)) as row}
+                            <TableBodyRow>
+                                {#each availableFields as header}
+                                    <TableBodyCell class="truncate max-w-[150px]">
+                                        {row[header] != null ? row[header] : ''}
+                                    </TableBodyCell>
+                                {/each}
+                            </TableBodyRow>
+                        {/each}
+                    </TableBody>
+                </Table>
+            </div>
 
-			<!-- Header Options -->
-			<div class="space-y-3">
-				<label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors"
-					   class:border-blue-500={hasHeaders}
-					   class:dark:border-blue-400={hasHeaders}
-					   class:border-gray-300={!hasHeaders}
-					   class:dark:border-gray-600={!hasHeaders}
-					   class:bg-blue-50={hasHeaders}
-					   class:dark:bg-blue-900={hasHeaders} class:dark:bg-opacity-20={hasHeaders}>
-					<input type="radio" bind:group={hasHeaders} name="header-option" value={true} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" autocomplete="off" autocorrect="off">
-					<div class="ml-3 text-sm">
-						<p class="font-medium text-gray-900 dark:text-gray-200">Yes, the first row is the header.</p>
-						<p class="text-gray-500 dark:text-gray-400">The first row will be used as column titles.</p>
-					</div>
-				</label>
-				<label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors"
-					   class:border-blue-500={!hasHeaders}
-					   class:dark:border-blue-400={!hasHeaders}
-					   class:border-gray-300={hasHeaders}
-					   class:dark:border-gray-600={hasHeaders}
-					   class:bg-blue-50={!hasHeaders}
-					   class:dark:bg-blue-900={!hasHeaders} class:dark:bg-opacity-20={!hasHeaders}>
-					<input type="radio" bind:group={hasHeaders} name="header-option" value={false} class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" autocomplete="off" autocorrect="off">
-					<div class="ml-3 text-sm">
-						<p class="font-medium text-gray-900 dark:text-gray-200">No, this file does not have a header row.</p>
-						<p class="text-gray-500 dark:text-gray-400">Generic headers (A, B, C...) will be generated, and the first row will be treated as data.</p>
-					</div>
-				</label>
-			</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 border rounded-xl cursor-pointer transition-all {hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = true}>
+                    <Radio bind:group={hasHeaders} value={true} name="headers-radio">
+                        <span class="font-bold">Yes, the first row is the header.</span>
+                        <p class="text-xs text-gray-500 mt-1">Use values from the first row as field names.</p>
+                    </Radio>
+                </div>
+                <div class="p-4 border rounded-xl cursor-pointer transition-all {!hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = false}>
+                    <Radio bind:group={hasHeaders} value={false} name="headers-radio">
+                        <span class="font-bold">No, treat the first row as data.</span>
+                        <p class="text-xs text-gray-500 mt-1">Generate generic field names (Field 1, Field 2, etc.).</p>
+                    </Radio>
+                </div>
+            </div>
+        {:else}
+            <div class="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm h-full">
+                <Table hoverable={true} shadow={false} class="h-full">
+                    <TableHead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
+                        <TableHeadCell class="w-[150px]">Field</TableHeadCell>
+                        <TableHeadCell>Type</TableHeadCell>
+                        <TableHeadCell>Sub-type</TableHeadCell>
+                        <TableHeadCell class="text-center">Primary</TableHeadCell>
+                        <TableHeadCell class="text-center">Req?</TableHeadCell>
+                        <TableHeadCell class="min-w-[150px]">Options / Constraints</TableHeadCell>
+                        <TableHeadCell class="min-w-[200px]">Description</TableHeadCell>
+                    </TableHead>
+                    <TableBody>
+                        {#each fields as field, i}
+                            <TableBodyRow>
+                                <TableBodyCell class="font-bold truncate max-w-[150px]">{field.name}</TableBodyCell>
+                                <TableBodyCell>
+                                    <Select size="sm" bind:value={field.type} items={Object.keys(FIELD_TYPES).map(t => ({name: t, value: t}))} on:change={() => handleTypeChange(i)} />
+                                </TableBodyCell>
+                                <TableBodyCell>
+                                    <Select size="sm" bind:value={field.subType} items={FIELD_TYPES[field.type].map(st => ({name: st, value: st}))} on:change={() => handleSubTypeChange(i)} />
+                                </TableBodyCell>
+                                <TableBodyCell class="text-center">
+                                    <Checkbox bind:checked={field.primary} on:change={() => handlePrimaryChange(i)} />
+                                </TableBodyCell>
+                                <TableBodyCell class="text-center">
+                                    <Checkbox bind:checked={field.required} disabled={field.primary} />
+                                </TableBodyCell>
+                                <TableBodyCell>
+                                    {#if field.subType === 'Selectbox' || field.subType === 'Multiselect'}
+                                        <Input size="sm" bind:value={field.options} placeholder="Opt 1, Opt 2..." autocomplete="off" autocorrect="off" />
+                                    {:else if field.type === 'Numeric'}
+                                        <div class="flex flex-col gap-1">
+                                            <div class="flex gap-1">
+                                                <Input size="sm" type="number" bind:value={field.min} placeholder="Min" />
+                                                <Input size="sm" type="number" bind:value={field.max} placeholder="Max" />
+                                            </div>
+                                            {#if field.subType === 'Currency'}
+                                                <div class="flex flex-col gap-1">
+                                                    <Select size="sm" items={currencyOptions} bind:value={field.currency} />
+                                                    {#if field.currency === 'OTHER'}
+                                                        <Input size="sm" type="text" bind:value={field.customCurrency} placeholder="ISO" maxlength="3" autocomplete="off" autocorrect="off" />
+                                                    {/if}
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    {:else if field.type === 'DateTime'}
+                                        <Select size="sm" bind:value={field.format} items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} />
+                                    {/if}
+                                </TableBodyCell>
+                                <TableBodyCell>
+                                    <Input size="sm" bind:value={field.description} placeholder="Tooltip text" autocomplete="off" autocorrect="off" />
+                                </TableBodyCell>
+                            </TableBodyRow>
+                        {/each}
+                    </TableBody>
+                </Table>
+            </div>
+        {/if}
+    </div>
 
-
-			<!-- Footer Buttons -->
-			<div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600 mt-6">
-				<button type="button" on:click={closeModal} class="btn-secondary">
-					Cancel
-				</button>
-				<button
-					type="button"
-					on:click={handleConfirm}
-					class="btn-primary"
-				>
-					Confirm and Import
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<style lang="postcss">
-	.btn-primary, .btn-secondary {
-		@apply px-4 py-2 rounded-md shadow-sm text-sm font-medium transition duration-150 ease-in-out;
-	}
-	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed;
-	}
-	 .btn-secondary {
-		@apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800;
-	}
-</style>
+    <!-- Footer -->
+    <div slot="footer" class="flex justify-between w-full">
+        <div>
+            {#if step === 2}
+                <Button color="alternative" on:click={() => step = 1}>Back</Button>
+            {/if}
+        </div>
+        <div class="flex gap-3">
+            <Button color="alternative" on:click={handleCancelClick}>Cancel</Button>
+            <Button color="blue" on:click={step === 1 ? goToStep2 : handleConfirm}>
+                {step === 1 ? 'Next: Define Field Types' : 'Confirm and Import'}
+            </Button>
+        </div>
+    </div>
+</Modal>

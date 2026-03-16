@@ -32,6 +32,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub waveform_data: Option<Vec<u8>>,
     pub language_code: Option<String>,
     pub properties: Option<String>,
+    pub file_type: Option<String>, // Added field
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -145,6 +146,7 @@ pub fn init_db() -> Result<(), CommandError> {
             waveform_data BLOB,
             language_code TEXT,
             properties TEXT,
+            file_type TEXT, -- Added field
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -152,6 +154,45 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized asset_metadata table definition with composite PK.");
+
+    // Check and add file_type column to asset_metadata if missing (for older schemas)
+    let mut stmt_check_file_type = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let file_type_column_exists = stmt_check_file_type
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "file_type"));
+    if !file_type_column_exists {
+        info!("[DB] Adding file_type column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
+    }
+
+    // Always check for records with missing file_type and attempt to backfill
+    let mut stmt_check_nulls = conn.prepare("SELECT COUNT(*) FROM asset_metadata WHERE file_type IS NULL OR file_type = ''")?;
+    let null_count: i64 = stmt_check_nulls.query_row([], |row| row.get(0))?;
+    if null_count > 0 {
+        info!("[DB] Found {} records with missing file_type. Backfilling...", null_count);
+        if let Err(e) = backfill_file_type(&conn) {
+            error!("[DB] Failed to backfill file_type: {}", e);
+        }
+    } else {
+        // Even if no nulls, run the correction logic to fix mislabeled video transcripts
+        debug!("[DB] Running file_type correction for video transcripts...");
+        let correction_sql = "
+            UPDATE asset_metadata SET file_type = 'video-transcript'
+            WHERE file_type = 'audio-transcript'
+            AND EXISTS (
+                SELECT 1 FROM asset_metadata m
+                WHERE m.project_id = asset_metadata.project_id
+                  AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+                  AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
+                      = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
+                  AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+            )
+            AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%';
+        ";
+        if let Err(e) = conn.execute(correction_sql, []) {
+            error!("[DB] Failed to run video-transcript correction: {}", e);
+        }
+    }
 
     // Check and add project_id column to asset_metadata if missing (for older schemas)
     // This simplified migration adds the column if it doesn't exist. It does not change PK for existing tables.
@@ -329,6 +370,33 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized table_styles table.");
 
+    // table_schemas table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_schemas (
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            schema_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, table_path),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized table_schemas table.");
+
+    // Trigger for table_schemas updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_schemas_updated_at
+        AFTER UPDATE ON table_schemas
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_schemas SET updated_at = CURRENT_TIMESTAMP WHERE project_id = OLD.project_id AND table_path = OLD.table_path;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_table_schemas_updated_at trigger.");
+
     // Trigger for table_styles updated_at
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_table_styles_updated_at
@@ -349,11 +417,49 @@ pub fn init_db() -> Result<(), CommandError> {
             root_path TEXT NOT NULL UNIQUE,
             xml_path TEXT NOT NULL UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_opened_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         [],
     )?;
     info!("[DB] Initialized projects table.");
+
+    // Check and add last_opened_ts column if missing
+    let mut stmt_check_last_opened = conn.prepare("PRAGMA table_info(projects)")?;
+    let last_opened_col_exists = stmt_check_last_opened
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "last_opened_ts"));
+
+    if !last_opened_col_exists {
+        info!("[DB] Adding last_opened_ts column to projects table.");
+        conn.execute("ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP", [])?;
+        conn.execute("UPDATE projects SET last_opened_ts = CURRENT_TIMESTAMP WHERE last_opened_ts IS NULL", [])?;
+    }
+
+    // Global Settings table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS global_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized global_settings table.");
+
+    // Downloaded Models table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS downloaded_models (
+            name TEXT PRIMARY KEY,
+            family TEXT,
+            language TEXT,
+            size TEXT,
+            description TEXT,
+            download_location TEXT,
+            download_url TEXT
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized downloaded_models table.");
 
     // Trigger for projects updated_at
     conn.execute(
@@ -746,6 +852,124 @@ pub fn init_db() -> Result<(), CommandError> {
     conn.execute("DROP TABLE IF EXISTS tags_legacy", [])?;
 
     info!("[DB] Database initialized successfully with all tables and triggers.");
+    Ok(())
+}
+
+fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
+    info!("[DB] Backfilling file_type column in asset_metadata table.");
+
+    // 1. Documents
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'document' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (
+             asset_type IN ('document', 'doc') 
+             OR file_name LIKE '%.pdf' OR file_name LIKE '%.docx' OR file_name LIKE '%.txt' OR file_name LIKE '%.rtf' OR file_name LIKE '%.md'
+             OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Documents/attachments/%')
+         )",
+        []
+    )?;
+
+    // 2. Tables
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'table' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'table' OR file_name LIKE '%.csv' OR file_name LIKE '%.xlsx')",
+        []
+    )?;
+
+    // 3. Transcripts (Imported)
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'transcript' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (
+             asset_type IN ('transcript', 'imported_transcript') 
+             OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
+         )",
+        []
+    )?;
+
+    // 4. Images
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'image' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'image' OR file_name LIKE '%.png' OR file_name LIKE '%.jpg' OR file_name LIKE '%.jpeg' OR file_name LIKE '%.gif' OR file_name LIKE '%.bmp' OR file_name LIKE '%.webp')",
+        []
+    )?;
+
+    // 5. Media - Audio
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'audio' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'audio' OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma')",
+        []
+    )?;
+
+    // 6. Media - Video
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'video' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND (asset_type = 'video' OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv')",
+        []
+    )?;
+
+    // 7. Media - Transcripts (Generated)
+    // Heuristic: If it's in Media folder and asset_type is transcript-related or it's in a transcripts subfolder
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = COALESCE((
+            SELECT CASE 
+                WHEN m.asset_type = 'video' OR m.file_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi' THEN 'video-transcript'
+                ELSE 'audio-transcript'
+            END
+            FROM asset_metadata m
+            WHERE m.project_id = asset_metadata.project_id 
+              AND (m.asset_type IN ('audio', 'video', 'media') OR m.file_type IN ('audio', 'video'))
+              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 20), '/') - 1) 
+                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20), '/') - 1)
+            LIMIT 1
+        ), 'audio-transcript')
+        WHERE (file_type IS NULL OR file_type = '') 
+        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%')
+        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%')",
+        []
+    )?;
+
+    // 8. Document Attachments
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'document-attachment' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND asset_type = 'attachment' 
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/attachments/%')",
+        []
+    )?;
+
+    // 9. Transcript Attachments
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'transcript-attachment' 
+         WHERE (file_type IS NULL OR file_type = '') 
+         AND asset_type = 'attachment' 
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%')",
+        []
+    )?;
+
+    // 10. Correction for mislabeled Video Transcripts
+    // If it's already labeled as audio-transcript but its parent media is a video, correct it.
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'video-transcript'
+         WHERE file_type = 'audio-transcript'
+         AND EXISTS (
+            SELECT 1 FROM asset_metadata m
+            WHERE m.project_id = asset_metadata.project_id
+              AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
+                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
+              AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+         )
+         AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'",
+        []
+    )?;
+
+    info!("[DB] Finished backfilling file_type column.");
     Ok(())
 }
 
@@ -1229,8 +1453,8 @@ pub fn save_asset_metadata(
     custom_fields_json: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
-        "[DB] Saving asset metadata for project_id {}: {} (type: {})",
-        project_id, asset_relative_path, asset_type
+        "[DB] Saving asset metadata for project_id {}: {} (type: {}, file_type: {})",
+        project_id, asset_relative_path, asset_type, metadata.file_type
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -1250,8 +1474,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json, waveform_data, language_code, properties
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            original_import_path, speaker_names_json, waveform_data, language_code, properties, file_type
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -1266,14 +1490,15 @@ pub fn save_asset_metadata(
             bit_rate = excluded.bit_rate,
             audio_codec = excluded.audio_codec,
             video_codec = excluded.video_codec,
-            creation_time = excluded.creation_time,
+            creation_time = COALESCE(excluded.creation_time, creation_time),
             asset_type = excluded.asset_type,
             custom_fields_json = excluded.custom_fields_json,
-            original_import_path = excluded.original_import_path,
+            original_import_path = COALESCE(excluded.original_import_path, original_import_path),
             speaker_names_json = excluded.speaker_names_json,
             waveform_data = excluded.waveform_data,
             language_code = excluded.language_code,
             properties = excluded.properties,
+            file_type = COALESCE(NULLIF(excluded.file_type, ''), file_type),
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -1304,12 +1529,13 @@ pub fn save_asset_metadata(
             to_sql_optional_blob(metadata.waveform_data.as_deref()),
             to_sql_optional_str(metadata.language_code.as_deref()),
             to_sql_optional_str(metadata.properties.as_deref()),
+            metadata.file_type, // Parameter 24
         ],
     )?;
 
     info!(
-        "[DB] Asset metadata saved successfully for project_id {}: {} (type: {})",
-        project_id, asset_relative_path, asset_type
+        "[DB] Asset metadata saved successfully for project_id {}: {} (type: {}, file_type: {})",
+        project_id, asset_relative_path, asset_type, metadata.file_type
     );
     Ok(())
 }
@@ -1326,7 +1552,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
                creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
-               language_code, properties
+               language_code, properties, file_type
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1354,6 +1580,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             waveform_data: row.get(18)?,
             language_code: row.get(19)?,
             properties: row.get(20)?,
+            file_type: row.get(21)?,
         })
     }).optional()?;
 
@@ -2314,6 +2541,43 @@ mod tests {
 pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
     debug!("[DB] Initializing database for test");
 
+    // projects table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root_path TEXT NOT NULL UNIQUE,
+            xml_path TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_opened_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // Global Settings table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS global_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Downloaded Models table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS downloaded_models (
+            name TEXT PRIMARY KEY,
+            family TEXT,
+            language TEXT,
+            size TEXT,
+            description TEXT,
+            download_location TEXT,
+            download_url TEXT
+        )",
+        [],
+    )?;
+
     // Updated pdf_annotations table definition
     conn.execute(
         "CREATE TABLE IF NOT EXISTS pdf_annotations (
@@ -2653,4 +2917,90 @@ mod get_highlights_by_tag_tests {
         let highlights = get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
         assert_eq!(highlights.len(), 0);
     }
+}
+
+pub fn save_table_schema(project_id: &str, table_path: &str, schema_json: &str) -> Result<(), CommandError> {
+    debug!("[DB] Saving table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "INSERT INTO table_schemas (project_id, table_path, schema_json)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(project_id, table_path) DO UPDATE SET
+             schema_json = excluded.schema_json,
+             updated_at = CURRENT_TIMESTAMP",
+        params![project_id, table_path, schema_json],
+    )?;
+    info!("[DB] Table schema saved successfully for project_id {}: {}", project_id, table_path);
+    Ok(())
+}
+
+pub fn load_table_schema(project_id: &str, table_path: &str) -> Result<Option<String>, CommandError> {
+    debug!("[DB] Loading table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        return Ok(None);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("
+        SELECT schema_json
+        FROM table_schemas
+        WHERE project_id = ?1 AND table_path = ?2
+    ")?;
+
+    let result = stmt.query_row(params![project_id, table_path], |row| {
+        row.get(0)
+    }).optional()?;
+
+    Ok(result)
+}
+
+pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting table schema for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    conn.execute(
+        "DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, table_path],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectAssetLinkOption {
+    pub name: String,
+    pub path: String,
+    pub file_type: Option<String>,
+}
+
+pub fn get_project_assets_for_link(project_id: &str) -> Result<Vec<ProjectAssetLinkOption>, CommandError> {
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT file_name, asset_relative_path, file_type 
+         FROM asset_metadata 
+         WHERE project_id = ? 
+         AND (file_type NOT LIKE '%attachment%' OR file_type IS NULL)
+         ORDER BY file_type, file_name"
+    )?;
+
+    let asset_iter = stmt.query_map([project_id], |row| {
+        Ok(ProjectAssetLinkOption {
+            name: row.get(0)?,
+            path: row.get(1)?,
+            file_type: row.get(2)?,
+        })
+    })?;
+
+    let mut assets = Vec::new();
+    for asset in asset_iter {
+        assets.push(asset?);
+    }
+
+    Ok(assets)
 }

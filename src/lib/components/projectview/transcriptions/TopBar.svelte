@@ -1,5 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
+	import { Button } from 'flowbite-svelte';
+	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, AudioLines, Rows2 } from 'lucide-svelte';
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
@@ -26,7 +28,6 @@
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
-	import { AudioLines, Rows2 } from 'lucide-svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -39,7 +40,7 @@
 	let isLayoutSettingsModalOpen = false; // Added
 	let transcriptsForModal = [];
 
-	function openTranslateModal() {
+	export function openTranslateModal() {
 		const selectedMedia = $transcriptStore.selectedMediaFile;
 
 		if (!selectedMedia?.relative_path) {
@@ -275,16 +276,11 @@
 	$: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? "";
 
 	// --- Theme Icons ---
-	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
-	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
-	const SYSTEM_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>`;
-	$: themeIconHtml = $themePreference === 'light' ? SUN_ICON
-					 : $themePreference === 'dark' ? MOON_ICON
-					 : SYSTEM_ICON;
+	$: currentThemeName = $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
 	$: nextThemeName = $themePreference === 'light' ? 'Dark'
 					 : $themePreference === 'dark' ? 'System'
 					 : 'Light';
-	$: themeTitle = `Switch to ${nextThemeName} Mode`;
+	$: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
 
 	// --- Layout Button Icon ---
 	const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
@@ -337,11 +333,11 @@
                 </svg>
             </button>
         </div>
-		
+
 
 		<!-- Media Selection Dropdown -->
 		<Dropdown
-			containerClasses="w-40"
+			containerClasses="w-72"
 			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
 			bind:value={selectedMediaValue}
 			on:change={(e) => handleMediaSelectionChange(e.detail)}
@@ -350,60 +346,52 @@
 		/>
 
 		<!-- Speakers Button -->
-		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
-			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-				  </svg>
-				  <span class="text-xs">Speakers</span> <!-- Shorter Text -->
+		<div class="relative inline-flex items-center ml-2">
+			<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1 relative" on:click="{openSpeakersModal}" title="Configure number of speakers and their names">
+				<Users class="w-3.5 h-3.5" />
+				<span>Speakers</span> <!-- Shorter Text -->
 			  {#if $transcriptStore.speakers.count > 0}
-				<span class="absolute -top-0.5 -right-0.5 bg-blue-500 text-white rounded-full text-xxs w-3.5 h-3.5 flex items-center justify-center"> <!-- Adjusted badge size/pos -->
+				<span class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"> <!-- Adjusted badge size/pos -->
 					{$transcriptStore.speakers.count}
 				</span>
 			  {/if}
-			</button>
+			</Button>
 		  </div>
 
 		<!-- Transcribe Button -->
-			<button
-				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+			<Button
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1"
 				on:click="{handleTranscribeClick}"
-				title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
+                title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 			>
 				{#if $transcriptStore.isTranscribing}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Transcribing...</span>
+				<span>Transcribing...</span>
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4" class:text-yellow-500={!$configStatus.transcription_models_downloaded}>
-					<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-				</svg>
-				<span class="text-xs">Transcribe</span>
+				<MessageSquareText class="w-3.5 h-3.5" />
+				<span>Transcribe</span>
 				{/if}
-			</button>
-
+			</Button>
 
 			<!-- Translate Button -->
-			<button
-				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
+			<Button
+				size="xs" color="alternative" class="ml-2 space-x-0.5 px-2 !py-1"
 				on:click={openTranslateModal}
-				title="Translate Transcript"
+                title="Translate Transcript"
 			>
 				{#if $transcriptStore.isTranslating}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Translating...</span>
+				<span>Translating...</span>
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4" viewBox="0 0 16 16">
-					<path d="M4.545 6.714 4.11 8H3l1.862-5h1.284L8 8H6.833l-.435-1.286zm1.634-.736L5.5 3.956h-.049l-.679 2.022z"/>
-					<path d="M0 2a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v3h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zm7.138 9.995q.289.451.63.846c-.748.575-1.673 1.001-2.768 1.292.178.217.451.635.555.867 1.125-.359 2.08-.844 2.886-1.494.777.665 1.739 1.165 2.93 1.472.133-.254.414-.673.629-.89-1.125-.253-2.057-.694-2.82-1.284.681-.747 1.222-1.651 1.621-2.757H14V8h-3v1.047h.765c-.318.844-.74 1.546-1.272 2.13a6 6 0 0 1-.415-.492 2 2 0 0 1-.94.31"/>
-				</svg>
-				<span class="text-xs">Translate</span>
+				<Languages class="w-3.5 h-3.5" />
+				<span>Translate</span>
 				{/if}
-			</button>
+			</Button>
 
 			
 	</div>
@@ -411,16 +399,18 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
-		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-		   <span class="text-xs">Export</span>
-		</button>
+		<Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click="{openExportModal}" disabled="{isExportDisabled}" title="Export Transcript">
+		   <Share class="w-3.5 h-3.5" />
+		   <span>Export</span>
+		</Button>
+
+		<div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
 
 		<!-- Dual Mode Toggle Button -->
 		<button 
 			on:click="{handleDualModeToggle}" 
 			class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-			title="Dual Transcript Mode"
+			title="Compare Transcripts"
 		>
 			<Rows2 size={16} strokeWidth={2} />
 		</button>
@@ -431,7 +421,7 @@
 			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
 			title="Change Transcript View Layout"
 		>
-			{@html LAYOUT_ICON_SVG}
+			<LayoutDashboard class="w-4 h-4" />
 		</button>
 
 		<!-- Waveform Toggle Button -->
@@ -445,9 +435,16 @@
 			</div>
 		</button>
 
+        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
-			{@html themeIconHtml}
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
+            {#if $themePreference === 'light'}
+                <Sun class="w-4 h-4" />
+            {:else if $themePreference === 'dark'}
+                <Moon class="w-4 h-4" />
+            {:else}
+                <Monitor class="w-4 h-4" />
+            {/if}
 		 </button>
 	</div>
 </div>

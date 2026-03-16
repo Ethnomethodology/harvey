@@ -16,9 +16,25 @@ use calamine::{Reader, Xlsx, open_workbook, Data};
 use rust_xlsxwriter::Workbook;
 
 #[tauri::command]
+pub async fn get_xlsx_sheets(
+    source_path_str: String,
+) -> Result<Vec<String>, CommandError> {
+    let source_path = PathBuf::from(&source_path_str);
+    if !source_path.exists() || !source_path.is_file() {
+        return Err(CommandError::from(format!("Source file not found: {}", source_path_str)));
+    }
+
+    let mut workbook: Xlsx<_> = open_workbook(&source_path)
+        .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", source_path.display(), e)))?;
+
+    Ok(workbook.sheet_names().to_vec())
+}
+
+#[tauri::command]
 pub async fn import_table_file(
     source_path_str: String,
     project_xml_path_str: String,
+    sheet_name_opt: Option<String>,
 ) -> Result<Value, CommandError> {
     info!("[import_table_file] Importing table from: {}, Project XML Path: {}", source_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_path_str);
@@ -79,14 +95,19 @@ pub async fn import_table_file(
         return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
-    let truncated_table_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
-    info!("[import_table_file] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, truncated_table_filename_with_ext);
+    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+        let original_stem = Path::new(&original_source_filename_with_ext).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let combined = format!("{}_{}", original_stem, sheet_name_opt.as_ref().unwrap());
+        truncate_filename_stem(&format!("{}.csv", combined), MAX_FILENAME_STEM_LENGTH)
+    } else {
+        truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH)
+    };
 
-    let table_file_stem_truncated = Path::new(&truncated_table_filename_with_ext).file_stem()
+    let table_file_stem_truncated = Path::new(&stem_base).file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| {
-            error!("[import_table_file] Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext);
-            CommandError::from(format!("Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext))
+            error!("[import_table_file] Could not get stem from truncated table filename: {}", stem_base);
+            CommandError::from(format!("Could not get stem from truncated table filename: {}", stem_base))
         })?;
     debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
@@ -122,7 +143,8 @@ pub async fn import_table_file(
         });
 
         if !candidate_folder.exists() && !name_conflict {
-            let file_name = format!("{}.{}", folder_name, original_source_extension);
+            let target_extension = if original_source_extension == "xlsx" && sheet_name_opt.is_some() { "csv" } else { &original_source_extension };
+            let file_name = format!("{}.{}", folder_name, target_extension);
             debug!("[import_table_file] Found unique folder path: {} and filename: {}", candidate_folder.display(), file_name);
             break (candidate_folder, file_name);
         }
@@ -149,12 +171,19 @@ pub async fn import_table_file(
     let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
     debug!("[import_table_file] Final table name: {}", final_table_name);
 
-    info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
-    fs::copy(&source_path, &final_table_path).map_err(|e| {
-        error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
-        CommandError::from(format!("Failed to copy table file: {}", e))
-    })?;
-    debug!("File copied to: {}", final_table_path.display());
+    if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+        let sheet_name = sheet_name_opt.as_ref().unwrap();
+        info!("[import_table_file] Extracting sheet '{}' from '{}' to '{}'", sheet_name, source_path.display(), final_table_path.display());
+        extract_xlsx_sheet_to_csv(&source_path, sheet_name, &final_table_path)?;
+        debug!("Sheet extracted to: {}", final_table_path.display());
+    } else {
+        info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
+        fs::copy(&source_path, &final_table_path).map_err(|e| {
+            error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
+            CommandError::from(format!("Failed to copy table file: {}", e))
+        })?;
+        debug!("File copied to: {}", final_table_path.display());
+    }
 
     let relative_path_for_xml = final_table_path
         .strip_prefix(project_base_dir)
@@ -213,6 +242,7 @@ pub async fn import_table_file(
         waveform_data: None,
         language_code: None,
         properties: None,
+        file_type: "table".to_string(),
     };
     debug!("[import_table_file] File metadata for DB created.");
 
@@ -228,16 +258,18 @@ pub async fn import_table_file(
     }
     info!("[import_table_file] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
-    // Always assume headers for the preview, the user will confirm.
-    let preview_data = match original_source_extension.as_str() {
-        "csv" => load_csv_data(&final_table_path, true, Some(5)),
-        "xlsx" => load_xlsx_data(&final_table_path, true, Some(5)),
+    // For preview, we always load WITHOUT assuming headers first
+    // This allows the user to see the first row and decide if it's a header or not.
+    let target_extension = final_table_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let preview_data = match target_extension {
+        "csv" => load_csv_data(&final_table_path, false, Some(5)),
+        "xlsx" => load_xlsx_data(&final_table_path, false, Some(5)),
         _ => {
-            error!("[import_table_file] Unsupported table extension for preview: {}", original_source_extension);
-            return Err(CommandError::from(format!("Unsupported table extension for preview: {}", original_source_extension)))
+            error!("[import_table_file] Unsupported table extension for preview: {}", target_extension);
+            return Err(CommandError::from(format!("Unsupported table extension for preview: {}", target_extension)))
         },
     }?;
-    debug!("[import_table_file] Preview data loaded.");
+    debug!("[import_table_file] Preview data loaded (no headers assumed).");
 
     Ok(json!({
         "table_path": final_table_path.to_string_lossy(),
@@ -337,7 +369,8 @@ pub async fn set_table_headers(
     }
 
     if !has_headers {
-        // If user says NO to headers, we write generated headers to the file and then treat it as having headers.
+        // If the user says the file DOES NOT have headers, we generate and write them.
+        // Once written, the file effectively HAS headers from our perspective.
         let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
         let loaded_data = match extension.as_str() {
             "csv" => load_csv_data(&table_path, false, None)?,
@@ -356,6 +389,10 @@ pub async fn set_table_headers(
             "xlsx" => save_xlsx_data_with_headers(&table_path, data, &headers)?,
             _ => unreachable!(),
         }
+    } else {
+        // If has_headers is true, it means the file ALREADY has headers.
+        // We don't need to rewrite the file, but we should make sure the XML reflects it.
+        // The load_table_data and delete_table_column already respect the has_headers flag.
     }
 
     // Now, update the XML. If the user said "no headers", we've added them, so the file *now* has headers.
@@ -495,6 +532,42 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
     to_json_response(headers, records)
 }
 
+fn extract_xlsx_sheet_to_csv(source_path: &Path, sheet_name: &str, final_table_path: &Path) -> Result<(), CommandError> {
+    let mut workbook: Xlsx<_> = open_workbook(source_path)
+        .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", source_path.display(), e)))?;
+
+    let range_opt = workbook.worksheet_range(sheet_name);
+    let range: calamine::Range<Data> = match range_opt {
+        Ok(r) => r,
+        Err(calamine::XlsxError::WorksheetNotFound(msg)) => return Err(CommandError::from(format!("Sheet '{}' not found in XLSX: {}", sheet_name, msg))),
+        Err(e) => return Err(CommandError::from(format!("Failed to read sheet '{}': {}", sheet_name, e))),
+    };
+
+    let mut wtr = csv::Writer::from_path(final_table_path)
+        .map_err(|e| CommandError::from(format!("Failed to create CSV at '{}': {}", final_table_path.display(), e)))?;
+
+    for row in range.rows() {
+        let row_strs: Vec<String> = row.iter().map(|cell: &Data| -> String {
+            match cell {
+                Data::String(s) => s.clone(),
+                Data::Float(f) => f.to_string(),
+                Data::Int(i) => i.to_string(),
+                Data::Bool(b) => b.to_string(),
+                Data::DateTime(e) => e.as_f64().to_string(),
+                Data::DateTimeIso(s) => s.clone(),
+                Data::DurationIso(s) => s.clone(),
+                Data::Error(e) => format!("Error:{:?}", e),
+                Data::Empty => String::new(),
+            }
+        }).collect();
+        wtr.write_record(&row_strs)
+            .map_err(|e| CommandError::from(format!("Failed to write row to CSV: {}", e)))?;
+    }
+    wtr.flush()
+        .map_err(|e| CommandError::from(format!("Failed to flush CSV at '{}': {}", final_table_path.display(), e)))?;
+    Ok(())
+}
+
 fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
     let mut workbook: Xlsx<_> = open_workbook(path)
         .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", path.display(), e)))?;
@@ -630,12 +703,24 @@ pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>, hea
 }
 
 fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]) -> Result<(), CommandError> {
+    save_xlsx_data_with_headers_and_styles(path, data, headers, None)
+}
+
+fn save_xlsx_data_with_headers_and_styles(
+    path: &Path,
+    data: Vec<Value>,
+    headers: &[String],
+    styles: Option<serde_json::Map<String, Value>>
+) -> Result<(), CommandError> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
+    let mut header_format = rust_xlsxwriter::Format::new();
+    header_format = header_format.set_bold();
+
     // Write headers
     for (col_num, header) in headers.iter().enumerate() {
-        worksheet.write_string(0, col_num as u16, header)?;
+        worksheet.write_string_with_format(0, col_num as u16, header, &header_format)?;
     }
 
     // Write data rows
@@ -643,19 +728,73 @@ fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]
         if let Some(row_map) = row_value.as_object() {
             for (col_num, header) in headers.iter().enumerate() {
                 if let Some(cell_value) = row_map.get(header) {
+                    let mut cell_format = rust_xlsxwriter::Format::new();
+                    cell_format = cell_format.set_text_wrap(); // Preserve newlines
+
+                    if let Some(ref style_map) = styles {
+                        let coord_key = format!("{},{}", row_num, col_num);
+                        if let Some(style_val) = style_map.get(&coord_key) {
+                            if let Some(style_obj) = style_val.as_object() {
+                                if let Some(is_bold) = style_obj.get("bold").and_then(|v| v.as_bool()) {
+                                    if is_bold { cell_format = cell_format.set_bold(); }
+                                }
+                                if let Some(is_italic) = style_obj.get("italic").and_then(|v| v.as_bool()) {
+                                    if is_italic { cell_format = cell_format.set_italic(); }
+                                }
+                                if let Some(is_underline) = style_obj.get("underline").and_then(|v| v.as_bool()) {
+                                    if is_underline { cell_format = cell_format.set_underline(rust_xlsxwriter::FormatUnderline::Single); }
+                                }
+                                if let Some(text_color_val) = style_obj.get("textColor").and_then(|v| v.as_str()) {
+                                    if !text_color_val.is_empty() {
+                                        let clean_color = if text_color_val.starts_with('#') {
+                                            &text_color_val[1..]
+                                        } else {
+                                            text_color_val
+                                        };
+                                        if let Ok(color_num) = u32::from_str_radix(clean_color, 16) {
+                                            cell_format = cell_format.set_font_color(rust_xlsxwriter::Color::RGB(color_num));
+                                        }
+                                    }
+                                }
+                                if let Some(color_val) = style_obj.get("color").and_then(|v| v.as_str()) {
+                                    if !color_val.is_empty() {
+                                        // Strip # if it exists
+                                        let clean_color = if color_val.starts_with('#') {
+                                            &color_val[1..]
+                                        } else {
+                                            color_val
+                                        };
+                                        if let Ok(color_num) = u32::from_str_radix(clean_color, 16) {
+                                            cell_format = cell_format.set_background_color(rust_xlsxwriter::Color::RGB(color_num));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     match cell_value {
                         Value::String(s) => {
-                            worksheet.write_string(row_num as u32 + 1, col_num as u16, s)?;
+                            worksheet.write_string_with_format(row_num as u32 + 1, col_num as u16, s, &cell_format)?;
                         },
                         Value::Number(n) => {
                             if let Some(float_val) = n.as_f64() {
-                                worksheet.write_number(row_num as u32 + 1, col_num as u16, float_val)?;
+                                worksheet.write_number_with_format(row_num as u32 + 1, col_num as u16, float_val, &cell_format)?;
                             }
                         },
                         Value::Bool(b) => {
-                            worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
+                            worksheet.write_boolean_with_format(row_num as u32 + 1, col_num as u16, *b, &cell_format)?;
                         },
-                        _ => {} // Handles null and other types as blank cells
+                        Value::Array(arr) => {
+                            let joined = arr.iter().map(|v| match v {
+                                Value::String(s) => s.clone(),
+                                _ => v.to_string(),
+                            }).collect::<Vec<String>>().join(", ");
+                            worksheet.write_string_with_format(row_num as u32 + 1, col_num as u16, &joined, &cell_format)?;
+                        },
+                        _ => {
+                            worksheet.write_blank(row_num as u32 + 1, col_num as u16, &cell_format)?;
+                        }
                     }
                 }
             }
@@ -677,6 +816,13 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
                         Value::String(s) => s.to_string(),
                         Value::Number(n) => n.to_string(),
                         Value::Bool(b) => b.to_string(),
+                        Value::Array(arr) => {
+                            // Join array elements with a comma for better CSV presentation
+                            arr.iter().map(|item| match item {
+                                Value::String(s) => s.clone(),
+                                _ => item.to_string(),
+                            }).collect::<Vec<String>>().join(", ")
+                        },
                         Value::Null => "".to_string(),
                         _ => v.to_string(),
                     }
@@ -915,40 +1061,90 @@ mod tests {
     }
 }
 #[tauri::command]
-pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) -> Result<String, CommandError> {
-    info!("[Backend Create Table] Start: project_xml_path={}, headers={:?}", project_xml_path, headers);
+pub async fn save_table_schema(
+    project_id: String,
+    table_path: String,
+    schema: Value,
+) -> Result<(), CommandError> {
+    // Normalize path: replace backslashes with forward slashes for cross-platform DB consistency
+    let normalized_path = table_path.replace("\\", "/");
+    info!("[save_table_schema] Saving schema for table: {} in project {}", normalized_path, project_id);
+    
+    let schema_json = serde_json::to_string_pretty(&schema)
+        .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
+    
+    db_handler::save_table_schema(&project_id, &normalized_path, &schema_json)?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn load_table_schema(
+    project_id: String,
+    table_path: String,
+) -> Result<Value, CommandError> {
+    // Normalize path: replace backslashes with forward slashes for cross-platform DB consistency
+    let normalized_path = table_path.replace("\\", "/");
+    debug!("[load_table_schema] Loading schema for table: {} in project {}", normalized_path, project_id);
+    
+    let schema_json_opt = db_handler::load_table_schema(&project_id, &normalized_path)?;
+    
+    match schema_json_opt {
+        Some(schema_json) => {
+            let schema: Value = serde_json::from_str(&schema_json)
+                .map_err(|e| CommandError::from(format!("Failed to parse schema JSON: {}", e)))?;
+            Ok(schema)
+        },
+        None => Ok(json!({})),
+    }
+}
+
+#[tauri::command]
+pub async fn create_new_table(
+    project_xml_path: String, 
+    headers: Vec<String>,
+    schema: Option<Value>
+) -> Result<String, CommandError> {
+    info!("[Backend Create Table] Start: project_xml_path={}, headers={:?}, has_schema={}", project_xml_path, headers, schema.is_some());
 
     let xml_path = PathBuf::from(&project_xml_path);
     let project_base_dir = xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base directory."))?;
 
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path)?)?;
 
-    // Create a unique filename
+    let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
+    fs::create_dir_all(&tables_base)?;
+
+    // Create a unique folder and filename
     let mut i = 1;
-    let new_table_path;
-    let new_table_name;
+    let mut folder_path;
+    let mut table_name;
     loop {
-        let table_name = format!("Untitled_{}.csv", i);
-        let relative_path = format!("{}/{}/{}", HARVEY_FILES_DIR, TABLES_DIR, table_name);
-        if !project_data.table_files.files.iter().any(|f| f.relative_path == relative_path) {
-            new_table_path = project_base_dir.join(&relative_path);
-            new_table_name = table_name;
+        let base_name = format!("Untitled_{}", i);
+        folder_path = tables_base.join(&base_name);
+        table_name = format!("{}.csv", base_name);
+        
+        let relative_path = format!("{}/{}/{}/{}", HARVEY_FILES_DIR, TABLES_DIR, base_name, table_name);
+        if !folder_path.exists() && !project_data.table_files.files.iter().any(|f| f.relative_path == relative_path) {
             break;
         }
         i += 1;
     }
 
+    fs::create_dir_all(&folder_path)?;
+    let new_table_path = folder_path.join(&table_name);
+
     // Create the CSV file with headers and an empty row
-    fs::create_dir_all(new_table_path.parent().unwrap())?;
     let mut wtr = csv::Writer::from_path(&new_table_path)?;
     wtr.write_record(&headers)?;
     wtr.write_record(headers.iter().map(|_| ""))?;
     wtr.flush()?;
 
     // Update project XML
+    let relative_path_for_xml = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
     project_data.table_files.files.push(TableEntryXml {
-        name: new_table_name.clone(),
-        relative_path: new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/"),
+        name: table_name.clone(),
+        relative_path: relative_path_for_xml.clone(),
         has_headers: Some(true),
         language_code: None,
     });
@@ -957,48 +1153,86 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
 
     let project_id_for_db = project_data.project_uuid.clone();
     if project_id_for_db.is_empty() {
-        error!("[Backend Create Table] Project UUID is empty in XML file: {}. Cannot create table without project_id.", xml_path.display());
-        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table creation cannot proceed.", xml_path.display())));
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}).", xml_path.display())));
     }
 
-    let relative_path_for_db = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+    // Save schema to database if provided
+    if let Some(s) = schema {
+        let schema_json = serde_json::to_string(&s)
+            .map_err(|e| CommandError::from(format!("Failed to serialize schema: {}", e)))?;
+        let normalized_path = new_table_path.to_string_lossy().replace("\\", "/");
+        db_handler::save_table_schema(&project_id_for_db, &normalized_path, &schema_json)?;
+    }
 
     let file_metadata_for_db = FileMetadata {
-        file_name: new_table_name.clone(),
+        file_name: table_name.clone(),
         file_path: new_table_path.to_string_lossy().into_owned(),
         last_modified: Utc::now().to_rfc3339(),
-        title: String::new(),
-        description: String::new(),
-        summary: String::new(),
-        duration_seconds: None,
-        width: None,
-        height: None,
-        frame_rate: None,
-        bit_rate: None,
-        audio_codec: None,
-        video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
-        original_import_path: None,
-        speaker_names: None,
-        waveform_data: None,
-        language_code: None,
         properties: Some(json!({"has_headers": true}).to_string()),
+        ..Default::default()
     };
 
-    if let Err(e) = db_handler::save_asset_metadata(
+    db_handler::save_asset_metadata(
         &project_id_for_db,
         &file_metadata_for_db,
-        &relative_path_for_db,
+        &relative_path_for_xml,
         "table",
         None,
-    ) {
-        error!("[Backend Create Table] Failed to save table metadata to DB for table '{}' (path: {}, project_id: {}): {}", new_table_name, relative_path_for_db, project_id_for_db, e);
-        return Err(e);
-    }
-    info!("[Backend Create Table] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_db, project_id_for_db);
+    )?;
 
     info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
     Ok(new_table_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn export_formatted_table_to_csv(
+    data: Vec<Value>,
+    headers: Vec<String>,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_formatted_table_to_csv] Exporting formatted table to: {}", output_path_str);
+    
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    save_csv_data_with_headers(output_path, data, &headers)?;
+    
+    Ok(output_path_str)
+}
+
+#[tauri::command]
+pub async fn export_formatted_table_to_xlsx(
+    data: Vec<Value>,
+    headers: Vec<String>,
+    styles: Option<Value>,
+    output_path_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_formatted_table_to_xlsx] Exporting formatted table to: {}", output_path_str);
+    
+    let output_path = Path::new(&output_path_str);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut styles_map = None;
+    if let Some(val) = styles {
+        info!("[export_formatted_table_to_xlsx] Received styles parameter.");
+        if let Some(map) = val.as_object() {
+            info!("[export_formatted_table_to_xlsx] Successfully parsed styles as object with {} keys", map.len());
+            styles_map = Some(map.clone());
+        } else {
+            info!("[export_formatted_table_to_xlsx] Styles parameter was not an object: {:?}", val);
+        }
+    } else {
+        info!("[export_formatted_table_to_xlsx] Styles parameter was None.");
+    }
+
+    save_xlsx_data_with_headers_and_styles(output_path, data, &headers, styles_map)?;
+    
+    Ok(output_path_str)
 }
 
 #[tauri::command]

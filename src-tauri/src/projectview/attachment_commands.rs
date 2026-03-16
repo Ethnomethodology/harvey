@@ -113,7 +113,38 @@ pub async fn upload_attachment(
                 waveform_data: metadata_from_db.waveform_data,
                 language_code: metadata_from_db.language_code,
                 properties: metadata_from_db.properties,
+                file_type: metadata_from_db.file_type.unwrap_or_default(),
             };
+
+            // Also register the attachment itself in asset_metadata
+            let attachment_file_type = if asset_relative_path.starts_with("harvey_files/Documents/") {
+                "document-attachment".to_string()
+            } else if asset_relative_path.starts_with("harvey_files/Transcripts/") {
+                "transcript-attachment".to_string()
+            } else {
+                "attachment".to_string() // Fallback
+            };
+
+            let attachment_metadata = FileMetadata {
+                file_name: file_name.to_string(),
+                file_path: target_path.to_string_lossy().to_string(),
+                last_modified: chrono::Utc::now().to_rfc3339(),
+                file_type: attachment_file_type,
+                ..Default::default()
+            };
+
+            let attachment_relative_path = format!("{}/attachments/{}", 
+                PathBuf::from(&asset_relative_path).parent().unwrap().to_string_lossy(),
+                file_name
+            ).replace("\\", "/");
+
+            db_handler::save_asset_metadata(
+                &project_id,
+                &attachment_metadata,
+                &attachment_relative_path,
+                "attachment",
+                None
+            ).map_err(|e| e.to_string())?;
 
             db_handler::save_asset_metadata(
                 &project_id,

@@ -1,5 +1,15 @@
+<!-- src/lib/components/projectview/modals/FindReplaceModal.svelte -->
 <script>
-  import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { createEventDispatcher, onMount, tick, onDestroy } from 'svelte';
+  import { CaseSensitive, Regex, WholeWord, X, Search, Replace, ReplaceAll, ChevronDown, ChevronUp } from 'lucide-svelte';
+  import { 
+    Button, 
+    Label, 
+    Input, 
+    Helper,
+    Badge,
+    Tooltip
+  } from 'flowbite-svelte';
 
   export let showModal = false;
   export let initialSearchTerm = '';
@@ -7,8 +17,8 @@
   export let totalMatches = 0;
 
   let modalElement;
-  let findInput;
-  let replaceInput;
+  let findInputElement;
+  let replaceInputElement;
   
   let findTerm = '';
   let replaceTerm = '';
@@ -23,10 +33,14 @@
   let startX, startY;
 
   let lastShowModal = false;
+  let prevInitialSearchTerm = '';
+
+  // Initialize on open
   $: if (showModal && !lastShowModal) {
     findTerm = initialSearchTerm || '';
+    prevInitialSearchTerm = initialSearchTerm || '';
     replaceTerm = ''; 
-    // Reset position when opening? Or preserve? Let's reset to center-ish.
+    // Reset position when opening
     x = 0;
     y = 0;
     
@@ -35,19 +49,20 @@
 
     setTimeout(() => {
       tick().then(() => {
-        if (findTerm && replaceInput) {
-            replaceInput.focus();
-        } else if (findInput) {
-            findInput.focus();
+        if (findTerm && replaceInputElement) {
+            replaceInputElement.focus();
+        } else if (findInputElement) {
+            findInputElement.focus();
         }
       });
     }, 0);
   }
   $: lastShowModal = showModal;
 
-  // Keep findTerm in sync with initialSearchTerm if initialSearchTerm changes from parent
-  $: if (showModal && initialSearchTerm !== undefined && initialSearchTerm !== findTerm) {
-      findTerm = initialSearchTerm;
+  // Sync if initialSearchTerm changes externally while modal is open
+  $: if (showModal && initialSearchTerm !== prevInitialSearchTerm) {
+      findTerm = initialSearchTerm || '';
+      prevInitialSearchTerm = initialSearchTerm;
   }
 
   const dispatch = createEventDispatcher();
@@ -95,8 +110,6 @@
       isDragging = true;
       startX = e.clientX - x;
       startY = e.clientY - y;
-      
-      // Capture pointer to continue receiving events even if move outside handle
       e.target.setPointerCapture(e.pointerId);
     }
   }
@@ -110,6 +123,14 @@
   function handlePointerUp(e) {
     isDragging = false;
   }
+
+  onMount(() => {
+    window.addEventListener('keydown', handleKeydown);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('keydown', handleKeydown);
+  });
 </script>
 
 {#if showModal}
@@ -118,191 +139,169 @@
     aria-labelledby="find-replace-modal-title"
     role="dialog"
     aria-modal="true"
-    on:keydown|stopPropagation={handleKeydown}
     tabindex="-1"
   >
     <div
       bind:this={modalElement}
-      class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl p-4 w-full max-w-md mx-4 text-sm text-gray-900 dark:text-gray-200 pointer-events-auto border border-gray-300 dark:border-gray-700 relative"
+      class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden pointer-events-auto"
       style="transform: translate({x}px, {y}px);"
       role="document"
     >
       <!-- Header / Drag Handle -->
       <div 
-        class="drag-handle cursor-move flex justify-between items-center mb-3 pb-2 border-b border-gray-100 dark:border-gray-700 select-none"
+        class="drag-handle cursor-move px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50 select-none"
         on:pointerdown={handlePointerDown}
         on:pointermove={handlePointerMove}
         on:pointerup={handlePointerUp}
       >
-        <h2 id="find-replace-modal-title" class="text-lg font-semibold">
-          Find & Replace
-        </h2>
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Search size={18} class="text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 id="find-replace-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+                Find & Replace
+            </h3>
+        </div>
         <button 
           on:click={closeModal}
-          class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+          class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all"
           title="Close"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16">
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
+          <X size={20} />
         </button>
       </div>
 
-      <div class="mb-3">
-        <label
-          for="find-term-input"
-          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-        >
-          Find
-        </label>
-        <div class="flex gap-2">
-          <input
-            bind:this={findInput}
-            id="find-term-input"
-            type="text"
-            bind:value={findTerm}
-            on:input={handleFindChange}
-            class="flex-grow px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="Find..."
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-          />
-          <button
-            type="button"
-            class="btn-primary text-xs whitespace-nowrap"
-            on:click={() => dispatch('findnext')}
-            disabled={totalMatches === 0}
-          >
-            Find
-          </button>
+      <div class="p-6 space-y-5">
+        <!-- Find Section -->
+        <div class="space-y-2">
+            <div class="flex justify-between items-center">
+                <Label for="find-term-input">Find</Label>
+                {#if findTerm}
+                    <Badge color={totalMatches > 0 ? 'blue' : 'red'} size="xs" class="font-mono">
+                        {#if totalMatches > 0}
+                            {currentMatchIndex + 1} / {totalMatches}
+                        {:else}
+                            No matches
+                        {/if}
+                    </Badge>
+                {/if}
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-grow">
+                    <Input
+                        id="find-term-input"
+                        type="text"
+                        bind:value={findTerm}
+                        on:input={handleFindChange}
+                        placeholder="Search text..."
+                        autocomplete="off"
+                        autocorrect="off"
+                    >
+                        <svelte:fragment slot="left">
+                            <Search class="w-4 h-4 text-gray-400" />
+                        </svelte:fragment>
+                    </Input>
+                    <!-- Internal binding hack for focus since Flowbite doesn't easily expose the input ref -->
+                    <input type="hidden" bind:this={findInputElement} />
+                </div>
+                <div class="flex gap-1">
+                    <Button color="alternative" size="xs" class="px-2" on:click={() => dispatch('findprev')} disabled={totalMatches === 0} title="Previous match">
+                        <ChevronUp size={16} />
+                    </Button>
+                    <Button color="alternative" size="xs" class="px-2" on:click={() => dispatch('findnext')} disabled={totalMatches === 0} title="Next match">
+                        <ChevronDown size={16} />
+                    </Button>
+                </div>
+            </div>
+            
+            <!-- Search Options Toggles -->
+            <div class="flex gap-2 pt-1">
+                <button
+                    type="button"
+                    class="toggle-btn {isCaseSensitive ? 'active' : ''}"
+                    on:click={toggleCaseSensitive}
+                    id="case-sensitive-toggle"
+                >
+                    <CaseSensitive size={16} />
+                    <Tooltip triggeredBy="#case-sensitive-toggle">Match Case</Tooltip>
+                </button>
+                <button
+                    type="button"
+                    class="toggle-btn {isRegex ? 'active' : ''}"
+                    on:click={toggleRegex}
+                    id="regex-toggle"
+                >
+                    <Regex size={16} />
+                    <Tooltip triggeredBy="#regex-toggle">Use Regular Expression</Tooltip>
+                </button>
+                <button
+                    type="button"
+                    class="toggle-btn {isWholeWord ? 'active' : ''}"
+                    on:click={toggleWholeWord}
+                    id="whole-word-toggle"
+                >
+                    <WholeWord size={16} />
+                    <Tooltip triggeredBy="#whole-word-toggle">Match Whole Word</Tooltip>
+                </button>
+            </div>
         </div>
-        <!-- Search Options Toggles -->
-        <div class="flex gap-2 mt-1.5">
-          <button
-            type="button"
-            class="toggle-btn {isCaseSensitive ? 'active' : ''}"
-            title="Match Case"
-            on:click={toggleCaseSensitive}
-          >
-            Aa
-          </button>
-          <button
-            type="button"
-            class="toggle-btn {isRegex ? 'active' : ''}"
-            title="Use Regular Expression"
-            on:click={toggleRegex}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-regex" viewBox="0 0 16 16">
-              <path fill-rule="evenodd" d="M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 1 1 .707.707m9.9-.707a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.314.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707M6 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0m5-6.5a.5.5 0 0 0-1 0v2.117L8.257 5.57a.5.5 0 0 0-.514.858L9.528 7.5 7.743 8.571a.5.5 0 1 0 .514.858L10 8.383V10.5a.5.5 0 1 0 1 0V8.383l1.743 1.046a.5.5 0 0 0 .514-.858L11.472 7.5l1.785-1.071a.5.5 0 1 0-.514-.858L11 6.617z"/>
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="toggle-btn {isWholeWord ? 'active' : ''}"
-            title="Match Whole Word"
-            on:click={toggleWholeWord}
-          >
-            <span class="underline decoration-1 underline-offset-2">ab</span>
-          </button>
+
+        <!-- Replace Section -->
+        <div class="space-y-2 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+            <Label for="replace-term-input">Replace with</Label>
+            <Input
+                id="replace-term-input"
+                type="text"
+                bind:value={replaceTerm}
+                placeholder="Replacement text..."
+                on:keydown={(e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) handleReplaceAll();
+                        else handleReplace();
+                    }
+                }}
+                autocomplete="off"
+            />
+            <input type="hidden" bind:this={replaceInputElement} />
+            <Helper class="text-[10px] italic">Press Enter to replace, Shift+Enter for Replace All</Helper>
         </div>
       </div>
 
-      <div class="mb-4">
-        <label
-          for="replace-term-input"
-          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-        >
-          Replace with
-        </label>
-        <input
-          bind:this={replaceInput}
-          id="replace-term-input"
-          type="text"
-          bind:value={replaceTerm}
-          class="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          placeholder="Replace with..."
-          on:keydown={(e) => {
-              if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (e.shiftKey) handleReplaceAll();
-                  else handleReplace();
-              }
-          }}
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-        />
-      </div>
-
-      <div class="flex justify-between items-center mb-4 text-xs text-gray-500 dark:text-gray-400">
-          <span>
-              {#if totalMatches > 0}
-                  {currentMatchIndex + 1} of {totalMatches} matches
-              {:else if findTerm}
-                  No matches
-              {/if}
-          </span>
-      </div>
-
-      <div class="flex justify-end items-center gap-2">
-        <button
-          type="button"
-          class="btn-secondary text-xs"
-          on:click={closeModal}
-        >
+      <!-- Footer -->
+      <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+        <Button color="alternative" on:click={closeModal} title="Close search">
           Close
-        </button>
-        <button
-          type="button"
-          class="btn-primary text-xs"
+        </Button>
+        <Button
+          color="blue"
           on:click={handleReplace}
           disabled={totalMatches === 0}
+          title="Replace current match"
         >
+          <Replace size={16} class="mr-2" />
           Replace
-        </button>
-        <button
-          type="button"
-          class="btn-primary text-xs"
+        </Button>
+        <Button
+          color="blue"
           on:click={handleReplaceAll}
           disabled={totalMatches === 0}
+          title="Replace all occurrences"
         >
+          <ReplaceAll size={16} class="mr-2" />
           Replace All
-        </button>
+        </Button>
       </div>
     </div>
   </div>
 {/if}
 
 <style lang="postcss">
-  .btn-primary {
-    @apply py-1.5 px-4 bg-blue-500 text-white border-none rounded-md cursor-pointer text-sm font-medium
-      transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400;
-  }
-  .btn-primary:hover:not(:disabled) {
-    @apply bg-blue-600;
-  }
-  .btn-secondary {
-    @apply py-1.5 px-4 bg-gray-200 text-gray-800 border border-gray-300 rounded-md cursor-pointer text-sm font-medium
-      transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .btn-secondary:hover:not(:disabled) {
-    @apply bg-gray-300 border-gray-400;
-  }
-  .btn-secondary:disabled {
-    @apply bg-gray-100 text-gray-400 border-gray-200;
-  }
-
   .toggle-btn {
-    @apply flex items-center justify-center w-6 h-6 rounded border border-gray-300 dark:border-gray-600 
-      bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer transition-colors text-[10px] font-bold;
-  }
-  .toggle-btn:hover {
-    @apply bg-gray-100 dark:bg-gray-600;
+    @apply flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 
+      bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700;
   }
   .toggle-btn.active {
-    @apply bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300;
+    @apply bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20;
   }
 </style>

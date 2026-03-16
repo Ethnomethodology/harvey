@@ -200,42 +200,200 @@ pub fn get_config_dir() -> Result<PathBuf, CommandError> { UserDirs::new().map(|
 pub fn get_config_file_path() -> Result<PathBuf, CommandError> { get_config_dir().map(|dir| dir.join(CONFIG_FILE_NAME)) }
 pub fn ensure_config_dir_exists() -> Result<PathBuf, CommandError> { let config_dir = get_config_dir()?; fs::create_dir_all(&config_dir)?; Ok(config_dir) }
 pub fn read_config() -> Result<Config, CommandError> {
+    use rusqlite::Connection;
+    use crate::projectview::db_handler::{get_db_path, init_db};
+
+    // Ensure DB is initialized
+    if let Err(e) = init_db() {
+        eprintln!("Failed to initialize DB in read_config: {:?}", e);
+    }
+
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    let mut config = Config::default();
+
     let config_path = get_config_file_path()?;
-    if !config_path.exists() { println!("Config file not found at {:?}, returning default.", config_path); return Ok(Config::default()); }
-    println!("Reading config file from {:?}", config_path);
-    let xml_content = fs::read_to_string(&config_path)?;
-    if xml_content.trim().is_empty() { println!("Config file is empty, returning default."); return Ok(Config::default()); }
-    match from_str::<Config>(&xml_content) {
-        Ok(mut config) => {
-            println!("Successfully parsed config file.");
-            // Ensure models are sorted if present
-            if !config.downloaded_models.is_empty() {
-                 config.downloaded_models.sort_by(|a, b| a.name.cmp(&b.name));
+    if config_path.exists() {
+        println!("Found legacy config file at {:?}. Migrating to SQLite...", config_path);
+        if let Ok(xml_content) = fs::read_to_string(&config_path) {
+            if !xml_content.trim().is_empty() {
+                if let Ok(old_config) = from_str::<Config>(&xml_content) {
+                    let _ = write_config(&old_config);
+                }
             }
-            Ok(config)
         }
-        Err(e) => {
-            eprintln!("Error parsing config file at {:?}: {}. Returning default config.", config_path, e);
-            // Return default but maybe log the error more permanently?
-            Ok(Config::default())
+        let mut bak_path = config_path.clone();
+        bak_path.set_extension("xml.bak");
+        let _ = fs::rename(&config_path, bak_path);
+    }
+
+    // Load global settings
+    if let Ok(mut stmt) = conn.prepare("SELECT key, value FROM global_settings") {
+        if let Ok(settings_iter) = stmt.query_map([], |row| {
+            let key: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            Ok((key, value))
+        }) {
+            for result in settings_iter.flatten() {
+                let (key, value) = result;
+                match key.as_str() {
+                    "download_location" => config.download_location = value,
+                    "selected_translation_family" => config.selected_translation_family = Some(value),
+                    "selected_transcription_engine" => config.selected_transcription_engine = Some(value),
+                    "themePreference" => config.theme = Some(value),
+                    "ffmpegPath" => config.ffmpeg_path = Some(value),
+                    "verification_status" => {
+                        if let Ok(vs) = serde_json::from_str::<VerificationStatus>(&value) {
+                            config.verification_status = vs;
+                        }
+                    }
+                    "advanced_translation" => {
+                        if let Ok(at) = serde_json::from_str::<AdvancedTranslationConfig>(&value) {
+                            config.advanced_translation = Some(at);
+                        }
+                    }
+                    "advanced_transcription" => {
+                        if let Ok(at) = serde_json::from_str::<AdvancedTranscriptionConfig>(&value) {
+                            config.advanced_transcription = Some(at);
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
+
+    // Load projects
+    if let Ok(mut stmt) = conn.prepare("SELECT name, xml_path, created_at, last_opened_ts FROM projects") {
+        if let Ok(projects_iter) = stmt.query_map([], |row| {
+            let name: String = row.get(0)?;
+            let path: String = row.get(1)?;
+            let created_at: String = row.get(2)?;
+            let last_opened_ts: String = row.get(3)?;
+            Ok((name, path, created_at, last_opened_ts))
+        }) {
+            for result in projects_iter.flatten() {
+                let (name, path, created_at, last_opened_ts) = result;
+                let created_ts = chrono::DateTime::parse_from_rfc3339(&format!("{}Z", created_at.replace(" ", "T")))
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+                let last_opened_ts = chrono::DateTime::parse_from_rfc3339(&format!("{}Z", last_opened_ts.replace(" ", "T")))
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+
+                config.projects.push(ProjectInfo {
+                    name,
+                    path,
+                    created_ts,
+                    last_opened_ts,
+                });
+            }
+        }
+    }
+    config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
+
+    // Load downloaded models
+    if let Ok(mut stmt) = conn.prepare("SELECT name, family, language, size, description, download_location, download_url FROM downloaded_models") {
+        if let Ok(models_iter) = stmt.query_map([], |row| {
+            let name: String = row.get(0)?;
+            let family: Option<String> = row.get(1)?;
+            let language: Option<String> = row.get(2)?;
+            let size: Option<String> = row.get(3)?;
+            let description: Option<String> = row.get(4)?;
+            let download_location: Option<String> = row.get(5)?;
+            let download_url: Option<String> = row.get(6)?;
+            Ok(ModelInfo { name, family, language, size, description, download_location, download_url })
+        }) {
+            for result in models_iter.flatten() {
+                config.downloaded_models.push(result);
+            }
+        }
+    }
+    config.downloaded_models.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(config)
 }
+
 pub fn write_config(config: &Config) -> Result<(), CommandError> {
-    let config_dir = ensure_config_dir_exists()?;
-    let config_path = config_dir.join(CONFIG_FILE_NAME);
-    println!("Writing config file to {:?}", config_path);
-    let mut config_to_write = config.clone();
-    // Sort projects by last opened, descending
-    config_to_write.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
-    // Sort models alphabetically
-    config_to_write.downloaded_models.sort_by(|a, b| a.name.cmp(&b.name));
-    let xml_string = to_string_with_root("config", &config_to_write).map_err(CommandError::from)?;
-    let file = File::create(&config_path)?;
-    let mut writer = BufWriter::new(file);
-    writer.write_all(xml_string.as_bytes())?;
-    writer.flush()?;
-    println!("Successfully wrote config file.");
+    use rusqlite::{Connection, params};
+    use crate::projectview::db_handler::{get_db_path, init_db};
+
+    if let Err(e) = init_db() {
+        eprintln!("Failed to initialize DB in write_config: {:?}", e);
+    }
+    let db_path = get_db_path()?;
+    let mut conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    let tx = conn.transaction().map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    // Save global settings
+    {
+        let mut stmt = tx.prepare("INSERT OR REPLACE INTO global_settings (key, value) VALUES (?1, ?2)").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        stmt.execute(params!["download_location", &config.download_location]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        if let Some(val) = &config.selected_translation_family { stmt.execute(params!["selected_translation_family", val]).map_err(|e| CommandError::RusqliteError(e.to_string()))?; }
+        if let Some(val) = &config.selected_transcription_engine { stmt.execute(params!["selected_transcription_engine", val]).map_err(|e| CommandError::RusqliteError(e.to_string()))?; }
+        if let Some(val) = &config.theme { stmt.execute(params!["themePreference", val]).map_err(|e| CommandError::RusqliteError(e.to_string()))?; }
+        if let Some(val) = &config.ffmpeg_path { stmt.execute(params!["ffmpegPath", val]).map_err(|e| CommandError::RusqliteError(e.to_string()))?; }
+
+        if let Ok(vs) = serde_json::to_string(&config.verification_status) {
+            stmt.execute(params!["verification_status", vs]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        }
+
+        if let Some(at) = &config.advanced_translation {
+            if let Ok(at_json) = serde_json::to_string(at) {
+                stmt.execute(params!["advanced_translation", at_json]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+            }
+        }
+
+        if let Some(at) = &config.advanced_transcription {
+            if let Ok(at_json) = serde_json::to_string(at) {
+                stmt.execute(params!["advanced_transcription", at_json]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+            }
+        }
+    }
+
+    // Projects update
+    // We also want to support adding projects directly if they were only in the old config.xml but not in SQLite.
+    {
+        let mut stmt_update = tx.prepare("UPDATE projects SET last_opened_ts = ?1, name = ?2 WHERE xml_path = ?3").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt_check = tx.prepare("SELECT 1 FROM projects WHERE xml_path = ?1").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt_insert = tx.prepare("INSERT INTO projects (id, name, root_path, xml_path, created_at, last_opened_ts, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+        for project in &config.projects {
+            let ts_str = project.last_opened_ts.format("%Y-%m-%d %H:%M:%S").to_string();
+            let created_str = project.created_ts.format("%Y-%m-%d %H:%M:%S").to_string();
+            let exists: bool = stmt_check.exists(params![project.path]).unwrap_or(false);
+            if exists {
+                let _ = stmt_update.execute(params![ts_str, project.name, project.path]);
+            } else {
+                let uuid = uuid::Uuid::new_v4().to_string();
+                let root_path = PathBuf::from(&project.path).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+                let _ = stmt_insert.execute(params![uuid, project.name, root_path, project.path, created_str, ts_str, ts_str]);
+            }
+        }
+    }
+
+    // Downloaded models
+    {
+        tx.execute("DELETE FROM downloaded_models", []).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt = tx.prepare("INSERT INTO downloaded_models (name, family, language, size, description, download_location, download_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        for model in &config.downloaded_models {
+            stmt.execute(params![
+                model.name,
+                model.family,
+                model.language,
+                model.size,
+                model.description,
+                model.download_location,
+                model.download_url
+            ]).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        }
+    }
+
+    tx.commit().map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    println!("Successfully wrote global config to harvey.sqlite");
     Ok(())
 }
 pub fn add_or_update_project_in_config(project_info: ProjectInfo) -> Result<(), CommandError> {

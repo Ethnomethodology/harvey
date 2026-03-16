@@ -236,14 +236,9 @@
 
 	onMount(async () => {
 		configError = '';
-		
-		// If libraries aren't installed, don't even try to load local models
-		// as it will trigger a technical error message.
-		if (!$configStatus.python_libraries_installed) {
-			return;
-		}
 
 		try {
+			// Load local models regardless of python library status so we can check what's already on disk.
 			downloadedModels = await getLocalTranslationModels();
 			ct2Installed = await isCTranslate2Installed();
 		} catch (e) {
@@ -485,22 +480,19 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Translation Models</h3>
 		<div class="flex items-center">
-			{#if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
+			{#if !$configStatus.python_libraries_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
+			{:else if (selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) > 0}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
 					{selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount} {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} {(selectedEngine === 'helsinki' ? helsinkiDownloadedCount : nllbDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
+				<span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase">NO {selectedEngine === 'helsinki' ? 'HELSINKI-NLP' : 'NLLB'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
 
 	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
-	{#if configError}
-		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
-			<span class="font-medium">Error:</span> {configError}
-		</p>
-	{/if}
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
@@ -541,7 +533,8 @@
 		
 		{#if selectedEngine === 'helsinki'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed mb-2">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, high quality for common language pairs.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openLink('https://huggingface.co/Helsinki-NLP')}>Helsinki-NLP</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, very fast on CPU, performs better for common language pairs.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Requires separate model for every language pair (e.g. ja-en, fr-en).</p>
 			</div>
 
@@ -560,6 +553,7 @@
 			{/if}
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openLink('https://huggingface.co/facebook/nllb-200-distilled-600M')}>NLLB (Meta)</button></p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> One model supports 200+ languages. Great for rare languages.</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Very heavy resource usage, large file size, and slower on CPUs. Best with GPU.</p>
                 {#if !ct2Installed && translationModelCount > 0}

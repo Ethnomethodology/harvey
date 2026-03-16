@@ -77,7 +77,7 @@ export const initialTranscriptState = {
     initialPrompt: "",
     hotwords: "",
 
-    // Dual Transcript Mode
+    // Compare two transcripts in interleaved mode
     isDualModeActive: loadDualModeState(),
     showDualTranscriptModal: false,
     secondaryTranscriptPath: null,
@@ -492,16 +492,22 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const mediaFile = ts.selectedMediaFile;
-        const projectRootPath = get(projectMainStore).projectRootPath;
+        const projectRootPath = get(projectMainStore).baseDirectory;
 
         let relativePathToMatch = normalizedInputPath;
         if (projectRootPath && normalizedInputPath.startsWith(projectRootPath)) {
             relativePathToMatch = normalizedInputPath.substring(projectRootPath.length).replace(/^[\\/]/, '');
         }
+        
+        // Ensure relativePathToMatch doesn't have a leading slash for comparison
+        relativePathToMatch = relativePathToMatch.replace(/^[\\/]/, '');
 
         const transcriptInfo = mediaFile?.associated_transcripts?.find(t => {
+            if (!t) return false;
             // Compare against relativePath if available, otherwise fallback to path
-            return t.relativePath === relativePathToMatch || t.path === normalizedInputPath;
+            const tRel = (t.relativePath || '').replace(/^[\\/]/, '').replace(/\\/g, '/');
+            const tPath = normalizePath(t.path || '');
+            return (tRel && tRel === relativePathToMatch) || (tPath && tPath === normalizedInputPath);
         });
 
         if (!transcriptInfo) {
@@ -1343,7 +1349,9 @@ export async function switchTranscript(path) {
 listen('media_renamed', (event) => {
     if (!event.payload) return;
 
-    const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
+    const { old_media_stem, new_media_stem, new_media_file_relative_path: rawRelativePath, new_absolute_path: rawAbsolutePath } = event.payload;
+    const new_media_file_relative_path = normalizePath(rawRelativePath);
+    const new_absolute_path = normalizePath(rawAbsolutePath);
 
     transcriptStore.update(ts => {
         if (ts.selectedMediaFile && ts.selectedMediaFile.media_xml_identifier === old_media_stem) {
@@ -1365,7 +1373,11 @@ listen('media_renamed', (event) => {
 
 listen('custom_transcription_job_completed', async (event) => {
     if (!event.payload) return;
-    const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
+    const { status, jobFinishedPath: rawJobFinishedPath, transcriptFilePath: rawTranscriptFilePath, translatedTranscriptFilePath: rawTranslatedTranscriptFilePath, errorMessage } = event.payload;
+    const jobFinishedPath = normalizePath(rawJobFinishedPath);
+    const transcriptFilePath = normalizePath(rawTranscriptFilePath);
+    const translatedTranscriptFilePath = normalizePath(rawTranslatedTranscriptFilePath);
+    
     const currentStore = get(transcriptStore);
 
     if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
@@ -1438,27 +1450,11 @@ listen('custom_transcription_job_completed', async (event) => {
         transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
 
         if (status === 'done' && currentStore.selectedMediaFile?.path === jobFinishedPath) {
-            if (activePathToLoad) {
-                try {
-                    const service = await import('../services/projectService.js');
-                    if (service.loadTranscriptFile) {
-
-                        await service.loadTranscriptFile(activePathToLoad);
-                    } else {
-                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
-                        updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
-                    }
-                } catch (e) {
-                    console.error(`[TranscriptStore] Error auto-loading transcript ${activePathToLoad}:`, e);
-                    updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}`});
-                }
-            }
-
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
                     console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
-                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path, activePathToLoad);
 
                     const latestProjectStore = get(projectMainStore);
                     const allFiles = latestProjectStore.files;
@@ -1506,7 +1502,10 @@ listen('custom_transcription_job_completed', async (event) => {
 
 listen('translation_job_completed', async (event) => {
     if (!event.payload) return;
-    const { jobId, status, originalTranscriptPath, newTranscriptPath, errorMessage } = event.payload;
+    const { jobId, status, originalTranscriptPath: rawOriginalTranscriptPath, newTranscriptPath: rawNewTranscriptPath, errorMessage } = event.payload;
+    const originalTranscriptPath = normalizePath(rawOriginalTranscriptPath);
+    const newTranscriptPath = normalizePath(rawNewTranscriptPath);
+    
     const currentStore = get(transcriptStore);
 
     if (currentStore.isTranslating && jobId === currentStore.translationJobId) {
@@ -1624,7 +1623,7 @@ export function setSpeakerConfig(newSpeakerConfig) {
     }));
 }
 
-// --- Dual Transcript Mode Functions ---
+// --- Compare two transcripts in interleaved mode Functions ---
 
 export function setDualTranscriptModal(show) {
     transcriptStore.update(ts => ({ ...ts, showDualTranscriptModal: !!show }));
@@ -1773,7 +1772,7 @@ export async function setSecondaryTranscript(path) {
 export function toggleDualMode(active) {
     const store = get(transcriptStore);
     if (store.transcriptDirty) {
-        message('Please save your changes before enabling or disabling Dual Transcript Mode.', { title: 'Unsaved Changes', type: 'error' });
+        message('Please save your changes before enabling or disabling Compare Transcripts.', { title: 'Unsaved Changes', type: 'error' });
         return;
     }
 

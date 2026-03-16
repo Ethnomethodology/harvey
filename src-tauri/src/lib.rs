@@ -378,6 +378,7 @@ pub fn run() {
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
             projectview::metadata_commands::update_asset_metadata_command,
+            projectview::metadata_commands::get_project_assets_for_link_command,
             projectview::attachment_commands::upload_attachment,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
@@ -460,6 +461,9 @@ pub fn run() {
 
             // --- Project view TABLE commands ---
             projectview::table_handler::create_new_table,
+            projectview::table_handler::save_table_schema,
+            projectview::table_handler::load_table_schema,
+            projectview::table_handler::get_xlsx_sheets,
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
             projectview::table_handler::set_table_headers,
@@ -470,6 +474,8 @@ pub fn run() {
             projectview::table_handler::load_table_styles,
             projectview::table_handler::export_table_to_csv, // Added
             projectview::table_handler::export_table_to_xlsx, // Added
+            projectview::table_handler::export_formatted_table_to_csv,
+            projectview::table_handler::export_formatted_table_to_xlsx,
             projectview::core_commands::save_table_layout_prefs,
             projectview::core_commands::load_table_layout_prefs,
 

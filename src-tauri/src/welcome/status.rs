@@ -62,65 +62,57 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         config_changed = true;
     }
 
-    // Always re-verify model presence
+    // Transcription and Translation: Instant checks via directory listing
     let models = get_downloaded_models().await?;
-
-    // Check for valid transcription models (whisper-cpp or faster-whisper)
     whisper_cpp_models_downloaded = models.iter().any(|m| {
         let family = m.family.as_deref().unwrap_or("whisper-cpp");
         (family == "whisper-cpp" || (m.family.is_none() && !m.name.contains('/'))) && !m.name.contains("paraphrase")
     });
-
     faster_whisper_models_downloaded = models.iter().any(|m| {
         let family = m.family.as_deref().unwrap_or("");
         family == "faster-whisper" && !m.name.contains("paraphrase")
     });
-
     let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded;
 
     let translation_models = get_local_translation_models().await?;
     helsinki_models_downloaded = translation_models.iter().any(|m| m.family.as_deref().unwrap_or("helsinki") == "helsinki");
     nllb_models_downloaded = translation_models.iter().any(|m| m.family.as_deref().unwrap_or("") == "nllb");
-
     let has_translation = !translation_models.is_empty();
 
-    if !transcription_models_downloaded && has_transcription {
-        transcription_models_downloaded = true;
-        config.verification_status.transcription_models_verified = true;
-        config_changed = true;
-    } else if transcription_models_downloaded && !has_transcription {
-        transcription_models_downloaded = false;
-        config.verification_status.transcription_models_verified = false;
+    if transcription_models_downloaded != has_transcription {
+        transcription_models_downloaded = has_transcription;
+        config.verification_status.transcription_models_verified = transcription_models_downloaded;
         config_changed = true;
     }
 
-    if translation_models_downloaded && !has_translation {
-        translation_models_downloaded = false;
-        config.verification_status.translation_models_verified = false;
-        config_changed = true;
-    } else if !translation_models_downloaded && has_translation {
-        translation_models_downloaded = true;
-        config.verification_status.translation_models_verified = true;
+    if translation_models_downloaded != has_translation {
+        translation_models_downloaded = has_translation;
+        config.verification_status.translation_models_verified = translation_models_downloaded;
         config_changed = true;
     }
 
+    // Diarization: Lightweight check (directory existence)
     if diarization_model_downloaded {
-        let hf_hub_path = dirs::home_dir().map(|h| h.join(".cache/huggingface/hub")).unwrap_or_default();
-        if !hf_hub_path.exists() {
+        let config_copy = config.clone();
+        let diarization_hub_path = std::path::PathBuf::from(&config_copy.download_location).join("diarization").join("hub");
+        if !diarization_hub_path.exists() {
             diarization_model_downloaded = false;
             config.verification_status.diarization_model_verified = false;
             config_changed = true;
         }
     }
 
-    // --- Full Checks (if necessary) ---
-    if !python_libs_installed && check_python_libraries_installed(app_handle.clone()).await.unwrap_or(false) {
-        python_libs_installed = true;
-        config.verification_status.python_libraries_verified = true;
-        config_changed = true;
+    // --- Conditional Heavy Checks (Only if currently false) ---
+    // If they are false, we try to verify them once. If they are true, we trust the lightweight checks above.
+    
+    if !python_libs_installed {
+        if check_python_libraries_installed(app_handle.clone()).await.unwrap_or(false) {
+            python_libs_installed = true;
+            config.verification_status.python_libraries_verified = true;
+            config_changed = true;
+        }
     }
 
-    // CTranslate2 check (Lazy Load)
     if python_libs_installed {
         if !ct2_installed {
             ct2_installed = is_ctranslate2_installed(app_handle.clone()).await.unwrap_or(false);
@@ -136,21 +128,8 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
                 config_changed = true;
             }
         }
-    } else {
-        // If python libs are not installed (or failed check), ensure these are false
-        if ct2_installed {
-            ct2_installed = false;
-            config.verification_status.ctranslate2_verified = false;
-            config_changed = true;
-        }
-        if fw_deps_installed {
-            fw_deps_installed = false;
-            config.verification_status.faster_whisper_dependencies_verified = false;
-            config_changed = true;
-        }
     }
 
-    // whisper.cpp binary check (independent of python pip libraries)
     if !whisper_cpp_installed {
         whisper_cpp_installed = super::commands::is_whisper_cpp_installed(app_handle.clone()).await.unwrap_or(false);
         if whisper_cpp_installed {
@@ -159,17 +138,20 @@ pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result
         }
     }
 
-    let current_hf_token_status = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
-    if hf_token_present != current_hf_token_status {
-        hf_token_present = current_hf_token_status;
-        config.verification_status.hf_token_verified = hf_token_present;
-        config_changed = true;
+    if !hf_token_present {
+        hf_token_present = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
+        if hf_token_present {
+            config.verification_status.hf_token_verified = true;
+            config_changed = true;
+        }
     }
-    // (Transcription and Translation checks removed here as they are covered above)
-    if !diarization_model_downloaded && check_diarization_model_access(app_handle.clone()).await.unwrap_or(false) {
-        diarization_model_downloaded = true;
-        config.verification_status.diarization_model_verified = true;
-        config_changed = true;
+
+    if !diarization_model_downloaded && python_libs_installed {
+        if check_diarization_model_access(app_handle.clone()).await.unwrap_or(false) {
+            diarization_model_downloaded = true;
+            config.verification_status.diarization_model_verified = true;
+            config_changed = true;
+        }
     }
 
     // --- Finalize ---

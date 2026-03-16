@@ -238,10 +238,53 @@ def translate_bulk(segments, engine, tokenizer, device, batch_size=16, src_lang=
             
     return translated
 
+def translate_with_sentence_splitting(segments, engine, tokenizer, device, batch_size=16, src_lang=None, tgt_lang=None, ct2_tgt_prefix=None, use_sliding_window=False):
+    """
+    Translates segments by splitting them into individual sentences.
+    If use_sliding_window is True, it applies contextual sliding window to the sentences.
+    """
+    all_sentences = []
+    segment_map = [] # stores number of sentences per original segment
+    
+    sentence_splitter = re.compile(r'(?<=[.!?])\s+')
+    
+    for seg in segments:
+        text = seg.strip()
+        if not text:
+            segment_map.append(0)
+            continue
+            
+        sents = [s.strip() for s in sentence_splitter.split(text) if s.strip()]
+        segment_map.append(len(sents))
+        all_sentences.extend(sents)
+        
+    if not all_sentences:
+        return ["" for _ in segments]
+        
+    # Translate the flat list of sentences
+    if use_sliding_window:
+        translated_sents = translate_sliding_window(all_sentences, engine, tokenizer, device, batch_size, src_lang, tgt_lang, ct2_tgt_prefix)
+    else:
+        translated_sents = translate_bulk(all_sentences, engine, tokenizer, device, batch_size, src_lang, tgt_lang, ct2_tgt_prefix)
+    
+    final_results = []
+    curr = 0
+    for count in segment_map:
+        if count == 0:
+            final_results.append("")
+            continue
+        
+        segment_translation = " ".join(translated_sents[curr : curr + count])
+        final_results.append(segment_translation)
+        curr += count
+        
+    return final_results
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", required=True)
-    parser.add_argument("--text", required=True)
+    parser.add_argument("--text")
+    parser.add_argument("--text-file")
     parser.add_argument("--mode", choices=["transcript", "document"], default="transcript")
     parser.add_argument("--src-lang", help="Source language code (e.g. en, eng_Latn)")
     parser.add_argument("--tgt-lang", help="Target language code (e.g. ja, jpn_Jpan)")
@@ -351,7 +394,11 @@ if __name__ == "__main__":
                     low_cpu_mem_usage=True
                 ).to(device).eval()
 
-        segments = json.loads(args.text)
+        if args.text_file:
+            with open(args.text_file, 'r', encoding='utf-8') as f:
+                segments = json.load(f)
+        else:
+            segments = json.loads(args.text)
         
         # Determine optimal batch size
         batch_size = 8
@@ -383,12 +430,25 @@ if __name__ == "__main__":
         # For NLLB in CT2, we need to pass the target language prefix
         ct2_tgt_prefix = [nllb_tgt] if use_ct2 and is_nllb and nllb_tgt else None
 
-        if args.mode == "document":
-            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Document mode (bulk)...")
-            results = translate_bulk(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
+        if is_nllb:
+            # NLLB: Use sentence splitting + sliding window for both modes
+            # This avoids truncation of long paragraphs while maintaining context.
+            mode_desc = "Document" if args.mode == "document" else "Transcript"
+            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in {mode_desc} mode (sentences + sliding window)...")
+            results = translate_with_sentence_splitting(
+                segments, engine, tokenizer, device, 
+                batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, 
+                ct2_tgt_prefix=ct2_tgt_prefix, use_sliding_window=True
+            )
         else:
-            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in Transcript mode (sliding window)...")
-            results = translate_sliding_window(segments, engine, tokenizer, device, batch_size=batch_size, src_lang=nllb_src, tgt_lang=nllb_tgt, ct2_tgt_prefix=ct2_tgt_prefix)
+            # Helsinki: Always split into sentences to avoid truncation
+            mode_desc = "Document" if args.mode == "document" else "Transcript"
+            sys.stderr.write(f"[Python Debug] Translating {len(segments)} segments in {mode_desc} mode (sentences)...")
+            results = translate_with_sentence_splitting(
+                segments, engine, tokenizer, device, 
+                batch_size=batch_size, src_lang=None, tgt_lang=None, 
+                ct2_tgt_prefix=None, use_sliding_window=False
+            )
             
         print(json.dumps(results, ensure_ascii=False))
 

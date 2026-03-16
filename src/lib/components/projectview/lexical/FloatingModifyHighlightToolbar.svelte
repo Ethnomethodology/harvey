@@ -1,5 +1,6 @@
 <!-- src/lib/components/projectview/lexical/FloatingModifyHighlightToolbar.svelte -->
 <script>
+  import { Trash2 } from 'lucide-svelte';
   export let editor;
   export let showToolbar;
   export let toolbarPosition;
@@ -43,9 +44,7 @@
     {/each}
   </div>
   <button class="remove-highlight" on:click={handleDelete}>
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
+    <Trash2 class="h-4 w-4" />
   </button>
 </div>
 {/if}
@@ -55,32 +54,59 @@
   position: absolute;
   z-index: 10;
   background-color: #fff;
-  border: 1px solid #ccc;
+  border: 1px solid #9ca3af; /* gray-400 */
   border-radius: 4px;
-  padding: 4px;
+  padding: 2px 4px;
   display: flex;
   align-items: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  gap: 2px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+}
+
+:global(html.dark) .selection-toolbar {
+  background-color: #111827; /* gray-900 */
+  border-color: #374151; /* gray-700 */
 }
 
 .highlight-options {
   display: flex;
   gap: 4px;
-  margin-right: 8px;
+  margin-right: 4px;
 }
 
 .color-box {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  width: 16px; /* align with pdf viewer w-4 h-4 */
+  height: 16px;
+  border: 1px solid #9ca3af; /* gray-400 */
+  border-radius: 9999px; /* rounded-full */
   cursor: pointer;
+}
+
+:global(html.dark) .color-box {
+    border-color: #374151; /* gray-700 */
 }
 
 .remove-highlight {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   padding: 4px;
+  border-radius: 0.25rem;
+  color: #ef4444; /* red-500 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-highlight:hover {
+    background-color: #e5e7eb; /* gray-200 */
+}
+
+:global(html.dark) .remove-highlight {
+    color: #f87171; /* red-400 */
+}
+
+:global(html.dark) .remove-highlight:hover {
+    background-color: #374151; /* gray-700 */
 }
 </style>

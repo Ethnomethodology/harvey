@@ -90,7 +90,14 @@
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
   import notificationStore from '$lib/stores/notificationStore.js';
-
+  import {
+    Undo2, Redo2, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, Plus,
+    ChevronDown, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+    Outdent, Indent, PaintBucket, Eraser, Search,
+    List, ListOrdered, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
+    Highlighter, Baseline, X, ChevronUp, CheckSquare,
+    Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
+  } from 'lucide-svelte';
   export let initialJson = null;
   export let editable = true;
   export let placeholder = 'Enter text...';
@@ -342,35 +349,12 @@
   ];
 
   const insertOptions = [
-      { value: 'table', label: 'Table', action: openInsertTableDialog, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 bi bi-table" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/>
-      </svg>
-    ` },
-    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
-        <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z"/>
-      </svg>
-    ` },
-    { value: 'link', label: 'Link', action: toggleLink, icon: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-link w-4 h-4" viewBox="0 0 16 16">
-        <path d="M6.354 5.5H4a3 3 0 0 0 0 6h3a3 3 0 0 0 2.83-4H9q-.13 0-.25.031A2 2 0 0 1 7 10.5H4a2 2 0 1 1 0-4h1.535c.218-.376.495-.714.82-1z"/>
-        <path d="M9 5.5a3 3 0 0 0-2.83 4h1.098A2 2 0 0 1 9 6.5h3a2 2 0 1 1 0 4h-1.535a4 4 0 0 1-.82 1H12a3 3 0 1 0 0-6z"/>
-      </svg>
-    ` },
+    { value: 'table', label: 'Table', action: openInsertTableDialog, iconComponent: TableIcon },
+    { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, iconComponent: Minus },
+    { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
   ];
 
-  const blockTypeIcons = {
-    paragraph: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5h6"/><path d="M15 12h6"/><path d="M3 19h18"/><path d="m3 12 3.553-7.724a.5.5 0 0 1 .894 0L11 12"/><path d="M3.92 10h6.16"/></svg>`,
-    h1:        `<span class="inline-block w-4 text-xs font-semibold">H1</span>`,
-    h2:        `<span class="inline-block w-4 text-xs font-semibold">H2</span>`,
-    h3:        `<span class="inline-block w-4 text-xs font-semibold">H3</span>`,
-    ul:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 5h2v2H4V5zM8 5h8v2H8V5zM4 9h2v2H4V9zM8 9h8v2H8V9zM4 13h2v2H4V13zM8 13h8v2H8V13z"/></svg>`,
-    ol:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h2v2H3V5zM8 5h8v2H8V5zM3 9h2v2H3V9zM8 9h8v2H8V9zM3 13h2v2H3V13zM8 13h8v2H8V13z"/></svg>`,
-    check:     `<span class="inline-block w-4 text-xs">☑</span>`,
-    quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
-    code:      `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`
-  };
+  const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: CheckSquare, quote: QuoteIcon, code: CodeIcon };
 
   const fontOptions = [
     { label: 'Inter', value: 'Inter' },
@@ -399,12 +383,7 @@
   ];
 
   const alignmentOptions = [ { value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }, { value: 'justify', label: 'Justify' } ];
-  const alignmentIcons = {
-    left:    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM3 8h10v2H3V8zM3 12h14v2H3v-2zM3 16h10v2H3v-2z" clip-rule="evenodd"/></svg>`,
-    center:  `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4h10v2H5V4zM3 8h14v2H3V8zM5 12h10v2H5v-2zM3 16h14v2H3v-2z" clip-rule="evenodd"/></svg>`,
-    right:   `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM7 8h10v2H7V8zM3 12h14v2H3v-2zM7 16h10v2H7v-2z" clip-rule="evenodd"/></svg>`,
-    justify: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4h14v2H3V4zM3 8h14v2H3V8zM3 12h14v2H3v-2zM3 16h14v2H3v-2z" clip-rule="evenodd"/></svg>`
-  };
+  const alignmentIcons = { left: 'left', center: 'center', right: 'right', justify: 'justify' };
 
   let isAlignDropdownOpen = false;
   let alignmentDropdownRef;
@@ -2561,14 +2540,14 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-hidden shadow-sm layout-{activeLayout}">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-[100]">
       {#if toolbarConfig.undo}
-        <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
+        <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}><Undo2 size={14} /></button>
       {/if}
       {#if toolbarConfig.redo}
-        <button class="mini-toolbar-button" on:click={redo} title="Redo ({modLabel}+{isMac ? 'Shift+Z' : 'Y'})" disabled={!editable || !canRedo}>↻</button>
+        <button class="mini-toolbar-button" on:click={redo} title="Redo ({modLabel}+{isMac ? 'Shift+Z' : 'Y'})" disabled={!editable || !canRedo}><Redo2 size={14} /></button>
       {/if}
       {#if (toolbarConfig.undo || toolbarConfig.redo) && (toolbarConfig.blockType || toolbarConfig.bold || toolbarConfig.italic || toolbarConfig.underline || toolbarConfig.strikethrough)}
         <div class="separator"></div>
@@ -2581,13 +2560,11 @@ $: if (editor && activeLayout) {
             title="Block Type"
             disabled={!editable}
           >
-            {@html blockTypeIcons[blockType] ?? blockTypeIcons.paragraph}
-            <svg class="ml-0.5 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            {#if blockType === 'h1'}<Heading1 size={14} />{:else if blockType === 'h2'}<Heading2 size={14} />{:else if blockType === 'h3'}<Heading3 size={14} />{:else if blockType === 'ul'}<List size={14} />{:else if blockType === 'ol'}<ListOrdered size={14} />{:else if blockType === 'check'}<CheckSquare size={14} />{:else if blockType === 'quote'}<QuoteIcon size={14} />{:else if blockType === 'code'}<CodeIcon size={14} />{:else}<Type size={14} />{/if}
+            <ChevronDown size={12} class="ml-0.5" />
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-20 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2596,7 +2573,7 @@ $: if (editor && activeLayout) {
                   tabindex="-1"
                 >
                   <span class="flex items-center gap-3 mr-3">
-                    {@html blockTypeIcons[option.value]}
+                    <svelte:component this={blockTypeIcons[option.value]} size={16} />
                     <span>{option.label}</span>
                   </span>
                   <span class="text-xs text-gray-500">{option.shortcut}</span>
@@ -2615,12 +2592,10 @@ $: if (editor && activeLayout) {
             disabled={!editable}
           >
             <span class="truncate">{fontOptions.find(f => f.value === selectedFontFamily)?.label ?? selectedFontFamily}</span>
-            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
           {#if isFontDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontOptions as option}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -2665,7 +2640,7 @@ $: if (editor && activeLayout) {
             +
           </button>
           {#if isFontSizeDropdownOpen}
-            <div class="absolute mt-1 top-full left-0 z-20 w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
+            <div class="absolute mt-1 top-full left-0 z-[200] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64">
               {#each fontSizeOptions as size}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -2684,16 +2659,16 @@ $: if (editor && activeLayout) {
         <div class="separator"></div>
       {/if}
       {#if toolbarConfig.bold}
-        <button class="mini-toolbar-button font-bold" on:click={() => formatText('bold')} class:active={isBold} title="Bold ({modLabel}+B)" disabled={!editable}>B</button>
+        <button class="mini-toolbar-button font-bold" on:click={() => formatText('bold')} class:active={isBold} title="Bold ({modLabel}+B)" disabled={!editable}><BoldIcon size={14} /></button>
       {/if}
       {#if toolbarConfig.italic}
-        <button class="mini-toolbar-button italic" on:click={() => formatText('italic')} class:active={isItalic} title="Italic ({modLabel}+I)" disabled={!editable}>I</button>
+        <button class="mini-toolbar-button italic" on:click={() => formatText('italic')} class:active={isItalic} title="Italic ({modLabel}+I)" disabled={!editable}><ItalicIcon size={14} /></button>
       {/if}
       {#if toolbarConfig.underline}
-        <button class="mini-toolbar-button underline" on:click={() => formatText('underline')} class:active={isUnderline} title="Underline ({modLabel}+U)" disabled={!editable}>U</button>
+        <button class="mini-toolbar-button underline" on:click={() => formatText('underline')} class:active={isUnderline} title="Underline ({modLabel}+U)" disabled={!editable}><UnderlineIcon size={14} /></button>
       {/if}
       {#if toolbarConfig.strikethrough}
-        <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough" disabled={!editable}>S</button>
+        <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough" disabled={!editable}><StrikethroughIcon size={14} /></button>
       {/if}
       {#if toolbarConfig.insertMenu}
         <div class="separator"></div>
@@ -2704,16 +2679,12 @@ $: if (editor && activeLayout) {
             title="Insert"
             disabled={!editable}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
+            <Plus class="h-4 w-4" />
             <span class="ml-1 hidden sm:inline">Insert</span>
-            <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
                 class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2735,13 +2706,11 @@ $: if (editor && activeLayout) {
       {#if toolbarConfig.align}
         <div class="relative" bind:this={alignmentDropdownRef}>
           <button class="mini-toolbar-button flex items-center" on:click={toggleAlignDropdown} title="Alignment" disabled={!editable}>
-            {@html alignmentIcons[selectedAlignment]}
-            <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-            </svg>
+            {#if selectedAlignment === 'left'}<AlignLeft size={14} />{:else if selectedAlignment === 'center'}<AlignCenter size={14} />{:else if selectedAlignment === 'right'}<AlignRight size={14} />{:else}<AlignJustify size={14} />{/if}
+            <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-20 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2750,7 +2719,7 @@ $: if (editor && activeLayout) {
                   tabindex="-1"
                 >
                   <span class="flex items-center gap-3">
-                    {@html alignmentIcons[option.value]}
+                    {#if option.value === 'left'}<AlignLeft size={14} />{:else if option.value === 'center'}<AlignCenter size={14} />{:else if option.value === 'right'}<AlignRight size={14} />{:else}<AlignJustify size={14} />{/if}
                     <span>{option.label}</span>
                   </span>
                 </div>
@@ -2764,16 +2733,12 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.outdent}
         <button class="mini-toolbar-button" on:click={outdentContent} title="Outdent" disabled={!editable}>
-            <svg class="w-[1rem] h-[1rem] indent-outdent-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                <path fill-rule="evenodd" d="M5 6a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Zm0 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Zm3.85-9.76A1 1 0 0 1 10.5 9v6a1 1 0 0 1-1.65.76l-3.5-3a1 1 0 0 1 0-1.52l3.5-3ZM12 10a1 1 0 0 1 1-1h5a1 1 0 1 1 0 2h-5a1 1 0 0 1-1-1Zm0 4a1 1 0 0 1 1-1h5a1 1 0 1 1 0 2h-5a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
-            </svg>
+            <Outdent size={14} />
           </button>
       {/if}
       {#if toolbarConfig.indent}
         <button class="mini-toolbar-button" on:click={indentContent} title="Indent" disabled={!editable}>
-            <svg class="w-[1rem] h-[1rem] indent-outdent-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                <path fill-rule="evenodd" d="M5 6a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Zm0 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Zm1.65-9.76A1 1 0 0 0 5 9v6a1 1 0 0 0 1.65.76l3.5-3a1 1 0 0 0 0-1.52l-3.5-3ZM12 10a1 1 0 0 1 1-1h5a1 1 0 1 1 0 2h-5a1 1 0 0 1-1-1Zm0 4a1 1 0 0 1 1-1h5a1 1 0 1 1 0 2h-5a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
-            </svg>
+            <Indent size={14} />
           </button>
       {/if}
       {#if (toolbarConfig.outdent || toolbarConfig.indent) && toolbarConfig.textColor}
@@ -2782,13 +2747,11 @@ $: if (editor && activeLayout) {
       {#if toolbarConfig.textColor}
         <div class="relative" bind:this={colorDropdownRef}>
           <button class="mini-toolbar-button flex items-center" on:click={toggleColorDropdown} title="Text Color" disabled={!editable} style="color: {selectedTextColor === 'transparent' ? 'currentColor': selectedTextColor}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
-                <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
-            </svg>
-            <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
+            <Baseline size={14} />
+            <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isColorDropdownOpen}
-            <div class="absolute mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each colorOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2811,15 +2774,11 @@ $: if (editor && activeLayout) {
       {#if toolbarConfig.highlight}
         <div class="relative" bind:this={highlightDropdownRef}>
           <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={!editable} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
-            </svg>
-            <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-            </svg>
+            <Highlighter size={14} />
+            <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isHighlightDropdownOpen}
-            <div class="absolute mt-1 z-20 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
+            <div class="absolute top-full left-0 mt-1 z-[200] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each highlightOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2841,9 +2800,7 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.clearFormatting}
         <button class="mini-toolbar-button" on:click={clearFormatting} title="Clear Formatting" disabled={!editable}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eraser" viewBox="0 0 16 16">
-            <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828zm2.121.707a1 1 0 0 0-1.414 0L4.16 7.547l5.293 5.293 4.633-4.633a1 1 0 0 0 0-1.414zM8.746 13.547 3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293z"/>
-          </svg>
+          <Eraser size={14} />
         </button>
       {/if}
 
@@ -2865,9 +2822,7 @@ $: if (editor && activeLayout) {
             }}
             title="Search"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-            </svg>
+            <Search class="w-4 h-4" />
           </button>
 
           {#if showSearchBox}
@@ -2903,9 +2858,7 @@ $: if (editor && activeLayout) {
                       on:click|stopPropagation={clearSearchTermInput}
                       title="Clear Search"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-                        <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                      </svg>
+                      <X class="w-3 h-3" />
                     </button>
                   {/if}
                 </div>
@@ -2918,9 +2871,7 @@ $: if (editor && activeLayout) {
                   disabled={searchResults.length === 0}
                   title="Previous Match"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-                  </svg>
+                  <ChevronLeft class="w-3.5 h-3.5" />
                 </button>
                 <button
                   class="mini-toolbar-button !p-1"
@@ -2928,9 +2879,7 @@ $: if (editor && activeLayout) {
                   disabled={searchResults.length === 0}
                   title="Next Match"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-                  </svg>
+                  <ChevronRight class="w-3.5 h-3.5" />
                 </button>
 
                 <div class="relative" bind:this={searchOptionsDropdownRef}>
@@ -2939,9 +2888,7 @@ $: if (editor && activeLayout) {
                     on:click={toggleSearchOptionsDropdown}
                     title="Search Options"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                      <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                    </svg>
+                    <MoreVertical class="w-3.5 h-3.5" />
                   </button>
                   {#if showSearchOptionsDropdown}
                     <div class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]">
@@ -2963,7 +2910,7 @@ $: if (editor && activeLayout) {
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 relative overflow-y-auto"
+    class="lexical-wrapper flex-grow min-h-0 relative overflow-visible"
     style="{enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}"
     bind:this={editorWrapper}
   >
@@ -2986,9 +2933,7 @@ $: if (editor && activeLayout) {
         on:click|stopPropagation={handlePlaySegmentClick}
         title="Play this segment"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 ml-0.5">
-          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-        </svg>
+        <Play class="w-3.5 h-3.5 ml-0.5 fill-current" />
       </button>
     {/if}
   </div>
@@ -3023,6 +2968,7 @@ $: if (editor && activeLayout) {
   on:replace={handleReplace}
   on:replaceall={handleReplaceAll}
   on:findnext={navigateToNextResult}
+  on:findprev={navigateToPreviousResult}
   on:findchange={(e) => executeSearch(e.detail.term, { isCaseSensitive: e.detail.isCaseSensitive, isRegex: e.detail.isRegex, isWholeWord: e.detail.isWholeWord })}
   on:close={() => showFindReplaceModal = false}
 />
@@ -3180,6 +3126,14 @@ $: if (editor && activeLayout) {
 
   button.active {
     @apply bg-gray-300 dark:bg-gray-500;
+  }
+
+  /* Make text black if it has a background color in dark mode (improves contrast) */
+  :global(html.dark .lexical-content [style*="background-color"]) {
+      color: black;
+  }
+  :global(html.dark .lexical-content [style*="background-color: transparent"]) {
+      color: white; /* Revert if it's explicitly transparent */
   }
 
   /* Ensure link color applies to text - targeting anchor tags directly inside editor */

@@ -2,38 +2,40 @@
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Import the new store
-    import { transcriptStore, toggleDualMode } from '$lib/stores/transcriptStore.js';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
+    import { 
+		Modal,
+        Button, 
+        Label, 
+        Select, 
+        Helper
+    } from 'flowbite-svelte';
+    import { LayoutDashboard, X, Waves } from 'lucide-svelte';
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
 	export let hideWaveformOptions = true; // Default to true now that it's in the top bar
-    export let hideDualModeOptions = true; // Default to true now that it's in the top bar
 
 	const dispatch = createEventDispatcher();
 
-	let modalElement;
 	let selectedDocxLayoutKey = currentLayoutKey;
-	let selectedWaveformLayout; // Will be initialized from the store
+	let selectedWaveformLayout; 
 
 	// Subscribe to the waveform layout store
 	const unsubscribeWaveformStore = waveformLayoutStore.subscribe(value => {
 		selectedWaveformLayout = value;
 	});
 
-	$: selectedDocxLayoutKey = currentLayoutKey; // Ensure internal state updates if prop changes
+	$: selectedDocxLayoutKey = currentLayoutKey;
 
 	function handleSelectDocxLayout(layoutKey) {
 		selectedDocxLayoutKey = layoutKey;
-		dispatch('selectLayout', layoutKey); // This is for DOCX export layout
-		// We don't close modal here, user might want to change waveform too
+		dispatch('selectLayout', layoutKey);
 	}
 
-	function handleSelectWaveformLayout(event) {
-		const newWaveformLayout = event.detail;
+	function handleSelectWaveformLayout(e) {
+		const newWaveformLayout = e.target.value;
 		waveformLayoutStore.setLayout(newWaveformLayout);
-		// selectedWaveformLayout will update reactively due to store subscription
 	}
 
 	function closeModal() {
@@ -41,127 +43,109 @@
 		dispatch('close');
 	}
 
-	function handleKeydown(event) {
-		if (showModal && event.key === 'Escape') {
-			closeModal();
-		}
-	}
-
-	onMount(() => {
-		window.addEventListener('keydown', handleKeydown);
-	});
-
 	onDestroy(() => {
-		window.removeEventListener('keydown', handleKeydown);
 		if (unsubscribeWaveformStore) {
 			unsubscribeWaveformStore();
 		}
 	});
 
 	const waveformOptions = [
-		{ value: 'horizontal', label: 'Horizontal' },
-		{ value: 'vertical', label: 'Vertical' },
-		{ value: 'none', label: 'None' }
+		{ value: 'horizontal', name: 'Horizontal' },
+		{ value: 'vertical', name: 'Vertical' },
+		{ value: 'none', name: 'None' }
 	];
 </script>
 
-{#if showModal}
-	<div
-		bind:this={modalElement}
-		class="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		on:click|self={closeModal}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="layout-settings-modal-title"
-		tabindex="-1"
-		on:keydown={handleKeydown}
-	>
-		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col text-gray-800 dark:text-gray-200 max-h-[85vh] overflow-y-auto"
-			on:click|stopPropagation
-			role="document"
-		>
-			<h2 id="layout-settings-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5">
-				View Settings
-			</h2>
+<Modal
+	bind:open={showModal}
+	size="md"
+	autoclose={false}
+	outsideclose={true}
+	class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-0 bg-white dark:bg-gray-900"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+	on:close={closeModal}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<LayoutDashboard class="w-5 h-5 text-gray-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			View Settings
+		</h3>
+	</div>
 
-			{#if !hideWaveformOptions}
-			<!-- Waveform Display Section -->
-			<div class="mb-6">
-				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Display</h3>
-				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-					Choose how the audio waveform is displayed in the Transcription tab.
-				</p>
-				<Dropdown
-					containerClasses="w-full"
-					options={waveformOptions}
-					bind:value={selectedWaveformLayout}
-					on:change={handleSelectWaveformLayout}
-				/>
+	<div class="p-6 space-y-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+		{#if !hideWaveformOptions}
+		<!-- Waveform Display Section -->
+		<div class="space-y-3 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+			<div class="flex items-center gap-2 text-gray-900 dark:text-white font-semibold text-sm">
+				<Waves size={18} class="text-blue-500" />
+				<span>Waveform Display</span>
 			</div>
-			{/if}
+			<p class="text-xs text-gray-500 dark:text-gray-400">
+				Choose how the audio waveform is displayed in the Transcription tab.
+			</p>
+			<Select
+				items={waveformOptions}
+				bind:value={selectedWaveformLayout}
+				on:change={handleSelectWaveformLayout}
+			/>
+		</div>
+		{/if}
 
-			<!-- DOCX Export Layout Section -->
-			<div>
-				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Transcript Export Layout</h3>
-				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-					This changes the layout for DOCX exports of the current transcript.
+		<!-- DOCX Export Layout Section -->
+		<div class="space-y-4">
+			<div class="space-y-1">
+				<Label class="text-gray-900 dark:text-white font-semibold text-sm">Transcript Layout</Label>
+				<p class="text-xs text-gray-500 dark:text-gray-400">
+					This changes the layout of the transcript on screen.
 				</p>
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-					{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
-						<button
-							type="button"
-							class="text-left p-3 border rounded-md transition-all duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 dark:focus-visible:ring-offset-gray-800"
-							class:bg-blue-500={selectedDocxLayoutKey === layout.rustLayoutKey}
-							class:text-white={selectedDocxLayoutKey === layout.rustLayoutKey}
-							class:hover:bg-gray-100={selectedDocxLayoutKey !== layout.rustLayoutKey}
-							class:dark:hover:bg-gray-700={selectedDocxLayoutKey !== layout.rustLayoutKey}
-							class:border-blue-500={selectedDocxLayoutKey === layout.rustLayoutKey}
-							class:dark:border-blue-400={selectedDocxLayoutKey === layout.rustLayoutKey}
-							class:border-gray-300={selectedDocxLayoutKey !== layout.rustLayoutKey}
-							class:dark:border-gray-600={selectedDocxLayoutKey !== layout.rustLayoutKey}
-							class:shadow-md={selectedDocxLayoutKey === layout.rustLayoutKey}
-							on:click={() => handleSelectDocxLayout(layout.rustLayoutKey)}
-							title={layout.name}
-							aria-pressed={selectedDocxLayoutKey === layout.rustLayoutKey}
-						>
-							<div class="font-medium mb-1.5 text-sm">{layout.name}</div>
-							<div class="{layout.previewClasses} min-h-[24px] opacity-80">
-								{#each layout.columnStyles as style}
-									<div class="{style.class} !p-1 !text-xs">{style.content}</div>
-								{/each}
-							</div>
-						</button>
-					{/each}
-				</div>
 			</div>
-
-			<!-- Footer Buttons -->
-			<div class="flex justify-end space-x-3 pt-5 border-t border-gray-200 dark:border-gray-600 mt-6">
-				<button type="button" on:click={closeModal} class="btn-secondary text-sm">
-					Close
-				</button>
-				<!-- Apply button is removed as changes are applied reactively -->
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+				{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+					<button
+						type="button"
+						class="text-left p-4 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {selectedDocxLayoutKey === layout.rustLayoutKey ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
+						on:click={() => handleSelectDocxLayout(layout.rustLayoutKey)}
+						title="Select {layout.name} layout"
+					>
+						<div class="font-bold mb-2 text-sm {selectedDocxLayoutKey === layout.rustLayoutKey ? 'text-blue-700 dark:text-blue-300' : ''}">
+							{layout.name}
+						</div>
+						<div class="{layout.previewClasses} min-h-[24px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800">
+							{#each layout.columnStyles as style}
+								<div class="{style.class} !p-1 !text-[10px] leading-tight flex items-center justify-center">{style.content}</div>
+							{/each}
+						</div>
+						{#if selectedDocxLayoutKey === layout.rustLayoutKey}
+							<div class="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full"></div>
+						{/if}
+					</button>
+				{/each}
 			</div>
 		</div>
 	</div>
-{/if}
+
+	<svelte:fragment slot="footer">
+		<Button color="blue" on:click={closeModal} title="Close settings" class="px-8">
+			Close
+		</Button>
+	</svelte:fragment>
+</Modal>
 
 <style lang="postcss">
-	/* Basic button styles - can be inherited or defined if this modal is used standalone */
-	.btn-primary, .btn-secondary {
-		@apply px-4 py-1.5 rounded-md shadow-sm font-medium transition duration-150 ease-in-out;
-	}
-	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed;
-	}
-	.btn-secondary {
-		@apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800;
-	}
-
-	/* Ensure preview styles are scoped or specific enough */
-	/* The `!p-1` and `!text-xs` in the template help override generic styles from layout.previewClasses if needed */
-    .ui-checkbox {
-		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
-	}
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-300 dark:bg-gray-600;
+    }
 </style>

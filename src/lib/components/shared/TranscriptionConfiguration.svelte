@@ -168,17 +168,12 @@
 	onMount(async () => {
 		configError = '';
 
-		// If libraries aren't installed, don't even try to load local models
-		// as it will trigger a technical error message.
-		if (!$configStatus.python_libraries_installed) {
-			return;
-		}
-
 		try {
 			const persistedEngine = await getSelectedTranscriptionEngine();
 			if (persistedEngine) {
 				setSelectedTranscriptionEngineStore(persistedEngine);
 			}
+			// Load local models regardless of python library status so we can check what's already on disk.
 			const models = await getDownloadedModels();
 			downloadedModels = Array.isArray(models) ? models : [];
 			totalDownloadedCount = downloadedModels.length;
@@ -468,17 +463,23 @@
 	<div class="flex justify-between items-center mb-2 px-1">
 		<h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">Transcription Models</h3>
 		<div class="flex items-center">
-			{#if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
+			{#if !$configStatus.python_libraries_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">PYTHON LIBRARIES MISSING</span>
+			{:else if selectedEngine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">FASTER-WHISPER LIBRARIES MISSING</span>
+			{:else if selectedEngine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed}
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">WHISPER.CPP LIBRARY MISSING</span>
+			{:else if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
 					{selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount} {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} {(selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) === 1 ? 'MODEL' : 'MODELS'} DOWNLOADED
 				</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase">NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span>
+				<span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase">NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span>
 			{/if}
 		</div>
 	</div>
 
-	{#if $configStatus.isInitialized && !$configStatus.faster_whisper_dependencies_installed && hasDownloadedFasterWhisper}
+	{#if $configStatus.isInitialized && selectedEngine === 'faster-whisper' && $configStatus.python_libraries_installed && !$configStatus.faster_whisper_dependencies_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">
@@ -501,7 +502,7 @@
 		</div>
 	{/if}
 
-	{#if $configStatus.isInitialized && !$configStatus.whisper_cpp_installed && hasDownloadedWhisperCpp}
+	{#if $configStatus.isInitialized && selectedEngine === 'whisper-cpp' && $configStatus.python_libraries_installed && !$configStatus.whisper_cpp_installed}
 		<div class="mb-4 flex flex-col bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-3 rounded-md shadow-sm">
 			<div class="flex items-center justify-between mb-2">
 				<div class="flex items-center">
@@ -510,9 +511,13 @@
 					</svg>
 					<span class="text-xs text-orange-800 dark:text-orange-300 font-medium">Whisper.cpp library is missing.</span>
 				</div>
-				<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
-					Install Now
-				</button>
+				{#if $configStatus.python_libraries_installed}
+					<button class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm" on:click={handleInstallWCDependencies} disabled={isInstallingDependencies}>
+						Install Now
+					</button>
+				{:else}
+					<span class="text-[10px] text-orange-700/80 dark:text-orange-400/80 italic">Install Python libraries in General Settings first</span>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -557,13 +562,15 @@
 
 		{#if selectedEngine === 'whisper-cpp'}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Native Metal support on Mac, extremely fast, lightweight, high accuracy with GGML models.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openExternal('https://github.com/ggerganov/whisper.cpp')}>whisper.cpp</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, fast on Mac (Metal) and Windows (CPU).</p>
 				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Less optimized for NVIDIA GPUs than faster-whisper.</p>
 			</div>
 		{:else}
 			<div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
-				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Blazing fast on NVIDIA GPUs, supports integer8 quantization for lower memory usage.</p>
-				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Macs compared to whisper.cpp, larger library dependencies.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Engine:</strong> <button class="hover:underline text-blue-600 dark:text-blue-400 font-medium" on:click={() => openExternal('https://github.com/SYSTRAN/faster-whisper')}>faster-whisper</button></p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Faster on NVIDIA GPUs.</p>
+				<p><strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Mac (Metal) compared to whisper.cpp.</p>
 			</div>
 		{/if}
 	</div>

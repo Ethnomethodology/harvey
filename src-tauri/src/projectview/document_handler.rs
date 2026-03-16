@@ -192,6 +192,7 @@ pub async fn import_document<R: Runtime>(
                 waveform_data: None,
                 language_code: None,
                 properties: None,
+                file_type: "document".to_string(),
             };
 
             // Save metadata to SQLite database
@@ -317,6 +318,7 @@ pub async fn import_document<R: Runtime>(
                 waveform_data: None,
                 language_code: None,
                 properties: None,
+                file_type: "document".to_string(),
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

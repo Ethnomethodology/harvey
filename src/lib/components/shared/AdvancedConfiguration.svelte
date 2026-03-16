@@ -1,8 +1,8 @@
 <script>
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
-    import Dropdown from '$lib/components/shared/Dropdown.svelte';
-    import { CheckCircle, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-svelte';
+    import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
+    import { CheckCircle, AlertTriangle, MessageSquareText, Users, Languages } from 'lucide-svelte';
 
     export let isBusy = false;
 
@@ -24,27 +24,23 @@
     let statusMessage = '';
     let statusType = 'info'; // info, success, error
     
-    // Collapsible panel states
-    let isDiarizationOpen = false;
-    let isTranslationOpen = false;
-    let isTranscriptionOpen = false;
 
     const deviceOptions = [
-        { value: 'auto', label: 'Auto (Recommended)' },
-        { value: 'cpu', label: 'CPU' },
-        { value: 'cuda', label: 'NVIDIA GPU (CUDA)' },
-        { value: 'mps', label: 'Apple Silicon (MPS/Metal)' }
+        { value: 'auto', name: 'Auto (Recommended)' },
+        { value: 'cpu', name: 'CPU' },
+        { value: 'cuda', name: 'NVIDIA GPU (CUDA)' },
+        { value: 'mps', name: 'Apple Silicon (MPS/Metal)' }
     ];
 
     const quantizationOptions = [
-        { value: 'int8', label: 'Int8 (Fastest - Recommended)' },
-        { value: 'float16', label: 'Float16 (Higher Precision)' }
+        { value: 'int8', name: 'Int8 (Fastest - Recommended)' },
+        { value: 'float16', name: 'Float16 (Higher Precision)' }
     ];
 
     const computeTypeOptions = [
-        { value: 'int8', label: 'Int8 (Fastest)' },
-        { value: 'int8_float16', label: 'Int8 + Float16 (Hybrid)' },
-        { value: 'float16', label: 'Float16 (Higher Precision)' }
+        { value: 'int8', name: 'Int8 (Fastest)' },
+        { value: 'int8_float16', name: 'Int8 + Float16 (Hybrid)' },
+        { value: 'float16', name: 'Float16 (Higher Precision)' }
     ];
 
     let originalQuantization = 'int8'; // To track changes
@@ -194,46 +190,39 @@
     }
 </script>
 
-<div class="p-1 h-full overflow-y-auto">
-    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-        <p class="text-xs text-blue-700 dark:text-blue-400">{recommendation}</p>
+<div class="h-full overflow-y-auto">
+    <div class="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+        <p class="text-xs font-medium text-blue-700 dark:text-blue-400">{recommendation}</p>
     </div>
     
     <!-- Status Message Area (Moved up) -->
-    {#if statusMessage}
-        <div class="mb-4 flex items-center p-2 rounded-md" class:bg-green-100={statusType === 'success'} class:text-green-700={statusType === 'success'} class:bg-red-100={statusType === 'error'} class:text-red-700={statusType === 'error'} class:bg-gray-100={statusType === 'info'} class:text-gray-700={statusType === 'info'} class:dark:bg-green-900={statusType === 'success'} class:dark:text-green-300={statusType === 'success'} class:dark:bg-red-900={statusType === 'error'} class:dark:text-red-300={statusType === 'error'} class:dark:bg-gray-800={statusType === 'info'} class:dark:text-gray-300={statusType === 'info'}>
+    {#if statusMessage && statusType !== 'info'}
+        <div class="mb-4 flex items-center p-2 rounded-md" class:bg-green-100={statusType === 'success'} class:text-green-700={statusType === 'success'} class:bg-red-100={statusType === 'error'} class:text-red-700={statusType === 'error'} class:dark:bg-green-900={statusType === 'success'} class:dark:text-green-300={statusType === 'success'} class:dark:bg-red-900={statusType === 'error'} class:dark:text-red-300={statusType === 'error'}>
             {#if statusType === 'success'} <CheckCircle class="w-4 h-4 mr-2"/> {:else if statusType === 'error'} <AlertTriangle class="w-4 h-4 mr-2"/> {/if}
             <span class="text-sm">{statusMessage}</span>
         </div>
     {/if}
 
-    <div class="space-y-6">
+    <Accordion class="w-full space-y-4 bg-transparent border-0" flush multiple={false}>
         <!-- Transcription Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <button
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isTranscriptionOpen = !isTranscriptionOpen}
-            >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Transcription Engine Parameters</h3>
-                {#if isTranscriptionOpen}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <AccordionItem open defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
+                    <MessageSquareText size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    Transcription Engine Parameters
+                </span>
 
-            {#if isTranscriptionOpen}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <!-- General Settings -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.transcription_device_preference} />
+                            <Select items={deviceOptions} bind:value={config.transcription_device_preference} />
                             <p class="text-[10px] text-gray-500">Auto will use GPU if available. 'CPU' bypasses GPU for both engines.</p>
                         </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.transcription_num_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Threads for inference (Faster-Whisper & Whisper.cpp).</p>
                         </div>
                     </div>
@@ -244,12 +233,12 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Compute Type (Quantization)</label>
-                            <Dropdown options={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
+                            <Select items={computeTypeOptions} bind:value={config.faster_whisper_compute_type} />
                             <p class="text-[10px] text-gray-500">Precision of model weights. Int8 is fastest on CPU.</p>
                         </div>
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Beam Size</label>
-                            <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" />
+                            <input type="number" bind:value={config.faster_whisper_beam_size} min="1" max="10" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Number of paths to search. 1 is greedy (fastest), 5 is standard.</p>
                         </div>
                     </div>
@@ -260,37 +249,30 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
 
         <!-- Diarization Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <button
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isDiarizationOpen = !isDiarizationOpen}
-            >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Diarization Engine Parameters</h3>
-                {#if isDiarizationOpen}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <AccordionItem defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
+                    <Users size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    Diarization Engine Parameters
+                </span>
 
-            {#if isDiarizationOpen}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.diarization_device} />
+                            <Select items={deviceOptions} bind:value={config.diarization_device} />
                             <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                         </div>
 
                         <!-- Threads -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.diarization_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
                     </div>
@@ -300,44 +282,37 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
 
         <!-- Translation Panel -->
-        <div class="border dark:border-gray-700 rounded-md overflow-hidden">
-            <button 
-                class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                on:click={() => isTranslationOpen = !isTranslationOpen}
-            >
-                <h3 class="font-medium text-gray-700 dark:text-gray-200">Translation Engine Parameters</h3>
-                {#if isTranslationOpen}
-                    <ChevronDown class="w-4 h-4 text-gray-500" />
-                {:else}
-                    <ChevronRight class="w-4 h-4 text-gray-500" />
-                {/if}
-            </button>
+        <div class="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <AccordionItem defaultClass="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span slot="header" class="flex items-center text-base font-medium text-gray-700 dark:text-gray-200">
+                    <Languages size={18} class="mr-2 text-gray-500 dark:text-gray-400" />
+                    Translation Engine Parameters
+                </span>
 
-            {#if isTranslationOpen}
                 <div class="p-4 space-y-4 bg-white dark:bg-gray-900">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Device & Backend -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Device Preference</label>
-                            <Dropdown options={deviceOptions} bind:value={config.device_preference} />
+                            <Select items={deviceOptions} bind:value={config.device_preference} />
                             <p class="text-[10px] text-gray-500">Force specific hardware. 'Auto' selects best available.</p>
                         </div>
                         
                         <!-- Threads -->
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">CPU Threads</label>
-                            <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" />
+                            <input type="number" bind:value={config.num_threads} min="1" max="32" class="input w-full" autocomplete="off" autocorrect="off" />
                             <p class="text-[10px] text-gray-500">Cores to use when running on CPU.</p>
                         </div>
 
                         <!-- Quantization -->
                         <div class="space-y-1 md:col-span-2 border-t pt-2 mt-2 dark:border-gray-800">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model Optimization (Quantization)</label>
-                            <Dropdown options={quantizationOptions} bind:value={config.quantization_preference} />
+                            <Select items={quantizationOptions} bind:value={config.quantization_preference} />
                             <p class="text-[10px] text-gray-500">
                                 'Int8' is significantly faster on CPU. 'Float16' is higher precision.
                             </p>
@@ -387,9 +362,9 @@
                         <button class="btn-primary" on:click={handleSave} disabled={isBusy}>Save</button>
                     </div>
                 </div>
-            {/if}
+            </AccordionItem>
         </div>
-    </div>
+    </Accordion>
 </div>
 
 <style lang="postcss">

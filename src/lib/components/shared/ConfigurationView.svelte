@@ -13,6 +13,8 @@
 		getDownloadLocation,
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
+	import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
+	import { FolderOpen, Settings2, MonitorCog, MessageSquareText, Users, Languages, SlidersHorizontal, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
@@ -30,6 +32,8 @@
 	let configError = '';
 	let isMovingModels = false;
 	let statusMessage = '';
+
+	let isGeneralOpen = false;
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
@@ -109,196 +113,167 @@
 	}
 </script>
 
-<div class="p-4 flex flex-col h-full bg-gray-50 dark:bg-gray-950 dark:text-gray-200">
+<div class="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
 	<!-- Tab Navigation -->
-	<div class="mb-6 flex-shrink-0">
-		<nav class="flex flex-wrap gap-2" aria-label="Tabs">
-            <button
-				on:click={() => activeTab = 'application'}
-				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:bg-blue-100={activeTab === 'application'}
-				class:text-blue-700={activeTab === 'application'}
-				class:dark:bg-blue-900={activeTab === 'application'}
-				class:dark:text-blue-300={activeTab === 'application'}
-				class:text-gray-500={activeTab !== 'application'}
-				class:dark:text-gray-400={activeTab !== 'application'}
-				class:hover:text-gray-700={activeTab !== 'application'}
-				class:dark:hover:text-gray-200={activeTab !== 'application'}
-				class:hover:bg-gray-100={activeTab !== 'application'}
-				class:dark:hover:bg-gray-800={activeTab !== 'application'}
-				aria-current={activeTab === 'application' ? 'page' : undefined}
-			>
-				<span>Application</span>
-				{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-red-500" viewBox="0 0 16 16">
-						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
-						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
-					</svg>
-				{/if}
-			</button>
-			<button
-				on:click={() => activeTab = 'transcription'}
-				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:bg-blue-100={activeTab === 'transcription'}
-				class:text-blue-700={activeTab === 'transcription'}
-				class:dark:bg-blue-900={activeTab === 'transcription'}
-				class:dark:text-blue-300={activeTab === 'transcription'}
-				class:text-gray-500={activeTab !== 'transcription'}
-				class:dark:text-gray-400={activeTab !== 'transcription'}
-				class:hover:text-gray-700={activeTab !== 'transcription'}
-				class:dark:hover:text-gray-200={activeTab !== 'transcription'}
-				class:hover:bg-gray-100={activeTab !== 'transcription'}
-				class:dark:hover:bg-gray-800={activeTab !== 'transcription'}
-				aria-current={activeTab === 'transcription' ? 'page' : undefined}
-			>
-				<span>Transcription</span>
-				{#if ($configStatus.selected_transcription_engine === 'whisper-cpp' && (!$configStatus.whisper_cpp_installed || !$configStatus.whisper_cpp_models_downloaded)) || ($configStatus.selected_transcription_engine === 'faster-whisper' && (!$configStatus.faster_whisper_dependencies_installed || !$configStatus.faster_whisper_models_downloaded || !$configStatus.python_libraries_installed))}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
-						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
-						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
-					</svg>
-				{/if}
-			</button>
-			<button
-				on:click={() => activeTab = 'diarization'}
-				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:bg-blue-100={activeTab === 'diarization'}
-				class:text-blue-700={activeTab === 'diarization'}
-				class:dark:bg-blue-900={activeTab === 'diarization'}
-				class:dark:text-blue-300={activeTab === 'diarization'}
-				class:text-gray-500={activeTab !== 'diarization'}
-				class:dark:text-gray-400={activeTab !== 'diarization'}
-				class:hover:text-gray-700={activeTab !== 'diarization'}
-				class:dark:hover:text-gray-200={activeTab !== 'diarization'}
-				class:hover:bg-gray-100={activeTab !== 'diarization'}
-				class:dark:hover:bg-gray-800={activeTab !== 'diarization'}
-				aria-current={activeTab === 'diarization' ? 'page' : undefined}
-			>
-				<span>Diarization</span>
-				{#if !$configStatus.diarization_model_downloaded}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
-						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
-						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
-					</svg>
-				{/if}
-			</button>
-			<button
-				on:click={() => activeTab = 'translation'}
-				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:bg-blue-100={activeTab === 'translation'}
-				class:text-blue-700={activeTab === 'translation'}
-				class:dark:bg-blue-900={activeTab === 'translation'}
-				class:dark:text-blue-300={activeTab === 'translation'}
-				class:text-gray-500={activeTab !== 'translation'}
-				class:dark:text-gray-400={activeTab !== 'translation'}
-				class:hover:text-gray-700={activeTab !== 'translation'}
-				class:dark:hover:text-gray-200={activeTab !== 'translation'}
-				class:hover:bg-gray-100={activeTab !== 'translation'}
-				class:dark:hover:bg-gray-800={activeTab !== 'translation'}
-				aria-current={activeTab === 'translation' ? 'page' : undefined}
-			>
-				<span>Translation</span>
-				{#if ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) || ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded)}
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-yellow-500" viewBox="0 0 16 16">
-						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
-						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
-					</svg>
-				{/if}
-			</button>
-			<button
-				on:click={() => activeTab = 'advanced'}
-				class="px-2.5 py-1.5 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:bg-blue-100={activeTab === 'advanced'}
-				class:text-blue-700={activeTab === 'advanced'}
-				class:dark:bg-blue-900={activeTab === 'advanced'}
-				class:dark:text-blue-300={activeTab === 'advanced'}
-				class:text-gray-500={activeTab !== 'advanced'}
-				class:dark:text-gray-400={activeTab !== 'advanced'}
-				class:hover:text-gray-700={activeTab !== 'advanced'}
-				class:dark:hover:text-gray-200={activeTab !== 'advanced'}
-				class:hover:bg-gray-100={activeTab !== 'advanced'}
-				class:dark:hover:bg-gray-800={activeTab !== 'advanced'}
-				aria-current={activeTab === 'advanced' ? 'page' : undefined}
-			>
-				<span>Advanced</span>
-			</button>
-		</nav>
+	<div class="border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
+		<ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
+			<li class="me-2">
+				<button
+					type="button"
+					on:click={() => (activeTab = 'application')}
+					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'application' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+				>
+					<MonitorCog size={18} class="me-2 {activeTab === 'application' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					Application
+					{#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present}
+						<TriangleAlert size={14} class="ms-2 text-red-500" />
+					{/if}
+				</button>
+			</li>
+			<li class="me-2">
+				<button
+					type="button"
+					on:click={() => (activeTab = 'transcription')}
+					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'transcription' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+				>
+					<MessageSquareText size={18} class="me-2 {activeTab === 'transcription' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					Transcription
+					{#if !$configStatus.python_libraries_installed || ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_installed) || ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.faster_whisper_dependencies_installed)}
+						<TriangleAlert size={14} class="ms-2 text-red-500" title="Missing required libraries" />
+					{:else if ($configStatus.selected_transcription_engine === 'whisper-cpp' && !$configStatus.whisper_cpp_models_downloaded) || ($configStatus.selected_transcription_engine === 'faster-whisper' && !$configStatus.faster_whisper_models_downloaded)}
+						<TriangleAlert size={14} class="ms-2 text-yellow-500" title="No models downloaded" />
+					{/if}
+				</button>
+			</li>
+			<li class="me-2">
+				<button
+					type="button"
+					on:click={() => (activeTab = 'diarization')}
+					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'diarization' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+				>
+					<Users size={18} class="me-2 {activeTab === 'diarization' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					Diarization
+					{#if !$configStatus.python_libraries_installed}
+						<TriangleAlert size={14} class="ms-2 text-red-500" title="Missing required Python libraries" />
+					{:else if !$configStatus.diarization_model_downloaded}
+						<TriangleAlert size={14} class="ms-2 text-yellow-500" title="No model downloaded" />
+					{/if}
+				</button>
+			</li>
+			<li class="me-2">
+				<button
+					type="button"
+					on:click={() => (activeTab = 'translation')}
+					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'translation' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+				>
+					<Languages size={18} class="me-2 {activeTab === 'translation' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					Translation
+					{#if !$configStatus.python_libraries_installed}
+						<TriangleAlert size={14} class="ms-2 text-red-500" title="Missing required Python libraries" />
+					{:else if ($configStatus.selected_translation_engine === 'helsinki' && !$configStatus.helsinki_models_downloaded) || ($configStatus.selected_translation_engine === 'nllb' && !$configStatus.nllb_models_downloaded)}
+						<TriangleAlert size={14} class="ms-2 text-yellow-500" title="No models downloaded" />
+					{/if}
+				</button>
+			</li>
+			<li class="me-2">
+				<button
+					type="button"
+					on:click={() => (activeTab = 'advanced')}
+					class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab === 'advanced' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+				>
+					<SlidersHorizontal size={18} class="me-2 {activeTab === 'advanced' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+					Advanced
+				</button>
+			</li>
+		</ul>
 	</div>
 
-	<!-- Tab Content Area -->
-	<div class="flex-grow min-h-0 overflow-y-auto pr-2 -mr-2">
-		{#if activeTab === 'application'}
-            <div class="p-1">
-                {#if isLoadingConfig}
-                    <p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
-                {:else if configError}
-                    <p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
-						<span class="font-medium">Error:</span> {configError}
-					</p>
-                {/if}
-
-				<div class="mb-6 flex-shrink-0">
-					<label for="theme-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme</label>
-					<Dropdown
-						containerClasses="w-48"
-						options={[{value: 'system', label: 'System'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]}
-						bind:value={$themePreference}
-					/>
-				</div>
-
-                <div class="mb-6 flex-shrink-0">
-                    <label for="download-location-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-						Local Model Download Location
-					</label>
-                    <div class="flex items-center space-x-2">
-                        <input
-							id="download-location-input"
-							type="text"
-							bind:value={downloadLocation}
-							class="input w-full flex-grow"
-							readonly
-							placeholder="Set a location..."
-							title={downloadLocation || 'No location set'}
-							autocomplete="off"
-							autocorrect="off"
-						/>
-                        <button
-							type="button"
-							class="btn-blue flex-shrink-0"
-							on:click={pickDownloadLocation}
-							disabled={isBusy}
-							title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
-						>
-							{#if isMovingModels} Moving... {:else} Browse {/if}
-						</button>
-                    </div>
-                    {#if isBusy && !isMovingModels}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-							Download in progress. Cannot change location now.
-						</p>
-                    {/if}
-                    {#if statusMessage}
-                        <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
-                    {/if}
-                </div>
-
-				<div class="mb-6">
-					<h3 class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Required Tools</h3>
+	<!-- Main Content Area -->
+	<div class="flex-grow min-h-0 overflow-y-auto p-8">
+		<div class="max-w-3xl mx-auto h-full">
+			{#if activeTab === 'application'}
+				<div class="space-y-6">
+					{#if isLoadingConfig}
+						<p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
+					{/if}
 					<LibrariesPanel />
-					<HuggingFacePanel />
+
+					<Accordion class="w-full bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden" flush>
+						<AccordionItem bind:open={isGeneralOpen} defaultClass="w-full flex items-center justify-between px-6 py-4 text-left font-semibold text-gray-900 dark:text-gray-200 bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors border-b dark:border-gray-700">
+							<span slot="header" class="flex items-center gap-2 text-gray-900 dark:text-gray-200 text-base">
+								<Settings2 size={18} class="text-gray-500" />
+								General Settings
+							</span>
+							<div class="p-6 space-y-6">
+								<div class="space-y-2">
+									<Label for="theme-select">Theme</Label>
+									<Select
+										id="theme-select"
+										class="max-w-xs"
+										items={[
+											{value: 'system', name: 'System'},
+											{value: 'light', name: 'Light'},
+											{value: 'dark', name: 'Dark'}
+										]}
+										bind:value={$themePreference}
+									/>
+								</div>
+
+								<div class="space-y-2">
+									<Label for="download-location-input">
+										Local Model Download Location
+									</Label>
+									<div class="flex items-center gap-2 max-w-2xl">
+										<Input
+											id="download-location-input"
+											type="text"
+											bind:value={downloadLocation}
+											class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
+											readonly
+											placeholder="Set a location..."
+											title={downloadLocation || 'No location set'}
+											autocomplete="off"
+											autocorrect="off"
+										/>
+										<Button
+											color="alternative"
+											class="px-3"
+											on:click={pickDownloadLocation}
+											disabled={isBusy}
+											title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
+										>
+											{#if isMovingModels}
+												Moving...
+											{:else}
+												<FolderOpen size={18} />
+											{/if}
+										</Button>
+									</div>
+									{#if isBusy && !isMovingModels}
+										<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+											Download in progress. Cannot change location now.
+										</p>
+									{/if}
+									{#if statusMessage}
+										<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
+									{/if}
+								</div>
+							</div>
+						</AccordionItem>
+					</Accordion>
 				</div>
-            </div>
-		{:else if activeTab === 'transcription'}
-			<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
-		{:else if activeTab === 'diarization'}
-			<div class="p-1">
+			{:else if activeTab === 'transcription'}
+				<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
+			{:else if activeTab === 'diarization'}
 				<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
-			</div>
-		{:else if activeTab === 'translation'}
-			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
-		{:else if activeTab === 'advanced'}
-			<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
-		{/if}
+			{:else if activeTab === 'translation'}
+				<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
+			{:else if activeTab === 'advanced'}
+				<div class="pb-8">
+					<AdvancedConfiguration bind:isBusy={isAdvancedBusy} />
+				</div>
+			{/if}
+		</div>
 	</div>
 </div>
 

@@ -2,15 +2,44 @@
 <script>
 	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
+	import { 
+        CheckCircle, 
+        XCircle, 
+        Clock, 
+        Loader, 
+        AlertTriangle, 
+        ExternalLink, 
+        Settings2, 
+        X, 
+        Mic, 
+        UserPen, 
+        SlidersHorizontal,
+        Cpu,
+        PencilLine,
+        Plus,
+        Minus
+    } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
+    import { 
+        Modal,
+        Input, 
+        Label, 
+        Select, 
+        Button, 
+        Helper, 
+        Checkbox, 
+        Tabs, 
+        TabItem,
+        Radio,
+        Progressbar,
+        Alert
+    } from 'flowbite-svelte';
 
 	// Props
 	export let fileName = '';
@@ -24,7 +53,6 @@
 
 	// Local state for editable fields
 	let modalSelectedModel = '';
-	let modalTranscriptionMode = 'automatic'; // Kept for store compatibility if needed, but UI uses modalTab
 	let modalTab = 'automatic'; // 'automatic' | 'manual'
 	let modalSelectedLanguage = 'auto';
     let modalInitialPrompt = '';
@@ -54,15 +82,41 @@
         }
     }
 
+    // Helper functions for custom buttons
+    function incrementCount() {
+        manualSegmentCount = Math.min(100, manualSegmentCount + 1);
+        if (mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / manualSegmentCount));
+        }
+    }
+    function decrementCount() {
+        manualSegmentCount = Math.max(1, manualSegmentCount - 1);
+        if (mediaDuration > 0) {
+            manualSegmentDuration = Math.max(1, Math.round(mediaDuration / manualSegmentCount));
+        }
+    }
+    function incrementDuration() {
+        manualSegmentDuration = manualSegmentDuration + 1;
+        if (mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / manualSegmentDuration)));
+        }
+    }
+    function decrementDuration() {
+        manualSegmentDuration = Math.max(1, manualSegmentDuration - 1);
+        if (mediaDuration > 0) {
+            manualSegmentCount = Math.min(100, Math.max(1, Math.round(mediaDuration / manualSegmentDuration)));
+        }
+    }
+
 	// Derived state for manual validation
 	$: totalDurationNeeded = manualSegmentCount * manualSegmentDuration;
 	// For manual transcription initialization (from this modal), we treat it as creating a new transcript/overwriting.
 	// So we validate against total media duration, not remaining space.
 	$: isManualDurationValid = totalDurationNeeded <= mediaDuration + 0.001;
 
-	const manualSpeakerOptions = [
+	$: manualSpeakerOptions = [
 		{ value: 'unassigned', label: 'Unassigned' },
-		{ value: 'alternate', label: 'Alternate Speakers', disabled: (speakers?.names?.length || 0) < 2 },
+		{ value: 'alternate', label: 'Alternate Speakers', disabled: (modalSpeakersConfig?.names?.length || 0) < 2 },
 	];
 
 	function formatDuration(seconds) {
@@ -171,8 +225,13 @@
 	let isInitialized = false;
 	// When the modal is about to show the confirm view, initialize local states from the store
 	$: if (showModal && !isTranscribing && jobStatus === null && !isInitialized) {
-		modalSelectedModel =
-			$transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
+		modalSelectedModel = $transcriptStore.selectedModelName || '';
+        
+        // Ensure a valid model is selected if possible
+        if (downloadedModelsList.length > 0 && (!modalSelectedModel || !downloadedModelsList.some(m => m.name === modalSelectedModel))) {
+            modalSelectedModel = downloadedModelsList[0].name;
+        }
+
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTab = $transcriptStore.transcriptionMode || 'automatic'; // Initialize tab from store
 
@@ -194,9 +253,11 @@
 		isInitialized = true;
 	}
 
-	// Update modalSelectedModel if downloadedModelsList changes and it's empty
-	$: if (showModal && !modalSelectedModel && downloadedModelsList.length > 0) {
-		modalSelectedModel = downloadedModelsList[0].name;
+	// Update modalSelectedModel if downloadedModelsList changes and it's empty or no longer valid
+	$: if (showModal && downloadedModelsList.length > 0) {
+        if (!modalSelectedModel || !downloadedModelsList.some(m => m.name === modalSelectedModel)) {
+            modalSelectedModel = downloadedModelsList[0].name;
+        }
 	}
 
 	// Reset the initialization flag when the modal is closed
@@ -209,7 +270,7 @@
 		!isTranscribing && jobStatus === null
 			? 'Transcription Settings'
 			: isTranscribing && jobStatus === 'initiating'
-				? 'Initiating Transcription...'
+				? 'Initiating Transcription'
 				: isTranscribing && jobStatus === 'running'
 					? 'Transcription Status'
 					: jobStatus === 'cancelling'
@@ -238,33 +299,25 @@
 		}
 	}
 
-	// Keyboard handling (optional, can be simplified or removed if not strictly needed by new design)
+	// Keyboard handling
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
-			// If transcribing and running/initiating, do nothing on Escape.
 			if (isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')) {
-				// Explicitly do nothing to prevent closure
-				event.preventDefault(); // Also prevent any default browser behavior for Escape if modal is focused
+				event.preventDefault();
 				return;
 			} else if (
 				!isTranscribing &&
 				(jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)
 			) {
-				// For terminal states or initial confirm state, allow close.
 				handleCloseAndReset();
 			}
-			// Other states (e.g., 'cancelling') will also do nothing, which is fine.
 		}
 	}
-
-	onDestroy(() => {
-		// Global listener cleanup is removed.
-	});
 </script>
 
 {#if showModal}
 	<div
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
@@ -277,426 +330,416 @@
 		on:keydown={handleKeydown}
 	>
 		<div
-			class="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
+			class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
 			role="document"
 			tabindex="-1"
 			on:click|stopPropagation
 		>
-			<h2 id="transcribe-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
+            <!-- Header -->
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        {#if !isTranscribing && jobStatus === null}
+                            <Settings2 size={20} class="text-blue-600 dark:text-blue-400" />
+                        {:else if isTranscribing}
+                            <Loader size={20} class="text-blue-600 dark:text-blue-400 animate-spin" />
+                        {:else if jobStatus === 'done'}
+                            <CheckCircle size={20} class="text-green-600 dark:text-green-400" />
+                        {:else if jobStatus === 'error'}
+                            <XCircle size={20} class="text-red-600 dark:text-red-400" />
+                        {:else}
+                            <Clock size={20} class="text-orange-600 dark:text-orange-400" />
+                        {/if}
+                    </div>
+                    <h3 id="transcribe-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+                        {modalTitle}
+                    </h3>
+                </div>
+                {#if !(isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating'))}
+                    <button on:click={handleCloseAndReset} class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all" title="Close">
+                        <X size={20} />
+                    </button>
+                {/if}
+            </div>
 
-			{#if !isTranscribing && jobStatus === null}
-				<!-- CONFIRM VIEW -->
+            <div class="p-6 overflow-y-auto max-h-[70vh]">
+                {#if !isTranscribing && jobStatus === null}
+                    <!-- CONFIRM VIEW -->
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Target File</p>
+                            <p class="text-sm font-mono text-gray-900 dark:text-gray-200 break-all">{fileName || 'N/A'}</p>
+                        </div>
 
-				<!-- Tabs -->
-				<div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
-					<button
-						class="flex-1 py-2 text-sm font-medium text-center border-b-2 focus:outline-none transition-colors {modalTab ===
-						'automatic'
-							? 'border-blue-500 text-blue-600 dark:text-blue-400'
-							: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
-						on:click={() => (modalTab = 'automatic')}
-					>
-						Automatic
-					</button>
-					<button
-						class="flex-1 py-2 text-sm font-medium text-center border-b-2 focus:outline-none transition-colors {modalTab ===
-						'manual'
-							? 'border-blue-500 text-blue-600 dark:text-blue-400'
-							: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
-						on:click={() => (modalTab = 'manual')}
-					>
-						Manual
-					</button>
-				</div>
+                        <!-- Tabs -->
+                        <div class="border-b border-gray-200 dark:border-gray-700 mt-4">
+                            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
+                                <li class="me-2">
+                                    <button 
+                                        type="button"
+                                        on:click={() => (modalTab = 'automatic')}
+                                        class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {modalTab === 'automatic' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+                                        title="Automatic Transcription"
+                                    >
+                                        <Cpu size={18} class="me-2 {modalTab === 'automatic' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+                                        Automatic
+                                    </button>
+                                </li>
+                                <li class="me-2">
+                                    <button 
+                                        type="button"
+                                        on:click={() => (modalTab = 'manual')}
+                                        class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {modalTab === 'manual' ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'}"
+                                        title="Manual Transcription"
+                                    >
+                                        <PencilLine size={18} class="me-2 {modalTab === 'manual' ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'}" />
+                                        Manual
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
 
-				<div class="space-y-3 text-sm mb-5 text-gray-700 dark:text-gray-300 max-h-[60vh] overflow-y-auto pr-2">
-					<div><strong>File:</strong> <span class="font-mono break-all ml-2">{fileName || 'N/A'}</span></div>
+                        <div class="mt-6">
+                            {#if modalTab === 'automatic'}
+                                <div class="space-y-4">
+                                    {#if hasCriticalConfigIssues}
+                                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-xl text-center space-y-3">
+                                            <p class="text-red-800 dark:text-red-300 font-medium">Required libraries missing</p>
+                                            <Button color="red" size="xs" on:click={handleOpenConfig} title="Go to Configuration">
+                                                Go to Configuration
+                                            </Button>
+                                        </div>
+                                    {:else if downloadedModelsList.length === 0}
+                                        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl text-center space-y-3">
+                                            <p class="text-yellow-800 dark:text-yellow-300 font-medium">No transcription models available</p>
+                                            <Button color="yellow" size="xs" on:click={handleOpenConfig} title="Download Models">
+                                                <AlertTriangle size={14} class="mr-2" />
+                                                Download Models
+                                            </Button>
+                                        </div>
+                                    {:else}
+                                        <div class="space-y-2">
+                                            <div class="flex items-center justify-between">
+                                                <Label for="modalModelSelect" color={!modalSelectedModel ? 'red' : 'gray'}>Transcription Model</Label>
+                                                {#if modalSelectedModel}
+                                                    {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+                                                    {#if selectedModelObj?.info_url}
+                                                        <button 
+                                                            class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1"
+                                                            on:click|stopPropagation={() => openExternal(selectedModelObj.info_url)}
+                                                            title="View on Hugging Face"
+                                                        >
+                                                            <span>Hugging Face</span>
+                                                            <ExternalLink size={10} />
+                                                        </button>
+                                                    {/if}
+                                                {/if}
+                                            </div>
+                                            <Select
+                                                id="modalModelSelect"
+                                                items={downloadedModelsList.map((m) => ({ value: m.name, name: `${m.name} (${m.family || 'whisper.cpp'})` }))}
+                                                bind:value={modalSelectedModel}
+                                                placeholder="Select a model"
+                                            />
+                                            {#if !modalSelectedModel}
+                                                <div class="flex items-center space-x-2 text-red-600 dark:text-red-400 mt-1 animate-pulse">
+                                                    <AlertTriangle size={14} />
+                                                    <Helper color="red" class="italic text-[11px] font-medium">Please select a model from the list above to proceed.</Helper>
+                                                </div>
+                                            {/if}
+                                            {#if modalSelectedModel}
+                                                {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
+                                                {#if selectedModelObj?.description}
+                                                    <Helper class="italic text-[11px]">{selectedModelObj.description}</Helper>
+                                                {/if}
+                                            {/if}
+                                        </div>
 
-					{#if modalTab === 'automatic'}
-						<!-- AUTOMATIC SETTINGS -->
-                        {#if hasCriticalConfigIssues}
-							<div
-								class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-md text-center space-y-3 my-4"
-							>
-								<p class="text-red-800 dark:text-red-300 font-medium">Required libraries are missing.</p>
-                                <p class="text-xs text-red-600 dark:text-red-400">Please install Python dependencies in the Configure screen.</p>
-                                <div class="flex justify-center mt-2">
-									<button
-										type="button"
-										on:click={handleOpenConfig}
-										class="flex items-center space-x-1 bg-red-100 dark:bg-red-900 px-3 py-1.5 rounded border border-red-300 dark:border-red-600 shadow-sm hover:bg-red-200 dark:hover:bg-red-800 transition-colors text-red-800 dark:text-red-100 text-xs font-semibold"
-									>
-										Configure
-									</button>
-                                </div>
-							</div>
-						{:else if downloadedModelsList.length === 0}
-							<div
-								class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md text-center space-y-3 my-4"
-							>
-								<p class="text-yellow-800 dark:text-yellow-300 font-medium">No transcription models available.</p>
-                                <div class="flex items-center justify-center space-x-2">
-                                    <p class="text-xs text-yellow-700 dark:text-yellow-400">Please download a model in the</p>
-									<button
-										type="button"
-										on:click={handleOpenConfig}
-										class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											viewBox="0 0 24 24"
-											fill="currentColor"
-											class="w-4 h-4 text-yellow-500"
-										>
-											<path
-												d="M17.004 10.407c.138.435-.216.842-.672.842h-3.465a.75.75 0 0 1-.65-.375l-1.732-3c-.229-.396-.053-.907.393-1.004a5.252 5.252 0 0 1 6.126 3.537ZM8.12 8.464c.307-.338.838-.235 1.066.16l1.732 3a.75.75 0 0 1 0 .75l-1.732 3c-.229.397-.76.5-1.067.161A5.23 5.23 0 0 1 6.75 12a5.23 5.23 0 0 1 1.37-3.536ZM10.878 17.13c-.447-.098-.623-.608-.394-1.004l1.733-3.002a.75.75 0 0 1 .65-.375h3.465c.457 0 .81.407.672.842a5.252 5.252 0 0 1-6.126 3.539Z"
-											/>
-											<path
-												fill-rule="evenodd"
-												d="M21 12.75a.75.75 0 1 0 0-1.5h-.783a8.22 8.22 0 0 0-.237-1.357l.734-.267a.75.75 0 1 0-.513-1.41l-.735.268a8.24 8.24 0 0 0-.689-1.192l.6-.503a.75.75 0 1 0-.964-1.149l-.6.504a8.3 8.3 0 0 0-1.054-.885l.391-.678a.75.75 0 1 0-1.299-.75l-.39.676a8.188 8.188 0 0 0-1.295-.47l.136-.77a.75.75 0 0 0-1.477-.26l-.136.77a8.36 8.36 0 0 0-1.377 0l-.136-.77a.75.75 0 1 0-1.477.26l.136.77c-.448.121-.88.28-1.294.47l-.39-.676a.75.75 0 0 0-1.3.75l.392.678a8.29 8.29 0 0 0-1.054.885l-.6-.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L3.8 8.216a.75.75 0 1 0-.513 1.41l.735.267a8.222 8.222 0 0 0-.238 1.356h-.783a.75.75 0 0 0 0 1.5h.783c.042.464.122.917.238 1.356l-.735.268a8.24 8.24 0 0 0 .513 1.41l.735-.268c.197.417.428.816.69 1.191l-.6.504a.75.75 0 0 0 .963 1.15l.601-.505c.326.323.679.62 1.054.885l-.392.68a.75.75 0 0 0 1.3.75l.39-.679c.414.192.847.35 1.294.471l-.136.77a.75.75 0 0 0 1.477.261l.137-.772a8.332 8.332 0 0 0 1.376 0l.136.772a.75.75 0 1 0 1.477-.26l-.136-.771a8.19 8.19 0 0 0 1.294-.47l.391.677a.75.75 0 0 0 1.3-.75l-.393-.679a8.29 8.29 0 0 0 1.054-.885l.601.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L18.2 15.784a.75.75 0 1 0 .513-1.41l.735-.267a8.222 8.222 0 0 0 .237-1.356h.784Zm-2.657-3.06a6.744 6.744 0 0 0-1.19-2.053 6.784 6.784 0 0 0-1.82-1.51A6.705 6.705 0 0 0 12 5.25a6.8 6.8 0 0 0-1.225.11 6.7 6.7 0 0 0-2.15.793 6.784 6.784 0 0 0-2.952 3.489.76.76 0 0 1-.036.098A6.74 6.74 0 0 0 5.251 12a6.74 6.74 0 0 0 3.366 5.842l.009.005a6.704 6.704 0 0 0 2.18.798l.022.003a6.792 6.792 0 0 0 2.368-.004 6.704 6.704 0 0 0 2.205-.811 6.785 6.785 0 0 0 1.762-1.484l.009-.01.009-.01a6.743 6.743 0 0 0 1.18-2.066c.253-.707.39-1.469.39-2.263a6.74 6.74 0 0 0-.408-2.309Z"
-												clip-rule="evenodd"
-											/>
-										</svg>
-										<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">Configure</span>
-									</button>
-                                    <p class="text-xs text-yellow-700 dark:text-yellow-400">screen.</p>
-                                </div>
-							</div>
-						{:else}
-							<div class="space-y-1">
-								<div class="flex items-center justify-between">
-									<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
-									{#if modalSelectedModel}
-										{@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
-										{#if selectedModelObj?.info_url}
-											<button 
-												class="text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 focus:outline-none p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-1"
-												title="View on Hugging Face"
-												on:click|stopPropagation={() => openExternal(selectedModelObj.info_url)}
-											>
-												<span class="text-[10px]">Hugging Face</span>
-												<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
-													<path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
-													<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
-												</svg>
-											</button>
-										{/if}
-									{/if}
-								</div>
-								<Dropdown
-									containerClasses="w-full"
-									options={downloadedModelsList.map((m) => ({ value: m.name, label: `${m.name} (${m.family || 'whisper.cpp'})` }))}
-									bind:value={modalSelectedModel}
-									placeholder="Select a Model"
-									disabled={downloadedModelsList.length === 0}
-								/>
-                                {#if modalSelectedModel}
-                                    {@const selectedModelObj = downloadedModelsList.find(m => m.name === modalSelectedModel)}
-                                    {#if selectedModelObj?.description}
-                                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 italic">
-                                            {selectedModelObj.description}
-                                        </p>
+                                        <div class="space-y-2">
+                                            <Label for="modalLanguageSelect">Language</Label>
+                                            <Select
+                                                id="modalLanguageSelect"
+                                                items={languageOptions.map(opt => ({ value: opt.value, name: opt.label }))}
+                                                bind:value={modalSelectedLanguage}
+                                            />
+                                        </div>
+
+                                        <div class="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                                            <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                                <div>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400">Configured Speakers</p>
+                                                    <p class="text-sm font-bold text-gray-900 dark:text-white">{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</p>
+                                                </div>
+                                                <Button color="alternative" size="xs" on:click={() => (showNestedSpeakersModal = true)} title="Edit Speakers">
+                                                    <UserPen size={14} class="mr-1.5" />
+                                                    Edit
+                                                </Button>
+                                            </div>
+
+                                            {#if $configStatus.diarization_model_downloaded}
+                                                <div class="flex items-start space-x-3 p-1">
+                                                    <Checkbox bind:checked={modalEnableDiarization} id="diarize-check" class="mt-0.5" />
+                                                    <div class="space-y-1 w-full">
+                                                        <Label for="diarize-check" class="cursor-pointer">Identify different speakers (diarize)</Label>
+                                                        {#if modalEnableDiarization}
+                                                            <Alert color="yellow" class="mt-2 py-2 px-3 text-[11px] border border-yellow-200 dark:border-yellow-900/50 bg-yellow-50/50 dark:bg-yellow-900/20" rounded={false}>
+                                                                <div class="flex items-center gap-2">
+                                                                    <AlertTriangle size={14} class="flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
+                                                                    <span class="text-yellow-800 dark:text-yellow-300">Note: This significantly increases processing time.</span>
+                                                                </div>
+                                                            </Alert>
+                                                        {/if}
+                                                    </div>
+                                                </div>
+                                            {:else}
+                                                <div class="bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                                    <div class="space-y-1">
+                                                        <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Speaker identification disabled</p>
+                                                        <p class="text-[10px] text-gray-400 italic">Download diarization model to enable.</p>
+                                                    </div>
+                                                    <Button color="alternative" size="xs" on:click={handleOpenConfig} title="Configure Diarization">
+                                                        Configure
+                                                    </Button>
+                                                </div>
+                                            {/if}
+                                        </div>
+
+                                        <div class="pt-2">
+                                            <Button color="alternative" class="w-full" size="sm" on:click={() => (showAdditionalParamsModal = true)} title="Additional Parameters">
+                                                <SlidersHorizontal size={14} class="mr-2" />
+                                                Additional Parameters
+                                            </Button>
+                                        </div>
                                     {/if}
-                                {/if}
-							</div>
+                                </div>
+                            {:else}
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <!-- Segments Input with custom buttons -->
+                                        <div class="space-y-2">
+                                            <Label for="manualSegCount">Segments</Label>
+                                            <div class="relative flex items-center w-full">
+                                                <button 
+                                                    type="button" 
+                                                    on:click={decrementCount}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Minus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                                <input 
+                                                    type="text" 
+                                                    id="manualSegCount" 
+                                                    class="bg-gray-50 border-x-0 border-gray-300 h-9 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                                                    value={manualSegmentCount}
+                                                    on:input={handleManualSegCountInput}
+                                                    required 
+                                                    autocomplete="off"
+                                                    autocorrect="off"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    on:click={incrementCount}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Plus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
 
-							<div class="space-y-1">
-								<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
-								<Dropdown
-									containerClasses="w-full"
-									options={languageOptions}
-									bind:value={modalSelectedLanguage}
-									placeholder="Select a Language"
-								/>
-							</div>
+                                        <!-- Duration Input with custom buttons -->
+                                        <div class="space-y-2">
+                                            <Label for="manualSegDuration">Duration (sec)</Label>
+                                            <div class="relative flex items-center w-full">
+                                                <button 
+                                                    type="button" 
+                                                    on:click={decrementDuration}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Minus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                                <input 
+                                                    type="text" 
+                                                    id="manualSegDuration" 
+                                                    class="bg-gray-50 border-x-0 border-gray-300 h-9 text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full py-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                                                    value={manualSegmentDuration}
+                                                    on:input={handleManualSegDurationInput}
+                                                    required 
+                                                    autocomplete="off"
+                                                    autocorrect="off"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    on:click={incrementDuration}
+                                                    class="flex-shrink-0 bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2 h-9 focus:ring-gray-100 dark:focus:ring-gray-700 focus:ring-2 focus:outline-none transition-colors"
+                                                >
+                                                    <Plus size={14} class="text-gray-900 dark:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
 
-							<div class="pt-2 space-y-3 border-t border-gray-200 dark:border-gray-700 mt-3">
-								<div class="flex justify-between items-center">
-									<div>
-										<strong>Speakers:</strong>
-										<span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
-									</div>
-									<button type="button" class="btn-xs-secondary" on:click={() => (showNestedSpeakersModal = true)}>
-										Edit Speakers
-									</button>
-								</div>
-								{#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
-									<div class="pl-4">
-										<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
-											({modalSpeakersConfig.names.join(', ')})
-										</p>
-									</div>
-								{/if}
+                                    <div class="bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800 text-xs space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Media Duration:</span>
+                                            <span class="font-medium text-gray-900 dark:text-white">{formatDuration(mediaDuration)}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500">Total Segmented:</span>
+                                            <span class="text-sm font-bold {isManualDurationValid ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}">
+                                                {formatDuration(totalDurationNeeded)}
+                                            </span>
+                                        </div>
+                                        {#if !isManualDurationValid}
+                                            <div class="pt-2 border-t border-red-100 dark:border-red-900/30 text-center">
+                                                <p class="font-bold text-red-600 dark:text-red-400">Exceeds media duration!</p>
+                                            </div>
+                                        {/if}
+                                    </div>
 
-								{#if $configStatus.diarization_model_downloaded}
-									<div class="flex items-center space-x-2">
-										<input
-											type="checkbox"
-											id="modalEnableDiarizationCheckbox"
-											class="ui-checkbox"
-											bind:checked={modalEnableDiarization}
-											autocomplete="off"
-											autocorrect="off"
-										/>
-										<label
-											for="modalEnableDiarizationCheckbox"
-											class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none"
-										>
-											Identify different speakers (diarize)
-										</label>
-									</div>
-									{#if modalEnableDiarization}
-										<p
-											class="text-xs mt-1 ml-6 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black"
-										>
-											Note: Speaker identification can significantly increase transcription time.
-										</p>
-									{/if}
-								{:else}
-									<div class="flex flex-col space-y-2">
-										<div class="flex items-center justify-between">
-											<span class="text-sm text-gray-500 dark:text-gray-400">Speaker identification (diarize)</span>
-											<button
-												type="button"
-												on:click={handleOpenConfig}
-												class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 24 24"
-													fill="currentColor"
-													class="w-4 h-4 text-yellow-500"
-												>
-													<path
-														d="M17.004 10.407c.138.435-.216.842-.672.842h-3.465a.75.75 0 0 1-.65-.375l-1.732-3c-.229-.396-.053-.907.393-1.004a5.252 5.252 0 0 1 6.126 3.537ZM8.12 8.464c.307-.338.838-.235 1.066.16l1.732 3a.75.75 0 0 1 0 .75l-1.732 3c-.229.397-.76.5-1.067.161A5.23 5.23 0 0 1 6.75 12a5.23 5.23 0 0 1 1.37-3.536ZM10.878 17.13c-.447-.098-.623-.608-.394-1.004l1.733-3.002a.75.75 0 0 1 .65-.375h3.465c.457 0 .81.407.672.842a5.252 5.252 0 0 1-6.126 3.539Z"
-													/>
-													<path
-														fill-rule="evenodd"
-														d="M21 12.75a.75.75 0 1 0 0-1.5h-.783a8.22 8.22 0 0 0-.237-1.357l.734-.267a.75.75 0 1 0-.513-1.41l-.735.268a8.24 8.24 0 0 0-.689-1.192l.6-.503a.75.75 0 1 0-.964-1.149l-.6.504a8.3 8.3 0 0 0-1.054-.885l.391-.678a.75.75 0 1 0-1.299-.75l-.39.676a8.188 8.188 0 0 0-1.295-.47l.136-.77a.75.75 0 0 0-1.477-.26l-.136.77a8.36 8.36 0 0 0-1.377 0l-.136-.77a.75.75 0 1 0-1.477.26l.136.77c-.448.121-.88.28-1.294.47l-.39-.676a.75.75 0 0 0-1.3.75l.392.678a8.29 8.29 0 0 0-1.054.885l-.6-.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L3.8 8.216a.75.75 0 1 0-.513 1.41l.735.267a8.222 8.222 0 0 0-.238 1.356h-.783a.75.75 0 0 0 0 1.5h.783c.042.464.122.917.238 1.356l-.735.268a8.24 8.24 0 0 0 .513 1.41l.735-.268c.197.417.428.816.69 1.191l-.6.504a.75.75 0 0 0 .963 1.15l.601-.505c.326.323.679.62 1.054.885l-.392.68a.75.75 0 0 0 1.3.75l.39-.679c.414.192.847.35 1.294.471l-.136.77a.75.75 0 0 0 1.477.261l.137-.772a8.332 8.332 0 0 0 1.376 0l.136.772a.75.75 0 1 0 1.477-.26l-.136-.771a8.19 8.19 0 0 0 1.294-.47l.391.677a.75.75 0 0 0 1.3-.75l-.393-.679a8.29 8.29 0 0 0 1.054-.885l.601.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L18.2 15.784a.75.75 0 1 0 .513-1.41l.735-.267a8.222 8.222 0 0 0 .237-1.356h.784Zm-2.657-3.06a6.744 6.744 0 0 0-1.19-2.053 6.784 6.784 0 0 0-1.82-1.51A6.705 6.705 0 0 0 12 5.25a6.8 6.8 0 0 0-1.225.11 6.7 6.7 0 0 0-2.15.793 6.784 6.784 0 0 0-2.952 3.489.76.76 0 0 1-.036.098A6.74 6.74 0 0 0 5.251 12a6.74 6.74 0 0 0 3.366 5.842l.009.005a6.704 6.704 0 0 0 2.18.798l.022.003a6.792 6.792 0 0 0 2.368-.004 6.704 6.704 0 0 0 2.205-.811 6.785 6.785 0 0 0 1.762-1.484l.009-.01.009-.01a6.743 6.743 0 0 0 1.18-2.066c.253-.707.39-1.469.39-2.263a6.74 6.74 0 0 0-.408-2.309Z"
-														clip-rule="evenodd"
-													/>
-												</svg>
-												<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">Configure</span>
-											</button>
-										</div>
-										<p class="text-[10px] text-gray-500 dark:text-gray-400 italic">
-											Download the diarization model in the Configure screen to enable this feature.
-										</p>
-									</div>
-								{/if}
-							</div>
+                                    <div class="space-y-3 pt-2">
+                                        <Label>Speaker Assignment</Label>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            {#each manualSpeakerOptions as option}
+                                                <Radio
+                                                    name="manualSpeakerMode"
+                                                    value={option.value}
+                                                    bind:group={manualSpeakerMode}
+                                                    disabled={option.disabled}
+                                                    class="p-2 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30"
+                                                >
+                                                    {option.label}
+                                                </Radio>
+                                            {/each}
+                                        </div>
+                                        {#if modalSpeakersConfig.names.length < 2}
+                                            <Helper class="italic text-[11px]">Note: 'Alternate Speakers' requires at least 2 speakers.</Helper>
+                                        {/if}
+                                    </div>
 
-                            <div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3 flex justify-center">
-                                <button type="button" class="btn-xs-secondary w-full" on:click={() => (showAdditionalParamsModal = true)}>
-                                    Edit Additional Parameters
-                                </button>
+                                    <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800/40 p-3 rounded-lg border border-gray-100 dark:border-gray-800 mt-2">
+                                        <div>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">Configured Speakers</p>
+                                            <p class="text-sm font-bold text-gray-900 dark:text-white">{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</p>
+                                        </div>
+                                        <button color="alternative" size="xs" on:click={() => (showNestedSpeakersModal = true)} title="Edit Speakers" class="text-xs flex items-center px-2.5 py-1.5 font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
+                                            <UserPen size={14} class="mr-1.5" />
+                                            Edit
+                                        </button>
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    </div>
+                {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
+                    <!-- RUNNING OR INITIATING VIEW -->
+                    <div class="flex flex-col items-center py-8 space-y-6 text-center">
+                        <div class="relative">
+                            <div class="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                                <Loader size={40} class="text-blue-600 dark:text-blue-400 animate-spin" />
                             </div>
-						{/if}
-					{:else}
-						<!-- MANUAL SETTINGS -->
-						<div class="space-y-1">
-							<label for="manualSegCount" class="block font-medium text-gray-900 dark:text-gray-100"
-								>Number of Segments:</label
-							>
-							<input
-								id="manualSegCount"
-								type="number"
-								min="1"
-								max="100"
-								bind:value={manualSegmentCount}
-                                on:input={handleManualSegCountInput}
-								class="ui-input w-full"
-							/>
-						</div>
+                        </div>
+                        
+                        <div class="space-y-2 w-full px-4">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">
+                                {jobStatus === 'initiating' ? 'Preparing Job...' : 'Transcribing...'}
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 h-10 flex items-center justify-center">
+                                {progressMessage || 'Processing audio segments...'}
+                            </p>
+                        </div>
 
-						<div class="space-y-1">
-							<label for="manualSegDuration" class="block font-medium text-gray-900 dark:text-gray-100"
-								>Duration (seconds):</label
-							>
-							<div class="flex items-center gap-2">
-								<input
-									id="manualSegDuration"
-									type="number"
-									min="1"
-									bind:value={manualSegmentDuration}
-                                    on:input={handleManualSegDurationInput}
-									class="ui-input w-full"
-								/>
-								<span class="text-xs text-gray-500 whitespace-nowrap min-w-[4rem]">
-									({formatDuration(manualSegmentDuration)})
-								</span>
-							</div>
-						</div>
+                        {#if elapsedText}
+                            <div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full font-mono text-xs text-gray-600 dark:text-gray-400">
+                                Elapsed: {elapsedText}
+                            </div>
+                        {/if}
+                    </div>
+                {:else if jobStatus === 'cancelling'}
+                    <div class="flex flex-col items-center py-12 space-y-4 text-center">
+                        <Clock size={48} class="text-orange-500 animate-pulse" />
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Stopping Transcription</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Attempting to gracefully cancel the process...</p>
+                        </div>
+                    </div>
+                {:else if !isTranscribing && jobStatus === 'done'}
+                    <div class="flex flex-col items-center py-8 space-y-4 text-center">
+                        <div class="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+                            <CheckCircle size={40} class="text-green-600 dark:text-green-400" />
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Job Completed!</p>
+                            {#if durationText}
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Total processing time: {durationText}</p>
+                            {/if}
+                        </div>
+                    </div>
+                {:else if !isTranscribing && jobStatus === 'cancelled'}
+                    <div class="flex flex-col items-center py-8 space-y-4 text-center">
+                        <div class="w-20 h-20 bg-orange-50 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                            <XCircle size={40} class="text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-900 dark:text-white">Transcription Cancelled</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{progressMessage || 'The job was stopped by user.'}</p>
+                        </div>
+                    </div>
+                {:else if !isTranscribing && jobStatus === 'error'}
+                    <div class="flex flex-col items-center py-6 space-y-4">
+                        <div class="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                            <XCircle size={32} class="text-red-600 dark:text-red-400" />
+                        </div>
+                        <p class="text-lg font-bold text-gray-900 dark:text-white">An Error Occurred</p>
+                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-4 rounded-xl w-full">
+                            <p class="text-xs font-mono text-red-700 dark:text-red-300 break-words whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                {currentErrorMessage || 'Unknown error during transcription.'}
+                            </p>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="flex flex-col items-center py-12 space-y-4">
+                        <Loader size={32} class="text-gray-400 animate-spin" />
+                        <p class="text-sm text-gray-500">Checking status...</p>
+                    </div>
+                {/if}
+            </div>
 
-						<div
-							class="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-xs space-y-1"
-						>
-							<div class="flex justify-between">
-								<span>Media Duration:</span>
-								<span class="font-medium">{formatDuration(mediaDuration)}</span>
-							</div>
-							<div class="flex justify-between">
-								<span>Segmented:</span>
-								<span
-									class="font-bold {isManualDurationValid
-										? 'text-blue-600 dark:text-blue-400'
-										: 'text-red-600 dark:text-red-400'}"
-								>
-									{formatDuration(totalDurationNeeded)}
-								</span>
-							</div>
-							{#if !isManualDurationValid}
-								<p
-									class="text-center font-semibold text-red-600 dark:text-red-400 pt-1 border-t border-gray-200 dark:border-gray-600"
-								>
-									Exceeds total media duration!
-								</p>
-							{/if}
-						</div>
-
-						<div class="pt-1 space-y-1 border-t border-gray-200 dark:border-gray-700 mt-3 mb-2">
-							<div class="flex justify-between items-center">
-								<div>
-									<strong>Speakers:</strong>
-									<span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
-								</div>
-								<button type="button" class="btn-xs-secondary" on:click={() => (showNestedSpeakersModal = true)}>
-									Edit Speakers
-								</button>
-							</div>
-							{#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
-								<div class="pl-4">
-									<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
-										({modalSpeakersConfig.names.join(', ')})
-									</p>
-								</div>
-							{/if}
-						</div>
-
-						<div class="space-y-2">
-							<span class="block font-medium text-gray-900 dark:text-gray-100">Speaker Assignment:</span>
-							<div class="flex flex-col space-y-2 ml-1">
-								{#each manualSpeakerOptions as option}
-									<label class="flex items-center space-x-2 cursor-pointer {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}">
-										<input
-											type="radio"
-											name="manualSpeakerMode"
-											value={option.value}
-											bind:group={manualSpeakerMode}
-											disabled={option.disabled}
-											class="ui-radio"
-										/>
-										<span class="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
-									</label>
-								{/each}
-							</div>
-							{#if modalSpeakersConfig.names.length < 2}
-								<p class="text-xs text-gray-500 mt-1 italic">Note: 'Alternate Speakers' requires at least 2 speakers.</p>
-							{:else if manualSpeakerMode === 'alternate' && modalSpeakersConfig.names.length < 2}
-								<p class="text-xs text-red-500 mt-1">Need at least 2 speakers configured.</p>
-							{/if}
-						</div>
-					{/if}
-				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
-					<button
-						class="btn-primary"
-						on:click={handleConfirm}
-						disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
-							(modalTab === 'manual' && !isManualDurationValid)}
-					>
-						{modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
-					</button>
-				</div>
-			{:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
-				<!-- RUNNING OR INITIATING VIEW -->
-				<div class="flex flex-col items-center space-y-4 mb-6">
-					<div class="w-16 h-16">
-						<Loader class="w-full h-full text-blue-500 animate-spin" />
-					</div>
-					<!-- Progress bar removed -->
-					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{progressMessage ||
-							(jobStatus === 'initiating'
-								? 'Preparing...'
-								: jobStatus === 'running'
-									? 'Processing...'
-									: 'Please wait...')}
-					</p>
-					{#if elapsedText}
-						<p class="text-xs text-center text-gray-500 dark:text-gray-500 font-mono mt-1">
-							{elapsedText}
-						</p>
-					{/if}
-				</div>
-				<div class="flex justify-center space-x-2 mt-auto">
-					<button
-						class="btn-secondary"
-						on:click={handleRunInBackgroundAndClose}
-						disabled={jobStatus === 'initiating'}
-					>
-						Run in background
-					</button>
-					<button class="btn-action-cancel" on:click={handleCancelRequest} disabled={jobStatus === 'initiating'}>
-						Request Cancellation
-					</button>
-				</div>
-			{:else if jobStatus === 'cancelling'}
-				<!-- CANCELLING VIEW (Added this state based on logic) -->
-				<div class="flex flex-col items-center space-y-4 mb-6">
-					<div class="w-16 h-16">
-						<Clock class="w-full h-full text-orange-500" />
-					</div>
-					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{progressMessage || 'Attempting to cancel...'}
-					</p>
-				</div>
-				<div class="flex justify-center space-x-2 mt-auto">
-					<button class="btn-secondary" disabled>Cancelling...</button>
-				</div>
-			{:else if !isTranscribing && jobStatus === 'done'}
-				<!-- DONE VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<CheckCircle class="w-16 h-16 text-green-500" />
-					<p class="text-sm font-medium">Transcription Complete!</p>
-					{#if durationText}
-						<p class="text-xs text-gray-500 dark:text-gray-400">Time taken: {durationText}</p>
-					{/if}
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-primary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-			{:else if !isTranscribing && jobStatus === 'cancelled'}
-				<!-- CANCELLED VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<XCircle class="w-16 h-16 text-orange-500" />
-					<p class="text-sm font-medium">{progressMessage || 'Transcription Cancelled'}</p>
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-			{:else if !isTranscribing && jobStatus === 'error'}
-				<!-- ERROR VIEW -->
-				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
-					<XCircle class="w-16 h-16 text-red-500" />
-					<p class="text-sm font-medium">An Error Occurred</p>
-					<p
-						class="text-xs bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-2 rounded w-full text-left overflow-x-auto max-h-32"
-					>
-						{currentErrorMessage || 'Unknown error during transcription.'}
-					</p>
-				</div>
-				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
-				</div>
-			{:else}
-				<!-- Fallback or initial brief loading state if necessary -->
-				<div class="flex flex-col items-center space-y-4 py-8">
-					<Loader class="w-12 h-12 text-gray-400 animate-spin" />
-					<p class="text-sm text-gray-500">Loading status...</p>
-				</div>
-			{/if}
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+                {#if !isTranscribing && jobStatus === null}
+                    <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
+                    <Button
+                        color="blue"
+                        on:click={handleConfirm}
+                        title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
+                        disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
+                            (modalTab === 'manual' && !isManualDurationValid)}
+                    >
+                        {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
+                    </Button>
+                {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
+                    <Button
+                        color="alternative"
+                        on:click={handleRunInBackgroundAndClose}
+                        disabled={jobStatus === 'initiating'}
+                        title="Run in Background"
+                    >
+                        Run in Background
+                    </Button>
+                    <Button 
+                        color="red" 
+                        on:click={handleCancelRequest} 
+                        disabled={jobStatus === 'initiating'}
+                        title="Stop Transcription"
+                    >
+                        Stop
+                    </Button>
+                {:else if jobStatus === 'cancelling'}
+                    <Button color="alternative" disabled title="Stopping...">Stopping...</Button>
+                {:else}
+                    <Button color="blue" on:click={handleCloseAndReset} title="Close">Close</Button>
+                {/if}
+            </div>
 		</div>
 	</div>
 {/if}
@@ -749,108 +792,15 @@
     />
 {/if}
 
-<style>
-	/* Styles remain unchanged */
-	.btn-primary,
-	.btn-secondary,
-	.btn-action-cancel {
-		padding: 0.5rem 1rem;
-		border: none;
-		border-radius: 0.375rem; /* 6px */
-		cursor: pointer;
-		font-size: 0.875rem; /* 14px */
-		font-weight: 500;
-		transition:
-			background-color 0.15s ease-in-out,
-			opacity 0.15s ease-in-out;
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.btn-primary {
-		background-color: #3b82f6; /* bg-blue-500 */
-		color: white;
-	}
-	.btn-primary:hover:not(:disabled) {
-		background-color: #2563eb; /* hover:bg-blue-600 */
-	}
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		/* background-color: #9ca3af; Let default browser style handle disabled bg */
-	}
-	.btn-secondary {
-		background-color: #e5e7eb; /* bg-gray-200 */
-		color: #374151; /* text-gray-700 */
-		border: 1px solid #d1d5db; /* border-gray-300 */
-	}
-	.dark .btn-secondary {
-		background-color: #4b5563; /* dark:bg-gray-600 */
-		color: #e5e7eb; /* dark:text-gray-200 */
-		border-color: #6b7280; /* dark:border-gray-500 */
-	}
-	.btn-secondary:hover:not(:disabled) {
-		background-color: #d1d5db; /* hover:bg-gray-300 */
-	}
-	.dark .btn-secondary:hover:not(:disabled) {
-		background-color: #6b7280; /* dark:hover:bg-gray-500 */
-	}
-	.btn-secondary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.btn-action-cancel {
-		background-color: #ef4444; /* bg-red-500 */
-		color: white;
-	}
-	.btn-action-cancel:hover:not(:disabled) {
-		background-color: #dc2626; /* hover:bg-red-600 */
-	}
-	.btn-action-cancel:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		/* background-color: #fca5a5; Let default browser style handle disabled bg */
-	}
-	.dark .btn-action-cancel {
-		background-color: #dc2626; /* dark:bg-red-600 */
-	}
-	.dark .btn-action-cancel:hover:not(:disabled) {
-		background-color: #b91c1c; /* dark:hover:bg-red-700 */
-	}
+<style lang="postcss">
+    /* Re-enable spin buttons for specific inputs */
+    :global(input.show-spinners::-webkit-outer-spin-button),
+    :global(input.show-spinners::-webkit-inner-spin-button) {
+        -webkit-appearance: inner-spin-button !important;
+        opacity: 1 !important;
+    }
 
-	/* Checkbox style */
-	.ui-checkbox {
-		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
-	}
-	.ui-radio {
-		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
-	}
-	.ui-select {
-		@apply block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md;
-		background-color: white;
-	}
-	:global(.dark) .ui-select {
-		background-color: #0d0d0d;
-		border-color: #333333;
-		color: white;
-		color-scheme: dark;
-	}
-
-	.ui-input {
-		@apply block w-full px-3 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md;
-		background-color: white;
-	}
-	:global(.dark) .ui-input {
-		background-color: #0d0d0d;
-		border-color: #333333;
-		color: white;
-		color-scheme: dark;
-	}
-	.btn-xs-secondary {
-		@apply px-2 py-1 text-xs font-medium rounded border;
-		@apply bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300;
-		@apply dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-500;
-		@apply focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800;
-	}
+    :global(input.show-spinners[type=number]) {
+        -moz-appearance: number-input !important;
+    }
 </style>

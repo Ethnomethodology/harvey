@@ -19,7 +19,7 @@ use quick_xml;
 use chrono::Utc;
 use super::db_handler::{self, delete_annotations_from_db};
 use super::shared_types::GroupData; // Added for group commands
-use rusqlite::Connection; // Added for opening DB connection in commands
+use rusqlite::{Connection, params}; // Added for opening DB connection in commands
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
@@ -477,12 +477,22 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
         // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
         // or use/enhance shared_utils::determine_asset_type if applicable.
 
+        let meta_opt = db_handler::load_asset_metadata(&project_id_for_db, &relative_path_str).ok().flatten();
+        let last_modified = meta_opt.as_ref().map(|meta| meta.last_modified.clone());
+        let created_at = meta_opt.as_ref().and_then(|meta| meta.creation_time.clone());
+        let title = meta_opt.as_ref().and_then(|meta| meta.title.clone());
+        let description = meta_opt.as_ref().and_then(|meta| meta.description.clone());
+
         associated_files.push(AssociatedFile {
             name: file_name,
             relative_path: relative_path_str,
             full_path: full_path.to_string_lossy().into_owned(),
             file_type,
             media_xml_identifier,
+            last_modified,
+            created_at,
+            title,
+            description,
         });
     }
     Ok(associated_files)
@@ -1087,12 +1097,120 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
     );
 
-    // --- SYNC: Ensure DB is consistent with XML (Self-Healing) ---
+    // --- SYNC & SELF-HEALING: Ensure DB has metadata for all XML assets ---
     let project_id_sync = project_data.project_uuid.clone();
+    let mut current_xml_relative_paths = std::collections::HashSet::new();
 
-    // Sync Documents: language_code
+    // 1. Sync Media Files
+    for media_entry in &project_data.media_files.files {
+        let rel_path = media_entry.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+
+        if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
+            info!("[Backend Sync] Creating missing metadata for media: {}", rel_path);
+            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            
+            // Determine if audio or video based on extension
+            let ext = Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let (asset_type, file_type) = match ext.as_str() {
+                "mp4" | "mov" | "avi" | "mkv" | "webm" => ("video", "video"),
+                _ => ("audio", "audio"),
+            };
+
+            let file_meta = FileMetadata {
+                file_name,
+                file_path: abs_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: "".to_string(),
+                description: "".to_string(),
+                summary: "".to_string(),
+                duration_seconds: None,
+                width: None, height: None, frame_rate: None, bit_rate: None,
+                audio_codec: None, video_codec: None,
+                created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
+                waveform_data: None,
+                language_code: None,
+                properties: None,
+                file_type: file_type.to_string(),
+            };
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, asset_type, None);
+        }
+
+        // Sync associated transcripts
+        for transcript_entry in &media_entry.transcripts {
+            let t_rel_path = transcript_entry.relative_path.clone().replace("\\", "/");
+            current_xml_relative_paths.insert(t_rel_path.clone());
+
+            if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &t_rel_path) {
+                info!("[Backend Sync] Creating missing metadata for generated transcript: {}", t_rel_path);
+                let t_abs_path = project_base_dir.join(&t_rel_path).to_string_lossy().to_string();
+                let t_file_name = Path::new(&t_abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                
+                // Determine transcript type based on parent media
+                let media_rel_path = media_entry.relative_path.clone().replace("\\", "/");
+                let t_file_type = if let Ok(Some(m_meta)) = db_handler::load_asset_metadata(&project_id_sync, &media_rel_path) {
+                    let is_video = m_meta.asset_type == "video" || m_meta.file_type.as_deref() == Some("video");
+                    if is_video { "video-transcript" } else { "audio-transcript" }
+                } else { "audio-transcript" };
+
+                let t_file_meta = FileMetadata {
+                    file_name: t_file_name,
+                    file_path: t_abs_path,
+                    last_modified: Utc::now().to_rfc3339(),
+                    title: "".to_string(),
+                    description: "".to_string(),
+                    summary: "".to_string(),
+                    duration_seconds: None,
+                    width: None, height: None, frame_rate: None, bit_rate: None,
+                    audio_codec: None, video_codec: None,
+                    created_at: Some(Utc::now().to_rfc3339()),
+                    original_import_path: None,
+                    speaker_names: None,
+                    waveform_data: None,
+                    language_code: transcript_entry.language_code.clone(),
+                    properties: None,
+                    file_type: t_file_type.to_string(),
+                };
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, "transcript", None);
+            }
+        }
+    }
+
+    // 2. Sync Document Files
     for doc in &project_data.document_files.files {
-        if let Ok(Some(mut meta_db)) = db_handler::load_asset_metadata(&project_id_sync, &doc.relative_path) {
+        let rel_path = doc.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+        let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
+        
+        if existing_meta.is_none() {
+            info!("[Backend Sync] Creating missing metadata for document: {}", rel_path);
+            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            
+            let file_meta = FileMetadata {
+                file_name,
+                file_path: abs_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: "".to_string(),
+                description: "".to_string(),
+                summary: "".to_string(),
+                duration_seconds: None,
+                width: None, height: None, frame_rate: None, bit_rate: None,
+                audio_codec: None, video_codec: None,
+                created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
+                waveform_data: None,
+                language_code: doc.language_code.clone(),
+                properties: None,
+                file_type: "document".to_string(),
+            };
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "document", None);
+        } else if let Some(mut meta_db) = existing_meta {
+            // Update language_code if it differs
             if meta_db.language_code != doc.language_code {
                 meta_db.language_code = doc.language_code.clone();
                 let file_meta_to_save = FileMetadata {
@@ -1115,15 +1233,49 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     waveform_data: meta_db.waveform_data,
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
+                    file_type: meta_db.file_type.unwrap_or("document".to_string()),
                 };
-                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &doc.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
             }
         }
     }
 
-    // Sync Tables: language_code and has_headers (properties)
+    // 3. Sync Table Files
     for table in &project_data.table_files.files {
-        if let Ok(Some(mut meta_db)) = db_handler::load_asset_metadata(&project_id_sync, &table.relative_path) {
+        let rel_path = table.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+        let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
+
+        if existing_meta.is_none() {
+            info!("[Backend Sync] Creating missing metadata for table: {}", rel_path);
+            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            
+            let mut props_map = serde_json::Map::new();
+            if let Some(xml_val) = table.has_headers {
+                props_map.insert("has_headers".to_string(), json!(xml_val));
+            }
+
+            let file_meta = FileMetadata {
+                file_name,
+                file_path: abs_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: "".to_string(),
+                description: "".to_string(),
+                summary: "".to_string(),
+                duration_seconds: None,
+                width: None, height: None, frame_rate: None, bit_rate: None,
+                audio_codec: None, video_codec: None,
+                created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
+                waveform_data: None,
+                language_code: table.language_code.clone(),
+                properties: Some(serde_json::to_string(&props_map).unwrap()),
+                file_type: "table".to_string(),
+            };
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "table", None);
+        } else if let Some(mut meta_db) = existing_meta {
             let mut changed = false;
             
             if meta_db.language_code != table.language_code {
@@ -1167,8 +1319,92 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     waveform_data: meta_db.waveform_data,
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
+                    file_type: meta_db.file_type.unwrap_or("table".to_string()),
                 };
-                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &table.relative_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
+            }
+        }
+    }
+
+    // 4. Sync Imported Transcripts
+    for transcript in &project_data.imported_transcript_files.files {
+        let rel_path = transcript.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+        if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
+            info!("[Backend Sync] Creating missing metadata for imported transcript: {}", rel_path);
+            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            
+            let file_meta = FileMetadata {
+                file_name,
+                file_path: abs_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: "".to_string(),
+                description: "".to_string(),
+                summary: "".to_string(),
+                duration_seconds: None,
+                width: None, height: None, frame_rate: None, bit_rate: None,
+                audio_codec: None, video_codec: None,
+                created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
+                waveform_data: None,
+                language_code: None,
+                properties: None,
+                file_type: "transcript".to_string(),
+            };
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "imported_transcript", None);
+        }
+    }
+
+    // 5. Sync Images
+    for image in &project_data.image_files.files {
+        let rel_path = image.relative_path.clone().replace("\\", "/");
+        current_xml_relative_paths.insert(rel_path.clone());
+        if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
+            info!("[Backend Sync] Creating missing metadata for image: {}", rel_path);
+            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            
+            let file_meta = FileMetadata {
+                file_name,
+                file_path: abs_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: "".to_string(),
+                description: "".to_string(),
+                summary: "".to_string(),
+                duration_seconds: None,
+                width: None, height: None, frame_rate: None, bit_rate: None,
+                audio_codec: None, video_codec: None,
+                created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
+                waveform_data: None,
+                language_code: None,
+                properties: None,
+                file_type: "image".to_string(),
+            };
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "image", None);
+        }
+    }
+
+    // 6. PRUNE: Remove metadata for files no longer in XML
+    // This handles the "ghost" items issue in the dropdown.
+    if let Ok(db_path) = db_handler::get_db_path() {
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            let mut stmt = conn.prepare("SELECT asset_relative_path FROM asset_metadata WHERE project_id = ?1")?;
+            let db_paths: Vec<String> = stmt.query_map(params![project_id_sync], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            
+            for db_path in db_paths {
+                // If it's an attachment, we don't prune it yet as they aren't explicitly in the main XML lists
+                if db_path.contains("/attachments/") { continue; }
+
+                if !current_xml_relative_paths.contains(&db_path) {
+                    info!("[Backend Prune] Removing stale metadata for: {} (project_id: {})", db_path, project_id_sync);
+                    let _ = db_handler::delete_asset_metadata(&project_id_sync, &db_path);
+                }
             }
         }
     }
@@ -1346,6 +1582,17 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     // --- Remove old .metadata.json file creation logic ---
     // The entire 'match get_media_metadata_path(...){...}' block has been removed.
 
+    let final_asset_type: String;
+    if video_codec.is_some() {
+        final_asset_type = "video".to_string();
+    } else if audio_codec.is_some() {
+        final_asset_type = "audio".to_string();
+    } else {
+        final_asset_type = source_path.extension()
+            .and_then(|s| s.to_str())
+            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+    }
+
     // --- Prepare and save metadata to SQLite database ---
     let file_metadata_for_db = FileMetadata {
         file_name: truncated_source_filename.clone(), // Use truncated filename
@@ -1367,18 +1614,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         waveform_data: None,
         language_code: None,
         properties: None,
+        file_type: final_asset_type.clone(),
     };
-
-    let final_asset_type: String;
-    if video_codec.is_some() {
-        final_asset_type = "video".to_string();
-    } else if audio_codec.is_some() {
-        final_asset_type = "audio".to_string();
-    } else {
-        final_asset_type = source_path.extension()
-            .and_then(|s| s.to_str())
-            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
-    }
 
     // destination_relative_path_for_xml is calculated before this block for XML update, use it as DB key
     // db_key_relative_path should use the truncated stem and truncated filename
@@ -1653,7 +1890,11 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                             } else {
                                 info!("[Backend Delete] Deleted highlights for transcript {} during media deletion.", transcript.relative_path);
                             }
+                            // Delete transcript metadata from DB
+                            let _ = db_handler::delete_asset_metadata(&project_id_for_db, &transcript.relative_path);
                         }
+                        // Delete media file metadata from DB
+                        let _ = db_handler::delete_asset_metadata(&project_id_for_db, &media_entry.relative_path);
                     }
                 }
 
@@ -1694,6 +1935,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     warn!("[Backend Delete] Failed to delete highlights for transcript {} during transcript deletion: {}", item_relative_path, e);
                 } else {
                     info!("[Backend Delete] Deleted highlights for transcript {} during transcript deletion.", item_relative_path);
+                }
+
+                // Delete transcript metadata from DB
+                if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path) {
+                    warn!("[Backend Delete] Failed to delete asset metadata from DB for project_id {}, transcript {}: {}", project_id_for_db, item_relative_path, e);
+                } else {
+                    info!("[Backend Delete] Deleted asset metadata from DB for project_id {}, transcript {}", project_id_for_db, item_relative_path);
                 }
 
                 info!("[Backend Delete] Updating XML to remove transcript link for '{}' with path '{}'", media_stem, item_relative_path);

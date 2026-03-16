@@ -723,7 +723,24 @@ struct ErrorPayload {
 
 
 // --- Project Commands (Unchanged - Omitted for brevity) ---
-#[command] pub async fn load_recent_projects() -> Result<Vec<ProjectInfo>, CommandError> { /* ... */ log::info!("---- load_recent_projects: Start ----"); let mut config = read_config()?; let original_project_count = config.projects.len(); let existing_paths: HashSet<String> = config.projects .iter() .filter(|p| PathBuf::from(&p.path).exists()) .map(|p| p.path.clone()) .collect(); let mut updated_config = false; if existing_paths.len() < original_project_count { config.projects.retain(|p| existing_paths.contains(&p.path)); log::info!("load_recent_projects: Removed {} missing projects.", original_project_count - existing_paths.len()); updated_config = true; } log::info!("load_recent_projects: Found {} valid projects.", config.projects.len()); if updated_config { write_config(&config)?; log::info!("load_recent_projects: Updated config.xml after removing missing projects."); } config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); log::info!("---- load_recent_projects: End ----"); Ok(config.projects) }
+#[command]
+pub async fn load_recent_projects() -> Result<Vec<ProjectInfo>, CommandError> {
+    log::info!("---- load_recent_projects: Start ----");
+    let mut config = read_config()?;
+    let original_project_count = config.projects.len();
+    let existing_paths: HashSet<String> = config.projects.iter().filter(|p| PathBuf::from(&p.path).exists()).map(|p| p.path.clone()).collect();
+    let mut updated_config = false;
+    if existing_paths.len() < original_project_count {
+        config.projects.retain(|p| existing_paths.contains(&p.path));
+        log::info!("load_recent_projects: Removed {} missing projects.", original_project_count - existing_paths.len());
+        updated_config = true;
+    }
+    log::info!("load_recent_projects: Found {} valid projects.", config.projects.len());
+    if updated_config { write_config(&config)?; log::info!("load_recent_projects: Updated db after removing missing projects."); }
+    config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
+    log::info!("---- load_recent_projects: End ----");
+    Ok(config.projects)
+}
 #[command]
 pub async fn create_project(name: String, parent_location: String, overwrite: Option<bool>) -> Result<String, CommandError> {
     let should_overwrite = overwrite.unwrap_or(false);
@@ -1050,7 +1067,21 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
     Ok(())
 }
 #[command] pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_list: Start Command. Path='{}' ----", project_xml_path); let result = remove_project_from_config_internal(&project_xml_path); log::info!("---- remove_project_from_list: End Command ----"); result }
-fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_config_internal: Start. Path='{}' ----", project_xml_path); let mut config = read_config()?; let initial_len = config.projects.len(); config.projects.retain(|p| p.path != project_xml_path); if config.projects.len() < initial_len { log::info!("remove_project_from_config_internal: Removed project path {} from config.", project_xml_path); write_config(&config)?; log::info!("remove_project_from_config_internal: Config.xml updated."); } else { log::warn!("remove_project_from_config_internal: Project path {} not found in config. No changes.", project_xml_path); } log::info!("---- remove_project_from_config_internal: End ----"); Ok(()) }
+fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> {
+    log::info!("---- remove_project_from_config_internal: Start. Path='{}' ----", project_xml_path);
+    let mut config = read_config()?;
+    let initial_len = config.projects.len();
+    config.projects.retain(|p| p.path != project_xml_path);
+
+    use rusqlite::{Connection, params};
+    use crate::projectview::db_handler::{get_db_path};
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    let _ = conn.execute("DELETE FROM projects WHERE xml_path = ?1", params![project_xml_path]);
+
+    log::info!("remove_project_from_config_internal: Removed project path {} from harvey.sqlite.", project_xml_path);
+    Ok(())
+}
 #[command] pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- open_project: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(&project_xml_path); if !path_buf.exists() || !path_buf.is_file() { log::error!("open_project: Error - XML file not found: {}", project_xml_path); return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path))); } log::info!("open_project: File exists."); let mut config = read_config()?; log::info!("open_project: Config read."); let project_index = config.projects.iter().position(|p| p.path == project_xml_path); log::info!("open_project: Project index in config: {:?}", project_index); let final_project_info: ProjectInfo; let mut config_needs_write = false; if let Some(index) = project_index { log::info!("open_project: Found project in config ('{}'). Updating timestamp.", config.projects[index].name); let now = Utc::now(); if config.projects[index].last_opened_ts != now { config.projects[index].last_opened_ts = now; config_needs_write = true; log::info!("open_project: Updated last_opened_ts for '{}'.", config.projects[index].name); } else { log::info!("open_project: Timestamp current for '{}'.", config.projects[index].name); } final_project_info = config.projects[index].clone(); } else { log::info!("open_project: Project not in config, importing..."); match import_project_internal(&project_xml_path) { Ok(imported_info) => { log::info!("open_project: Import successful."); final_project_info = imported_info; config_needs_write = true; /* Config was updated by import */ }, Err(e) => { log::error!("open_project: Import failed: {}", e); return Err(e); } } } if config_needs_write { log::info!("open_project: Config needs write. Writing..."); config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); write_config(&config)?; log::info!("open_project: Config.xml written."); } else { log::info!("open_project: Config up-to-date."); } log::info!("---- open_project: End Successfully ----"); Ok(final_project_info) }
 fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = canonicalize_path(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read XML ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = from_str(&xml_content).map_err(|e| CommandError::from(format!("XML deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
 #[command] pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project: Start Command Wrapper. Path='{}' ----", project_xml_path); let result = import_project_internal(&project_xml_path); log::info!("---- import_project: End Command Wrapper ----"); result }

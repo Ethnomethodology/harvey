@@ -1,14 +1,22 @@
-<!-- src/lib/components/projectview/ExportModal.svelte -->
+<!-- src/lib/components/projectview/modals/ExportModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-	import { activeLayout } from '$lib/stores/layoutStore.js'; // Re-added
+	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { open } from '@tauri-apps/plugin-dialog';
     import { documentDir } from '@tauri-apps/api/path';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
-	// --- REMOVED: No fs functions imported for path manipulation ---
+    import { 
+		Modal,
+        Input, 
+        Label, 
+        Select, 
+        Button, 
+        Helper,
+        Checkbox
+    } from 'flowbite-svelte';
+    import { Share, FolderOpen, X } from 'lucide-svelte';
 
 	export let showModal = false;
 	// Prop to receive the path of the transcript being exported
@@ -23,40 +31,19 @@
 	let selectedDocxLayout;
 	let exportDirectory = '';
 	let excludeSpeakerNames = false; // New state for subtitles
-	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
 
 	// Available export formats
 	const exportFormats = [
-		{ value: 'csv', label: 'CSV (.csv)', disabled: false },
-		{ value: 'docx', label: 'DOCX (.docx)', disabled: false },
-		{ value: 'md', label: 'Markdown (.md)', disabled: false },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: false },
-		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: false },
-		{ value: 'ass', label: 'Advanced SubStation Alpha (.ass)', disabled: false }, // Added ASS
+		{ value: 'csv', name: 'CSV (.csv)', disabled: false },
+		{ value: 'docx', name: 'DOCX (.docx)', disabled: false },
+		{ value: 'md', name: 'Markdown (.md)', disabled: false },
+		{ value: 'srt', name: 'SRT (.srt)', disabled: false },
+		{ value: 'vtt', name: 'Web VTT (.vtt)', disabled: false },
+		{ value: 'ass', name: 'Advanced SubStation Alpha (.ass)', disabled: false }, // Added ASS
 	];
 
-	const DEFAULT_EXPORT_FOLDER_NAME = 'exports'; // Name for the default subfolder
 	const PATH_SEPARATOR = '/'; // Use forward slash for JS path construction
-
-    // --- NEW: Simple JS dirname equivalent ---
-    function simpleDirname(path) {
-        if (!path || typeof path !== 'string') return '';
-        // Replace backslashes for consistency
-        const normalizedPath = path.replace(/\\/g, PATH_SEPARATOR);
-        const lastSeparatorIndex = normalizedPath.lastIndexOf(PATH_SEPARATOR);
-        if (lastSeparatorIndex === -1) {
-            // No separator found, maybe just a filename? Return '.' for current dir? Or empty? Let's return empty for simplicity here.
-            return '';
-        }
-        if (lastSeparatorIndex === 0) {
-             // Path is like "/file", dirname is "/"
-             return PATH_SEPARATOR;
-        }
-        // Return the part before the last separator
-        return normalizedPath.substring(0, lastSeparatorIndex);
-    }
-    // --- END NEW ---
 
 	// --- Initialization ---
 	async function initializeModalState() { // Keep async in case other async ops are added later
@@ -83,43 +70,29 @@
 		}
 		exportFileName = baseName;
 
-		// Simplified default directory logic
-		// We do NOT reset exportDirectory here to preserve the last used location during the session.
-        // If it's the first time (empty), we default to the user's Documents folder.
-
 		if (!exportDirectory) { 
             try {
                 const docDir = await documentDir();
                 exportDirectory = docDir;
-                console.log('[ExportModal] Default export directory set to User Documents:', exportDirectory);
             } catch (err) {
-			    // exportDirectory = ''; // It's already empty/falsy
 			    console.warn('[ExportModal] Could not determine User Documents directory.', err);
             }
 		}
-		// END Simplified default directory logic
 
 		// Reset format to default
 		exportFormat = 'csv';
 		excludeSpeakerNames = false;
 		selectedDocxLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
-
-		console.log('[ExportModal] Modal state initialized.', { exportFileName, exportDirectory, modalTitle });
 	}
 
 
 	// Initialize state when modal becomes visible
 	$: if (showModal) {
-		initializeModalState(); // This sets exportFormat to 'csv' and resets other fields
-		// If the initial active layout should be reflected immediately even if the format
-		// was already docx/md (which initializeModalState prevents by setting to csv),
-		// this would be the place. But since exportFormat becomes 'csv',
-		// the following $: block handles the change *to* docx/md correctly.
+		initializeModalState();
 	}
 
 	// --- Actions ---
 	async function selectExportDirectory() {
-		console.log('[ExportModal] Opening directory save dialog...');
 		try {
 			const selectedPath = await open({
 				directory: true,
@@ -129,10 +102,6 @@
 
 			if (selectedPath && typeof selectedPath === 'string') {
 				exportDirectory = selectedPath;
-				 console.log('[ExportModal] Export directory selected:', exportDirectory);
-			} else {
-				 console.log('[ExportModal] Directory selection cancelled or invalid path received.');
-				 if (selectedPath) console.warn("[ExportModal] Received non-string path from dialog:", selectedPath)
 			}
 		} catch (error) {
 			console.error('[ExportModal] Error selecting export directory:', error);
@@ -141,8 +110,6 @@
 	}
 
 	function handleConfirm() {
-		console.log('[ExportModal] Confirming export...');
-		// Basic validation
 		if (!exportFileName || exportFileName.trim() === '') {
 			alert('Please enter a filename.');
 			return;
@@ -156,18 +123,14 @@
 			 return;
 		 }
 
-        // --- Use manual string concatenation ---
         let fullExportPath = '';
          try {
             const dir = exportDirectory.endsWith(PATH_SEPARATOR) ? exportDirectory.slice(0, -1) : exportDirectory;
             fullExportPath = dir + PATH_SEPARATOR + `${exportFileName}.${exportFormat}`;
-            console.log("[ExportModal] Constructed full export path:", fullExportPath);
          } catch (e) {
-             console.error("[ExportModal] Failed to construct full export path:", e);
-             alert(`Error constructing export path: ${e?.message || e}`);
+             console.error("[ExportModal] Failed to construct export path:", e);
              return;
          }
-         // --- END ---
 
 		dispatch('confirm', {
 			filePath: fullExportPath, // Pass the string path
@@ -179,213 +142,153 @@
 	}
 
 	function closeModal() {
-		showModal = false; // Update bound prop
-		dispatch('close'); // Dispatch event
+		showModal = false;
+		dispatch('close');
 	}
-
-	// --- Keyboard Handling ---
-	function handleKeydown(event) {
-		if (showModal && event.key === 'Escape') {
-			closeModal();
-		}
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			 const confirmButton = modalElement?.querySelector('.btn-primary');
-			 if (confirmButton && !confirmButton.disabled) {
-				 handleConfirm();
-			 }
-		}
-	}
-
-	onMount(() => {
-		window.addEventListener('keydown', handleKeydown);
-	});
-
-	onDestroy(() => {
-		window.removeEventListener('keydown', handleKeydown);
-	});
 </script>
 
-{#if showModal}
-	<div
-		bind:this={modalElement}
-		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		on:click|self={closeModal}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="export-modal-title"
-		tabindex="-1"
-	>
-		<div
-			class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
-			on:click|stopPropagation
-			role="document"
-		>
-			<h2 id="export-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5 truncate" title="{modalTitle}">
-				{modalTitle}
-			</h2>
+<Modal
+	bind:open={showModal}
+	size="md"
+	autoclose={false}
+	outsideclose={true}
+	class="w-full"
+	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+	bodyClass="p-0 overflow-hidden bg-white dark:bg-gray-900"
+	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+	footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+	on:close={closeModal}
+>
+	<div slot="header" class="flex items-center gap-2">
+		<Share class="w-5 h-5 text-gray-500" />
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate max-w-[250px]" title="{modalTitle}">
+			Export Transcript
+		</h3>
+	</div>
 
-			<div class="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-				<!-- Filename Input -->
-				<div>
-					<label for="export-filename" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Filename:</label>
-					<input
-						id="export-filename"
-						type="text"
-						bind:value={exportFileName}
-						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
-						placeholder="e.g., MyMeetingTranscript"
-						autocomplete="off"
-						autocorrect="off"
-					/>
-				</div>
+	<div class="p-6 space-y-5 overflow-y-auto max-h-[70vh] custom-scrollbar">
+		<!-- Filename Input -->
+		<div class="space-y-2">
+			<Label for="export-filename">Filename</Label>
+			<Input
+				id="export-filename"
+				type="text"
+				bind:value={exportFileName}
+				placeholder="e.g., MyMeetingTranscript"
+				autocomplete="off"
+				autocorrect="off"
+			/>
+		</div>
 
-				<!-- Format Dropdown -->
-				 <div>
-					<label for="export-format" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Format:</label>
-					<Dropdown
-						containerClasses="w-full"
-						options={exportFormats}
-						bind:value={exportFormat}
-						placeholder="Select a Format"
-					/>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md' && exportFormat !== 'ass'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. All listed formats are available.</p>
-					 {:else if exportFormat === 'md'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
-					 {:else if exportFormat === 'ass'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export provides standard subtitles with styling support (bold, italic, underline, strikethrough, color).</p>
-					 {/if}
-				</div>
+		<!-- Format Dropdown -->
+		 <div class="space-y-2">
+			<Label for="export-format">Export Format</Label>
+			<Select
+				id="export-format"
+				items={exportFormats}
+				bind:value={exportFormat}
+			/>
+			 {#if exportFormat === 'md'}
+				<Helper class="italic">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</Helper>
+			 {:else if exportFormat === 'ass'}
+				<Helper class="italic">ASS export provides standard subtitles with styling support (bold, italic, underline, strikethrough, color).</Helper>
+			 {:else if exportFormat === 'csv'}
+				<Helper class="italic">Comma-separated values file (.csv)</Helper>
+			 {:else if exportFormat === 'docx'}
+				<Helper class="italic">Microsoft Word document (.docx)</Helper>
+			 {:else if exportFormat === 'srt'}
+				<Helper class="italic">SubRip Subtitle file (.srt)</Helper>
+			 {:else if exportFormat === 'vtt'}
+				<Helper class="italic">Web Video Text Tracks file (.vtt)</Helper>
+			 {/if}
+		</div>
 
-				<!-- Subtitle Options (Conditional for SRT, VTT, ASS) -->
-				{#if exportFormat === 'srt' || exportFormat === 'vtt' || exportFormat === 'ass'}
-					<div class="flex items-center space-x-2 pt-1">
-						<input
-							id="exclude-speakers"
-							type="checkbox"
-							bind:checked={excludeSpeakerNames}
-							class="w-4 h-4 text-blue-600 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-600 focus:ring-2"
-						/>
-						<label for="exclude-speakers" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-							Exclude speaker names from subtitles
-						</label>
-					</div>
-				{/if}
+		<!-- Subtitle Options (Conditional for SRT, VTT, ASS) -->
+		{#if exportFormat === 'srt' || exportFormat === 'vtt' || exportFormat === 'ass'}
+			<div class="pt-1">
+				<Checkbox bind:checked={excludeSpeakerNames}>
+					Exclude speaker names from subtitles
+				</Checkbox>
+			</div>
+		{/if}
 
-				<!-- Layout Options (Conditional for DOCX and MD) -->
-				{#if exportFormat === 'docx' || exportFormat === 'md'}
-				<div class="pt-2">
-						<div id="layout-label" class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">{exportFormat.toUpperCase()} Layout:</div>
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-labelledby="layout-label">
-							{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
-								<button
-									type="button"
-									class="text-left p-2 border rounded-md transition-colors text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-									class:bg-blue-500={selectedDocxLayout === layout.rustLayoutKey}
-									class:text-white={selectedDocxLayout === layout.rustLayoutKey}
-									class:hover:bg-gray-100={selectedDocxLayout !== layout.rustLayoutKey}
-									class:dark:hover:bg-gray-700={selectedDocxLayout !== layout.rustLayoutKey}
-									class:border-blue-500={selectedDocxLayout === layout.rustLayoutKey}
-									class:dark:border-blue-400={selectedDocxLayout === layout.rustLayoutKey}
-									class:border-gray-300={selectedDocxLayout !== layout.rustLayoutKey}
-									class:dark:border-gray-600={selectedDocxLayout !== layout.rustLayoutKey}
-									on:click={() => selectedDocxLayout = layout.rustLayoutKey}
-									title={layout.name}
-								>
-									<div class="font-medium mb-1">{layout.name}</div>
-									<div class="{layout.previewClasses} min-h-[20px]">
-										{#each layout.columnStyles as style}
-											<div class="{style.class}">{style.content}</div>
-										{/each}
-									</div>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<!-- Directory Selection -->
-				<div>
-					<label for="export-directory" class="block font-medium text-gray-700 dark:text-gray-300 mb-1 pt-2">Export To:</label>
-					<div class="flex space-x-2">
-						<input
-							id="export-directory"
-							type="text"
-							bind:value={exportDirectory}
-							class="input-field flex-grow bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 cursor-not-allowed"
-							readonly
-							placeholder="Select directory..."
-							autocomplete="off"
-							autocorrect="off"
-						/>
-						<button type="button" on:click={selectExportDirectory} class="btn-secondary flex-shrink-0 text-xs px-3 py-1.5">
-							Browse
+		<!-- Layout Options (Conditional for DOCX and MD) -->
+		{#if exportFormat === 'docx' || exportFormat === 'md'}
+		<div class="pt-2 space-y-3">
+				<Label id="layout-label" class="font-semibold text-sm">{exportFormat.toUpperCase()} Layout</Label>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-labelledby="layout-label">
+					{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+						<button
+							type="button"
+							class="text-left p-3 border rounded-xl transition-all relative {selectedDocxLayout === layout.rustLayoutKey ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
+							on:click={() => selectedDocxLayout = layout.rustLayoutKey}
+							title={layout.name}
+						>
+							<div class="font-bold text-[11px] mb-2 {selectedDocxLayout === layout.rustLayoutKey ? 'text-blue-700 dark:text-blue-300' : ''}">
+								{layout.name}
+							</div>
+							<div class="{layout.previewClasses} min-h-[20px] opacity-80 rounded overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800">
+								{#each layout.columnStyles as style}
+									<div class="{style.class} !p-1 !text-[9px] leading-tight flex items-center justify-center text-center">{style.content}</div>
+								{/each}
+							</div>
+							{#if selectedDocxLayout === layout.rustLayoutKey}
+								<div class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+							{/if}
 						</button>
-					</div>
+					{/each}
 				</div>
 			</div>
+		{/if}
 
-			<!-- Footer Buttons -->
-			<div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600 mt-6">
-				<button type="button" on:click={closeModal} class="btn-secondary">
-					Cancel
-				</button>
-				<button
-					type="button"
-					on:click={handleConfirm}
-					class="btn-primary"
-					disabled={
-						!exportFileName || exportFileName.trim() === '' ||
-						!exportDirectory || exportDirectory.trim() === '' ||
-						(
-							exportFormat !== 'csv' &&
-							exportFormat !== 'docx' &&
-							exportFormat !== 'srt' &&
-							exportFormat !== 'vtt' &&
-							exportFormat !== 'md' &&
-							exportFormat !== 'ass'
-						)
-					}
-				>
-					Export {exportFormat.toUpperCase()}
-				</button>
+		<!-- Directory Selection -->
+		<div class="space-y-2">
+			<Label for="export-directory">Destination Directory</Label>
+			<div class="flex gap-2">
+				<Input
+					id="export-directory"
+					type="text"
+					bind:value={exportDirectory}
+					readonly
+					class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
+				/>
+				<Button color="alternative" on:click={selectExportDirectory} class="px-3" title="Browse">
+					<FolderOpen size={18} />
+				</Button>
 			</div>
 		</div>
 	</div>
-{/if}
+
+	<svelte:fragment slot="footer">
+		<Button color="alternative" on:click={closeModal} title="Cancel">
+			Cancel
+		</Button>
+		<Button
+			color="blue"
+			on:click={handleConfirm}
+			title="Export to {exportFormat.toUpperCase()}"
+			disabled={
+				!exportFileName || exportFileName.trim() === '' ||
+				!exportDirectory || exportDirectory.trim() === ''
+			}
+		>
+			Export {exportFormat.toUpperCase()}
+		</Button>
+	</svelte:fragment>
+</Modal>
 
 <style lang="postcss">
-	/* Reuse button/input styles from other components */
-	.btn-primary, .btn-secondary {
-		@apply px-4 py-2 rounded-md shadow-sm text-sm font-medium transition duration-150 ease-in-out;
-	}
-	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 dark:disabled:bg-gray-600;
-	}
-	 .btn-secondary {
-		@apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800;
-	}
-	.input-field {
-		@apply block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm;
-	}
-	 /* Add dark mode styling */
-	 .dark .input-field {
-		 @apply bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400;
-	 }
-	 .dark .input-field:read-only {
-		 @apply bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed;
-	 }
-
-	 select.input-field {
-		 @apply appearance-none pr-8; /* Add padding for dropdown arrow */
-		 background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%236b7280%22%3E%3Cpath%20d%3D%22M7.293%209.293a1%201%200%20011.414%200L12%2012.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20fill-rule%3D%22evenodd%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E');
-		 background-repeat: no-repeat;
-		 background-size: 1rem 1rem; /* 16px */
-		 background-position: right 0.5rem center;
-	 }
-
-	 select.input-field option[disabled] {
-		 color: #9ca3af; /* gray-400 */
-	 }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-200 dark:bg-gray-700 rounded-full;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-300 dark:bg-gray-600;
+    }
 </style>

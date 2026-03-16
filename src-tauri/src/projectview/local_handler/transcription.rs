@@ -690,7 +690,13 @@ async fn run_python_diarization<R: Runtime>(
     ];
 
     debug!("[PyDiarize][{}] Running script '{}'", job_id, script_path.display());
-    let (mut rx, child) = get_python_command(&app_handle)?
+    let mut command = get_python_command(&app_handle)?;
+    
+    if let Ok(hf_home) = crate::welcome::diarization::get_diarization_hub_path(app_handle) {
+        command = command.env("HF_HOME", hf_home.to_string_lossy().to_string());
+    }
+
+    let (mut rx, child) = command
         .args(args)
         .spawn()
       .map_err(|e| {

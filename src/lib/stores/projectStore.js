@@ -90,7 +90,6 @@ export const initialState = {
     mediaNoteTranscriptError: null,
     activeMediaNoteEditorRef: null,
 
-    autosaveEnabled: true,
 
     showUnsavedChangesModal: false,
     unsavedItemName: '',
@@ -204,7 +203,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
     const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables' || itemType === 'table';
     const isImage = itemType === 'images' || itemType === 'image';
-    const isJsonDocument = normalizedFilePath && itemType === 'documents' && !isPdf;
+    const isJsonDocument = normalizedFilePath && (itemType === 'documents' || itemType === 'document') && !isPdf && !isImage;
 
     const defaultFileLevelMetadata = {
         file_name: '', last_modified: '', title: '', description: '', summary: '',
@@ -854,9 +853,9 @@ export function markImportedTranscriptChangesDiscarded(filePath) {
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
-export function prepareMediaNoteView(mediaPath) {
+export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
-
+    const normalizedTranscriptPath = transcriptPath ? transcriptPath.replace(/\\/g, '/') : null;
 
     project.update(p => {
         const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson);
@@ -883,11 +882,11 @@ export function prepareMediaNoteView(mediaPath) {
             isLoading: finalIsGlobalLoading,
 
             // Clear other fieldnotes states
-            selectedDocumentPath: null, /* ... */
+            selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
-            currentImportedTranscriptPath: null, /* ... */
+            currentImportedTranscriptPath: null,
             currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
-            activeTranscriptPathInDataTab: null, // Clear active transcript when switching to other views
+            activeTranscriptPathInDataTab: normalizedTranscriptPath, // Set if provided, otherwise cleared
         };
     });
 
@@ -903,20 +902,20 @@ export function prepareMediaNoteView(mediaPath) {
         }
 
         const mediaFileNode = findMediaFileInTree(currentProjectState.files, normalizedMediaPath);
-        const firstTranscriptPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+        const targetTranscriptPath = normalizedTranscriptPath || mediaFileNode?.associated_transcripts?.[0]?.path || null;
 
         project.update(p => ({
             ...p,
-            activeTranscriptPathInDataTab: firstTranscriptPath,
-            mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
-            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false,
-            isLoading: firstTranscriptPath ? true : false,
+            activeTranscriptPathInDataTab: targetTranscriptPath,
+            mediaNoteTranscriptError: targetTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
+            isMediaNoteTranscriptLoading: targetTranscriptPath ? true : false,
+            isLoading: targetTranscriptPath ? true : false,
             currentDocumentHighlights: [], // Clear highlights initially
         }));
 
-        if (firstTranscriptPath) {
+        if (targetTranscriptPath) {
             (async () => {
-                const meta = await projectService.loadDocumentMetadata(firstTranscriptPath);
+                const meta = await projectService.loadDocumentMetadata(targetTranscriptPath);
                 project.update(p => {
                     if (p.selectedMediaNotePath === normalizedMediaPath) {
                         return {
@@ -965,7 +964,7 @@ export async function switchTranscriptInDataTab(newTranscriptPath) {
 
     if (proj.isMediaNoteTranscriptDirty) {
         let savedSuccessfully = false;
-        if (proj.autosaveEnabled && proj.activeMediaNoteEditorRef?.ref && typeof proj.activeMediaNoteEditorRef.ref.save === 'function') {
+        if (proj.activeMediaNoteEditorRef?.ref && typeof proj.activeMediaNoteEditorRef.ref.save === 'function') {
              console.log('[ProjectStore] Autosaving dirty transcript before switch...');
              try {
                  await proj.activeMediaNoteEditorRef.ref.save();
@@ -1105,18 +1104,6 @@ export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) { proj
 
 export function clearActiveMediaNoteEditorRef() { project.update(p => { if (p.activeMediaNoteEditorRef) { return { ...p, activeMediaNoteEditorRef: null }; } return p; }); }
 
-export function loadAutosaveState(projectId) {
-    if (!projectId) return;
-    const key = `harvey_autosave_${projectId}`;
-    if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem(key);
-        // Default to true (ON) if not set or set to anything other than 'false'
-        const isEnabled = stored !== 'false';
-        project.update(p => ({ ...p, autosaveEnabled: isEnabled }));
-    }
-}
-
-export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; if (typeof window !== 'undefined' && p.id) { localStorage.setItem(`harvey_autosave_${p.id}`, newState.toString()); } return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
 export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting ? true : p.isLoading })); }

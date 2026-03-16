@@ -4,6 +4,7 @@
 	import { project } from '$lib/stores/projectStore.js';
 	import { transcriptStore, updatePlayerTime } from '$lib/stores/transcriptStore.js';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+	import { ZoomIn, ZoomOut } from 'lucide-svelte';
 
 	export let isTrimming = false;
 	export let trimStartTime = 0;
@@ -1082,15 +1083,11 @@ export let compactMode = false; // New prop, defaults to false
 		{/if}
 	</div>
 	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-		<button class="ui-button-icon-panelheader" title="Zoom In Waveform ({modKeyName}+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || visibleCanvasWidth <= 0}">
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
-			</svg>
+		<button class="ui-button-icon-panelheader flex items-center justify-center" title="Zoom In Waveform ({modKeyName}+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || visibleCanvasWidth <= 0}">
+			<ZoomIn class="w-5 h-5" />
 		</button>
-		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform ({modKeyName}+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || visibleCanvasWidth <= 0}">
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
-			</svg>
+		<button class="ui-button-icon-panelheader flex items-center justify-center" title="Zoom Out Waveform ({modKeyName}+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || visibleCanvasWidth <= 0}">
+			<ZoomOut class="w-5 h-5" />
 		</button>
 	</div>
 </div>

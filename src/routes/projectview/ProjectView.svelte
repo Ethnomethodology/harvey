@@ -61,7 +61,7 @@
 	import DataView from '$lib/components/projectview/data/DataView.svelte';
     import TranscriptionsView from '$lib/components/projectview/transcriptions/TranscriptionsView.svelte';
     import TagsView from '$lib/components/projectview/tags/TagsView.svelte';
-    import { Loader } from 'lucide-svelte';
+    import { Loader, Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon } from 'lucide-svelte';
     import DataTopBar from '$lib/components/projectview/data/DataTopBar.svelte';
     import TranscriptionsTopBar from '$lib/components/projectview/transcriptions/TopBar.svelte';
     import SimpleTopBar from '$lib/components/projectview/shared/SimpleTopBar.svelte';
@@ -72,6 +72,7 @@
 
 	let transcribeModalRef;
     let transcriptionsViewRef;
+    let transcriptionsTopBarRef;
     let dataViewRef;
     let tagsViewRef;
 	let selectedTab = 'data';
@@ -231,6 +232,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 	onMount(async () => {
 		const appWindow = getCurrentWindow();
+		await appWindow.setMinSize(new LogicalSize(1024, 600));
 		await appWindow.maximize();
         await invoke('set_menu_context', { context: 'project' }).catch(err => console.warn('Failed to set menu context:', err));
 
@@ -393,7 +395,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
                 const activeImpTsEditor = proj.activeImportedTranscriptEditorRef?.ref;
                 const activeMediaNoteEditor = proj.activeMediaNoteEditorRef?.ref;
 
-                if (!proj.autosaveEnabled) {
+                if (false) {
                     if ((proj.isDocumentDirty || proj.isDocumentMetadataDirty) && activeDocEditor && typeof activeDocEditor.save === 'function') {
                         activeDocEditor.save().catch(e => console.error(`${modKeyName}+S document save failed`, e));
                     } else if (proj.isImportedTranscriptDirty && activeImpTsEditor && typeof activeImpTsEditor.save === 'function') {
@@ -564,6 +566,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		if (canProceed) {
             await clearProjectDataStore();
 			const appWindow = getCurrentWindow();
+			await appWindow.setMinSize(new LogicalSize(800, 600)); // Reset min size for welcome screen
 			await appWindow.unmaximize();
 			await appWindow.setSize(new LogicalSize(800, 600));
 			await goto('/');
@@ -775,16 +778,26 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
             } else if (isMediaTranscript) {
                 function findMediaByTranscriptPathRecursive(nodes, transcriptPath) {
                     if (!Array.isArray(nodes)) return null;
+                    const normTranscriptPath = transcriptPath.replace(/\\/g, '/');
                     for (const node of nodes) {
-                        if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath)) return node;
+                        if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path.replace(/\\/g, '/') === normTranscriptPath)) return node;
                         const found = findMediaByTranscriptPathRecursive(node.children || [], transcriptPath);
                         if (found) return found;
                     }
                     return null;
                 }
                 const mediaNode = findMediaByTranscriptPathRecursive(proj.files, path);
-                if (mediaNode) prepareMediaNoteView(mediaNode.path);
-                else prepareDocumentView(path, 'documents');
+                if (mediaNode) {
+                    console.log(`[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`);
+                    prepareMediaNoteView(mediaNode.path, path); // dual-path call
+                    // Selection highlighting in Left Panel
+                    project.update(p => ({ ...p, activeTranscriptPathInDataTab: path }));
+                } else {
+                    console.warn(`[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`);
+                    prepareDocumentView(path, 'documents');
+                }
+            } else if (viewType === 'media_note' || viewType === 'media' || ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm'].includes(path.split('.').pop()?.toLowerCase())) {
+                prepareMediaNoteView(path);
             } else {
                 const ext = path.split('.').pop()?.toLowerCase();
                 let type = 'documents';
@@ -915,6 +928,32 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Dialog opened.` }));
     }
 
+    async function handleRequestTranslationTabWithMediaAndDialog(event) {
+        const { mediaPath, transcriptPath } = event.detail;
+        const mediaName = mediaPath.split(/[\\/]/).pop();
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to translate ${mediaName} and opening dialog...` }));
+
+        await handleTabClick('transcriptions');
+        await tick();
+        await handleRequestMediaSelection({ detail: { mediaPath } });
+        await tick();
+
+        if (transcriptPath && transcriptPath !== get(transcriptStore).currentTranscriptPath) {
+            await loadTranscriptFile(transcriptPath);
+            await tick();
+        }
+
+        // Now trigger the translation dialog
+        if (transcriptionsTopBarRef) {
+            transcriptionsTopBarRef.openTranslateModal();
+        } else {
+            console.warn("[ProjectView] transcriptionsTopBarRef not available. Opening translate modal via store.");
+            toggleTranslateModal(true);
+        }
+
+        project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to translate ${mediaName}. Dialog opened.` }));
+    }
+
     async function handleRequestTrimInTranscriptionTab(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
@@ -1041,9 +1080,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     }
 
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
-        function handleImportMenuAction(event, actionType) { 
-        closeImportMenu(); 
-        triggerMediaImport(actionType); 
+        function handleImportMenuAction(event, actionType) {
+        closeImportMenu();
+        triggerMediaImport(actionType);
     }
 
 	async function handleHeaderConfirmation(event) {
@@ -1079,8 +1118,9 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 	<div class="flex-shrink-0">
 		{#if selectedTab === 'data'}
 			<DataTopBar
-				tableViewRef={dataViewRef?.tableViewRef}
+				dataViewRef={dataViewRef}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+                on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
@@ -1089,7 +1129,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 			/>
 		{:else if selectedTab === 'transcriptions'}
 			<TranscriptionsTopBar
-				bind:this={transcriptionsViewRef}
+				bind:this={transcriptionsTopBarRef}
                 on:requestImport={handleImportMediaInSidebar}
 				on:cancelTranslationRequest={handleCancelTranslationRequest}
 				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
@@ -1104,9 +1144,38 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 	<!-- Main Content Area -->
 	<div class="flex flex-grow w-full overflow-hidden min-h-0">
 		<div class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 overflow-hidden border-r border-gray-300 dark:border-gray-700">
-			<div class="flex flex-col space-y-2 w-full">             <button title="Data" aria-label="Data" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'data'} class:border-blue-500={selectedTab === 'data'} class:dark:border-blue-400={selectedTab === 'data'} class:bg-white={selectedTab === 'data'} class:dark:bg-gray-950={selectedTab === 'data'} class:text-blue-500={selectedTab === 'data'} class:dark:text-accent={selectedTab === 'data'} class:hover:bg-gray-300={selectedTab !== 'data'} class:dark:hover:bg-gray-800={selectedTab !== 'data'} class:text-gray-700={selectedTab !== 'data'} class:dark:text-gray-300={selectedTab !== 'data'} class:dark:hover:text-gray-100={selectedTab !== 'data'} class:hover:text-gray-900={selectedTab !== 'data'} on:click={() => handleTabClick('data')}> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-6"> <path d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 2 2 0 0 1-2 2H3a2 2 0 0 1-2-2h1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1H1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1H3a2 2 0 0 1 2-2"/> <path d="M1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 2.5v.5H.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1H2v-.5a.5.5 0 0 0-1 0"/> </svg> </button> <button title="Transcription" aria-label="Transcription" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'transcriptions'} class:border-blue-500={selectedTab === 'transcriptions'} class:dark:border-blue-400={selectedTab === 'transcriptions'} class:bg-white={selectedTab === 'transcriptions'} class:dark:bg-gray-950={selectedTab === 'transcriptions'} class:text-blue-500={selectedTab === 'transcriptions'} class:dark:text-accent={selectedTab === 'transcriptions'} class:hover:bg-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:bg-gray-800={selectedTab !== 'transcriptions'} class:text-gray-700={selectedTab !== 'transcriptions'} class:dark:text-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:text-gray-100={selectedTab !== 'transcriptions'} class:hover:text-gray-900={selectedTab !== 'transcriptions'} on:click={() => handleTabClick('transcriptions')}> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-6"> <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/> <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/> </svg> </button> <button title="Tags" aria-label="Tags" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'tags'} class:border-blue-500={selectedTab === 'tags'} class:dark:border-blue-400={selectedTab === 'tags'} class:bg-white={selectedTab === 'tags'} class:dark:bg-gray-950={selectedTab === 'tags'} class:text-blue-500={selectedTab === 'tags'} class:dark:text-accent={selectedTab === 'tags'} class:hover:bg-gray-300={selectedTab !== 'tags'} class:dark:hover:bg-gray-800={selectedTab !== 'tags'} class:text-gray-700={selectedTab !== 'tags'} class:dark:text-gray-300={selectedTab !== 'tags'} class:dark:hover:text-gray-100={selectedTab !== 'tags'} class:hover:text-gray-900={selectedTab !== 'tags'} on:click={() => handleTabClick('tags')}> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tags size-6" viewBox="0 0 16 16"> <path d="M3 2v4.586l7 7L14.586 9l-7-7zM2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586z"/> <path d="M5.5 5a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1m0 1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M1 7.086a1 1 0 0 0 .293.707L8.75 15.25l-.043.043a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 0 7.586V3a1 1 0 0 1 1-1z"/> </svg> </button> </div>
-			<div class="mt-auto flex flex-col space-y-2 pb-2 w-full"> <button title="Help" aria-label="Help" on:click={() => showHelpModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"> <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-question-circle-fill size-[18px]" viewBox="0 0 16 16"> <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.496 6.033h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286a.237.237 0 0 0 .241.247m2.325 6.443c.61 0 1.029-.394 1.029-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94 0 .533.425.927 1.01.927z"/> </svg> </button> <button title="Configure" aria-label="Configure" on:click={() => showConfigurationModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 {hasCriticalConfigIssues ? 'text-red-500' : (hasNonCriticalConfigIssues ? 'text-yellow-500' : '')}"> <path d="M17.004 10.407c.138.435-.216.842-.672.842h-3.465a.75.75 0 0 1-.65-.375l-1.732-3c-.229-.396-.053-.907.393-1.004a5.252 5.252 0 0 1 6.126 3.537ZM8.12 8.464c.307-.338.838-.235 1.066.16l1.732 3a.75.75 0 0 1 0 .75l-1.732 3c-.229.397-.76.5-1.067.161A5.23 5.23 0 0 1 6.75 12a5.23 5.23 0 0 1 1.37-3.536ZM10.878 17.13c-.447-.098-.623-.608-.394-1.004l1.733-3.002a.75.75 0 0 1 .65-.375h3.465c.457 0 .81.407.672.842a5.252 5.252 0 0 1-6.126 3.539Z" /> <path fill-rule="evenodd" d="M21 12.75a.75.75 0 1 0 0-1.5h-.783a8.22 8.22 0 0 0-.237-1.357l.734-.267a.75.75 0 1 0-.513-1.41l-.735.268a8.24 8.24 0 0 0-.689-1.192l.6-.503a.75.75 0 1 0-.964-1.149l-.6.504a8.3 8.3 0 0 0-1.054-.885l.391-.678a.75.75 0 1 0-1.299-.75l-.39.676a8.188 8.188 0 0 0-1.295-.47l.136-.77a.75.75 0 0 0-1.477-.26l-.136.77a8.36 8.36 0 0 0-1.377 0l-.136-.77a.75.75 0 1 0-1.477.26l.136.77c-.448.121-.88.28-1.294.47l-.39-.676a.75.75 0 0 0-1.3.75l.392.678a8.29 8.29 0 0 0-1.054.885l-.6-.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L3.8 8.216a.75.75 0 1 0-.513 1.41l.735.267a8.222 8.222 0 0 0-.238 1.356h-.783a.75.75 0 0 0 0 1.5h.783c.042.464.122.917.238 1.356l-.735.268a.75.75 0 0 0 .513 1.41l.735-.268c.197.417.428.816.69 1.191l-.6.504a.75.75 0 0 0 .963 1.15l.601-.505c.326.323.679.62 1.054.885l-.392.68a.75.75 0 0 0 1.3.75l.39-.679c.414.192.847.35 1.294.471l-.136.77a.75.75 0 0 0 1.477.261l.137-.772a8.332 8.332 0 0 0 1.376 0l.136.772a.75.75 0 1 0 1.477-.26l-.136-.771a8.19 8.19 0 0 0 1.294-.47l.391.677a.75.75 0 0 0 1.3-.75l-.393-.679a8.29 8.29 0 0 0 1.054-.885l.601.504a.75.75 0 1 0-.965 1.149l.6.503a8.243 8.243 0 0 0-.689 1.192L18.2 15.784a.75.75 0 1 0 .513-1.41l.735-.267a8.222 8.222 0 0 0 .237-1.356h.784Zm-2.657-3.06a6.744 6.744 0 0 0-1.19-2.053 6.784 6.784 0 0 0-1.82-1.51A6.705 6.705 0 0 0 12 5.25a6.8 6.8 0 0 0-1.225.11 6.7 6.7 0 0 0-2.15.793 6.784 6.784 0 0 0-2.952 3.489.76.76 0 0 1-.036.098A6.74 6.74 0 0 0 5.251 12a6.74 6.74 0 0 0 3.366 5.842l.009.005a6.704 6.704 0 0 0 2.18.798l.022.003a6.792 6.792 0 0 0 2.368-.004 6.704 6.704 0 0 0 2.205-.811 6.785 6.785 0 0 0 1.762-1.484l.009-.01.009-.01a6.743 6.743 0 0 0 1.18-2.066c.253-.707.39-1.469.39-2.263a6.74 6.74 0 0 0-.408-2.309Z" clip-rule="evenodd" /> </svg> </button>
+			<div class="flex-grow flex flex-col space-y-2">
+                <button title="Data" aria-label="Data" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'data'} class:border-blue-500={selectedTab === 'data'} class:dark:border-blue-400={selectedTab === 'data'} class:bg-white={selectedTab === 'data'} class:dark:bg-gray-950={selectedTab === 'data'} class:text-blue-500={selectedTab === 'data'} class:dark:text-accent={selectedTab === 'data'} class:hover:bg-gray-300={selectedTab !== 'data'} class:dark:hover:bg-gray-800={selectedTab !== 'data'} class:text-gray-700={selectedTab !== 'data'} class:dark:text-gray-300={selectedTab !== 'data'} class:dark:hover:text-gray-100={selectedTab !== 'data'} class:hover:text-gray-900={selectedTab !== 'data'} on:click={() => handleTabClick('data')}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-6 h-6 bi bi-journals" viewBox="0 0 16 16">
+                      <path d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 2 2 0 0 1-2 2H3a2 2 0 0 1-2-2h1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1H1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1H3a2 2 0 0 1 2-2"/>
+                      <path d="M1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 2.5v.5H.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1H2v-.5a.5.5 0 0 0-1 0"/>
+                    </svg>
+                </button>
+                <button title="Transcription" aria-label="Transcription" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'transcriptions'} class:border-blue-500={selectedTab === 'transcriptions'} class:dark:border-blue-400={selectedTab === 'transcriptions'} class:bg-white={selectedTab === 'transcriptions'} class:dark:bg-gray-950={selectedTab === 'transcriptions'} class:text-blue-500={selectedTab === 'transcriptions'} class:dark:text-accent={selectedTab === 'transcriptions'} class:hover:bg-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:bg-gray-800={selectedTab !== 'transcriptions'} class:text-gray-700={selectedTab !== 'transcriptions'} class:dark:text-gray-300={selectedTab !== 'transcriptions'} class:dark:hover:text-gray-100={selectedTab !== 'transcriptions'} class:hover:text-gray-900={selectedTab !== 'transcriptions'} on:click={() => handleTabClick('transcriptions')}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-6 h-6 bi bi-chat-square-text" viewBox="0 0 16 16">
+                      <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                      <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/>
+                    </svg>
+                </button>
+                <button title="Tags" aria-label="Tags" class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400" class:border-l-4={selectedTab === 'tags'} class:border-blue-500={selectedTab === 'tags'} class:dark:border-blue-400={selectedTab === 'tags'} class:bg-white={selectedTab === 'tags'} class:dark:bg-gray-950={selectedTab === 'tags'} class:text-blue-500={selectedTab === 'tags'} class:dark:text-accent={selectedTab === 'tags'} class:hover:bg-gray-300={selectedTab !== 'tags'} class:dark:hover:bg-gray-800={selectedTab !== 'tags'} class:text-gray-700={selectedTab !== 'tags'} class:dark:text-gray-300={selectedTab !== 'tags'} class:dark:hover:text-gray-100={selectedTab !== 'tags'} class:hover:text-gray-900={selectedTab !== 'tags'} on:click={() => handleTabClick('tags')}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-6 h-6 bi bi-tags" viewBox="0 0 16 16">
+                      <path d="M3 2v4.586l7 7L14.586 9l-7-7zM2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586z"/>
+                      <path d="M5.5 5a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1m0 1a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M1 7.086a1 1 0 0 0 .293.707L8.75 15.25l-.043.043a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 0 7.586V3a1 1 0 0 1 1-1z"/>
+                    </svg>
+                </button>
+            </div>
+			<div class="mt-auto flex flex-col space-y-2 pb-2 w-full">
+                <button title="Help" aria-label="Help" on:click={() => showHelpModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-6 h-6 bi bi-question-circle" viewBox="0 0 16 16">
+                      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                      <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
+                    </svg>
+                </button>
+                <button title="Configure" aria-label="Configure" on:click={() => showConfigurationModal = true} class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400">
+					<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-6 h-6 bi bi-gear-wide-connected {hasCriticalConfigIssues ? 'text-red-500' : (hasNonCriticalConfigIssues ? 'text-yellow-500' : '')}" viewBox="0 0 16 16">
+                      <path d="M7.068.727c.243-.97 1.62-.97 1.864 0l.071.286a.96.96 0 0 0 1.622.434l.205-.211c.695-.719 1.888-.03 1.613.931l-.08.284a.96.96 0 0 0 1.187 1.187l.283-.081c.96-.275 1.65.918.931 1.613l-.211.205a.96.96 0 0 0 .434 1.622l.286.071c.97.243.97 1.62 0 1.864l-.286.071a.96.96 0 0 0-.434 1.622l.211.205c.719.695.03 1.888-.931 1.613l-.284-.08a.96.96 0 0 0-1.187 1.187l.081.283c.275.96-.918 1.65-1.613.931l-.205-.211a.96.96 0 0 0-1.622.434l-.071.286c-.243.97-1.62.97-1.864 0l-.071-.286a.96.96 0 0 0-1.622-.434l-.205.211c-.695.719-1.888.03-1.613-.931l.08-.284a.96.96 0 0 0-1.186-1.187l-.284.081c-.96.275-1.65-.918-.931-1.613l.211-.205a.96.96 0 0 0-.434-1.622l-.286-.071c-.97-.243-.97-1.62 0-1.864l.286-.071a.96.96 0 0 0 .434-1.622l-.211-.205c-.719-.695-.03-1.888.931-1.613l.284.08a.96.96 0 0 0 1.187-1.186l-.081-.284c-.275-.96.918-1.65 1.613-.931l.205.211a.96.96 0 0 0 1.622-.434zM12.973 8.5H8.25l-2.834 3.779A4.998 4.998 0 0 0 12.973 8.5m0-1a4.998 4.998 0 0 0-7.557-3.779l2.834 3.78zM5.048 3.967l-.087.065zm-.431.355A4.98 4.98 0 0 0 3.002 8c0 1.455.622 2.765 1.615 3.678L7.375 8zm.344 7.646.087.065z"/>
+                    </svg>
+                </button>
 			</div>
 		</div>
 
@@ -1125,6 +1194,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 						on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
 						on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}
 						on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
+						on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
+						on:requestviewchange={handleRequestOpenTab}
 					 />
 				{:else if selectedTab === 'tags'}
 					<TagsView
@@ -1204,13 +1275,25 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
 
     {#if importMenuVisible}
-        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
-            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Audio</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Document</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Image</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Table</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Transcript</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Video</button>
+        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[140px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
+            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Music class="w-4 h-4" /><span>Audio</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <FileText class="w-4 h-4" /><span>Document</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <ImageIcon class="w-4 h-4" /><span>Image</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Sheet class="w-4 h-4" /><span>Table</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <MessageSquareText class="w-4 h-4" /><span>Transcript</span>
+            </button>
+            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                <Film class="w-4 h-4" /><span>Video</span>
+            </button>
         </div>
     {/if}
 

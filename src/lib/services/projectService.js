@@ -70,7 +70,6 @@ import {
 
     prepareMediaNoteView,
     markMediaNoteTranscriptChangesDiscarded,
-    loadAutosaveState
 } from '$lib/stores/projectStore.js';
 
 import {
@@ -103,24 +102,6 @@ export function normalizePath(path) {
     normalized = normalized.replace(/\\/g, '/');
 
     return normalized;
-}
-
-/**
- * Updates the name and description for a specific tag.
- * @param {string} projectId - The ID of the project.
- * @param {string} projectRootPath - The root path of the project.
- * @param {string} oldName - The current name of the tag.
- * @param {string} newName - The new name for the tag.
- * @param {string} newDescription - The new description for the tag.
- */
-export async function updateTag(projectId, projectRootPath, oldName, newName, newDescription) {
-    return await invoke('update_tag', {
-        projectId,
-        projectRootPathStr: projectRootPath,
-        oldName,
-        newName,
-        newDescription,
-    });
 }
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
@@ -169,6 +150,33 @@ export async function loadHighlightsForFile(filePath, itemType) {
         } else {
             console.log(`[ProjectService] No highlights found for document type '${itemType}'.`);
         }
+    }
+}
+
+export async function saveTableSchema(tablePath, schema) {
+    if (!tablePath || !schema) return;
+    const normalizedPath = normalizePath(tablePath);
+    const { project } = await import('$lib/stores/projectStore.js');
+    const projectId = get(project).id;
+    try {
+        await invoke('save_table_schema', { projectId, tablePath: normalizedPath, schema });
+    } catch (error) {
+        console.error(`[ProjectService] Error saving table schema for ${tablePath}:`, error);
+        throw error;
+    }
+}
+
+export async function loadTableSchema(tablePath) {
+    if (!tablePath) return null;
+    const normalizedPath = normalizePath(tablePath);
+    const { project } = await import('$lib/stores/projectStore.js');
+    const projectId = get(project).id;
+    try {
+        const schema = await invoke('load_table_schema', { projectId, tablePath: normalizedPath });
+        return schema || {};
+    } catch (error) {
+        console.error(`[ProjectService] Error loading table schema for ${tablePath}:`, error);
+        return null;
     }
 }
 
@@ -369,7 +377,7 @@ function createConversionEditor(instanceId) {
     });
 }
 
-export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect = null) {
+export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect = null, targetTranscriptPathToSelect = null) {
     if (!projectXmlPath || projectXmlPath.trim() === '') {
         console.error('[ProjectService] loadProjectDataAndUpdateStore called without a valid projectXmlPath');
         project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));
@@ -456,7 +464,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 
         // Load autosave preference for this project (defaults to true)
         if (loadedData.project_uuid) {
-            loadAutosaveState(loadedData.project_uuid);
         }
 
         // Update project groups list
@@ -513,7 +520,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 
         if (mediaFileToSelect) {
             
-            selectMedia(mediaFileToSelect);
+            selectMedia(mediaFileToSelect, targetTranscriptPathToSelect);
         
             
         }
@@ -537,8 +544,9 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
-              if (node.file_type === 'media' && node.transcripts) {
-                 node.transcripts = node.transcripts.map(t => {
+              if (node.file_type === 'media') {
+                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
+                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
                     let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
@@ -563,7 +571,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                         }
                     }
                     return {
-                        path: absolutePath, // This will be null if construction failed
+                        path: absolutePath ? normalizePath(absolutePath) : null,
                         relativePath: t.relativePath, // Always preserve the original relativePath
                         language_code: t.language_code, // Pass the language code
                         name: name // Add the name property
@@ -902,6 +910,21 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
 
+export async function importTableSheet(sourceFilePath, projectXmlPath, sheetName, filename) {
+    // Only invoke the backend and return the promise so the UI orchestrator
+    // has control over the loading state, preventing loading spinner glitches.
+    const result = await invoke('import_table_file', {
+        sourcePathStr: sourceFilePath,
+        projectXmlPathStr: projectXmlPath,
+        sheetNameOpt: sheetName
+    });
+    if (result && result.table_path && result.preview_data) {
+        return { ...result, filename: `${filename} (${sheetName})` };
+    } else {
+        throw new Error('Invalid response from backend during table sheet import.');
+    }
+}
+
 export async function importTableFile(hasHeaders) {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
@@ -935,18 +958,37 @@ export async function importTableFile(hasHeaders) {
         const sourceFilePath = selected;
         console.log(`[ProjectService] importTableFile: sourceFilePath = ${sourceFilePath}`);
         const sourceFilename = await basename(sourceFilePath);
+        setAssetImportStatus(true, `Inspecting table ${sourceFilename}...`);
+
+        let selectedSheets = null;
+        if (sourceFilePath.toLowerCase().endsWith('.xlsx')) {
+            console.log(`[ProjectService] Invoking 'get_xlsx_sheets' for ${sourceFilePath}`);
+            const sheets = await invoke('get_xlsx_sheets', { sourcePathStr: sourceFilePath });
+            if (sheets && sheets.length > 1) {
+                // If there are multiple sheets, we stop here and return them to the UI
+                // so the UI can prompt the user to select which ones to import.
+                setAssetImportStatus(false, `Select sheets to import from ${sourceFilename}`);
+                return { sheets, sourceFilePath, filename: sourceFilename, projectXmlPath };
+            } else if (sheets && sheets.length === 1) {
+                // Single sheet, proceed directly
+                selectedSheets = [sheets[0]];
+            }
+        }
+
+        // If it's a CSV or an XLSX with a single sheet, we can import it right away
         setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
 
         console.log(`[ProjectService] Invoking 'import_table_file' with sourcePathStr: ${sourceFilePath}, projectXmlPathStr: ${projectXmlPath}`);
         const result = await invoke('import_table_file', {
             sourcePathStr: sourceFilePath,
-            projectXmlPathStr: projectXmlPath
+            projectXmlPathStr: projectXmlPath,
+            sheetNameOpt: selectedSheets ? selectedSheets[0] : null
         });
         console.log(`[ProjectService] Result from 'import_table_file':`, result);
 
         if (result && result.table_path && result.preview_data) {
             setAssetImportStatus(false, `${sourceFilename} imported successfully.`);
-            return { ...result, filename: sourceFilename };
+            return [{ ...result, filename: sourceFilename }];
         } else {
             throw new Error('Invalid response from backend during table import.');
         }
@@ -1368,7 +1410,7 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
     return JSON.stringify(editor.getEditorState().toJSON());
 }
 
-export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
+export async function refreshProjectFiles(targetPathToSelect = null, targetTranscriptPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect, targetTranscriptPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
     const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
     await refreshProjectFiles(); // Refresh the file list after rename
@@ -1720,6 +1762,7 @@ export async function convertAndSaveTranscriptAsDoc() {
             original_import_path: null,
             speaker_names: null,
             waveform_data: null,
+            file_type: "document",
         };
 
         await invoke('update_asset_metadata_command', {
@@ -1821,6 +1864,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
             original_import_path: null,
             speaker_names: null,
             waveform_data: null,
+            file_type: "transcript",
         };
 
         await invoke('update_asset_metadata_command', {
@@ -2372,7 +2416,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         return true;
     }
 
-    if (projState.autosaveEnabled) {
+    if (true) {
         if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
             try {
                 await saveCurrentPdfAnnotations();
@@ -2417,28 +2461,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             await message(`Cannot ${actionContextDisplay}: Unsaved changes exist for "${itemName}", but an automatic save could not be performed (missing save capability for this item type). Please save or discard changes manually.`, { title: 'Autosave Error', type: 'error'});
             return false;
         }
-    } else {
-        return new Promise((resolve) => {
-            showUnsavedChangesPrompt(itemName, itemTypeForPrompt,
-                async () => {
-                    hideUnsavedChangesPrompt();
-                    if (saveFunction) {
-                        try { await saveFunction(); resolve(true); }
-                        catch (error) { console.error("[UnsavedChangesModal callback] Save failed:", error); await message(`Failed to save "${itemName}": ${error.message || error}`, {title: "Save Error", type: "error"}); resolve(false); }
-                    } else { console.error("[UnsavedChangesModal callback] Save chosen, but save function missing."); await message('Cannot save: Editor reference or save method is missing.', { title: 'Internal Error', type: 'error' }); resolve(false); }
-                },
-                () => {
-                    hideUnsavedChangesPrompt();
-                    if (discardFunction) discardFunction();
-                    if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null) resetEditorFunction(initialContentForReset);
-                    resolve(true);
-                },
-                () => {
-                    hideUnsavedChangesPrompt();
-                    resolve(false);
-                }
-            );
-        });
     }
 }
 
@@ -2864,4 +2886,49 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
     // 5. Refresh and Load
     await refreshProjectFiles(mediaPath);
     await loadTranscriptFile(newTranscriptPath);
+}
+
+/**
+ * Fetches and groups all project assets for link fields, using backend file_type categorization.
+ * Excludes attachments.
+ * @param {string} projectId 
+ * @returns {Promise<Array>}
+ */
+export async function getProjectAssetsForLink(projectId) {
+    try {
+        const rawAssets = await invoke('get_project_assets_for_link_command', { projectId });
+        
+        const categoryMap = {
+            'audio': 'Audios',
+            'video': 'Videos',
+            'audio-transcript': 'Audio Transcripts',
+            'video-transcript': 'Video Transcripts',
+            'transcript': 'Transcripts',
+            'imported_transcript': 'Transcripts',
+            'document': 'Documents',
+            'doc': 'Documents',
+            'pdf': 'Documents',
+            'table': 'Tables',
+            'image': 'Images'
+        };
+
+        const assets = rawAssets.map(node => {
+            let category = categoryMap[node.file_type] || 'Other';
+            return {
+                label: `${category} - ${node.name}`,
+                value: node.path,
+                category: category
+            };
+        });
+
+        return assets.sort((a, b) => {
+            if (a.category !== b.category) {
+                return a.category.localeCompare(b.category);
+            }
+            return a.label.localeCompare(b.label);
+        });
+    } catch (e) {
+        console.error('Failed to fetch project assets for link:', e);
+        return [];
+    }
 }

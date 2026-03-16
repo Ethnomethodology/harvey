@@ -3,13 +3,14 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath } from '$lib/services/projectService.js';
+	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
 	    import FileRenameModal from '../modals/FileRenameModal.svelte';
 		import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	    import GroupRenameModal from '../modals/GroupRenameModal.svelte'; // Added GroupRenameModal
+        import TableSheetSelectionModal from '../modals/TableSheetSelectionModal.svelte';
 		import { confirm, message } from '@tauri-apps/plugin-dialog';	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
@@ -17,6 +18,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from 'lucide-svelte';
 
 
     const dispatch = createEventDispatcher();
@@ -285,6 +287,19 @@
     let showImportTranscriptModal = false;
     let showHeaderConfirmationModal = false;
     let headerConfirmationData = {};
+
+    let showTableSheetSelectionModal = false;
+    let tableSheetSelectionData = {
+        sheets: [],
+        filename: '',
+        sourceFilePath: '',
+        projectXmlPath: ''
+    };
+
+    let pendingSheetNamesToImport = [];
+    let pendingTableImports = [];
+    let importedTablePathsToRevert = [];
+
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -366,17 +381,36 @@
     async function handleTableImport() {
         let isLoading = true;
         try {
-            const importResult = await importTableFile(); // No arguments needed, projectService handles file selection
+            const importResult = await importTableFile();
             console.log(`[DataLeftPanel] importResult from importTableFile:`, importResult);
-            if (importResult) {
-                headerConfirmationData.tablePath = importResult.table_path;
-                headerConfirmationData.previewData = importResult.preview_data;
-                showHeaderConfirmationModal = true;
-            } else {
-                // If result is null, it means the user cancelled the file selection.
-                // No error, just return.
+
+            if (!importResult) {
+                // User cancelled the file selection.
                 return;
             }
+
+            // Mark import process as active to handle safe cancellations
+            isActivelyImportingTable = true;
+
+            // Check if it's the intermediate state (multiple sheets found)
+            if (importResult.sheets && importResult.sheets.length > 1) {
+                tableSheetSelectionData = {
+                    sheets: importResult.sheets,
+                    filename: importResult.filename,
+                    sourceFilePath: importResult.sourceFilePath,
+                    projectXmlPath: importResult.projectXmlPath
+                };
+                showTableSheetSelectionModal = true;
+                return;
+            }
+
+            // Otherwise, it's an array of imported files (one item for CSV/single sheet XLSX)
+            if (Array.isArray(importResult) && importResult.length > 0) {
+                pendingTableImports = importResult;
+                importedTablePathsToRevert = [];
+                processNextTableImport();
+            }
+
         } catch (e) {
             console.error(`[DataLeftPanel] Error importTableFile:`, e);
             message(e.message, { title: 'Import Error', type: 'error' });
@@ -385,18 +419,204 @@
         }
     }
 
+    async function handleTableSheetSelectionConfirm(event) {
+        const { selectedSheets } = event.detail;
+        console.log(`[DataLeftPanel] Selected sheets for import:`, selectedSheets);
+        showTableSheetSelectionModal = false;
+
+        if (!selectedSheets || selectedSheets.length === 0) {
+            isActivelyImportingTable = false;
+            return;
+        }
+
+        pendingSheetNamesToImport = [...selectedSheets];
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
+
+        // Start processing the first sheet immediately
+        await processNextTableImport();
+    }
+
+    async function handleTableSheetSelectionCancel() {
+        console.log(`[DataLeftPanel] Table sheet selection cancelled.`);
+        showTableSheetSelectionModal = false;
+        isActivelyImportingTable = false;
+        // No cleanup needed since we haven't extracted/imported any files yet.
+        setAssetImportStatus(false, 'Table import cancelled.');
+    }
+
+    async function processNextTableImport() {
+        if (!isActivelyImportingTable) {
+            console.log("[DataLeftPanel] Import cancelled, halting processNextTableImport.");
+            return;
+        }
+
+        // If we still have sheets to extract, pull the next one and extract it
+        if (pendingSheetNamesToImport.length > 0) {
+            const nextSheet = pendingSheetNamesToImport.shift();
+            try {
+                setAssetImportStatus(true, `Extracting sheet ${nextSheet}...`);
+                const result = await importTableSheet(
+                    tableSheetSelectionData.sourceFilePath,
+                    tableSheetSelectionData.projectXmlPath,
+                    nextSheet,
+                    tableSheetSelectionData.filename
+                );
+
+                if (!isActivelyImportingTable) return; // User cancelled during extraction
+                setAssetImportStatus(false, '');
+
+                if (result && result.table_path) {
+                    pendingTableImports.push(result);
+                    // Open the header configuration modal for the newly extracted sheet
+                    showNextHeaderConfirmation();
+                } else {
+                    // Skip to next if extraction failed but didn't throw
+                    await processNextTableImport();
+                }
+            } catch (e) {
+                console.error(`[DataLeftPanel] Error extracting sheet ${nextSheet}:`, e);
+                if (isActivelyImportingTable) {
+                    const errorMessage = typeof e === 'string' ? e : (e?.message || 'Unknown error');
+                    message(`Error extracting sheet ${nextSheet}: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+                    // We've hit an error during sheet extraction. Abort the remaining imports safely.
+                    await triggerHeaderConfirmationCancel();
+                }
+            }
+            return;
+        }
+
+        // If no more sheets to extract, check if we have any pending header confirmations
+        if (pendingTableImports.length > 0) {
+            showNextHeaderConfirmation();
+            return;
+        }
+
+        // All imports and configurations completed successfully
+        if (importedTablePathsToRevert.length > 0) {
+            // Select the last imported table
+            const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
+            handleItemSelect(lastImported, 'table');
+
+            const count = importedTablePathsToRevert.length;
+            message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
+        }
+        importedTablePathsToRevert = [];
+        isActivelyImportingTable = false;
+        setAssetImportStatus(false, '');
+    }
+
+    function showNextHeaderConfirmation() {
+        const nextImport = pendingTableImports[0];
+        headerConfirmationData.tablePath = nextImport.table_path;
+        headerConfirmationData.previewData = nextImport.preview_data;
+        headerConfirmationData.filename = nextImport.filename;
+
+        showHeaderConfirmationModal = true;
+    }
+
+    let isActivelyImportingTable = false;
+
     async function handleHeaderConfirmation(event) {
-        const { hasHeaders } = event.detail;
-        const { tablePath } = headerConfirmationData;
+        const { hasHeaders, schema } = event.detail;
+        console.log(`[DataLeftPanel] handleHeaderConfirmation: hasHeaders = ${hasHeaders}, schema =`, schema);
+        showHeaderConfirmationModal = false;
+        
         try {
-            await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+            // First, set the headers flag in XML
+            await invoke('set_table_headers', {
+                tablePathStr: headerConfirmationData.tablePath,
+                hasHeaders: hasHeaders
+            });
+
+            // Then, save the schema if provided
+            if (schema && Object.keys(schema).length > 0) {
+                await saveTableSchema(headerConfirmationData.tablePath, schema);
+            }
+
+            // Mark this specific import as fully processed
+            importedTablePathsToRevert.push(headerConfirmationData.tablePath);
+            pendingTableImports.shift(); // Remove the successfully processed item
+
             await refreshProjectFiles();
 
-            dispatch('requestviewchange', { viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
+            // Proceed to the next one
+            processNextTableImport();
         } catch (error) {
-            console.error(`[DataLeftPanel] Error setting table headers:`, error);
-            await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
+            console.error('[DataLeftPanel] Error confirming headers/schema:', error);
+            message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
+            // Abort remaining imports on error
+            await triggerHeaderConfirmationCancel();
         }
+    }
+
+    async function handleHeaderConfirmationCancel() {
+        // This is strictly bound to the modal's internal cancel/close button event
+        await triggerHeaderConfirmationCancel();
+    }
+
+    async function triggerHeaderConfirmationCancel() {
+        console.log(`[DataLeftPanel] Header confirmation cancelled. Aborting entire import process.`);
+        showHeaderConfirmationModal = false;
+
+        if (!isActivelyImportingTable) return;
+        isActivelyImportingTable = false;
+
+        try {
+            // Gather all paths we need to delete (the ones fully processed + the current one + the remaining pending ones)
+            const pathsToDelete = [...importedTablePathsToRevert];
+
+            // Add current one being cancelled if it's not already in the revert list
+            if (headerConfirmationData.tablePath && !pathsToDelete.includes(headerConfirmationData.tablePath)) {
+                pathsToDelete.push(headerConfirmationData.tablePath);
+            }
+
+            // Add any remaining pending imports that were extracted but not yet configured
+            for (const pending of pendingTableImports) {
+                if (pending.table_path && !pathsToDelete.includes(pending.table_path)) {
+                    pathsToDelete.push(pending.table_path);
+                }
+            }
+
+            if (pathsToDelete.length > 0) {
+                // Clean up: Delete them sequentially
+                // We bypass deleteProjectItem here because deleteProjectItem modifies global loading state
+                // and attempts to refresh the UI in ways that conflict with the cancellation spinner logic.
+                for (const path of pathsToDelete) {
+                    console.log(`[DataLeftPanel] Reverting partially imported table: ${path}`);
+                    try {
+                        const projectStoreVal = get(project);
+                        if (projectStoreVal.xmlPath) {
+                            await invoke('delete_project_item', { itemPath: path, projectXmlPath: projectStoreVal.xmlPath });
+                        }
+                    } catch (e) {
+                        console.error(`[DataLeftPanel] Failed to delete table during rollback: ${path}`, e);
+                    }
+                }
+
+                await refreshProjectFiles();
+                message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+            }
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error during import rollback:`, e);
+        } finally {
+            pendingTableImports = [];
+            importedTablePathsToRevert = [];
+            headerConfirmationData = { tablePath: '', previewData: null };
+
+            // Critical fix: ensure global import/loading flags are flipped back!
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: 'Table import cancelled.'
+            }));
+            setAssetImportStatus(false, 'Table import cancelled.');
+        }
+    }
+
+    function setAssetImportStatus(isImporting, message) {
+        project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message }));
     }
 
     async function handleRenameConfirm(event) {
@@ -666,12 +886,12 @@
     }
 
     const CATEGORIES_BASE = [
-        { name: 'Audios', type: 'audio', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`, importEnabled: true },
-        { name: 'Documents', type: 'document', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files w-4 h-4" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2m0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1M3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>`, importEnabled: true },
-        { name: 'Images', type: 'image', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-images w-4 h-4" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2M14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1M2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>`, importEnabled: true },
-        { name: 'Tables', type: 'table', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-table w-4 h-4" viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/></svg>`, importEnabled: true },
-        { name: 'Transcripts', type: 'imported_transcript', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`, importEnabled: true },
-        { name: 'Videos', type: 'video', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-film w-4 h-4" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`, importEnabled: true },
+        { name: 'Audios', type: 'audio', iconComponent: Music, importEnabled: true },
+        { name: 'Documents', type: 'document', iconComponent: FileText, importEnabled: true },
+        { name: 'Images', type: 'image', iconComponent: ImageIcon, importEnabled: true },
+        { name: 'Tables', type: 'table', iconComponent: Sheet, importEnabled: true },
+        { name: 'Transcripts', type: 'imported_transcript', iconComponent: MessageSquareText, importEnabled: true },
+        { name: 'Videos', type: 'video', iconComponent: Film, importEnabled: true },
     ];
     const IMPORT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"><path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/></svg>`;
     const CONTEXT_MENU_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical w-4 h-4" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/></svg>`;
@@ -924,7 +1144,7 @@
                 class:pointer-events-none={$showSearchBox}
                 on:click={handleSearchClick}
                 title="Search Data">
-                {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
+                <Search class="w-4 h-4" />
             </button>
 
             <!-- Search Input Overlay -->
@@ -968,7 +1188,7 @@
                                     on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
                                     <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-600">
                                         <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
-                                        <span class="flex-shrink-0">{@html category.icon}</span>
+                                        <span class="flex-shrink-0"><svelte:component this={category.iconComponent} class="w-4 h-4" /></span>
                                         <span class="font-medium text-gray-700 dark:text-gray-400">{category.name}</span>
                                     </div>
                                     <button
@@ -991,7 +1211,7 @@
                                                         <div class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
                                                              class:bg-blue-100={fileItem.path === selectedItemPathInStore}
                                                              class:dark:bg-blue-800={fileItem.path === selectedItemPathInStore}
-                                                             title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                             title="{fileItem.name}" role="button" tabindex="0"
                                                              on:click={() => handleItemClick(fileItem) }
                                                              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
                                                             <span class="flex items-center space-x-1 text-gray-800 dark:text-gray-200 truncate"
@@ -1028,13 +1248,21 @@
 
                 <!-- Bottom 1/3 for Groups -->
                 <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: {100 - categoriesHeightPercent}%;">
-                    <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5">
-                        <span class="mr-1.5 flex-shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
-                                <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-                            </svg>
-                        </span>
-                        Groups
+                    <h3 class="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5 group hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                        <div class="flex items-center">
+                            <span class="mr-1.5 flex-shrink-0">
+                                <GalleryVerticalEnd class="w-3.5 h-3.5" />
+                            </span>
+                            Groups
+                        </div>
+                        <button
+                            type="button"
+                            class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-700 hover:text-gray-600 dark:hover:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${categoryContextMenuVisible && categoryContextMenuType === 'groups' ? 'opacity-100' : ''}"
+                            title="Options"
+                            on:click|stopPropagation={(e) => handleCategoryContextMenu(e, 'groups')}
+                        >
+                            {@html CONTEXT_MENU_ICON_SVG}
+                        </button>
                     </h3>
                     <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-700 text-xs">
                         {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
@@ -1097,7 +1325,7 @@
                     on:focus={(event) => showTooltip(event, category)}
                     on:blur={hideTooltip}
                 >
-                    {@html category.icon}
+                    <svelte:component this={category.iconComponent} class="w-5 h-5" />
                 </button>
             {/each}
         </div>
@@ -1248,36 +1476,46 @@
             }
         }}
     >
-        {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
+        {#if categoryContextMenuType === 'groups'}
           <button
-            on:click|stopPropagation={() => {
-                if (categoryContextMenuType === 'document') {
-                    const currentProject = get(project);
-                    if (currentProject && currentProject.xmlPath) {
-                        createNewDocument(currentProject.xmlPath);
-                    } else {
-                        message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
-                    }
-                }
-                if (categoryContextMenuType === 'table') {
-                    emit('request-create-table-modal');
-                }
-                closeCategoryContextMenu();
-            }}
+            on:click|stopPropagation={() => { handleNewGroupClick(); closeCategoryContextMenu(); }}
             class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
-            title="Create New"
+            title="Create New Group"
           >
             Create New
           </button>
+        {:else}
+            {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
+              <button
+                on:click|stopPropagation={() => {
+                    if (categoryContextMenuType === 'document') {
+                        const currentProject = get(project);
+                        if (currentProject && currentProject.xmlPath) {
+                            createNewDocument(currentProject.xmlPath);
+                        } else {
+                            message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
+                        }
+                    }
+                    if (categoryContextMenuType === 'table') {
+                        emit('request-create-table-modal');
+                    }
+                    closeCategoryContextMenu();
+                }}
+                class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                title="Create New"
+              >
+                Create New
+              </button>
+            {/if}
+            <button
+              on:click|stopPropagation={() => { handleImportClick(categoryContextMenuType); closeCategoryContextMenu(); }}
+              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+              disabled={!CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.importEnabled}
+              title="Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}"
+            >
+              Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}
+            </button>
         {/if}
-        <button
-          on:click|stopPropagation={() => { handleImportClick(categoryContextMenuType); closeCategoryContextMenu(); }}
-          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
-          disabled={!CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.importEnabled}
-          title="Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}"
-        >
-          Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}
-        </button>
       </div>
     {/if}
 </div>
@@ -1297,6 +1535,14 @@
     tablePath={headerConfirmationData.tablePath} 
     previewData={headerConfirmationData.previewData}
     on:confirm={handleHeaderConfirmation}
+    on:cancel={handleHeaderConfirmationCancel}
+/>
+<TableSheetSelectionModal
+    bind:showModal={showTableSheetSelectionModal}
+    sheets={tableSheetSelectionData.sheets}
+    filename={tableSheetSelectionData.filename}
+    on:confirm={handleTableSheetSelectionConfirm}
+    on:cancel={handleTableSheetSelectionCancel}
 />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={(event) => handleImportTranscriptConfirm(event)} on:close={() => showImportTranscriptModal = false} />
 

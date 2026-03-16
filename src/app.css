@@ -1,5 +1,7 @@
 /* src/app.css */
 
+@import "./lib/styles/datepicker.css";
+
 /*---------------------------------------------------------
   Tailwind directives
 ---------------------------------------------------------*/
@@ -240,4 +242,28 @@ body {
 /* Fix for strikethrough and underline not appearing together in Lexical/Tailwind */
 .underline.line-through {
   text-decoration: underline line-through !important;
+}
+
+/* Hide number input spin buttons globally to prevent overlap with Flowbite slots/icons */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Ensure Flowbite Datepicker is always on top of modals */
+.datepicker {
+  z-index: 9999 !important;
+}
+
+/* Ensure Flowbite Modals and their backdrops are always on top of everything including topbars and editor toolbars */
+div[role="dialog"] {
+  z-index: 10000 !important;
+}
+div[role="presentation"].fixed.inset-0 {
+  z-index: 9999 !important;
 }
