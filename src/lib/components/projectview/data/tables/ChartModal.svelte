@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper } from 'flowbite-svelte';
-    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
+    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -320,7 +320,7 @@
                 if (selectedChartType === 'bar') {
                     option.xAxis = { type: 'value' };
                     option.yAxis = { type: 'category', data: xData };
-                    option.series = [{ type: 'bar', data: yData }];
+                    option.series = [{ type: 'bar', name: yAxisCol, data: yData }];
                 } else {
                     option.xAxis = { type: 'category', data: xData };
                     option.yAxis = { type: 'value' };
@@ -329,11 +329,11 @@
                         option.xAxis = { type: 'value' };
                         // Scatter needs [x, y] data pairs
                         const scatterData = validData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
-                        option.series = [{ type: 'scatter', data: scatterData }];
+                        option.series = [{ type: 'scatter', name: yAxisCol, data: scatterData }];
                     } else if (selectedChartType === 'column') {
-                        option.series = [{ type: 'bar', data: yData }];
+                        option.series = [{ type: 'bar', name: yAxisCol, data: yData }];
                     } else {
-                        option.series = [{ type: selectedChartType, data: yData }];
+                        option.series = [{ type: selectedChartType, name: yAxisCol, data: yData }];
                     }
                 }
             } else if (selectedChartType === 'pie') {
@@ -365,12 +365,14 @@
                 option.series = [
                     {
                         type: 'bar',
+                        name: 'Start',
                         stack: 'Total',
                         itemStyle: { borderColor: 'transparent', color: 'transparent' },
                         data: starts
                     },
                     {
                         type: 'bar',
+                        name: 'Duration',
                         stack: 'Total',
                         data: durations
                     }
@@ -419,6 +421,7 @@
                 imageDataBase64: imageData
             });
             notificationStore.add('Chart saved to Images tab.', 'success');
+            dispatch('chartSavedToImages');
         } catch (error) {
             console.error('Failed to save to images:', error);
             notificationStore.add('Failed to save chart to Images.', 'error');
@@ -453,13 +456,23 @@
     dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
     class="w-full p-0 overflow-hidden flex flex-col h-[70vh] max-h-[800px] relative bg-white dark:bg-gray-900"
 >
-    <div slot="header" class="flex items-center space-x-3 w-full">
-        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-            <PieChart size={20} class="text-blue-600 dark:text-blue-400" />
+    <div slot="header" class="flex items-center justify-between w-full pr-4">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <PieChart size={20} class="text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Insert Chart</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Create or open visualizations from table data</p>
+            </div>
         </div>
-        <div>
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Insert Chart</h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Create or open visualizations from table data</p>
+        <div class="flex gap-2">
+            <Button size="sm" color="light" on:click={() => exportChart('png')} title="Export as PNG" disabled={!chartInstance}>
+                <Share class="w-4 h-4 mr-2" /> Export
+            </Button>
+            <Button size="sm" color="light" on:click={saveChartToImages} title="Save to Images" disabled={!chartInstance}>
+                <ImagePlus class="w-4 h-4 mr-2" /> Save to Images
+            </Button>
         </div>
     </div>
 
@@ -501,7 +514,7 @@
                             </div>
                         {:else}
                             <div class="text-sm font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                                Data Configuration
+                                {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </div>
 
                             {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
@@ -607,16 +620,6 @@
                 </div>
             {:else if activeTab === 'create' && isEditingExisting}
                 <!-- Chart Preview & Dashboard -->
-                <div class="absolute top-2 right-2 flex gap-2 z-10">
-                    {#if chartInstance}
-                        <Button size="xs" color="light" on:click={() => exportChart('png')} title="Export PNG">
-                            <Download class="w-4 h-4 mr-1" /> PNG
-                        </Button>
-                        <Button size="xs" color="light" on:click={saveChartToImages} title="Save to Images">
-                            <ImageIcon class="w-4 h-4 mr-1" /> Save to Data
-                        </Button>
-                    {/if}
-                </div>
                 <div class="flex-1 w-full h-full p-4" bind:this={chartContainer}></div>
             {:else if activeTab === 'existing'}
                  <div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 italic">

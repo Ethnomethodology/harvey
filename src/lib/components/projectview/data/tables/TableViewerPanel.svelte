@@ -3208,6 +3208,9 @@
         on:chartSaved={() => {
             dispatch('requestviewchange', { type: 'refresh_metadata' });
         }}
+        on:chartSavedToImages={() => {
+            dispatch('requestviewchange', { type: 'refresh_metadata' });
+        }}
     />
 {/if}
 
