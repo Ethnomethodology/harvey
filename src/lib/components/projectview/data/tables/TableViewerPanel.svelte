@@ -3250,6 +3250,11 @@
             <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
                 <Eraser size={14} />
             </button>
+            <div class="separator mx-0.5"></div>
+
+            <button id="insert-charts" on:click={() => showChartModal = true} class="mini-toolbar-button" title="Insert Charts">
+                <PieChart size={14} />
+            </button>
         </div>
 
          {#if !isLoading && !error}

@@ -127,7 +127,7 @@
              console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
 
-        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
+        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && itemTypeForInfo !== 'table' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
             panelStateStore.setActiveInfoPanelTab('metadata');
         }
     });
