@@ -65,6 +65,10 @@
     let lineType = 'Line'; // Line, Stacked Line, 100% Stacked Line
     let lineStyleOption = 'With Markers'; // With Markers, Area Filled
 
+    // Scatter Chart Extra Configuration
+    let scatterConnectPoints = 'None'; // None, Line, Line with Markers
+    let scatterTrendline = false;
+
     // Labels Configuration
     let xAxisLabel = '';
     let yAxisLabel = '';
@@ -154,7 +158,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -168,7 +172,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -217,6 +221,8 @@
         sortOrder = 'None';
         lineType = 'Line';
         lineStyleOption = 'With Markers';
+        scatterConnectPoints = 'None';
+        scatterTrendline = false;
         xAxisLabel = '';
         yAxisLabel = '';
         titlePosition = 'Top';
@@ -267,6 +273,8 @@
             sortOrder = config.sortOrder || 'None';
             lineType = config.lineType || 'Line';
             lineStyleOption = config.lineStyleOption || 'With Markers';
+            scatterConnectPoints = config.scatterConnectPoints || 'None';
+            scatterTrendline = config.scatterTrendline || false;
             xAxisLabel = config.xAxisLabel || '';
             yAxisLabel = config.yAxisLabel || '';
             titlePosition = config.titlePosition || 'Top';
@@ -315,6 +323,8 @@
             sortOrder,
             lineType,
             lineStyleOption,
+            scatterConnectPoints,
+            scatterTrendline,
             xAxisLabel,
             yAxisLabel,
             titlePosition,
@@ -645,23 +655,159 @@
                     }
                     option.series = seriesArray;
                 }
-            } else if (selectedChartType === 'line' || selectedChartType === 'scatter') {
+            } else if (selectedChartType === 'scatter') {
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
                 const validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '' && row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
-                const xData = validData.map(row => row[xAxisCol]);
-                const yData = validData.map(row => parseFloat(row[yAxisCol]) || 0);
 
-                option.xAxis = { type: 'category', data: xData };
-                option.yAxis = { type: 'value' };
-
-                if (selectedChartType === 'scatter') {
-                    option.xAxis = { type: 'value' };
-                    // Scatter needs [x, y] data pairs
-                    const scatterData = validData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
-                    option.series = [{ type: 'scatter', name: yAxisCol, data: scatterData }];
-                } else {
-                    option.series = [{ type: selectedChartType, name: yAxisCol, data: yData }];
+                // Title
+                let titleConfig = { text: chartName || 'New Chart' };
+                if (chartDescription && chartDescription.trim() !== '') {
+                    titleConfig.subtext = chartDescription;
                 }
+                const hasSubtext = !!titleConfig.subtext;
+
+                if (titlePosition === 'Top') {
+                    titleConfig.top = 0;
+                    titleConfig.left = 'center';
+                } else {
+                    titleConfig.bottom = 0;
+                    titleConfig.left = 'center';
+                }
+                option.title = titleConfig;
+
+                // Legend Pos
+                let legendConfig = { show: showLegend, type: 'scroll' };
+                if (legendPosition === 'Top') {
+                    legendConfig.top = titlePosition === 'Top' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Bottom') {
+                    legendConfig.bottom = titlePosition === 'Bottom' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Left') {
+                    legendConfig.left = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                if (legendPosition === 'Right') {
+                    legendConfig.right = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                option.legend = legendConfig;
+
+                // Base grid with default padding
+                option.grid = { containLabel: true, left: 30, right: 30, top: 40, bottom: 30 };
+
+                // Adjust Grid for Title
+                if (titlePosition === 'Top') {
+                    option.grid.top = hasSubtext ? 70 : 50;
+                } else {
+                    option.grid.bottom = hasSubtext ? 70 : 50;
+                }
+
+                // Adjust Grid for Legend
+                if (showLegend) {
+                    if (legendPosition === 'Left') option.grid.left = 140;
+                    if (legendPosition === 'Right') option.grid.right = 140;
+                    if (legendPosition === 'Top') option.grid.top = Math.max(option.grid.top, (titlePosition === 'Top' ? (hasSubtext ? 90 : 70) : 40));
+                    if (legendPosition === 'Bottom') option.grid.bottom = Math.max(option.grid.bottom, (titlePosition === 'Bottom' ? (hasSubtext ? 90 : 70) : 40));
+                }
+
+                option.xAxis = { type: 'value', name: xAxisLabel, nameLocation: 'middle', nameGap: 30 };
+                option.yAxis = { type: 'value', name: yAxisLabel, nameLocation: 'middle', nameGap: 40 };
+
+                // Map the data into structured groups
+                let groupedData = {};
+                let allX = [];
+                let allY = [];
+
+                validData.forEach(row => {
+                    const xVal = parseFloat(row[xAxisCol]) || 0;
+                    const yVal = parseFloat(row[yAxisCol]) || 0;
+                    const bKey = breakdownCol && row[breakdownCol] ? String(row[breakdownCol]) : yAxisCol;
+
+                    if (!groupedData[bKey]) groupedData[bKey] = [];
+                    groupedData[bKey].push([xVal, yVal]);
+
+                    allX.push(xVal);
+                    allY.push(yVal);
+                });
+
+                // Color Palettes
+                const palettes = {
+                    'Modern': ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'],
+                    'Soft Pastels': ['#fca5a5', '#fcd34d', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4'],
+                    'Warm Pastels': ['#ffb3ba', '#ffdfba', '#ffffba', '#baffc9', '#bae1ff'],
+                    'Warm Sunset': ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#2dd4bf']
+                };
+                option.color = palettes[colorPalette] || palettes['Modern'];
+
+                option.tooltip = {
+                    trigger: 'item', // Individual points
+                    formatter: function (params) {
+                        return `<div class="font-bold mb-1">${params.seriesName}</div>` +
+                               `<div>${params.marker} ${xAxisCol}: <b>${params.value[0]}</b></div>` +
+                               `<div>${params.marker} ${yAxisCol}: <b>${params.value[1]}</b></div>`;
+                    }
+                };
+
+                let seriesArray = [];
+                let colorIndex = 0;
+                for (const bKey in groupedData) {
+                    // Sort scatter points by X so connecting lines render left-to-right correctly
+                    groupedData[bKey].sort((a, b) => a[0] - b[0]);
+
+                    const seriesType = scatterConnectPoints === 'None' ? 'scatter' : 'line';
+                    const showSym = scatterConnectPoints === 'Line' ? false : true;
+
+                    seriesArray.push({
+                        name: bKey,
+                        type: seriesType,
+                        showSymbol: showSym,
+                        data: groupedData[bKey],
+                        itemStyle: {
+                            color: option.color[colorIndex % option.color.length]
+                        }
+                    });
+
+                    if (scatterTrendline) {
+                        // Linear regression: y = mx + b
+                        const pts = groupedData[bKey];
+                        const n = pts.length;
+                        if (n > 1) {
+                            const sumX = pts.reduce((a, p) => a + p[0], 0);
+                            const sumY = pts.reduce((a, p) => a + p[1], 0);
+                            const sumXY = pts.reduce((a, p) => a + (p[0] * p[1]), 0);
+                            const sumXX = pts.reduce((a, p) => a + (p[0] * p[0]), 0);
+
+                            const denom = (n * sumXX - sumX * sumX);
+                            if (denom !== 0) {
+                                const m = (n * sumXY - sumX * sumY) / denom;
+                                const b = (sumY - m * sumX) / n;
+
+                                const minX = Math.min(...pts.map(p => p[0]));
+                                const maxX = Math.max(...pts.map(p => p[0]));
+
+                                seriesArray.push({
+                                    name: bKey + ' (Trend)',
+                                    type: 'line',
+                                    showSymbol: false,
+                                    data: [[minX, m * minX + b], [maxX, m * maxX + b]],
+                                    lineStyle: {
+                                        type: 'dashed',
+                                        width: 2,
+                                        color: option.color[colorIndex % option.color.length]
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    colorIndex++;
+                }
+
+                option.series = seriesArray;
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
                 const validData = tableData.filter(row => row[categoryCol] !== null && row[categoryCol] !== undefined && row[categoryCol] !== '' && row[valueCol] !== null && row[valueCol] !== undefined && row[valueCol] !== '');
@@ -843,7 +989,7 @@
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
                     <div class="space-y-4">
-                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line'))}
+                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'))}
                             <div>
                                 <Label for="chartName" class="mb-2">Chart Name</Label>
                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
@@ -863,20 +1009,22 @@
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </h3>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
                                 <Accordion flush>
                                     <AccordionItem open>
                                         <span slot="header">Data Mapping</span>
                                         <div class="space-y-4">
                                             <div>
-                                                <Label for="xAxisCol" class="mb-2">Categories ({selectedChartType === 'bar' ? 'Y' : 'X'}-Axis)</Label>
-                                                <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
+                                                <Label for="xAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'X-Axis Values' : 'Categories (' + (selectedChartType === 'bar' ? 'Y' : 'X') + '-Axis)'}</Label>
+                                                <Select id="xAxisCol" items={selectedChartType === 'scatter' ? numericColumns : categoricalColumns} bind:value={xAxisCol} />
                                             </div>
                                             <div>
-                                                <Label for="yAxisCol" class="mb-2">Values ({selectedChartType === 'bar' ? 'X' : 'Y'}-Axis)</Label>
+                                                <Label for="yAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'Y-Axis Values' : 'Values (' + (selectedChartType === 'bar' ? 'X' : 'Y') + '-Axis)'}</Label>
                                                 <div class="flex gap-2">
                                                     <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} class="flex-1" />
+                                                    {#if selectedChartType !== 'scatter'}
                                                     <Select id="aggregationType" items={[{value:'Sum', name:'Sum'}, {value:'Average', name:'Average'}, {value:'Count', name:'Count'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={aggregationType} class="w-28" />
+                                                    {/if}
                                                 </div>
                                             </div>
                                             <div>
@@ -911,6 +1059,29 @@
                                                         <input type="radio" value="Area Filled" bind:group={lineStyleOption} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
                                                         Area Filled
                                                     </Label>
+                                                </div>
+                                            {:else if selectedChartType === 'scatter'}
+                                                <div class="space-y-4">
+                                                    <div>
+                                                        <Label class="mb-2">Connect Points</Label>
+                                                        <div class="flex gap-4">
+                                                            <Label class="flex items-center gap-2">
+                                                                <input type="radio" value="None" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                                                None
+                                                            </Label>
+                                                            <Label class="flex items-center gap-2">
+                                                                <input type="radio" value="Line" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                                                Line
+                                                            </Label>
+                                                            <Label class="flex items-center gap-2">
+                                                                <input type="radio" value="Line with Markers" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                                                Line with Markers
+                                                            </Label>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <Checkbox bind:checked={scatterTrendline}>Show Trendline (Linear Regression)</Checkbox>
+                                                    </div>
                                                 </div>
                                             {/if}
                                             <div>
@@ -974,18 +1145,7 @@
                                     </AccordionItem>
                                 </Accordion>
 
-                            {:else if selectedChartType === 'scatter'}
-                                <div>
-                                    <Label for="xAxisCol" class="mb-2">X-Axis Column</Label>
-                                    <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
-                                </div>
-                                <div>
-                                    <Label for="yAxisCol" class="mb-2">Y-Axis Column (Numeric)</Label>
-                                    <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} />
-                                </div>
-                                <div class="pt-2">
-                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
-                                </div>
+
                             {:else if selectedChartType === 'pie'}
                                 <div>
                                     <Label for="categoryCol" class="mb-2">Category Column</Label>
