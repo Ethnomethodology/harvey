@@ -25,6 +25,12 @@
         return null;
     }
 
+    export function openChart(chart) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openChart === 'function') {
+            tableViewerPanelRef.openChart(chart);
+        }
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});

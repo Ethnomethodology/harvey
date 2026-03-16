@@ -65,6 +65,35 @@ pub fn init_db() -> Result<(), CommandError> {
 
     debug!("[DB] Initializing database at: {}", db_path.display());
 
+    // Chart configurations table definition
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_charts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            chart_name TEXT NOT NULL,
+            chart_type TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, table_path, chart_name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized table_charts table definition.");
+
+    // Create a trigger to update `updated_at` timestamp for table_charts
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_charts_updated_at
+        AFTER UPDATE ON table_charts
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_charts SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+
     // Updated pdf_annotations table definition
     conn.execute(
         "CREATE TABLE IF NOT EXISTS pdf_annotations (
@@ -2317,6 +2346,25 @@ mod tests {
                 xml_path TEXT NOT NULL UNIQUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn init_table_charts_table_for_test(conn: &Connection) -> Result<()> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS table_charts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                table_path TEXT NOT NULL,
+                chart_name TEXT NOT NULL,
+                chart_type TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE (project_id, table_path, chart_name)
             )",
             [],
         )?;

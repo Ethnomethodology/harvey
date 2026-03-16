@@ -25,6 +25,7 @@
     import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
     import EditFieldModal from '$lib/components/projectview/modals/EditFieldModal.svelte';
     import TableHeaderIcon from './TableHeaderIcon.svelte';
+    import ChartModal from './ChartModal.svelte';
     import TableIcon from './TableIcon.svelte';
     import { 
         Pencil, 
@@ -772,6 +773,7 @@
     }
 
     let showEditFieldModal = false;
+    let showChartModal = false;
     let editingFieldData = { name: '', schema: {} };
     let isAddingNewField = false;
     let newFieldPosition = 'after';
@@ -2428,6 +2430,13 @@
         return dataColumnDefs;
     }
 
+    export let initialChartToLoad = null;
+
+    export function openChart(chart) {
+        showChartModal = true;
+        initialChartToLoad = chart;
+    }
+
     export async function getExportData() {
         if (!tabulatorInstance) return null;
         
@@ -3182,6 +3191,19 @@
             showEditFieldModal = false;
             isAddingNewField = false;
             newFieldTargetColumn = null;
+        }}
+    />
+{/if}
+
+{#if showChartModal}
+    <ChartModal
+        bind:open={showChartModal}
+        tablePath={tablePath}
+        columns={columns}
+        tableData={tableData}
+        initialChart={initialChartToLoad}
+        on:chartSaved={() => {
+            dispatch('requestviewchange', { type: 'refresh_metadata' });
         }}
     />
 {/if}

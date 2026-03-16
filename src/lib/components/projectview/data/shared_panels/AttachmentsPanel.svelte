@@ -5,7 +5,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
-    import { FileAudio, PlayCircle, Plus } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -19,13 +19,20 @@
     let currentTrackIndex = -1;
 
     function getFileName(path) {
+        if (typeof path === 'object' && path.chart_name) return path.chart_name;
         return path.split(/[\/\\]/).pop() || path;
     }
 
     function playTrack(index) {
         if (index >= 0 && index < attachments.length) {
             currentTrackIndex = index;
-            dispatch('requestPlayMedia', { mediaPath: attachments[index] });
+            const attachment = attachments[index];
+            if (typeof attachment === 'object' && attachment.chart_name) {
+                // For table charts, dispatch a specific event with chart data
+                dispatch('requestOpenChart', { chart: attachment });
+            } else {
+                dispatch('requestPlayMedia', { mediaPath: attachment });
+            }
         }
     }
 
@@ -83,16 +90,24 @@
         }
 
         try {
-            const result = await invoke('get_asset_metadata_command', {
-                projectId: projectStoreState.id,
-                assetRelativePath: assetRelativePathToLoad
-            });
+            if (itemType === 'table') {
+                // For tables, attachments are charts
+                attachments = await invoke('load_chart_configs_command', {
+                    projectId: projectStoreState.id,
+                    tablePath: assetRelativePathToLoad
+                });
+            } else {
+                const result = await invoke('get_asset_metadata_command', {
+                    projectId: projectStoreState.id,
+                    assetRelativePath: assetRelativePathToLoad
+                });
 
-            if (result && result.custom_fields_json) {
-                const customFields = JSON.parse(result.custom_fields_json);
-                const attachmentsField = customFields.find(f => f.key === 'attachments');
-                if (attachmentsField && attachmentsField.value) {
-                    attachments = JSON.parse(attachmentsField.value);
+                if (result && result.custom_fields_json) {
+                    const customFields = JSON.parse(result.custom_fields_json);
+                    const attachmentsField = customFields.find(f => f.key === 'attachments');
+                    if (attachmentsField && attachmentsField.value) {
+                        attachments = JSON.parse(attachmentsField.value);
+                    }
                 }
             }
         } catch (error) {
@@ -106,7 +121,7 @@
     $: {
         (async () => {
             const currentProjectStoreState = get(project);
-            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript';
+            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table';
             if (itemPath && isSupportedType && currentProjectStoreState?.baseDirectory) {
                 const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
@@ -130,7 +145,7 @@
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
     <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
         <span class="ml-1">Attachments</span>
-        {#if itemType !== 'doc'}
+        {#if itemType !== 'doc' && itemType !== 'table'}
             <button 
                 on:click={handleAddAttachment}
                 class="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-blue-600 dark:text-blue-400 flex items-center justify-center"
@@ -153,13 +168,21 @@
                         on:click={() => playTrack(i)}
                     >
                         <div class="flex items-center space-x-3 truncate">
-                            <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
-                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={attachment}>
+                            {#if typeof attachment === 'object' && attachment.chart_name}
+                                <PieChart class="w-4 h-4 text-gray-400 shrink-0" />
+                            {:else}
+                                <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
+                            {/if}
+                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? attachment.chart_name : attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
-                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
-                            <PlayCircle class="w-4 h-4" />
+                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title={typeof attachment === 'object' && attachment.chart_name ? "Open" : "Play"} on:click|stopPropagation={() => playTrack(i)}>
+                            {#if typeof attachment === 'object' && attachment.chart_name}
+                                <PieChart class="w-4 h-4" />
+                            {:else}
+                                <PlayCircle class="w-4 h-4" />
+                            {/if}
                         </button>
                     </li>
                 {/each}

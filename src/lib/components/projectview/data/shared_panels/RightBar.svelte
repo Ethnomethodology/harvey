@@ -53,7 +53,7 @@
         <Bookmark class="w-5 h-5" />
     </button>
 
-    {#if itemType === 'doc' || itemType === 'imported_transcript'}
+    {#if itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table'}
         <button
             on:click={() => handleTabClick('attachments')}
             class="p-1 focus:outline-none transition-colors flex items-center justify-center"

@@ -72,6 +72,18 @@
         }
     }
 
+    function handleRequestOpenChart(event) {
+        const { chart } = event.detail;
+        console.log('[DataView] Received requestOpenChart:', chart);
+        if (activeViewType === 'tables' && tableViewRef) {
+            if (typeof tableViewRef.openChart === 'function') {
+                tableViewRef.openChart(chart);
+            } else {
+                console.warn("[DataView] tableViewRef.openChart is not a function");
+            }
+        }
+    }
+
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
     project.subscribe(value => {
@@ -292,7 +304,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} />
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} />
                 {/if}
             </div>
         {/if}

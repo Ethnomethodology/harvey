@@ -41,6 +41,7 @@
     "@tiptap/extension-table-row": "^2.11.7",
     "@tiptap/extension-text-align": "^2.11.7",
     "@tiptap/pm": "^2.11.7",
+    "echarts": "^6.0.0",
     "lexical": "^0.30.0",
     "lucide-svelte": "^0.577.0",
     "openseadragon": "^4.1.1",

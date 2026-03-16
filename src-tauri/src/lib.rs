@@ -385,6 +385,11 @@ pub fn run() {
             projectview::metadata_commands::get_all_custom_field_definitions_command,
             projectview::metadata_commands::delete_custom_field_definition_command, // Added this line
 
+            // --- Chart Commands ---
+            projectview::chart_commands::save_chart_config_command,
+            projectview::chart_commands::load_chart_configs_command,
+            projectview::chart_commands::delete_chart_config_command,
+
             // --- Tag Handler Commands ---
             projectview::tag_handler::add_tag,
             projectview::tag_handler::get_all_tags,
