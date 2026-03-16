@@ -656,6 +656,8 @@
     <ImageExportModal
         bind:showModal={showImageExportModal}
         defaultFileName={chartName || 'chart'}
+        exportTypeLabel="Chart"
+        showAnnotations={false}
         on:export={handleExportConfirm}
         on:close={() => showImageExportModal = false}
     />
