@@ -61,6 +61,10 @@
     let barType = 'Clustered'; // Clustered, Stacked, 100% Stacked
     let sortOrder = 'None'; // None, Highest, Lowest, A-Z
 
+    // Line Chart Extra Configuration
+    let lineType = 'Line'; // Line, Stacked Line, 100% Stacked Line
+    let lineStyleOption = 'With Markers'; // With Markers, Area Filled
+
     // Labels Configuration
     let xAxisLabel = '';
     let yAxisLabel = '';
@@ -150,7 +154,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -164,7 +168,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -211,6 +215,8 @@
         breakdownCol = '';
         barType = 'Clustered';
         sortOrder = 'None';
+        lineType = 'Line';
+        lineStyleOption = 'With Markers';
         xAxisLabel = '';
         yAxisLabel = '';
         titlePosition = 'Top';
@@ -259,6 +265,8 @@
             breakdownCol = config.breakdownCol || '';
             barType = config.barType || 'Clustered';
             sortOrder = config.sortOrder || 'None';
+            lineType = config.lineType || 'Line';
+            lineStyleOption = config.lineStyleOption || 'With Markers';
             xAxisLabel = config.xAxisLabel || '';
             yAxisLabel = config.yAxisLabel || '';
             titlePosition = config.titlePosition || 'Top';
@@ -305,6 +313,8 @@
             breakdownCol,
             barType,
             sortOrder,
+            lineType,
+            lineStyleOption,
             xAxisLabel,
             yAxisLabel,
             titlePosition,
@@ -373,7 +383,7 @@
         };
 
         try {
-            if (selectedChartType === 'bar' || selectedChartType === 'column') {
+            if (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line') {
                 // Determine whether required axis cols are present depending on aggregation.
                 // If Count, we technically only need xAxisCol, but UI enforces yAxisCol selection.
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
@@ -454,28 +464,42 @@
                 const seriesArray = seriesNames.map(sName => {
                     const dataPoints = aggData.map(d => {
                         let val = d.series[sName] || 0;
-                        if (barType === '100% Stacked' && d.total !== 0) {
+                        if ((barType === '100% Stacked' || lineType === '100% Stacked Line') && d.total !== 0) {
                             val = (val / d.total) * 100;
                         }
                         return val;
                     });
 
+                    let valType = barType;
+                    if (selectedChartType === 'line') {
+                        valType = lineType;
+                    }
+
                     let sConfig = {
                         name: breakdownCol ? sName : (aggregationType === 'Count' ? 'Count' : yAxisCol),
-                        type: 'bar',
+                        type: selectedChartType === 'line' ? 'line' : 'bar',
                         data: dataPoints
                     };
 
-                    if (barType === 'Stacked' || barType === '100% Stacked') {
+                    if (valType === 'Stacked' || valType === '100% Stacked' || valType === 'Stacked Line' || valType === '100% Stacked Line') {
                         sConfig.stack = 'total';
+                    }
+
+                    if (selectedChartType === 'line') {
+                        if (lineStyleOption === 'Area Filled') {
+                            sConfig.areaStyle = {};
+                            sConfig.showSymbol = false; // Hide markers to emphasize area
+                        } else {
+                            sConfig.showSymbol = true; // Emphasize markers
+                        }
                     }
 
                     if (showValueLabels) {
                         sConfig.label = {
                             show: true,
-                            position: valueLabelPosition === 'Inside End' ? (selectedChartType === 'bar' ? 'insideRight' : 'insideTop') : (selectedChartType === 'bar' ? 'right' : 'top'),
-                            color: valueLabelPosition === 'Inside End' ? '#fff' : '#000',
-                            formatter: barType === '100% Stacked' ? '{c}%' : '{c}'
+                            position: selectedChartType === 'line' ? 'top' : (valueLabelPosition === 'Inside End' ? (selectedChartType === 'bar' ? 'insideRight' : 'insideTop') : (selectedChartType === 'bar' ? 'right' : 'top')),
+                            color: selectedChartType === 'line' ? '#000' : (valueLabelPosition === 'Inside End' ? '#fff' : '#000'),
+                            formatter: (valType === '100% Stacked' || valType === '100% Stacked Line') ? '{c}%' : '{c}'
                         };
                     }
 
@@ -562,7 +586,7 @@
                         let html = `<div class="font-bold mb-1">${params[0].axisValue}</div>`;
                         params.forEach(p => {
                             let valStr;
-                            if (barType === '100% Stacked') {
+                            if (barType === '100% Stacked' || lineType === '100% Stacked Line') {
                                 valStr = `${p.value.toFixed(1)}%`;
                             } else if (aggregationType === 'Count') {
                                 valStr = p.value;
@@ -596,8 +620,8 @@
                         }
                     };
                     option.series = seriesArray;
-                } else if (selectedChartType === 'column') {
-                    // Vertical column
+                } else if (selectedChartType === 'column' || selectedChartType === 'line') {
+                    // Vertical column or Line
                     option.xAxis = {
                         type: 'category',
                         data: xData,
@@ -605,12 +629,17 @@
                         nameLocation: 'middle',
                         nameGap: 40,
                         axisLabel: {
-                            width: yAxisWidthLimit,
-                            overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate'
+                            width: selectedChartType === 'line' ? undefined : yAxisWidthLimit,
+                            overflow: selectedChartType === 'line' ? undefined : (longTextHandling === 'Wrap' ? 'break' : 'truncate')
                         }
                     };
+                    // ECharts line charts typically prefer boundaryGap: false to start the line strictly from the Y-axis edge
+                    if (selectedChartType === 'line') {
+                        option.xAxis.boundaryGap = false;
+                    }
+
                     option.yAxis = { type: 'value', name: yAxisLabel, nameLocation: 'middle', nameGap: 40 };
-                    if (barType === '100% Stacked') {
+                    if ((selectedChartType === 'column' && barType === '100% Stacked') || (selectedChartType === 'line' && lineType === '100% Stacked Line')) {
                         option.yAxis.max = 100;
                         option.yAxis.axisLabel = { formatter: '{value}%' };
                     }
@@ -814,7 +843,7 @@
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
                     <div class="space-y-4">
-                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column'))}
+                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line'))}
                             <div>
                                 <Label for="chartName" class="mb-2">Chart Name</Label>
                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
@@ -830,11 +859,11 @@
                                 Select a chart type from the right panel and click Create to begin configuring data.
                             </div>
                         {:else}
-                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 pb-2">
+                            <h3 class="text-center font-bold text-lg text-gray-800 dark:text-gray-200 pb-2">
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
-                            </div>
+                            </h3>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'column'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line'}
                                 <Accordion flush>
                                     <AccordionItem open>
                                         <span slot="header">Data Mapping</span>
@@ -859,14 +888,31 @@
                                     <AccordionItem>
                                         <span slot="header">Appearance</span>
                                         <div class="space-y-4">
-                                            <div>
-                                                <Label for="barType" class="mb-2">Bar Type</Label>
-                                                <Select id="barType" items={[{value:'Clustered', name:'Clustered'}, {value:'Stacked', name:'Stacked'}, {value:'100% Stacked', name:'100% Stacked'}]} bind:value={barType} />
-                                            </div>
-                                            <div>
-                                                <Label for="sortOrder" class="mb-2">Sorting</Label>
-                                                <Select id="sortOrder" items={[{value:'None', name:'None'}, {value:'Highest', name:'Highest values first (Leaderboard)'}, {value:'Lowest', name:'Lowest values first'}, {value:'A-Z', name:'Alphabetical (A-Z)'}]} bind:value={sortOrder} />
-                                            </div>
+                                            {#if selectedChartType === 'bar' || selectedChartType === 'column'}
+                                                <div>
+                                                    <Label for="barType" class="mb-2">Bar Type</Label>
+                                                    <Select id="barType" items={[{value:'Clustered', name:'Clustered'}, {value:'Stacked', name:'Stacked'}, {value:'100% Stacked', name:'100% Stacked'}]} bind:value={barType} />
+                                                </div>
+                                                <div>
+                                                    <Label for="sortOrder" class="mb-2">Sorting</Label>
+                                                    <Select id="sortOrder" items={[{value:'None', name:'None'}, {value:'Highest', name:'Highest values first (Leaderboard)'}, {value:'Lowest', name:'Lowest values first'}, {value:'A-Z', name:'Alphabetical (A-Z)'}]} bind:value={sortOrder} />
+                                                </div>
+                                            {:else if selectedChartType === 'line'}
+                                                <div>
+                                                    <Label for="lineType" class="mb-2">Line Type</Label>
+                                                    <Select id="lineType" items={[{value:'Line', name:'Line'}, {value:'Stacked Line', name:'Stacked Line'}, {value:'100% Stacked Line', name:'100% Stacked Line'}]} bind:value={lineType} />
+                                                </div>
+                                                <div class="flex gap-4">
+                                                    <Label class="flex items-center gap-2">
+                                                        <input type="radio" value="With Markers" bind:group={lineStyleOption} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                                        With Markers
+                                                    </Label>
+                                                    <Label class="flex items-center gap-2">
+                                                        <input type="radio" value="Area Filled" bind:group={lineStyleOption} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
+                                                        Area Filled
+                                                    </Label>
+                                                </div>
+                                            {/if}
                                             <div>
                                                 <Label for="colorPalette" class="mb-2">Color Palette</Label>
                                                 <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}]} bind:value={colorPalette} />
@@ -905,14 +951,16 @@
                                                 <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
                                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
                                             </div>
-                                            <div>
-                                                <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
-                                                <Range id="yAxisWidth" min="50" max="300" bind:value={yAxisWidthLimit} />
-                                            </div>
-                                            <div>
-                                                <Label for="longTextHandling" class="mb-2">Long Text Handling</Label>
-                                                <Select id="longTextHandling" items={[{value:'Truncate', name:'Truncate'}, {value:'Wrap', name:'Wrap to next line'}]} bind:value={longTextHandling} />
-                                            </div>
+                                            {#if selectedChartType === 'bar' || selectedChartType === 'column'}
+                                                <div>
+                                                    <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
+                                                    <Range id="yAxisWidth" min="50" max="300" bind:value={yAxisWidthLimit} />
+                                                </div>
+                                                <div>
+                                                    <Label for="longTextHandling" class="mb-2">Long Text Handling</Label>
+                                                    <Select id="longTextHandling" items={[{value:'Truncate', name:'Truncate'}, {value:'Wrap', name:'Wrap to next line'}]} bind:value={longTextHandling} />
+                                                </div>
+                                            {/if}
                                             <div class="pt-2">
                                                 <Checkbox bind:checked={showValueLabels}>Show Value Labels</Checkbox>
                                             </div>
@@ -926,7 +974,7 @@
                                     </AccordionItem>
                                 </Accordion>
 
-                            {:else if selectedChartType === 'line' || selectedChartType === 'scatter'}
+                            {:else if selectedChartType === 'scatter'}
                                 <div>
                                     <Label for="xAxisCol" class="mb-2">X-Axis Column</Label>
                                     <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
