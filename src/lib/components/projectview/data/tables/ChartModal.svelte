@@ -39,6 +39,8 @@
     let selectedChartType = null;
     let existingCharts = [];
     let isEditingExisting = false;
+    let prevOpen = false;
+    let prevOpen = false;
 
     // Form fields
     let chartName = '';
@@ -103,19 +105,22 @@
     });
 
     $: {
-        if (open) {
-            loadExistingCharts().then(() => {
-                if (initialChart) {
-                    selectExistingChart(initialChart);
-                    initialChart = null; // Reset after loading once
-                } else {
-                    // Force open to the fresh create screen
-                    resetForm();
-                    activeTab = 'create';
-                    isEditingExisting = false;
-                    chartName = `Chart-${existingCharts.length + 1}`;
-                }
-            });
+        if (open !== prevOpen) {
+            prevOpen = open;
+            if (open) {
+                loadExistingCharts().then(() => {
+                    if (initialChart) {
+                        selectExistingChart(initialChart);
+                        initialChart = null; // Reset after loading once
+                    } else {
+                        // Force open to the fresh create screen
+                        resetForm();
+                        activeTab = 'create';
+                        isEditingExisting = false;
+                        chartName = `Chart-${existingCharts.length + 1}`;
+                    }
+                });
+            }
         }
     }
 
@@ -183,10 +188,7 @@
         }
     }
 
-    // Set initial chartName automatically when creation tab opens, but don't save yet
-    $: if (open && activeTab === 'create' && !isEditingExisting && !chartName) {
-        chartName = `Chart-${existingCharts.length + 1}`;
-    }
+
 
     async function initialCreate() {
         if (!chartName) chartName = `Chart-${existingCharts.length + 1}`;
@@ -466,18 +468,21 @@
 
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
-                    {#if !isEditingExisting}
-                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">Select a chart type from the right panel.</div>
-                    {:else}
-                        <div class="space-y-4">
-                            <div>
-                                <Label for="chartName" class="mb-2">Chart Name</Label>
-                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                    <div class="space-y-4">
+                        <div>
+                            <Label for="chartName" class="mb-2">Chart Name</Label>
+                            <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                        </div>
+                        <div>
+                            <Label for="chartDescription" class="mb-2">Description</Label>
+                            <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
+                        </div>
+
+                        {#if !isEditingExisting}
+                            <div class="text-sm text-gray-500 dark:text-gray-400 italic pt-4 border-t border-gray-200 dark:border-gray-700">
+                                Select a chart type from the right panel and click Create to begin configuring data.
                             </div>
-                            <div>
-                                <Label for="chartDescription" class="mb-2">Description</Label>
-                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
-                            </div>
+                        {:else}
                             <div class="text-sm font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                 Data Configuration
                             </div>
@@ -518,8 +523,8 @@
                             <div class="pt-2">
                                 <Toggle bind:checked={showLegend}>Show Legend</Toggle>
                             </div>
-                        </div>
-                    {/if}
+                           {/if}
+                    </div>
                 {:else if activeTab === 'existing'}
                     {#if existingCharts.length === 0}
                         <div class="text-sm text-gray-500 dark:text-gray-400 italic">No existing charts found for this table.</div>
