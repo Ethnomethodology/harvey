@@ -72,6 +72,11 @@
     // Pie Chart Extra Configuration
     let pieStyle = 'Standard'; // Standard, Donut
 
+    // Gantt Chart Extra Configuration
+    let ganttTaskDisplay = 'Stacked'; // Stacked, Clustered
+    let ganttXAxisInterval = 'Auto'; // Auto, Years, Months, Weeks, Days
+    let ganttShowGridLines = true;
+
     // Labels Configuration
     let xAxisLabel = '';
     let yAxisLabel = '';
@@ -169,7 +174,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -183,7 +188,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -235,6 +240,9 @@
         scatterConnectPoints = 'None';
         scatterTrendline = 'None';
         pieStyle = 'Standard';
+        ganttTaskDisplay = 'Stacked';
+        ganttXAxisInterval = 'Auto';
+        ganttShowGridLines = true;
         xAxisLabel = '';
         yAxisLabel = '';
         titlePosition = 'Top';
@@ -288,6 +296,10 @@
             scatterConnectPoints = config.scatterConnectPoints || 'None';
             scatterTrendline = config.scatterTrendline || 'None';
             pieStyle = config.pieStyle || 'Standard';
+            ganttTaskDisplay = config.ganttTaskDisplay || 'Stacked';
+            ganttXAxisInterval = config.ganttXAxisInterval || 'Auto';
+            // handle existing boolean
+            ganttShowGridLines = config.ganttShowGridLines !== undefined ? config.ganttShowGridLines : true;
             xAxisLabel = config.xAxisLabel || '';
             yAxisLabel = config.yAxisLabel || '';
             titlePosition = config.titlePosition || 'Top';
@@ -339,6 +351,9 @@
             scatterConnectPoints,
             scatterTrendline,
             pieStyle,
+            ganttTaskDisplay,
+            ganttXAxisInterval,
+            ganttShowGridLines,
             xAxisLabel,
             yAxisLabel,
             titlePosition,
@@ -957,7 +972,7 @@
 
                 option.grid.left = (option.grid.left || 30) + (yAxisWidthLimit || 50) + 20;
 
-                // Sort by categories / lanes to build a unique Y-axis
+                // Group Data
                 const categoriesMap = new Map();
                 validData.forEach(row => {
                     const c = row[yAxisCol];
@@ -967,35 +982,75 @@
                     categoriesMap.get(c).push(row);
                 });
 
-                // Prepare axes
-                const categories = Array.from(categoriesMap.keys());
+                // Build Y-Axis Data based on Stacked vs Clustered
+                let yAxisData = [];
+                // mapping row to its Y-axis index
+                let rowToYIndex = new Map();
+
+                if (ganttTaskDisplay === 'Clustered') {
+                    let yIndex = 0;
+                    for (let [cat, rows] of categoriesMap.entries()) {
+                        // Push Parent Phase (bold)
+                        yAxisData.push({ value: cat, textStyle: { fontWeight: 'bold' } });
+                        yIndex++;
+
+                        // Push distinct tasks indented
+                        const uniqueTasksInCat = Array.from(new Set(rows.map(r => r[taskCol])));
+                        uniqueTasksInCat.forEach(t => {
+                            yAxisData.push({ value: '   ' + t, originalTask: t, parentCat: cat });
+                            // map specific row back to this yIndex
+                            rows.filter(r => r[taskCol] === t).forEach(r => {
+                                rowToYIndex.set(r, yIndex);
+                            });
+                            yIndex++;
+                        });
+                    }
+                } else {
+                    // Stacked (Current Behavior)
+                    yAxisData = Array.from(categoriesMap.keys());
+                    validData.forEach(r => {
+                        rowToYIndex.set(r, yAxisData.indexOf(r[yAxisCol]));
+                    });
+                }
 
                 option.xAxis = {
                     type: 'time',
                     name: xAxisLabel,
                     nameLocation: 'middle',
-                    nameGap: 30
+                    nameGap: 30,
+                    splitLine: { show: ganttShowGridLines }
                 };
+
+                // Handle X-Axis Intervals
+                if (ganttXAxisInterval === 'Years') {
+                    option.xAxis.axisLabel = { formatter: '{yyyy}' };
+                    option.xAxis.minInterval = 31536000000;
+                } else if (ganttXAxisInterval === 'Months') {
+                    option.xAxis.axisLabel = { formatter: '{MMM} {yyyy}' };
+                    option.xAxis.minInterval = 2592000000;
+                } else if (ganttXAxisInterval === 'Weeks') {
+                    option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
+                    option.xAxis.minInterval = 604800000;
+                } else if (ganttXAxisInterval === 'Days') {
+                    option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
+                    option.xAxis.minInterval = 86400000;
+                }
 
                 option.yAxis = {
                     type: 'category',
-                    data: categories,
+                    data: yAxisData.map(y => typeof y === 'object' ? y : { value: y }),
                     name: yAxisLabel,
                     nameLocation: 'middle',
                     nameGap: yAxisWidthLimit + 20,
+                    inverse: true, // Top-down
                     axisLabel: {
                         width: yAxisWidthLimit,
-                        overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate'
+                        overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate',
+                        rich: {} // Enables textStyle formatting passed in the data object
                     }
                 };
 
-                // Palettes
                 option.color = palettes[colorPalette] || palettes['Modern'];
-
-                // ECharts Gantt via custom series is robust but complex.
-                // An easier fallback is stacked bars: Series 1 = Start Date (transparent), Series 2 = Duration.
-                // However, this fails when tasks overlap within the same lane.
-                // A Custom Series is required for overlapping tasks.
 
                 const customRenderItem = function(params, api) {
                     var categoryIndex = api.value(0); // Y-axis
@@ -1023,19 +1078,19 @@
                     };
                 };
 
-                // Group by breakdownCol (taskCol) to allow color assignment and legend toggling
                 const tasksMap = new Map();
                 validData.forEach(row => {
                     const t = row[taskCol];
                     if (!tasksMap.has(t)) {
                         tasksMap.set(t, []);
                     }
-                    // Data format: [categoryIndex, start_time, end_time, original_task_name]
+                    const yIndex = rowToYIndex.get(row);
                     tasksMap.get(t).push([
-                        categories.indexOf(row[yAxisCol]),
+                        yIndex,
                         new Date(row[startDateCol]).getTime(),
                         new Date(row[endDateCol]).getTime(),
-                        t
+                        t,
+                        row[yAxisCol] // Track original category/lane
                     ]);
                 });
 
@@ -1067,7 +1122,7 @@
                     formatter: function (params) {
                         const start = new Date(params.value[1]).toLocaleDateString();
                         const end = new Date(params.value[2]).toLocaleDateString();
-                        const lane = categories[params.value[0]];
+                        const lane = params.value[4]; // original category/lane
                         return `<div class="font-bold mb-1">${lane}</div>` +
                                `<div>${params.marker} ${params.name}: <b>${start} to ${end}</b></div>`;
                     }
@@ -1341,6 +1396,18 @@
                                                 <div>
                                                     <Label for="pieStyle" class="mb-2">Pie Style</Label>
                                                     <Select id="pieStyle" items={[{value:'Standard', name:'Standard'}, {value:'Donut', name:'Donut'}]} bind:value={pieStyle} />
+                                                </div>
+                                            {:else if selectedChartType === 'gantt'}
+                                                <div>
+                                                    <Label for="ganttTaskDisplay" class="mb-2">Display Tasks</Label>
+                                                    <Select id="ganttTaskDisplay" items={[{value:'Stacked', name:'Stacked (Shared Lanes)'}, {value:'Clustered', name:'Clustered (Separate Rows)'}]} bind:value={ganttTaskDisplay} />
+                                                </div>
+                                                <div>
+                                                    <Label for="ganttXAxisInterval" class="mb-2">X-Axis Interval</Label>
+                                                    <Select id="ganttXAxisInterval" items={[{value:'Auto', name:'Auto'}, {value:'Years', name:'Years'}, {value:'Months', name:'Months'}, {value:'Weeks', name:'Weeks'}, {value:'Days', name:'Days'}]} bind:value={ganttXAxisInterval} />
+                                                </div>
+                                                <div class="pt-2">
+                                                    <Checkbox bind:checked={ganttShowGridLines}>Show Vertical Grid Lines</Checkbox>
                                                 </div>
                                             {/if}
                                             <div>

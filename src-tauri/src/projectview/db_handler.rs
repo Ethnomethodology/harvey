@@ -1618,20 +1618,41 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
 }
 
 pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting asset metadata for project_id {}: {}", project_id, asset_relative_path);
+    debug!("[DB] Deleting asset metadata and associated items for project_id {}: {}", project_id, asset_relative_path);
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, asset: {}", db_path.display(), project_id, asset_relative_path);
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    let changes = conn.execute("DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path])?;
 
+    // Check if table schema/chart configs/styles exist and drop them
+    let _ = conn.execute("DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute("DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+
+    // Highlights reference 'asset_id' based on the schema, but could be 'document_path' in old logic. Delete from both to be safe.
+    let _ = conn.execute("DELETE FROM highlights WHERE project_id = ?1 AND asset_id = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute("DELETE FROM highlights WHERE project_id = ?1 AND document_path = ?2", params![project_id, asset_relative_path]);
+
+    // Delete PDF annotations (they use 'pdf_document_path')
+    let _ = conn.execute("DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2", params![project_id, asset_relative_path]);
+
+    // Delete Layout Preferences
+    let _ = conn.execute("DELETE FROM table_layout_preferences WHERE project_id = ?1 AND table_asset_relative_path = ?2", params![project_id, asset_relative_path]);
+
+    // Delete File Group mappings
+    let _ = conn.execute("DELETE FROM file_groups WHERE project_id = ?1 AND file_asset_path = ?2", params![project_id, asset_relative_path]);
+
+    // Delete Media Transcript Data
+    let _ = conn.execute("DELETE FROM media_transcript_data WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path]);
+
+    // Finally Delete Metadata (since other tables might rely on FKs pointing to it, though PRAGMA foreign_keys = ON should cascade natively, executing it explicitly ensures full cleanup across all DB versions)
+    let changes = conn.execute("DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path])?;
     if changes > 0 {
-        info!("[DB] Asset metadata deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
-    } else {
-        debug!("[DB] No asset metadata found to delete for project_id {}: {}", project_id, asset_relative_path);
+        info!("[DB] Asset metadata and relations deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
     }
+
     Ok(())
 }
 

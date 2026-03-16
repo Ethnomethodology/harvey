@@ -2073,6 +2073,20 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete Table] Deleted table styles from DB for project_id {}, table {}", project_id_for_db, item_path);
             }
 
+            // Also delete any table schema configs associated with this table
+            if let Err(e) = db_handler::delete_table_schema(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Table] Failed to delete table schema configs from DB for project_id {}, table {}: {}", project_id_for_db, item_relative_path, e);
+            } else {
+                info!("[Backend Delete Table] Deleted table schema configs from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
+            }
+
+            // Also delete any chart configs associated with this table
+            if let Err(e) = chart_handler::delete_all_charts_for_table(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Table] Failed to delete chart configs from DB for project_id {}, table {}: {}", project_id_for_db, item_relative_path, e);
+            } else {
+                info!("[Backend Delete Table] Deleted chart configs from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
+            }
+
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_table_len = project_data.table_files.files.len();

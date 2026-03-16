@@ -131,6 +131,8 @@ import { Modal } from 'flowbite-svelte';
         } else {
             delete fields[index].currency;
         }
+        // Force Svelte to re-render the row immediately to fix the dropdown items
+        fields = [...fields];
 	}
 
 	function handleSubTypeChange(index) {
