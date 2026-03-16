@@ -42,7 +42,8 @@
         Bold,
         Italic,
         Underline,
-        Eraser
+        Eraser,
+        PieChart
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
