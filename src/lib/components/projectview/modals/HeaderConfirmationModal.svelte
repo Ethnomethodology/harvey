@@ -317,7 +317,7 @@ import { Modal } from 'flowbite-svelte';
                                             {/if}
                                         </div>
                                     {:else if field.type === 'DateTime'}
-                                        <Select size="sm" bind:value={field.format} items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} />
+                                        <Select size="sm" bind:value={field.format} items={(DATETIME_FORMATS[field.subType] || DATETIME_FORMATS['Date']).map(fmt => ({name: fmt, value: fmt}))} />
                                     {/if}
                                 </TableBodyCell>
                                 <TableBodyCell>

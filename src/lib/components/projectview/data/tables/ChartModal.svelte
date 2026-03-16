@@ -890,42 +890,186 @@
 
                 option.series = [seriesConfig];
             } else if (selectedChartType === 'gantt') {
-                if (!taskCol || !startDateCol || !endDateCol) { chartInstance.clear(); return; }
+                if (!yAxisCol || !taskCol || !startDateCol || !endDateCol) { chartInstance.clear(); return; }
 
                 const validData = tableData.filter(row =>
+                    row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '' &&
                     row[taskCol] !== null && row[taskCol] !== undefined && row[taskCol] !== '' &&
                     row[startDateCol] !== null && row[startDateCol] !== undefined && row[startDateCol] !== '' &&
                     row[endDateCol] !== null && row[endDateCol] !== undefined && row[endDateCol] !== ''
                 );
 
-                // Extremely basic gantt implementation using custom series or stacked bar
-                const tasks = validData.map(row => row[taskCol]);
-                const starts = validData.map(row => new Date(row[startDateCol]).getTime());
-                const ends = validData.map(row => new Date(row[endDateCol]).getTime());
-                const durations = ends.map((end, i) => end - starts[i]);
+                // Title
+                let titleConfig = { text: chartName || 'New Chart' };
+                if (chartDescription && chartDescription.trim() !== '') {
+                    titleConfig.subtext = chartDescription;
+                }
+                const hasSubtext = !!titleConfig.subtext;
 
-                option.xAxis = { type: 'time' };
-                option.yAxis = { type: 'category', data: tasks };
-                option.series = [
-                    {
-                        type: 'bar',
-                        name: 'Start',
-                        stack: 'Total',
-                        itemStyle: { borderColor: 'transparent', color: 'transparent' },
-                        data: starts
-                    },
-                    {
-                        type: 'bar',
-                        name: 'Duration',
-                        stack: 'Total',
-                        data: durations
+                if (titlePosition === 'Top') {
+                    titleConfig.top = 0;
+                    titleConfig.left = 'center';
+                } else {
+                    titleConfig.bottom = 0;
+                    titleConfig.left = 'center';
+                }
+                option.title = titleConfig;
+
+                // Legend Pos
+                let legendConfig = { show: showLegend, type: 'scroll' };
+                if (legendPosition === 'Top') {
+                    legendConfig.top = titlePosition === 'Top' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Bottom') {
+                    legendConfig.bottom = titlePosition === 'Bottom' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Left') {
+                    legendConfig.left = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                if (legendPosition === 'Right') {
+                    legendConfig.right = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                option.legend = legendConfig;
+
+                // Base grid with default padding
+                option.grid = { containLabel: true, left: 30, right: 30, top: 40, bottom: 30 };
+
+                // Adjust Grid for Title
+                if (titlePosition === 'Top') {
+                    option.grid.top = hasSubtext ? 70 : 50;
+                } else {
+                    option.grid.bottom = hasSubtext ? 70 : 50;
+                }
+
+                // Adjust Grid for Legend
+                if (showLegend) {
+                    if (legendPosition === 'Left') option.grid.left = 140;
+                    if (legendPosition === 'Right') option.grid.right = 140;
+                    if (legendPosition === 'Top') option.grid.top = Math.max(option.grid.top, (titlePosition === 'Top' ? (hasSubtext ? 90 : 70) : 40));
+                    if (legendPosition === 'Bottom') option.grid.bottom = Math.max(option.grid.bottom, (titlePosition === 'Bottom' ? (hasSubtext ? 90 : 70) : 40));
+                }
+
+                option.grid.left = (option.grid.left || 30) + (yAxisWidthLimit || 50) + 20;
+
+                // Sort by categories / lanes to build a unique Y-axis
+                const categoriesMap = new Map();
+                validData.forEach(row => {
+                    const c = row[yAxisCol];
+                    if (!categoriesMap.has(c)) {
+                        categoriesMap.set(c, []);
                     }
-                ];
-                option.tooltip.formatter = function(params) {
-                    if (params[0].dataIndex !== undefined) {
-                        const start = new Date(starts[params[0].dataIndex]).toLocaleDateString();
-                        const end = new Date(ends[params[0].dataIndex]).toLocaleDateString();
-                        return `${tasks[params[0].dataIndex]}<br/>Start: ${start}<br/>End: ${end}`;
+                    categoriesMap.get(c).push(row);
+                });
+
+                // Prepare axes
+                const categories = Array.from(categoriesMap.keys());
+
+                option.xAxis = {
+                    type: 'time',
+                    name: xAxisLabel,
+                    nameLocation: 'middle',
+                    nameGap: 30
+                };
+
+                option.yAxis = {
+                    type: 'category',
+                    data: categories,
+                    name: yAxisLabel,
+                    nameLocation: 'middle',
+                    nameGap: yAxisWidthLimit + 20,
+                    axisLabel: {
+                        width: yAxisWidthLimit,
+                        overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate'
+                    }
+                };
+
+                // Palettes
+                option.color = palettes[colorPalette] || palettes['Modern'];
+
+                // ECharts Gantt via custom series is robust but complex.
+                // An easier fallback is stacked bars: Series 1 = Start Date (transparent), Series 2 = Duration.
+                // However, this fails when tasks overlap within the same lane.
+                // A Custom Series is required for overlapping tasks.
+
+                const customRenderItem = function(params, api) {
+                    var categoryIndex = api.value(0); // Y-axis
+                    var start = api.coord([api.value(1), categoryIndex]);
+                    var end = api.coord([api.value(2), categoryIndex]);
+                    var height = api.size([0, 1])[1] * 0.6; // Bar height is 60% of lane
+
+                    var rectShape = echarts.graphic.clipRectByRect({
+                        x: start[0],
+                        y: start[1] - height / 2,
+                        width: end[0] - start[0],
+                        height: height
+                    }, {
+                        x: params.coordSys.x,
+                        y: params.coordSys.y,
+                        width: params.coordSys.width,
+                        height: params.coordSys.height
+                    });
+
+                    return rectShape && {
+                        type: 'rect',
+                        transition: ['shape'],
+                        shape: rectShape,
+                        style: api.style()
+                    };
+                };
+
+                // Group by breakdownCol (taskCol) to allow color assignment and legend toggling
+                const tasksMap = new Map();
+                validData.forEach(row => {
+                    const t = row[taskCol];
+                    if (!tasksMap.has(t)) {
+                        tasksMap.set(t, []);
+                    }
+                    // Data format: [categoryIndex, start_time, end_time, original_task_name]
+                    tasksMap.get(t).push([
+                        categories.indexOf(row[yAxisCol]),
+                        new Date(row[startDateCol]).getTime(),
+                        new Date(row[endDateCol]).getTime(),
+                        t
+                    ]);
+                });
+
+                let seriesArray = [];
+                let colorIndex = 0;
+                for (let [taskName, dataPoints] of tasksMap.entries()) {
+                    seriesArray.push({
+                        name: taskName,
+                        type: 'custom',
+                        renderItem: customRenderItem,
+                        itemStyle: {
+                            color: option.color[colorIndex % option.color.length]
+                        },
+                        encode: {
+                            x: [1, 2],
+                            y: 0
+                        },
+                        data: dataPoints
+                    });
+                    colorIndex++;
+                }
+
+                option.series = seriesArray;
+
+                option.tooltip = {
+                    trigger: 'item',
+                    confine: true,
+                    appendToBody: true,
+                    formatter: function (params) {
+                        const start = new Date(params.value[1]).toLocaleDateString();
+                        const end = new Date(params.value[2]).toLocaleDateString();
+                        const lane = categories[params.value[0]];
+                        return `<div class="font-bold mb-1">${lane}</div>` +
+                               `<div>${params.marker} ${params.name}: <b>${start} to ${end}</b></div>`;
                     }
                 };
             }
@@ -1085,7 +1229,7 @@
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
                     <div class="space-y-4">
-                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie'))}
+                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie' || selectedChartType === 'gantt'))}
                             <div>
                                 <Label for="chartName" class="mb-2">Chart Name</Label>
                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
@@ -1105,7 +1249,7 @@
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </h3>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie' || selectedChartType === 'gantt'}
                                 <Accordion flush>
                                     <AccordionItem open>
                                         <span slot="header" class="flex items-center"><Database class="w-4 h-4 mr-2" />Data Mapping</span>
@@ -1118,6 +1262,23 @@
                                                 <div>
                                                     <Label for="valueCol" class="mb-2">Value Column (Numeric)</Label>
                                                     <Select id="valueCol" items={numericColumns} bind:value={valueCol} />
+                                                </div>
+                                            {:else if selectedChartType === 'gantt'}
+                                                <div>
+                                                    <Label for="yAxisCol" class="mb-2">Categories / Lanes (Y-axis)</Label>
+                                                    <Select id="yAxisCol" items={categoricalColumns} bind:value={yAxisCol} />
+                                                </div>
+                                                <div>
+                                                    <Label for="taskCol" class="mb-2">Task Name / Breakdown</Label>
+                                                    <Select id="taskCol" items={categoricalColumns} bind:value={taskCol} />
+                                                </div>
+                                                <div>
+                                                    <Label for="startDateCol" class="mb-2">Start Date (X-axis)</Label>
+                                                    <Select id="startDateCol" items={dateColumns} bind:value={startDateCol} />
+                                                </div>
+                                                <div>
+                                                    <Label for="endDateCol" class="mb-2">End Date (X-axis)</Label>
+                                                    <Select id="endDateCol" items={dateColumns} bind:value={endDateCol} />
                                                 </div>
                                             {:else}
                                                 <div>
@@ -1220,17 +1381,23 @@
 
                                             {#if selectedChartType !== 'pie'}
                                                 <div>
-                                                    <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
+                                                    <Label for="xAxisLabel" class="mb-2">
+                                                        {#if selectedChartType === 'gantt'}Time (X-Axis) Label
+                                                        {:else}{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories){/if}
+                                                    </Label>
                                                     <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
                                                 </div>
                                                 <div>
-                                                    <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
+                                                    <Label for="yAxisLabel" class="mb-2">
+                                                        {#if selectedChartType === 'gantt'}Lanes (Y-Axis) Label
+                                                        {:else}{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values){/if}
+                                                    </Label>
                                                     <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
                                                 </div>
                                             {/if}
-                                            {#if selectedChartType === 'bar' || selectedChartType === 'column'}
+                                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'gantt'}
                                                 <div>
-                                                    <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
+                                                    <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' || selectedChartType === 'gantt' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
                                                     <Range id="yAxisWidth" min="50" max="300" bind:value={yAxisWidthLimit} />
                                                 </div>
                                                 <div>
@@ -1253,23 +1420,7 @@
 
 
 
-                            {:else if selectedChartType === 'gantt'}
-                                <div>
-                                    <Label for="taskCol" class="mb-2">Task Name Column</Label>
-                                    <Select id="taskCol" items={categoricalColumns} bind:value={taskCol} />
-                                </div>
-                                <div>
-                                    <Label for="startDateCol" class="mb-2">Start Date Column</Label>
-                                    <Select id="startDateCol" items={dateColumns} bind:value={startDateCol} />
-                                </div>
-                                <div>
-                                    <Label for="endDateCol" class="mb-2">End Date Column</Label>
-                                    <Select id="endDateCol" items={dateColumns} bind:value={endDateCol} />
-                                </div>
-                                <div class="pt-2">
-                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
-                                </div>
-                            {/if}
+
                            {/if}
                     </div>
                 {:else if activeTab === 'existing'}
