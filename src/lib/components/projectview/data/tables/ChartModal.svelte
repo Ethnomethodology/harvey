@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper } from 'flowbite-svelte';
-    import { PieChart, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
+    import { PieChart, BarChart, LineChart, ScatterChart, AlignLeft, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -453,12 +453,15 @@
                     <div class="grid grid-cols-2 lg:grid-cols-3 gap-6">
                         {#each chartTypes as type}
                             <button
-                                class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
+                                class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
                                 on:click={() => selectChartType(type.value)}
                             >
-                                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-600 dark:text-gray-400">
-                                    <!-- Use PieChart as a generic placeholder if others aren't imported -->
-                                    <PieChart size={32} />
+                                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                                    {#if type.icon === 'BarChart'}<BarChart size={32} />{/if}
+                                    {#if type.icon === 'LineChart'}<LineChart size={32} />{/if}
+                                    {#if type.icon === 'ScatterChart'}<ScatterChart size={32} />{/if}
+                                    {#if type.icon === 'PieChart'}<PieChart size={32} />{/if}
+                                    {#if type.icon === 'AlignLeft'}<AlignLeft size={32} />{/if}
                                 </div>
                                 <span class="font-medium text-gray-900 dark:text-white">{type.name}</span>
                             </button>
