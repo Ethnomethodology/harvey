@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper, Accordion, AccordionItem, Range, Checkbox } from 'flowbite-svelte';
-    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
+    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen, Database, Palette, Type } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -1021,11 +1021,35 @@
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
             <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <PieChart size={20} class="text-blue-600 dark:text-blue-400" />
+                {#if selectedChartType === 'bar'}
+                    <ChartBar size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else if selectedChartType === 'column'}
+                    <ChartColumn size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else if selectedChartType === 'line'}
+                    <LineChart size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else if selectedChartType === 'scatter'}
+                    <ScatterChart size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else if selectedChartType === 'gantt'}
+                    <SquareChartGantt size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else}
+                    <PieChart size={20} class="text-blue-600 dark:text-blue-400" />
+                {/if}
             </div>
             <div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Insert Chart</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Create or open visualizations from table data</p>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                    {#if activeTab === 'create' && isEditingExisting}
+                        {chartName || 'New Chart'}
+                    {:else}
+                        Insert Chart
+                    {/if}
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {#if activeTab === 'create' && isEditingExisting}
+                        {chartDescription || 'Configuring chart'}
+                    {:else}
+                        Create or open visualizations from table data
+                    {/if}
+                </p>
             </div>
         </div>
         <div class="flex gap-2">
@@ -1040,7 +1064,7 @@
 
     <div class="flex-1 flex overflow-hidden -m-6 h-full border-t border-gray-200 dark:border-gray-700">
         <!-- Left Sidebar: Create / Open Existing -->
-        <div class="w-64 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800">
+        <div class="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800">
             {#if !(activeTab === 'create' && isEditingExisting)}
                 <div class="flex border-b border-gray-200 dark:border-gray-700">
                     <button
@@ -1084,7 +1108,7 @@
                             {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie'}
                                 <Accordion flush>
                                     <AccordionItem open>
-                                        <span slot="header">Data Mapping</span>
+                                        <span slot="header" class="flex items-center"><Database class="w-4 h-4 mr-2" />Data Mapping</span>
                                         <div class="space-y-4">
                                             {#if selectedChartType === 'pie'}
                                                 <div>
@@ -1117,7 +1141,7 @@
                                         </div>
                                     </AccordionItem>
                                     <AccordionItem>
-                                        <span slot="header">Appearance</span>
+                                        <span slot="header" class="flex items-center"><Palette class="w-4 h-4 mr-2" />Appearance</span>
                                         <div class="space-y-4">
                                             {#if selectedChartType === 'bar' || selectedChartType === 'column'}
                                                 <div>
@@ -1161,7 +1185,7 @@
                                             <div>
                                                 <Label for="colorPalette" class="mb-2">Color Palette</Label>
                                                 <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}, {value:'Ocean Blues', name:'Ocean Blues'}]} bind:value={colorPalette} />
-                                                <div class="flex flex-wrap gap-1 mt-2">
+                                                <div class="flex flex-wrap justify-center gap-1 mt-2">
                                                     {#each palettes[colorPalette] || palettes['Modern'] as color}
                                                         <div class="w-4 h-4 rounded-sm shadow-sm" style="background-color: {color};"></div>
                                                     {/each}
@@ -1179,7 +1203,7 @@
                                         </div>
                                     </AccordionItem>
                                     <AccordionItem>
-                                        <span slot="header">Labels</span>
+                                        <span slot="header" class="flex items-center"><Type class="w-4 h-4 mr-2" />Labels</span>
                                         <div class="space-y-4">
                                             <div>
                                                 <Label for="titlePosition" class="mb-2">Main Chart Title Position</Label>
