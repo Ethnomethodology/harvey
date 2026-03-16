@@ -38,6 +38,8 @@
 
     async function handleDeleteChart(chart) {
         if (!chart || !chart.chart_name) return;
+        if (!confirm(`Are you sure you want to delete ${chart.chart_name}?`)) return;
+
         const projectStoreState = get(project);
 
         // Match logic of ChartModal by converting active active item path to relative if needed, but the backend stores the relative table path.

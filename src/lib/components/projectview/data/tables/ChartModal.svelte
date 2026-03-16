@@ -56,14 +56,22 @@
     let chartInstance;
 
     // Derived dropdown options
-    $: numericColumns = columns.filter(c => {
+    $: numericColumns = columns.map(c => {
+        const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
+        const title = c.title || fieldName;
+        return { field: fieldName, title };
+    }).filter(c => {
         const colSchema = schema[c.field];
         if (colSchema && colSchema.type === 'Numeric') return true;
         // Fallback if schema not well defined
-        return tableData.some(row => !isNaN(parseFloat(row[c.field])) && isFinite(row[c.field]));
-    }).map(c => ({ value: c.field, name: c.title || c.field }));
+        return tableData.some(row => row[c.field] !== null && row[c.field] !== undefined && row[c.field] !== '' && !isNaN(parseFloat(row[c.field])) && isFinite(row[c.field]));
+    }).map(c => ({ value: c.field, name: c.title }));
 
-    $: dateColumns = columns.filter(c => {
+    $: dateColumns = columns.map(c => {
+        const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
+        const title = c.title || fieldName;
+        return { field: fieldName, title };
+    }).filter(c => {
         const colSchema = schema[c.field];
         if (colSchema && colSchema.type === 'DateTime') return true;
         // Fallback if schema not well defined
@@ -71,9 +79,13 @@
             const val = row[c.field];
             return val && !isNaN(Date.parse(val));
         });
-    }).map(c => ({ value: c.field, name: c.title || c.field }));
+    }).map(c => ({ value: c.field, name: c.title }));
 
-    $: allColumns = columns.map(c => ({ value: c.field, name: c.title || c.field }));
+    $: allColumns = columns.map(c => {
+        const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
+        const title = c.title || fieldName;
+        return { value: fieldName, name: title };
+    });
 
     $: {
         if (open) {
@@ -123,8 +135,7 @@
         if (tab === 'create') {
             resetForm();
             isEditingExisting = false;
-            const count = existingCharts.length + 1;
-            chartName = `Chart-${count}`;
+            chartName = `Chart-${existingCharts.length + 1}`;
         }
     }
 
@@ -149,6 +160,11 @@
         if (chartInstance) {
             setTimeout(renderChart, 50);
         }
+    }
+
+    // Set initial chartName automatically when creation tab opens, but don't save yet
+    $: if (open && activeTab === 'create' && !isEditingExisting && !chartName) {
+        chartName = `Chart-${existingCharts.length + 1}`;
     }
 
     async function initialCreate() {
@@ -226,6 +242,8 @@
     async function deleteChart(name) {
         const targetName = typeof name === 'string' ? name : chartName;
         if (!targetName) return;
+        if (!confirm(`Are you sure you want to delete ${targetName}?`)) return;
+
         const projectStoreState = get(project);
         try {
             await invoke('delete_chart_config_command', {
@@ -405,36 +423,37 @@
     <div class="flex-1 flex overflow-hidden -m-6 h-full border-t border-gray-200 dark:border-gray-700">
         <!-- Left Sidebar: Create / Open Existing -->
         <div class="w-64 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800">
-            <div class="flex border-b border-gray-200 dark:border-gray-700">
-                <button
-                    class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
-                    on:click={() => handleTabChange('create')}
-                >
-                    <div class="flex items-center justify-center gap-2"><Plus size={16}/> Create</div>
-                </button>
-                <button
-                    class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
-                    on:click={() => handleTabChange('existing')}
-                >
-                    <div class="flex items-center justify-center gap-2"><FolderOpen size={16}/> Existing</div>
-                </button>
-            </div>
+            {#if !(activeTab === 'create' && isEditingExisting)}
+                <div class="flex border-b border-gray-200 dark:border-gray-700">
+                    <button
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        on:click={() => handleTabChange('create')}
+                    >
+                        <div class="flex items-center justify-center gap-2"><Plus size={16}/> Create</div>
+                    </button>
+                    <button
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        on:click={() => handleTabChange('existing')}
+                    >
+                        <div class="flex items-center justify-center gap-2"><FolderOpen size={16}/> Existing</div>
+                    </button>
+                </div>
+            {/if}
 
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
-                    <div class="space-y-4">
-                        <div>
-                            <Label for="chartName" class="mb-2">Chart Name</Label>
-                            <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
-                        </div>
-                        <div>
-                            <Label for="chartDescription" class="mb-2">Description</Label>
-                            <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
-                        </div>
-
-                        {#if !selectedChartType}
-                            <div class="text-sm text-gray-500 dark:text-gray-400 italic mt-4">Select a chart type from the right panel.</div>
-                        {:else}
+                    {#if !isEditingExisting}
+                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">Select a chart type from the right panel.</div>
+                    {:else}
+                        <div class="space-y-4">
+                            <div>
+                                <Label for="chartName" class="mb-2">Chart Name</Label>
+                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                            </div>
+                            <div>
+                                <Label for="chartDescription" class="mb-2">Description</Label>
+                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
+                            </div>
                             <div class="text-sm font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                 Data Configuration
                             </div>
@@ -475,8 +494,8 @@
                             <div class="pt-2">
                                 <Toggle bind:checked={showLegend}>Show Legend</Toggle>
                             </div>
-                        {/if}
-                    </div>
+                        </div>
+                    {/if}
                 {:else if activeTab === 'existing'}
                     {#if existingCharts.length === 0}
                         <div class="text-sm text-gray-500 dark:text-gray-400 italic">No existing charts found for this table.</div>
