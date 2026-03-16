@@ -2936,7 +2936,7 @@
 
         // Replicate frozen column for number
         const numberColEl = document.createElement("div");
-        numberColEl.className = "tabulator-cell flex items-center justify-center bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-colors group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20";
+        numberColEl.className = "tabulator-cell flex items-center justify-center bg-blue-50/50 dark:bg-blue-900/10 border-r border-gray-200 dark:border-gray-700 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30";
         numberColEl.style.width = "50px";
         numberColEl.style.minWidth = "50px";
         numberColEl.style.height = "100%";
@@ -2946,7 +2946,7 @@
 
         mount(TableIcon, {
             target: numberColEl,
-            props: { icon: Plus, size: 16, customClass: "text-blue-500 opacity-70 group-hover:opacity-100 transition-opacity" }
+            props: { icon: Plus, size: 16, customClass: "text-blue-500" }
         });
 
         // The dashed body part
@@ -2954,7 +2954,7 @@
         bodyEl.className = "flex-1 flex items-center h-full";
 
         const innerDash = document.createElement("div");
-        innerDash.className = "flex-1 mx-2 my-[4px] min-h-[28px] border-2 border-dashed border-transparent group-hover:border-blue-400 dark:group-hover:border-blue-600 rounded-lg flex items-center justify-center text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-all bg-transparent group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10";
+        innerDash.className = "flex-1 mx-2 my-[4px] min-h-[28px] border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg flex items-center justify-center text-blue-500 font-medium transition-all bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/30";
         innerDash.innerHTML = `<span>Add New Entry</span>`;
 
         bodyEl.appendChild(innerDash);
