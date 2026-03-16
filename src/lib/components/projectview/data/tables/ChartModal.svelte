@@ -830,7 +830,7 @@
                                 Select a chart type from the right panel and click Create to begin configuring data.
                             </div>
                         {:else}
-                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 pb-2">
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </div>
 
@@ -857,21 +857,29 @@
                                         </div>
                                     </AccordionItem>
                                     <AccordionItem>
-                                        <span slot="header">Bar Type</span>
+                                        <span slot="header">Appearance</span>
                                         <div class="space-y-4">
                                             <div>
                                                 <Label for="barType" class="mb-2">Bar Type</Label>
                                                 <Select id="barType" items={[{value:'Clustered', name:'Clustered'}, {value:'Stacked', name:'Stacked'}, {value:'100% Stacked', name:'100% Stacked'}]} bind:value={barType} />
                                             </div>
-                                        </div>
-                                    </AccordionItem>
-                                    <AccordionItem>
-                                        <span slot="header">Sorting</span>
-                                        <div class="space-y-4">
                                             <div>
                                                 <Label for="sortOrder" class="mb-2">Sorting</Label>
                                                 <Select id="sortOrder" items={[{value:'None', name:'None'}, {value:'Highest', name:'Highest values first (Leaderboard)'}, {value:'Lowest', name:'Lowest values first'}, {value:'A-Z', name:'Alphabetical (A-Z)'}]} bind:value={sortOrder} />
                                             </div>
+                                            <div>
+                                                <Label for="colorPalette" class="mb-2">Color Palette</Label>
+                                                <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}]} bind:value={colorPalette} />
+                                            </div>
+                                            <div class="pt-2">
+                                                <Checkbox bind:checked={showLegend}>Show Legend</Checkbox>
+                                            </div>
+                                            {#if showLegend}
+                                                <div>
+                                                    <Label for="legendPosition" class="mb-2">Legend Position</Label>
+                                                    <Select id="legendPosition" items={[{value:'Top', name:'Top'}, {value:'Bottom', name:'Bottom'}, {value:'Left', name:'Left'}, {value:'Right', name:'Right'}]} bind:value={legendPosition} />
+                                                </div>
+                                            {/if}
                                         </div>
                                     </AccordionItem>
                                     <AccordionItem>
@@ -912,24 +920,6 @@
                                                 <div>
                                                     <Label for="valueLabelPosition" class="mb-2">Label Position</Label>
                                                     <Select id="valueLabelPosition" items={[{value:'Inside End', name:'Inside End (White text)'}, {value:'Outside End', name:'Outside End (Dark text)'}]} bind:value={valueLabelPosition} />
-                                                </div>
-                                            {/if}
-                                        </div>
-                                    </AccordionItem>
-                                    <AccordionItem>
-                                        <span slot="header">Appearance</span>
-                                        <div class="space-y-4">
-                                            <div>
-                                                <Label for="colorPalette" class="mb-2">Color Palette</Label>
-                                                <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}]} bind:value={colorPalette} />
-                                            </div>
-                                            <div class="pt-2">
-                                                <Checkbox bind:checked={showLegend}>Show Legend</Checkbox>
-                                            </div>
-                                            {#if showLegend}
-                                                <div>
-                                                    <Label for="legendPosition" class="mb-2">Legend Position</Label>
-                                                    <Select id="legendPosition" items={[{value:'Top', name:'Top'}, {value:'Bottom', name:'Bottom'}, {value:'Left', name:'Left'}, {value:'Right', name:'Right'}]} bind:value={legendPosition} />
                                                 </div>
                                             {/if}
                                         </div>
