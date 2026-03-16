@@ -482,38 +482,73 @@
                     return sConfig;
                 });
 
-                // Legend Pos
-                let legendConfig = { show: showLegend };
-                if (legendPosition === 'Top') { legendConfig.top = 0; }
-                if (legendPosition === 'Bottom') { legendConfig.bottom = 0; }
-                if (legendPosition === 'Left') { legendConfig.left = 0; legendConfig.orient = 'vertical'; }
-                if (legendPosition === 'Right') { legendConfig.right = 0; legendConfig.orient = 'vertical'; }
-                option.legend = legendConfig;
-
                 // Title
-                let titleConfig = { text: chartName || 'New Chart', subtext: chartDescription };
+                let titleConfig = { text: chartName || 'New Chart' };
+                if (chartDescription && chartDescription.trim() !== '') {
+                    titleConfig.subtext = chartDescription;
+                }
+                const hasSubtext = !!titleConfig.subtext;
+
                 if (titlePosition === 'Top') {
-                    titleConfig.top = 'top';
+                    titleConfig.top = 0;
                     titleConfig.left = 'center';
                 } else {
-                    titleConfig.bottom = 'bottom';
+                    titleConfig.bottom = 0;
                     titleConfig.left = 'center';
-                    // Need to push legend/grid if title is bottom
-                    if (legendPosition === 'Bottom') option.legend.bottom = 40;
                 }
                 option.title = titleConfig;
 
-                // Axis Grid offsets so it doesn't clip
-                option.grid = { containLabel: true, bottom: titlePosition === 'Bottom' ? 60 : 30, left: 30, right: 30, top: 40 };
-
-                if (showLegend) {
-                    if (legendPosition === 'Left') option.grid.left = 120;
-                    if (legendPosition === 'Right') option.grid.right = 120;
-                    if (legendPosition === 'Top') option.grid.top = 80;
-                    if (legendPosition === 'Bottom') option.grid.bottom = titlePosition === 'Bottom' ? 100 : 70;
+                // Legend Pos
+                let legendConfig = { show: showLegend, type: 'scroll' };
+                if (legendPosition === 'Top') {
+                    legendConfig.top = titlePosition === 'Top' ? (hasSubtext ? 50 : 30) : 0;
                 }
+                if (legendPosition === 'Bottom') {
+                    legendConfig.bottom = titlePosition === 'Bottom' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Left') {
+                    legendConfig.left = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    // Set a max width so it doesn't bleed endlessly into chart
+                    legendConfig.width = 120;
+                }
+                if (legendPosition === 'Right') {
+                    legendConfig.right = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                option.legend = legendConfig;
+
+                // Axis Grid offsets so it doesn't clip
+                // Base grid with default padding
+                option.grid = { containLabel: true, left: 30, right: 30, top: 40, bottom: 30 };
+
+                // Adjust Grid for Title
                 if (titlePosition === 'Top') {
-                    option.grid.top = Math.max(option.grid.top, showLegend && legendPosition === 'Top' ? 100 : 60);
+                    option.grid.top = hasSubtext ? 70 : 50;
+                } else {
+                    option.grid.bottom = hasSubtext ? 70 : 50;
+                }
+
+                // Adjust Grid for Legend
+                if (showLegend) {
+                    if (legendPosition === 'Left') option.grid.left = 140;
+                    if (legendPosition === 'Right') option.grid.right = 140;
+                    if (legendPosition === 'Top') option.grid.top = Math.max(option.grid.top, (titlePosition === 'Top' ? (hasSubtext ? 90 : 70) : 40));
+                    if (legendPosition === 'Bottom') option.grid.bottom = Math.max(option.grid.bottom, (titlePosition === 'Bottom' ? (hasSubtext ? 90 : 70) : 40));
+                }
+
+                // ECharts with `containLabel: true` usually automatically adds space for labels.
+                // However, setting `grid.left = 140` hardcodes the left offset, bypassing `containLabel`'s
+                // dynamic calculation for the *remaining* axis labels inside the grid.
+                // To force the chart to squeeze instead of clip, we compute `left` as a dynamically sized percentage
+                // if it exceeds standard bounds, or we add `yAxisWidthLimit` to `grid.left` for horizontal bars.
+                if (selectedChartType === 'bar') {
+                    option.grid.left = (option.grid.left || 30) + (yAxisWidthLimit || 50) + 20;
+                } else if (selectedChartType === 'column') {
+                    option.grid.bottom = (option.grid.bottom || 30) + 40; // Space for X-Axis labels
                 }
 
 
@@ -521,6 +556,8 @@
                 option.tooltip = {
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
+                    confine: true, // Prevents tooltip clipping by modal overflow
+                    appendToBody: true, // Appends DOM outside relative bounds
                     formatter: (params) => {
                         let html = `<div class="font-bold mb-1">${params[0].axisValue}</div>`;
                         params.forEach(p => {
@@ -732,7 +769,7 @@
     outsideclose
     backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
     dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
-    class="w-full p-0 overflow-hidden flex flex-col h-[85vh] max-h-[900px] relative bg-white dark:bg-gray-900"
+    class="w-full p-0 overflow-hidden flex flex-col h-[92vh] max-h-[1200px] relative bg-white dark:bg-gray-900"
 >
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
@@ -780,11 +817,11 @@
                         {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column'))}
                             <div>
                                 <Label for="chartName" class="mb-2">Chart Name</Label>
-                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
                             </div>
                             <div>
                                 <Label for="chartDescription" class="mb-2">Description</Label>
-                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
+                                <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
                             </div>
                         {/if}
 
@@ -846,19 +883,19 @@
                                             </div>
                                             <div>
                                                 <Label for="chartName" class="mb-2">Chart Name</Label>
-                                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
                                             </div>
                                             <div>
                                                 <Label for="chartDescription" class="mb-2">Description</Label>
-                                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
+                                                <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
                                             </div>
                                             <div>
                                                 <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
-                                                <Input id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
+                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
                                             </div>
                                             <div>
                                                 <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
-                                                <Input id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
+                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
                                             </div>
                                             <div>
                                                 <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
