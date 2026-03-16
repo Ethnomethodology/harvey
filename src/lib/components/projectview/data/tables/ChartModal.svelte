@@ -126,8 +126,16 @@
     }
 
     // Re-render chart when data or config changes
-    $: if (open && chartInstance && selectedChartType) {
-        renderChart();
+    $: if (open && chartContainer && selectedChartType) {
+        // Trigger render when any of these change
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData];
+        if (typeof window !== 'undefined') {
+            setTimeout(() => {
+                if (chartContainer) {
+                    renderChart();
+                }
+            }, 50);
+        }
     }
 
     let saveTimeout;
