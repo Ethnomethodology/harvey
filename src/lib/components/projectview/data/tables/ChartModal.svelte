@@ -81,6 +81,21 @@
         });
     }).map(c => ({ value: c.field, name: c.title }));
 
+    $: categoricalColumns = columns.map(c => {
+        const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
+        const title = c.title || fieldName;
+        return { field: fieldName, title };
+    }).filter(c => {
+        const colSchema = schema[c.field];
+        if (!colSchema) return true; // Fallback if no schema
+        if (colSchema.type === 'Text' && colSchema.subType === 'Small Text') return true;
+        if (colSchema.type === 'Misc' && colSchema.subType === 'Selectbox') return true;
+        if (colSchema.type === 'Numeric') return true;
+        if (colSchema.type === 'DateTime') return true;
+        return false;
+    }).map(c => ({ value: c.field, name: c.title }));
+
+    // Also keep allColumns for backwards compatibility or fallback if needed
     $: allColumns = columns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         const title = c.title || fieldName;
@@ -93,6 +108,12 @@
                 if (initialChart) {
                     selectExistingChart(initialChart);
                     initialChart = null; // Reset after loading once
+                } else {
+                    // Force open to the fresh create screen
+                    resetForm();
+                    activeTab = 'create';
+                    isEditingExisting = false;
+                    chartName = `Chart-${existingCharts.length + 1}`;
                 }
             });
         }
@@ -242,7 +263,10 @@
     async function deleteChart(name) {
         const targetName = typeof name === 'string' ? name : chartName;
         if (!targetName) return;
-        if (!confirm(`Are you sure you want to delete ${targetName}?`)) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete ${targetName}?`, { title: 'Delete Chart', type: 'warning' });
+        if (!confirmed) return;
 
         const projectStoreState = get(project);
         try {
@@ -461,7 +485,7 @@
                             {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
                                 <div>
                                     <Label for="xAxisCol" class="mb-2">X-Axis Column</Label>
-                                    <Select id="xAxisCol" items={allColumns} bind:value={xAxisCol} />
+                                    <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
                                 </div>
                                 <div>
                                     <Label for="yAxisCol" class="mb-2">Y-Axis Column (Numeric)</Label>
@@ -470,7 +494,7 @@
                             {:else if selectedChartType === 'pie'}
                                 <div>
                                     <Label for="categoryCol" class="mb-2">Category Column</Label>
-                                    <Select id="categoryCol" items={allColumns} bind:value={categoryCol} />
+                                    <Select id="categoryCol" items={categoricalColumns} bind:value={categoryCol} />
                                 </div>
                                 <div>
                                     <Label for="valueCol" class="mb-2">Value Column (Numeric)</Label>
@@ -479,7 +503,7 @@
                             {:else if selectedChartType === 'gantt'}
                                 <div>
                                     <Label for="taskCol" class="mb-2">Task Name Column</Label>
-                                    <Select id="taskCol" items={allColumns} bind:value={taskCol} />
+                                    <Select id="taskCol" items={categoricalColumns} bind:value={taskCol} />
                                 </div>
                                 <div>
                                     <Label for="startDateCol" class="mb-2">Start Date Column</Label>
