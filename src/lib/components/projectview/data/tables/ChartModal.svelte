@@ -523,7 +523,7 @@
                             >
                                 <div class="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10 transition-colors z-0"></div>
                                 <div class="w-14 h-14 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-3 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shadow-sm z-10">
-                                    {#if type.icon === 'ChartBar'}<BarChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'ChartBar'}<ChartBar size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'ChartColumn'}<ChartColumn size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'LineChart'}<LineChart size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'ScatterChart'}<ScatterChart size={24} strokeWidth={2} />{/if}
