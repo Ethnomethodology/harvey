@@ -337,15 +337,26 @@
 
 </script>
 
-<Modal bind:open size="xl" on:close={handleModalClose} title="Insert Chart" headerClass="bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700" bodyClass="p-0 flex h-[600px] bg-white dark:bg-gray-900" footerClass="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 justify-between">
-    <svelte:fragment slot="header">
-        <div class="flex items-center gap-2">
-            <PieChart class="w-5 h-5 text-gray-700 dark:text-gray-300" />
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Insert Chart</h3>
+<Modal
+    bind:open={open}
+    size="xl"
+    on:close={handleModalClose}
+    outsideclose
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
+    class="w-full p-0 overflow-hidden flex flex-col h-[70vh] max-h-[800px] relative bg-white dark:bg-gray-900"
+>
+    <div slot="header" class="flex items-center space-x-3 w-full">
+        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <PieChart size={20} class="text-blue-600 dark:text-blue-400" />
         </div>
-    </svelte:fragment>
+        <div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Insert Chart</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Create or open visualizations from table data</p>
+        </div>
+    </div>
 
-    <div class="flex w-full h-full">
+    <div class="flex-1 flex overflow-hidden -m-6 h-full border-t border-gray-200 dark:border-gray-700">
         <!-- Left Sidebar: Create / Open Existing -->
         <div class="w-64 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800">
             <div class="flex border-b border-gray-200 dark:border-gray-700">
@@ -448,22 +459,23 @@
         <!-- Right Content Area -->
         <div class="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 relative">
             {#if activeTab === 'create' && !selectedChartType}
-                <div class="p-8 h-full overflow-y-auto">
-                    <h4 class="text-xl font-medium mb-6 text-gray-800 dark:text-gray-200">Select Chart Type</h4>
-                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="p-8 h-full overflow-y-auto bg-gray-50/30 dark:bg-gray-900/30">
+                    <h4 class="text-xl font-semibold mb-6 text-gray-900 dark:text-white">Select Chart Type</h4>
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         {#each chartTypes as type}
                             <button
-                                class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
+                                class="flex flex-col items-center p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden"
                                 on:click={() => selectChartType(type.value)}
                             >
-                                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
-                                    {#if type.icon === 'BarChart'}<BarChart size={32} />{/if}
-                                    {#if type.icon === 'LineChart'}<LineChart size={32} />{/if}
-                                    {#if type.icon === 'ScatterChart'}<ScatterChart size={32} />{/if}
-                                    {#if type.icon === 'PieChart'}<PieChart size={32} />{/if}
-                                    {#if type.icon === 'AlignLeft'}<AlignLeft size={32} />{/if}
+                                <div class="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10 transition-colors z-0"></div>
+                                <div class="w-14 h-14 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-3 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shadow-sm z-10">
+                                    {#if type.icon === 'BarChart'}<BarChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'LineChart'}<LineChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'ScatterChart'}<ScatterChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'PieChart'}<PieChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'AlignLeft'}<AlignLeft size={24} strokeWidth={2} />{/if}
                                 </div>
-                                <span class="font-medium text-gray-900 dark:text-white">{type.name}</span>
+                                <span class="font-medium text-sm text-gray-900 dark:text-white z-10">{type.name}</span>
                             </button>
                         {/each}
                     </div>
@@ -489,19 +501,20 @@
         </div>
     </div>
 
-    <svelte:fragment slot="footer">
+    <!-- Footer -->
+    <div slot="footer" class="flex items-center justify-between w-full border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 -m-6 p-4">
         <div>
             {#if isEditingExisting}
-                <Button color="red" on:click={deleteChart} size="sm">
-                    <Trash2 class="w-4 h-4 mr-2" /> Delete
+                <Button color="red" on:click={deleteChart} size="sm" class="flex items-center gap-2">
+                    <Trash2 class="w-4 h-4" /> Delete
                 </Button>
             {/if}
         </div>
-        <div class="flex gap-2">
-            <Button color="alternative" on:click={() => { if(activeTab==='create' && chartName) saveChart(); open = false; }} size="sm">Cancel</Button>
-            <Button color="blue" on:click={saveChart} size="sm">
-                <Save class="w-4 h-4 mr-2" /> Save
+        <div class="flex gap-3 ml-auto">
+            <Button color="alternative" on:click={() => { if(activeTab==='create' && chartName && selectedChartType) saveChart(); open = false; }} size="sm" class="px-5">Cancel</Button>
+            <Button color="blue" on:click={saveChart} size="sm" class="flex items-center gap-2 px-5">
+                <Save class="w-4 h-4" /> Save
             </Button>
         </div>
-    </svelte:fragment>
+    </div>
 </Modal>
