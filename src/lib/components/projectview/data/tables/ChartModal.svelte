@@ -7,6 +7,8 @@
     import { project } from '$lib/stores/projectStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import * as echarts from 'echarts';
+    import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
+    import { writeFile } from '@tauri-apps/plugin-fs';
 
     const dispatch = createEventDispatcher();
 
@@ -55,6 +57,7 @@
 
     let chartContainer;
     let chartInstance;
+    let showImageExportModal = false;
 
     // Derived dropdown options
     $: numericColumns = columns.map(c => {
@@ -392,15 +395,33 @@
         }
     }
 
-    async function exportChart(type) {
+    function openExportModal() {
         if (!chartInstance) return;
-        const base64 = chartInstance.getDataURL({ type: type, backgroundColor: '#fff' });
+        showImageExportModal = true;
+    }
 
-        // Trigger download
-        const a = document.createElement('a');
-        a.href = base64;
-        a.download = `${chartName || 'chart'}.${type}`;
-        a.click();
+    async function handleExportConfirm(event) {
+        const { filePath } = event.detail;
+        if (!chartInstance) return;
+
+        const ext = filePath.split('.').pop().toLowerCase();
+        const exportType = ext === 'jpg' || ext === 'jpeg' ? 'jpeg' : 'png';
+
+        const base64 = chartInstance.getDataURL({ type: exportType, backgroundColor: '#fff' });
+        const base64Data = base64.split(',')[1];
+
+        try {
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            await writeFile(filePath, bytes);
+            notificationStore.add('Chart exported successfully.', 'success');
+        } catch (error) {
+            console.error('Failed to export chart:', error);
+            notificationStore.add('Failed to export chart.', 'error');
+        }
     }
 
     async function saveChartToImages() {
@@ -467,7 +488,7 @@
             </div>
         </div>
         <div class="flex gap-2">
-            <Button size="sm" color="light" on:click={() => exportChart('png')} title="Export as PNG" disabled={!chartInstance}>
+            <Button size="sm" color="light" on:click={openExportModal} title="Export" disabled={!chartInstance}>
                 <Share class="w-4 h-4 mr-2" /> Export
             </Button>
             <Button size="sm" color="light" on:click={saveChartToImages} title="Save to Images" disabled={!chartInstance}>
@@ -630,3 +651,12 @@
     </div>
 
 </Modal>
+
+{#if showImageExportModal}
+    <ImageExportModal
+        bind:showModal={showImageExportModal}
+        defaultFileName={chartName || 'chart'}
+        on:export={handleExportConfirm}
+        on:close={() => showImageExportModal = false}
+    />
+{/if}
