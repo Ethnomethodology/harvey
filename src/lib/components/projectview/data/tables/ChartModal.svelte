@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-    import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper } from 'flowbite-svelte';
+    import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper, Accordion, AccordionItem, Range, Checkbox } from 'flowbite-svelte';
     import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
@@ -54,6 +54,25 @@
     let endDateCol = '';   // For Gantt
     let taskCol = '';      // For Gantt
     let showLegend = true;
+
+    // Bar/Column Chart Extra Configuration
+    let aggregationType = 'Sum'; // Sum, Average, Count, Min, Max
+    let breakdownCol = ''; // Group By
+    let barType = 'Clustered'; // Clustered, Stacked, 100% Stacked
+    let sortOrder = 'None'; // None, Highest, Lowest, A-Z
+
+    // Labels Configuration
+    let xAxisLabel = '';
+    let yAxisLabel = '';
+    let titlePosition = 'Top'; // Top, Bottom
+    let yAxisWidthLimit = 150; // 50-300px
+    let longTextHandling = 'Truncate'; // Truncate, Wrap
+    let showValueLabels = false;
+    let valueLabelPosition = 'Inside End'; // Inside End, Outside End
+
+    // Appearance Configuration
+    let colorPalette = 'Modern'; // Modern, Soft Pastels, Warm Pastels, Warm Sunset
+    let legendPosition = 'Bottom'; // Top, Bottom, Left, Right
 
     let chartContainer;
     let chartInstance;
@@ -131,7 +150,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -145,7 +164,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -188,6 +207,19 @@
         endDateCol = '';
         taskCol = '';
         showLegend = true;
+        aggregationType = 'Sum';
+        breakdownCol = '';
+        barType = 'Clustered';
+        sortOrder = 'None';
+        xAxisLabel = '';
+        yAxisLabel = '';
+        titlePosition = 'Top';
+        yAxisWidthLimit = 150;
+        longTextHandling = 'Truncate';
+        showValueLabels = false;
+        valueLabelPosition = 'Inside End';
+        colorPalette = 'Modern';
+        legendPosition = 'Bottom';
         if (chartInstance) {
             chartInstance.clear();
         }
@@ -222,6 +254,20 @@
             endDateCol = config.endDateCol || '';
             taskCol = config.taskCol || '';
             showLegend = config.showLegend !== false;
+
+            aggregationType = config.aggregationType || 'Sum';
+            breakdownCol = config.breakdownCol || '';
+            barType = config.barType || 'Clustered';
+            sortOrder = config.sortOrder || 'None';
+            xAxisLabel = config.xAxisLabel || '';
+            yAxisLabel = config.yAxisLabel || '';
+            titlePosition = config.titlePosition || 'Top';
+            yAxisWidthLimit = config.yAxisWidthLimit || 150;
+            longTextHandling = config.longTextHandling || 'Truncate';
+            showValueLabels = config.showValueLabels || false;
+            valueLabelPosition = config.valueLabelPosition || 'Inside End';
+            colorPalette = config.colorPalette || 'Modern';
+            legendPosition = config.legendPosition || 'Bottom';
         } catch (e) {
             console.error('Failed to parse chart config:', e);
         }
@@ -254,7 +300,20 @@
             startDateCol,
             endDateCol,
             taskCol,
-            showLegend
+            showLegend,
+            aggregationType,
+            breakdownCol,
+            barType,
+            sortOrder,
+            xAxisLabel,
+            yAxisLabel,
+            titlePosition,
+            yAxisWidthLimit,
+            longTextHandling,
+            showValueLabels,
+            valueLabelPosition,
+            colorPalette,
+            legendPosition
         };
 
         try {
@@ -314,30 +373,195 @@
         };
 
         try {
-            if (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter') {
+            if (selectedChartType === 'bar' || selectedChartType === 'column') {
+                // Determine whether required axis cols are present depending on aggregation.
+                // If Count, we technically only need xAxisCol, but UI enforces yAxisCol selection.
+                if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
+                let validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '');
+                if (aggregationType !== 'Count') {
+                    validData = validData.filter(row => row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
+                }
+
+                // Map the data into structured groups
+                // Grouping by X-Axis Categories
+                let groupedData = {};
+                // If breakdown is selected, we have a second level of grouping
+                // Structure: groupedData = { category_x: { breakdown_1: [y_val, y_val], breakdown_2: [y_val] } }
+
+                validData.forEach(row => {
+                    const cat = String(row[xAxisCol]);
+                    const bKey = breakdownCol && row[breakdownCol] ? String(row[breakdownCol]) : 'All';
+                    let yVal = 0;
+                    if (aggregationType !== 'Count') {
+                        yVal = parseFloat(row[yAxisCol]) || 0;
+                    } else {
+                        yVal = 1; // For count, every row is 1
+                    }
+
+                    if (!groupedData[cat]) groupedData[cat] = {};
+                    if (!groupedData[cat][bKey]) groupedData[cat][bKey] = [];
+                    groupedData[cat][bKey].push(yVal);
+                });
+
+                // Aggregate
+                let aggData = []; // [{ category: 'cat', total: val, series: { 'Breakdown 1': val, ... } }]
+                for (const cat in groupedData) {
+                    let catObj = { category: cat, total: 0, series: {} };
+                    for (const bKey in groupedData[cat]) {
+                        const vals = groupedData[cat][bKey];
+                        let val = 0;
+                        if (aggregationType === 'Sum' || aggregationType === 'Count') {
+                            val = vals.reduce((a, b) => a + b, 0);
+                        } else if (aggregationType === 'Average') {
+                            val = vals.reduce((a, b) => a + b, 0) / vals.length;
+                        } else if (aggregationType === 'Max') {
+                            val = Math.max(...vals);
+                        } else if (aggregationType === 'Min') {
+                            val = Math.min(...vals);
+                        }
+                        catObj.series[bKey] = val;
+                        catObj.total += val; // Total for sorting and 100% stack normalization
+                    }
+                    aggData.push(catObj);
+                }
+
+                // Sort
+                if (sortOrder === 'Highest') {
+                    aggData.sort((a, b) => b.total - a.total);
+                } else if (sortOrder === 'Lowest') {
+                    aggData.sort((a, b) => a.total - b.total);
+                } else if (sortOrder === 'A-Z') {
+                    aggData.sort((a, b) => a.category.localeCompare(b.category));
+                }
+
+                // Extract all unique breakdown keys (series names)
+                const breakdownKeys = new Set();
+                aggData.forEach(d => Object.keys(d.series).forEach(k => breakdownKeys.add(k)));
+                const seriesNames = Array.from(breakdownKeys);
+
+                const xData = aggData.map(d => d.category);
+
+                // Color Palettes
+                const palettes = {
+                    'Modern': ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'],
+                    'Soft Pastels': ['#fca5a5', '#fcd34d', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4'],
+                    'Warm Pastels': ['#ffb3ba', '#ffdfba', '#ffffba', '#baffc9', '#bae1ff'],
+                    'Warm Sunset': ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#2dd4bf']
+                };
+                option.color = palettes[colorPalette] || palettes['Modern'];
+
+                // Series config
+                const seriesArray = seriesNames.map(sName => {
+                    const dataPoints = aggData.map(d => {
+                        let val = d.series[sName] || 0;
+                        if (barType === '100% Stacked' && d.total !== 0) {
+                            val = (val / d.total) * 100;
+                        }
+                        return val;
+                    });
+
+                    let sConfig = {
+                        name: breakdownCol ? sName : (aggregationType === 'Count' ? 'Count' : yAxisCol),
+                        type: 'bar',
+                        data: dataPoints
+                    };
+
+                    if (barType === 'Stacked' || barType === '100% Stacked') {
+                        sConfig.stack = 'total';
+                    }
+
+                    if (showValueLabels) {
+                        sConfig.label = {
+                            show: true,
+                            position: valueLabelPosition === 'Inside End' ? (selectedChartType === 'bar' ? 'insideRight' : 'insideTop') : (selectedChartType === 'bar' ? 'right' : 'top'),
+                            color: valueLabelPosition === 'Inside End' ? '#fff' : '#000',
+                            formatter: barType === '100% Stacked' ? '{c}%' : '{c}'
+                        };
+                    }
+
+                    return sConfig;
+                });
+
+                // Legend Pos
+                let legendConfig = { show: showLegend };
+                if (legendPosition === 'Top') { legendConfig.top = 0; }
+                if (legendPosition === 'Bottom') { legendConfig.bottom = 0; }
+                if (legendPosition === 'Left') { legendConfig.left = 0; legendConfig.orient = 'vertical'; }
+                if (legendPosition === 'Right') { legendConfig.right = 0; legendConfig.orient = 'vertical'; }
+                option.legend = legendConfig;
+
+                // Title
+                let titleConfig = { text: chartName || 'New Chart', subtext: chartDescription };
+                if (titlePosition === 'Top') {
+                    titleConfig.top = 'top';
+                    titleConfig.left = 'center';
+                } else {
+                    titleConfig.bottom = 'bottom';
+                    titleConfig.left = 'center';
+                    // Need to push legend/grid if title is bottom
+                    if (legendPosition === 'Bottom') option.legend.bottom = 40;
+                }
+                option.title = titleConfig;
+
+                // Axis Grid offsets so it doesn't clip
+                option.grid = { containLabel: true, bottom: titlePosition === 'Bottom' ? 60 : 30 };
+
+                // Apply axes
+                if (selectedChartType === 'bar') {
+                    // Horizontal bar
+                    option.xAxis = { type: 'value', name: xAxisLabel, nameLocation: 'middle', nameGap: 30 };
+                    if (barType === '100% Stacked') {
+                        option.xAxis.max = 100;
+                        option.xAxis.axisLabel = { formatter: '{value}%' };
+                    }
+                    option.yAxis = {
+                        type: 'category',
+                        data: xData,
+                        name: yAxisLabel,
+                        nameLocation: 'middle',
+                        nameGap: yAxisWidthLimit + 20,
+                        axisLabel: {
+                            width: yAxisWidthLimit,
+                            overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate'
+                        }
+                    };
+                    option.series = seriesArray;
+                } else if (selectedChartType === 'column') {
+                    // Vertical column
+                    option.xAxis = {
+                        type: 'category',
+                        data: xData,
+                        name: xAxisLabel,
+                        nameLocation: 'middle',
+                        nameGap: 40,
+                        axisLabel: {
+                            width: yAxisWidthLimit,
+                            overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate'
+                        }
+                    };
+                    option.yAxis = { type: 'value', name: yAxisLabel, nameLocation: 'middle', nameGap: 40 };
+                    if (barType === '100% Stacked') {
+                        option.yAxis.max = 100;
+                        option.yAxis.axisLabel = { formatter: '{value}%' };
+                    }
+                    option.series = seriesArray;
+                }
+            } else if (selectedChartType === 'line' || selectedChartType === 'scatter') {
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
                 const validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '' && row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
                 const xData = validData.map(row => row[xAxisCol]);
                 const yData = validData.map(row => parseFloat(row[yAxisCol]) || 0);
 
-                if (selectedChartType === 'bar') {
-                    option.xAxis = { type: 'value' };
-                    option.yAxis = { type: 'category', data: xData };
-                    option.series = [{ type: 'bar', name: yAxisCol, data: yData }];
-                } else {
-                    option.xAxis = { type: 'category', data: xData };
-                    option.yAxis = { type: 'value' };
+                option.xAxis = { type: 'category', data: xData };
+                option.yAxis = { type: 'value' };
 
-                    if (selectedChartType === 'scatter') {
-                        option.xAxis = { type: 'value' };
-                        // Scatter needs [x, y] data pairs
-                        const scatterData = validData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
-                        option.series = [{ type: 'scatter', name: yAxisCol, data: scatterData }];
-                    } else if (selectedChartType === 'column') {
-                        option.series = [{ type: 'bar', name: yAxisCol, data: yData }];
-                    } else {
-                        option.series = [{ type: selectedChartType, name: yAxisCol, data: yData }];
-                    }
+                if (selectedChartType === 'scatter') {
+                    option.xAxis = { type: 'value' };
+                    // Scatter needs [x, y] data pairs
+                    const scatterData = validData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
+                    option.series = [{ type: 'scatter', name: yAxisCol, data: scatterData }];
+                } else {
+                    option.series = [{ type: selectedChartType, name: yAxisCol, data: yData }];
                 }
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
@@ -538,7 +762,101 @@
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </div>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column'}
+                                <Accordion flush>
+                                    <AccordionItem open>
+                                        <span slot="header">Data Mapping</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="xAxisCol" class="mb-2">Categories ({selectedChartType === 'bar' ? 'Y' : 'X'}-Axis)</Label>
+                                                <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
+                                            </div>
+                                            <div>
+                                                <Label for="yAxisCol" class="mb-2">Values ({selectedChartType === 'bar' ? 'X' : 'Y'}-Axis)</Label>
+                                                <div class="flex gap-2">
+                                                    <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} class="flex-1" />
+                                                    <Select id="aggregationType" items={[{value:'Sum', name:'Sum'}, {value:'Average', name:'Average'}, {value:'Count', name:'Count'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={aggregationType} class="w-28" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <Label for="breakdownCol" class="mb-2">Breakdown (Group By)</Label>
+                                                <Select id="breakdownCol" items={[{value:'', name:'-- None --'}, ...categoricalColumns]} bind:value={breakdownCol} />
+                                            </div>
+                                        </div>
+                                    </AccordionItem>
+                                    <AccordionItem>
+                                        <span slot="header">Bar Type</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="barType" class="mb-2">Bar Type</Label>
+                                                <Select id="barType" items={[{value:'Clustered', name:'Clustered'}, {value:'Stacked', name:'Stacked'}, {value:'100% Stacked', name:'100% Stacked'}]} bind:value={barType} />
+                                            </div>
+                                        </div>
+                                    </AccordionItem>
+                                    <AccordionItem>
+                                        <span slot="header">Sorting</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="sortOrder" class="mb-2">Sorting</Label>
+                                                <Select id="sortOrder" items={[{value:'None', name:'None'}, {value:'Highest', name:'Highest values first (Leaderboard)'}, {value:'Lowest', name:'Lowest values first'}, {value:'A-Z', name:'Alphabetical (A-Z)'}]} bind:value={sortOrder} />
+                                            </div>
+                                        </div>
+                                    </AccordionItem>
+                                    <AccordionItem>
+                                        <span slot="header">Labels</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="titlePosition" class="mb-2">Main Chart Title Position</Label>
+                                                <Select id="titlePosition" items={[{value:'Top', name:'Top'}, {value:'Bottom', name:'Bottom'}]} bind:value={titlePosition} />
+                                            </div>
+                                            <div>
+                                                <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
+                                                <Input id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
+                                            </div>
+                                            <div>
+                                                <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
+                                                <Input id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
+                                            </div>
+                                            <div>
+                                                <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
+                                                <Range id="yAxisWidth" min="50" max="300" bind:value={yAxisWidthLimit} />
+                                            </div>
+                                            <div>
+                                                <Label for="longTextHandling" class="mb-2">Long Text Handling</Label>
+                                                <Select id="longTextHandling" items={[{value:'Truncate', name:'Truncate'}, {value:'Wrap', name:'Wrap to next line'}]} bind:value={longTextHandling} />
+                                            </div>
+                                            <div class="pt-2">
+                                                <Checkbox bind:checked={showValueLabels}>Show Value Labels</Checkbox>
+                                            </div>
+                                            {#if showValueLabels}
+                                                <div>
+                                                    <Label for="valueLabelPosition" class="mb-2">Label Position</Label>
+                                                    <Select id="valueLabelPosition" items={[{value:'Inside End', name:'Inside End (White text)'}, {value:'Outside End', name:'Outside End (Dark text)'}]} bind:value={valueLabelPosition} />
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    </AccordionItem>
+                                    <AccordionItem>
+                                        <span slot="header">Appearance</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="colorPalette" class="mb-2">Color Palette</Label>
+                                                <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}]} bind:value={colorPalette} />
+                                            </div>
+                                            <div class="pt-2">
+                                                <Checkbox bind:checked={showLegend}>Show Legend</Checkbox>
+                                            </div>
+                                            {#if showLegend}
+                                                <div>
+                                                    <Label for="legendPosition" class="mb-2">Legend Position</Label>
+                                                    <Select id="legendPosition" items={[{value:'Top', name:'Top'}, {value:'Bottom', name:'Bottom'}, {value:'Left', name:'Left'}, {value:'Right', name:'Right'}]} bind:value={legendPosition} />
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    </AccordionItem>
+                                </Accordion>
+
+                            {:else if selectedChartType === 'line' || selectedChartType === 'scatter'}
                                 <div>
                                     <Label for="xAxisCol" class="mb-2">X-Axis Column</Label>
                                     <Select id="xAxisCol" items={categoricalColumns} bind:value={xAxisCol} />
@@ -546,6 +864,9 @@
                                 <div>
                                     <Label for="yAxisCol" class="mb-2">Y-Axis Column (Numeric)</Label>
                                     <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} />
+                                </div>
+                                <div class="pt-2">
+                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
                                 </div>
                             {:else if selectedChartType === 'pie'}
                                 <div>
@@ -555,6 +876,9 @@
                                 <div>
                                     <Label for="valueCol" class="mb-2">Value Column (Numeric)</Label>
                                     <Select id="valueCol" items={numericColumns} bind:value={valueCol} />
+                                </div>
+                                <div class="pt-2">
+                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
                                 </div>
                             {:else if selectedChartType === 'gantt'}
                                 <div>
@@ -569,11 +893,10 @@
                                     <Label for="endDateCol" class="mb-2">End Date Column</Label>
                                     <Select id="endDateCol" items={dateColumns} bind:value={endDateCol} />
                                 </div>
+                                <div class="pt-2">
+                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
+                                </div>
                             {/if}
-
-                            <div class="pt-2">
-                                <Toggle bind:checked={showLegend}>Show Legend</Toggle>
-                            </div>
                            {/if}
                     </div>
                 {:else if activeTab === 'existing'}
