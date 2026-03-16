@@ -3199,7 +3199,7 @@
     <ChartModal
         bind:open={showChartModal}
         tablePath={tablePath}
-        columns={columns}
+        columns={tableColumnsForModal}
         tableData={tableData}
         initialChart={initialChartToLoad}
         on:chartSaved={() => {
