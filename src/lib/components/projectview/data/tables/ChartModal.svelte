@@ -504,7 +504,40 @@
                 option.title = titleConfig;
 
                 // Axis Grid offsets so it doesn't clip
-                option.grid = { containLabel: true, bottom: titlePosition === 'Bottom' ? 60 : 30 };
+                option.grid = { containLabel: true, bottom: titlePosition === 'Bottom' ? 60 : 30, left: 30, right: 30, top: 40 };
+
+                if (showLegend) {
+                    if (legendPosition === 'Left') option.grid.left = 120;
+                    if (legendPosition === 'Right') option.grid.right = 120;
+                    if (legendPosition === 'Top') option.grid.top = 80;
+                    if (legendPosition === 'Bottom') option.grid.bottom = titlePosition === 'Bottom' ? 100 : 70;
+                }
+                if (titlePosition === 'Top') {
+                    option.grid.top = Math.max(option.grid.top, showLegend && legendPosition === 'Top' ? 100 : 60);
+                }
+
+
+                const isCurrency = schema[yAxisCol] && schema[yAxisCol].subType === 'Currency';
+                option.tooltip = {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: (params) => {
+                        let html = `<div class="font-bold mb-1">${params[0].axisValue}</div>`;
+                        params.forEach(p => {
+                            let valStr;
+                            if (barType === '100% Stacked') {
+                                valStr = `${p.value.toFixed(1)}%`;
+                            } else if (aggregationType === 'Count') {
+                                valStr = p.value;
+                            } else {
+                                const rounded = Math.round(p.value);
+                                valStr = isCurrency ? `${rounded.toLocaleString()}` : rounded.toLocaleString();
+                            }
+                            html += `<div>${p.marker} ${p.seriesName}: <b>${valStr}</b></div>`;
+                        });
+                        return html;
+                    }
+                };
 
                 // Apply axes
                 if (selectedChartType === 'bar') {
@@ -694,12 +727,12 @@
 
 <Modal
     bind:open={open}
-    size="xl"
+    size="6xl"
     on:close={handleModalClose}
     outsideclose
     backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
     dialogClass="fixed top-0 start-0 end-0 h-modal md:h-full z-[10001] w-full p-4 flex items-center justify-center"
-    class="w-full p-0 overflow-hidden flex flex-col h-[70vh] max-h-[800px] relative bg-white dark:bg-gray-900"
+    class="w-full p-0 overflow-hidden flex flex-col h-[85vh] max-h-[900px] relative bg-white dark:bg-gray-900"
 >
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
@@ -744,14 +777,16 @@
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
                     <div class="space-y-4">
-                        <div>
-                            <Label for="chartName" class="mb-2">Chart Name</Label>
-                            <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
-                        </div>
-                        <div>
-                            <Label for="chartDescription" class="mb-2">Description</Label>
-                            <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
-                        </div>
+                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column'))}
+                            <div>
+                                <Label for="chartName" class="mb-2">Chart Name</Label>
+                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                            </div>
+                            <div>
+                                <Label for="chartDescription" class="mb-2">Description</Label>
+                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
+                            </div>
+                        {/if}
 
                         {#if !isEditingExisting}
                             <div class="text-sm text-gray-500 dark:text-gray-400 italic pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -808,6 +843,14 @@
                                             <div>
                                                 <Label for="titlePosition" class="mb-2">Main Chart Title Position</Label>
                                                 <Select id="titlePosition" items={[{value:'Top', name:'Top'}, {value:'Bottom', name:'Bottom'}]} bind:value={titlePosition} />
+                                            </div>
+                                            <div>
+                                                <Label for="chartName" class="mb-2">Chart Name</Label>
+                                                <Input id="chartName" bind:value={chartName} placeholder="Enter chart name" />
+                                            </div>
+                                            <div>
+                                                <Label for="chartDescription" class="mb-2">Description</Label>
+                                                <Textarea id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
                                             </div>
                                             <div>
                                                 <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
