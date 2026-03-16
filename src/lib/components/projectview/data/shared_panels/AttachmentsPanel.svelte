@@ -38,7 +38,10 @@
 
     async function handleDeleteChart(chart) {
         if (!chart || !chart.chart_name) return;
-        if (!confirm(`Are you sure you want to delete ${chart.chart_name}?`)) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete ${chart.chart_name}?`, { title: 'Delete Chart', type: 'warning' });
+        if (!confirmed) return;
 
         const projectStoreState = get(project);
 

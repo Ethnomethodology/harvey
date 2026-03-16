@@ -59,7 +59,7 @@
     // Derived dropdown options
     $: numericColumns = columns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
-        const title = c.title || fieldName;
+        const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
         const colSchema = schema[c.field];
@@ -70,7 +70,7 @@
 
     $: dateColumns = columns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
-        const title = c.title || fieldName;
+        const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
         const colSchema = schema[c.field];
@@ -84,7 +84,7 @@
 
     $: categoricalColumns = columns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
-        const title = c.title || fieldName;
+        const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
         const colSchema = schema[c.field];
@@ -99,7 +99,7 @@
     // Also keep allColumns for backwards compatibility or fallback if needed
     $: allColumns = columns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
-        const title = c.title || fieldName;
+        const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { value: fieldName, name: title };
     });
 
@@ -581,8 +581,8 @@
                             </button>
                         {/each}
                     </div>
-                    <div class="mt-auto pt-6 flex justify-end">
-                        <Button color="blue" disabled={!selectedChartType} on:click={initialCreate} class="px-6">
+                    <div class="absolute bottom-6 right-6 z-10">
+                        <Button color="blue" disabled={!selectedChartType} on:click={initialCreate} class="px-6 shadow-md">
                             Create Chart
                         </Button>
                     </div>
