@@ -5,7 +5,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
-    import { FileAudio, PlayCircle, Plus, PieChart } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Trash2 } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -33,6 +33,28 @@
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }
+        }
+    }
+
+    async function handleDeleteChart(chart) {
+        if (!chart || !chart.chart_name) return;
+        const projectStoreState = get(project);
+
+        // Match logic of ChartModal by converting active active item path to relative if needed, but the backend stores the relative table path.
+        // We know we fetched these charts using `previousProcessedItemPath`.
+        try {
+            await invoke('delete_chart_config_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                chartName: chart.chart_name
+            });
+            notificationStore.add('Chart deleted.', 'success');
+            // Optimistic update
+            attachments = attachments.filter(a => a.chart_name !== chart.chart_name);
+            dispatch('chartSaved'); // Optionally trigger broader UI refresh if needed
+        } catch (error) {
+            console.error('Failed to delete chart via attachments panel:', error);
+            notificationStore.add('Failed to delete chart.', 'error');
         }
     }
 
@@ -169,7 +191,12 @@
                     >
                         <div class="flex items-center space-x-3 truncate">
                             {#if typeof attachment === 'object' && attachment.chart_name}
-                                <PieChart class="w-4 h-4 text-gray-400 shrink-0" />
+                                {#if attachment.chart_type === 'bar'}<ChartBar class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'column'}<ChartColumn class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'line'}<LineChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'scatter'}<ScatterChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'pie'}<PieChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'gantt'}<SquareChartGantt class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                             {:else}
                                 <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
@@ -177,13 +204,15 @@
                                 {getFileName(attachment)}
                             </span>
                         </div>
-                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title={typeof attachment === 'object' && attachment.chart_name ? "Open" : "Play"} on:click|stopPropagation={() => playTrack(i)}>
-                            {#if typeof attachment === 'object' && attachment.chart_name}
-                                <PieChart class="w-4 h-4" />
-                            {:else}
+                        {#if typeof attachment === 'object' && attachment.chart_name}
+                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete" on:click|stopPropagation={() => handleDeleteChart(attachment)}>
+                                <Trash2 class="w-4 h-4" />
+                            </button>
+                        {:else}
+                            <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
                                 <PlayCircle class="w-4 h-4" />
-                            {/if}
-                        </button>
+                            </button>
+                        {/if}
                     </li>
                 {/each}
             </ul>

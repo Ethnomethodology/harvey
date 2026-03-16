@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper } from 'flowbite-svelte';
-    import { PieChart, BarChart, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
+    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -27,7 +27,8 @@
 
     // Chart Options
     const chartTypes = [
-        { value: 'bar', name: 'Bar Chart', icon: 'BarChart' },
+        { value: 'bar', name: 'Bar Chart', icon: 'ChartBar' },
+        { value: 'column', name: 'Column Chart', icon: 'ChartColumn' },
         { value: 'line', name: 'Line Chart', icon: 'LineChart' },
         { value: 'scatter', name: 'Scatter Plot', icon: 'ScatterChart' },
         { value: 'pie', name: 'Pie Chart', icon: 'PieChart' },
@@ -122,11 +123,12 @@
         if (tab === 'create') {
             resetForm();
             isEditingExisting = false;
+            const count = existingCharts.length + 1;
+            chartName = `Chart-${count}`;
         }
     }
 
     function resetForm() {
-        chartName = '';
         chartDescription = '';
         selectedChartType = null;
         xAxisCol = '';
@@ -144,16 +146,15 @@
 
     async function selectChartType(type) {
         selectedChartType = type;
-        if (!isEditingExisting) {
-            // Auto-generate name and instantly "create" to enter edit mode safely
-            const count = existingCharts.length + 1;
-            chartName = `Chart-${count}`;
-            isEditingExisting = true; // Act as if we are editing now
-            await saveChart(true);
-        }
         if (chartInstance) {
             setTimeout(renderChart, 50);
         }
+    }
+
+    async function initialCreate() {
+        if (!chartName) chartName = `Chart-${existingCharts.length + 1}`;
+        isEditingExisting = true;
+        await saveChart(false);
     }
 
     function selectExistingChart(chart) {
@@ -229,7 +230,7 @@
         try {
             await invoke('delete_chart_config_command', {
                 projectId: projectStoreState.id,
-                tablePath: tablePath,
+                tablePath: normalizedTablePath,
                 chartName: targetName
             });
             notificationStore.add('Chart deleted.', 'success');
@@ -257,21 +258,29 @@
         };
 
         try {
-            if (selectedChartType === 'bar' || selectedChartType === 'line' || selectedChartType === 'scatter') {
+            if (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter') {
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
                 const xData = tableData.map(row => row[xAxisCol]);
                 const yData = tableData.map(row => parseFloat(row[yAxisCol]) || 0);
 
-                option.xAxis = { type: 'category', data: xData };
-                option.yAxis = { type: 'value' };
-
-                if (selectedChartType === 'scatter') {
+                if (selectedChartType === 'bar') {
                     option.xAxis = { type: 'value' };
-                    // Scatter needs [x, y] data pairs
-                    const scatterData = tableData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
-                    option.series = [{ type: 'scatter', data: scatterData }];
+                    option.yAxis = { type: 'category', data: xData };
+                    option.series = [{ type: 'bar', data: yData }];
                 } else {
-                    option.series = [{ type: selectedChartType, data: yData }];
+                    option.xAxis = { type: 'category', data: xData };
+                    option.yAxis = { type: 'value' };
+
+                    if (selectedChartType === 'scatter') {
+                        option.xAxis = { type: 'value' };
+                        // Scatter needs [x, y] data pairs
+                        const scatterData = tableData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
+                        option.series = [{ type: 'scatter', data: scatterData }];
+                    } else if (selectedChartType === 'column') {
+                        option.series = [{ type: 'bar', data: yData }];
+                    } else {
+                        option.series = [{ type: selectedChartType, data: yData }];
+                    }
                 }
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
@@ -430,7 +439,7 @@
                                 Data Configuration
                             </div>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'line' || selectedChartType === 'scatter'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
                                 <div>
                                     <Label for="xAxisCol" class="mb-2">X-Axis Column</Label>
                                     <Select id="xAxisCol" items={allColumns} bind:value={xAxisCol} />
@@ -500,18 +509,22 @@
 
         <!-- Right Content Area -->
         <div class="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 relative">
-            {#if activeTab === 'create' && !selectedChartType}
-                <div class="p-8 h-full overflow-y-auto bg-gray-50/30 dark:bg-gray-900/30">
+            {#if activeTab === 'create' && !isEditingExisting}
+                <div class="p-8 h-full overflow-y-auto bg-gray-50/30 dark:bg-gray-900/30 flex flex-col">
                     <h4 class="text-xl font-semibold mb-6 text-gray-900 dark:text-white">Select Chart Type</h4>
                     <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         {#each chartTypes as type}
                             <button
                                 class="flex flex-col items-center p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden"
+                                class:border-blue-500={selectedChartType === type.value}
+                                class:ring-2={selectedChartType === type.value}
+                                class:ring-blue-500={selectedChartType === type.value}
                                 on:click={() => selectChartType(type.value)}
                             >
                                 <div class="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10 transition-colors z-0"></div>
                                 <div class="w-14 h-14 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-3 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shadow-sm z-10">
-                                    {#if type.icon === 'BarChart'}<BarChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'ChartBar'}<BarChart size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'ChartColumn'}<ChartColumn size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'LineChart'}<LineChart size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'ScatterChart'}<ScatterChart size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'PieChart'}<PieChart size={24} strokeWidth={2} />{/if}
@@ -521,8 +534,13 @@
                             </button>
                         {/each}
                     </div>
+                    <div class="mt-auto pt-6 flex justify-end">
+                        <Button color="blue" disabled={!selectedChartType} on:click={initialCreate} class="px-6">
+                            Create Chart
+                        </Button>
+                    </div>
                 </div>
-            {:else if activeTab === 'create' && selectedChartType}
+            {:else if activeTab === 'create' && isEditingExisting}
                 <!-- Chart Preview & Dashboard -->
                 <div class="absolute top-2 right-2 flex gap-2 z-10">
                     {#if chartInstance}
