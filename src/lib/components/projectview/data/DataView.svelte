@@ -133,6 +133,11 @@
     });
 
     async function handleViewChangeRequest(eventDetailFromDispatch) {
+        if (eventDetailFromDispatch?.type === 'refresh_metadata') {
+            infoPanelRefreshKey++;
+            highlightsPanelRefreshKey++;
+            return;
+        }
         const pathForView = eventDetailFromDispatch?.itemPath || eventDetailFromDispatch?.loadNotePath;
         const typeForView = eventDetailFromDispatch?.viewType;
         const hasHeadersForView = eventDetailFromDispatch?.hasHeaders;
