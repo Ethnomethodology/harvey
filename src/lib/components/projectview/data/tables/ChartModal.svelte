@@ -1417,11 +1417,8 @@
                                         </div>
                                     </AccordionItem>
                                 </Accordion>
-
-
-
-
-                           {/if}
+                            {/if}
+                        {/if}
                     </div>
                 {:else if activeTab === 'existing'}
                     {#if existingCharts.length === 0}
