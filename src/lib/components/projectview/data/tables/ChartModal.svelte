@@ -40,7 +40,6 @@
     let existingCharts = [];
     let isEditingExisting = false;
     let prevOpen = false;
-    let prevOpen = false;
 
     // Form fields
     let chartName = '';
