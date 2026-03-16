@@ -496,7 +496,7 @@
         if (importedTablePathsToRevert.length > 0) {
             // Select the last imported table
             const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
-            handleItemSelect(lastImported, 'table');
+            handleItemClick({ path: lastImported, file_type: 'table' });
 
             const count = importedTablePathsToRevert.length;
             message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });
