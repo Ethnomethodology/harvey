@@ -2434,6 +2434,7 @@
     export let initialChartToLoad = null;
 
     export function openChart(chart) {
+        tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         showChartModal = true;
         initialChartToLoad = chart;
     }
@@ -3277,7 +3278,7 @@
             </button>
             <div class="separator mx-0.5"></div>
 
-            <button id="insert-charts" on:click={() => showChartModal = true} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
+            <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
                 <ChartBar size={14} />
                 <span>Insert Charts</span>
             </button>

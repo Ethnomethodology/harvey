@@ -89,10 +89,12 @@
     }).filter(c => {
         const colSchema = schema[c.field];
         if (!colSchema) return true; // Fallback if no schema
+        // short text, numeric and datetype fields
         if (colSchema.type === 'Text' && colSchema.subType === 'Small Text') return true;
-        if (colSchema.type === 'Misc' && colSchema.subType === 'Selectbox') return true;
         if (colSchema.type === 'Numeric') return true;
         if (colSchema.type === 'DateTime') return true;
+        // Optionally include categorical selectboxes as well
+        if (colSchema.type === 'Misc' && (colSchema.subType === 'Selectbox' || colSchema.subType === 'Multiselect')) return true;
         return false;
     }).map(c => ({ value: c.field, name: c.title }));
 
@@ -303,8 +305,9 @@
         try {
             if (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter') {
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
-                const xData = tableData.map(row => row[xAxisCol]);
-                const yData = tableData.map(row => parseFloat(row[yAxisCol]) || 0);
+                const validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '' && row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
+                const xData = validData.map(row => row[xAxisCol]);
+                const yData = validData.map(row => parseFloat(row[yAxisCol]) || 0);
 
                 if (selectedChartType === 'bar') {
                     option.xAxis = { type: 'value' };
@@ -317,7 +320,7 @@
                     if (selectedChartType === 'scatter') {
                         option.xAxis = { type: 'value' };
                         // Scatter needs [x, y] data pairs
-                        const scatterData = tableData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
+                        const scatterData = validData.map(row => [parseFloat(row[xAxisCol]) || 0, parseFloat(row[yAxisCol]) || 0]);
                         option.series = [{ type: 'scatter', data: scatterData }];
                     } else if (selectedChartType === 'column') {
                         option.series = [{ type: 'bar', data: yData }];
@@ -327,7 +330,8 @@
                 }
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
-                const pieData = tableData.map(row => ({
+                const validData = tableData.filter(row => row[categoryCol] !== null && row[categoryCol] !== undefined && row[categoryCol] !== '' && row[valueCol] !== null && row[valueCol] !== undefined && row[valueCol] !== '');
+                const pieData = validData.map(row => ({
                     name: String(row[categoryCol]),
                     value: parseFloat(row[valueCol]) || 0
                 }));
@@ -336,10 +340,16 @@
             } else if (selectedChartType === 'gantt') {
                 if (!taskCol || !startDateCol || !endDateCol) { chartInstance.clear(); return; }
 
+                const validData = tableData.filter(row =>
+                    row[taskCol] !== null && row[taskCol] !== undefined && row[taskCol] !== '' &&
+                    row[startDateCol] !== null && row[startDateCol] !== undefined && row[startDateCol] !== '' &&
+                    row[endDateCol] !== null && row[endDateCol] !== undefined && row[endDateCol] !== ''
+                );
+
                 // Extremely basic gantt implementation using custom series or stacked bar
-                const tasks = tableData.map(row => row[taskCol]);
-                const starts = tableData.map(row => new Date(row[startDateCol]).getTime());
-                const ends = tableData.map(row => new Date(row[endDateCol]).getTime());
+                const tasks = validData.map(row => row[taskCol]);
+                const starts = validData.map(row => new Date(row[startDateCol]).getTime());
+                const ends = validData.map(row => new Date(row[endDateCol]).getTime());
                 const durations = ends.map((end, i) => end - starts[i]);
 
                 option.xAxis = { type: 'time' };
