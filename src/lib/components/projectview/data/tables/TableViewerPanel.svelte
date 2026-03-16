@@ -2932,6 +2932,7 @@
         addRowBtn.className = "tabulator-row tabulator-add-entry-row cursor-pointer group flex items-center";
         addRowBtn.style.minHeight = "38px";
         addRowBtn.style.borderBottom = "1px solid var(--ui-select-border)";
+        addRowBtn.title = "Add New Entry";
 
         // Replicate frozen column for number
         const numberColEl = document.createElement("div");
