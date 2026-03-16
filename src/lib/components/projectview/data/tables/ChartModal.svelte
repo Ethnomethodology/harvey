@@ -67,7 +67,10 @@
 
     // Scatter Chart Extra Configuration
     let scatterConnectPoints = 'None'; // None, Line, Line with Markers
-    let scatterTrendline = false;
+    let scatterTrendline = 'None';
+
+    // Pie Chart Extra Configuration
+    let pieStyle = 'Standard'; // Standard, Donut
 
     // Labels Configuration
     let xAxisLabel = '';
@@ -85,6 +88,14 @@
     let chartContainer;
     let chartInstance;
     let showImageExportModal = false;
+
+    const palettes = {
+        'Modern': ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'],
+        'Soft Pastels': ['#fca5a5', '#fcd34d', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4'],
+        'Warm Pastels': ['#ffb3ba', '#ffdfba', '#ffffba', '#baffc9', '#bae1ff'],
+        'Warm Sunset': ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#2dd4bf'],
+        'Ocean Blues': ['#0284c7', '#0369a1', '#075985', '#0c4a6e', '#38bdf8', '#7dd3fc', '#bae6fd']
+    };
 
     // Derived dropdown options
     $: numericColumns = columns.map(c => {
@@ -158,7 +169,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -172,7 +183,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -222,7 +233,8 @@
         lineType = 'Line';
         lineStyleOption = 'With Markers';
         scatterConnectPoints = 'None';
-        scatterTrendline = false;
+        scatterTrendline = 'None';
+        pieStyle = 'Standard';
         xAxisLabel = '';
         yAxisLabel = '';
         titlePosition = 'Top';
@@ -274,7 +286,8 @@
             lineType = config.lineType || 'Line';
             lineStyleOption = config.lineStyleOption || 'With Markers';
             scatterConnectPoints = config.scatterConnectPoints || 'None';
-            scatterTrendline = config.scatterTrendline || false;
+            scatterTrendline = config.scatterTrendline || 'None';
+            pieStyle = config.pieStyle || 'Standard';
             xAxisLabel = config.xAxisLabel || '';
             yAxisLabel = config.yAxisLabel || '';
             titlePosition = config.titlePosition || 'Top';
@@ -325,6 +338,7 @@
             lineStyleOption,
             scatterConnectPoints,
             scatterTrendline,
+            pieStyle,
             xAxisLabel,
             yAxisLabel,
             titlePosition,
@@ -462,12 +476,6 @@
                 const xData = aggData.map(d => d.category);
 
                 // Color Palettes
-                const palettes = {
-                    'Modern': ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'],
-                    'Soft Pastels': ['#fca5a5', '#fcd34d', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4'],
-                    'Warm Pastels': ['#ffb3ba', '#ffdfba', '#ffffba', '#baffc9', '#bae1ff'],
-                    'Warm Sunset': ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#2dd4bf']
-                };
                 option.color = palettes[colorPalette] || palettes['Modern'];
 
                 // Series config
@@ -736,12 +744,6 @@
                 });
 
                 // Color Palettes
-                const palettes = {
-                    'Modern': ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'],
-                    'Soft Pastels': ['#fca5a5', '#fcd34d', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4'],
-                    'Warm Pastels': ['#ffb3ba', '#ffdfba', '#ffffba', '#baffc9', '#bae1ff'],
-                    'Warm Sunset': ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#2dd4bf']
-                };
                 option.color = palettes[colorPalette] || palettes['Modern'];
 
                 option.tooltip = {
@@ -772,7 +774,7 @@
                         }
                     });
 
-                    if (scatterTrendline) {
+                    if (scatterTrendline === 'Linear Regression') {
                         // Linear regression: y = mx + b
                         const pts = groupedData[bKey];
                         const n = pts.length;
@@ -811,12 +813,82 @@
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
                 const validData = tableData.filter(row => row[categoryCol] !== null && row[categoryCol] !== undefined && row[categoryCol] !== '' && row[valueCol] !== null && row[valueCol] !== undefined && row[valueCol] !== '');
+
+                // Title
+                let titleConfig = { text: chartName || 'New Chart' };
+                if (chartDescription && chartDescription.trim() !== '') {
+                    titleConfig.subtext = chartDescription;
+                }
+                const hasSubtext = !!titleConfig.subtext;
+
+                if (titlePosition === 'Top') {
+                    titleConfig.top = 0;
+                    titleConfig.left = 'center';
+                } else {
+                    titleConfig.bottom = 0;
+                    titleConfig.left = 'center';
+                }
+                option.title = titleConfig;
+
+                // Legend Pos
+                let legendConfig = { show: showLegend, type: 'scroll' };
+                if (legendPosition === 'Top') {
+                    legendConfig.top = titlePosition === 'Top' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Bottom') {
+                    legendConfig.bottom = titlePosition === 'Bottom' ? (hasSubtext ? 50 : 30) : 0;
+                }
+                if (legendPosition === 'Left') {
+                    legendConfig.left = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                if (legendPosition === 'Right') {
+                    legendConfig.right = 0;
+                    legendConfig.orient = 'vertical';
+                    legendConfig.top = 'middle';
+                    legendConfig.width = 120;
+                }
+                option.legend = legendConfig;
+
                 const pieData = validData.map(row => ({
                     name: String(row[categoryCol]),
                     value: parseFloat(row[valueCol]) || 0
                 }));
-                option.tooltip.trigger = 'item';
-                option.series = [{ type: 'pie', radius: '50%', data: pieData }];
+
+                option.color = palettes[colorPalette] || palettes['Modern'];
+
+                const isCurrency = schema[valueCol] && schema[valueCol].subType === 'Currency';
+                option.tooltip = {
+                    trigger: 'item',
+                    confine: true,
+                    appendToBody: true,
+                    formatter: (params) => {
+                        let valStr;
+                        const rounded = Math.round(params.value);
+                        valStr = isCurrency ? `${rounded.toLocaleString()}` : rounded.toLocaleString();
+                        return `<div class="font-bold mb-1">${params.name}</div>` +
+                               `<div>${params.marker} ${valueCol}: <b>${valStr}</b> (${params.percent}%)</div>`;
+                    }
+                };
+
+                let seriesConfig = {
+                    type: 'pie',
+                    radius: pieStyle === 'Donut' ? ['40%', '70%'] : '50%',
+                    center: ['50%', '50%'],
+                    data: pieData
+                };
+
+                // Offset center if legend takes up space on sides
+                if (showLegend) {
+                    if (legendPosition === 'Left') seriesConfig.center[0] = '60%';
+                    if (legendPosition === 'Right') seriesConfig.center[0] = '40%';
+                    if (legendPosition === 'Top') seriesConfig.center[1] = titlePosition === 'Top' ? '60%' : '55%';
+                    if (legendPosition === 'Bottom') seriesConfig.center[1] = titlePosition === 'Bottom' ? '40%' : '45%';
+                }
+
+                option.series = [seriesConfig];
             } else if (selectedChartType === 'gantt') {
                 if (!taskCol || !startDateCol || !endDateCol) { chartInstance.clear(); return; }
 
@@ -989,7 +1061,7 @@
             <div class="flex-1 overflow-y-auto p-4">
                 {#if activeTab === 'create'}
                     <div class="space-y-4">
-                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'))}
+                        {#if !(isEditingExisting && (selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie'))}
                             <div>
                                 <Label for="chartName" class="mb-2">Chart Name</Label>
                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartName" bind:value={chartName} placeholder="Enter chart name" />
@@ -1009,28 +1081,39 @@
                                 {chartTypes.find(t => t.value === selectedChartType)?.name || 'Chart Type'} Configuration
                             </h3>
 
-                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter'}
+                            {#if selectedChartType === 'bar' || selectedChartType === 'column' || selectedChartType === 'line' || selectedChartType === 'scatter' || selectedChartType === 'pie'}
                                 <Accordion flush>
                                     <AccordionItem open>
                                         <span slot="header">Data Mapping</span>
                                         <div class="space-y-4">
-                                            <div>
-                                                <Label for="xAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'X-Axis Values' : 'Categories (' + (selectedChartType === 'bar' ? 'Y' : 'X') + '-Axis)'}</Label>
-                                                <Select id="xAxisCol" items={selectedChartType === 'scatter' ? numericColumns : categoricalColumns} bind:value={xAxisCol} />
-                                            </div>
-                                            <div>
-                                                <Label for="yAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'Y-Axis Values' : 'Values (' + (selectedChartType === 'bar' ? 'X' : 'Y') + '-Axis)'}</Label>
-                                                <div class="flex gap-2">
-                                                    <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} class="flex-1" />
-                                                    {#if selectedChartType !== 'scatter'}
-                                                    <Select id="aggregationType" items={[{value:'Sum', name:'Sum'}, {value:'Average', name:'Average'}, {value:'Count', name:'Count'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={aggregationType} class="w-28" />
-                                                    {/if}
+                                            {#if selectedChartType === 'pie'}
+                                                <div>
+                                                    <Label for="categoryCol" class="mb-2">Category Column</Label>
+                                                    <Select id="categoryCol" items={categoricalColumns} bind:value={categoryCol} />
                                                 </div>
-                                            </div>
-                                            <div>
-                                                <Label for="breakdownCol" class="mb-2">Breakdown (Group By)</Label>
-                                                <Select id="breakdownCol" items={[{value:'', name:'-- None --'}, ...categoricalColumns]} bind:value={breakdownCol} />
-                                            </div>
+                                                <div>
+                                                    <Label for="valueCol" class="mb-2">Value Column (Numeric)</Label>
+                                                    <Select id="valueCol" items={numericColumns} bind:value={valueCol} />
+                                                </div>
+                                            {:else}
+                                                <div>
+                                                    <Label for="xAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'X-Axis Values' : 'Categories (' + (selectedChartType === 'bar' ? 'Y' : 'X') + '-Axis)'}</Label>
+                                                    <Select id="xAxisCol" items={selectedChartType === 'scatter' ? numericColumns : categoricalColumns} bind:value={xAxisCol} />
+                                                </div>
+                                                <div>
+                                                    <Label for="yAxisCol" class="mb-2">{selectedChartType === 'scatter' ? 'Y-Axis Values' : 'Values (' + (selectedChartType === 'bar' ? 'X' : 'Y') + '-Axis)'}</Label>
+                                                    <div class="flex gap-2">
+                                                        <Select id="yAxisCol" items={numericColumns} bind:value={yAxisCol} class="flex-1" />
+                                                        {#if selectedChartType !== 'scatter'}
+                                                        <Select id="aggregationType" items={[{value:'Sum', name:'Sum'}, {value:'Average', name:'Average'}, {value:'Count', name:'Count'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={aggregationType} class="w-28" />
+                                                        {/if}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <Label for="breakdownCol" class="mb-2">Breakdown (Group By)</Label>
+                                                    <Select id="breakdownCol" items={[{value:'', name:'-- None --'}, ...categoricalColumns]} bind:value={breakdownCol} />
+                                                </div>
+                                            {/if}
                                         </div>
                                     </AccordionItem>
                                     <AccordionItem>
@@ -1061,32 +1144,28 @@
                                                     </Label>
                                                 </div>
                                             {:else if selectedChartType === 'scatter'}
-                                                <div class="space-y-4">
-                                                    <div>
-                                                        <Label class="mb-2">Connect Points</Label>
-                                                        <div class="flex gap-4">
-                                                            <Label class="flex items-center gap-2">
-                                                                <input type="radio" value="None" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                                                None
-                                                            </Label>
-                                                            <Label class="flex items-center gap-2">
-                                                                <input type="radio" value="Line" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                                                Line
-                                                            </Label>
-                                                            <Label class="flex items-center gap-2">
-                                                                <input type="radio" value="Line with Markers" bind:group={scatterConnectPoints} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" />
-                                                                Line with Markers
-                                                            </Label>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <Checkbox bind:checked={scatterTrendline}>Show Trendline (Linear Regression)</Checkbox>
-                                                    </div>
+                                                <div>
+                                                    <Label for="scatterConnectPoints" class="mb-2">Connect Points</Label>
+                                                    <Select id="scatterConnectPoints" items={[{value:'None', name:'None'}, {value:'Line', name:'Line'}, {value:'Line with Markers', name:'Line with Markers'}]} bind:value={scatterConnectPoints} />
+                                                </div>
+                                                <div>
+                                                    <Label for="scatterTrendline" class="mb-2">Trendline</Label>
+                                                    <Select id="scatterTrendline" items={[{value:'None', name:'None'}, {value:'Linear Regression', name:'Linear Regression'}]} bind:value={scatterTrendline} />
+                                                </div>
+                                            {:else if selectedChartType === 'pie'}
+                                                <div>
+                                                    <Label for="pieStyle" class="mb-2">Pie Style</Label>
+                                                    <Select id="pieStyle" items={[{value:'Standard', name:'Standard'}, {value:'Donut', name:'Donut'}]} bind:value={pieStyle} />
                                                 </div>
                                             {/if}
                                             <div>
                                                 <Label for="colorPalette" class="mb-2">Color Palette</Label>
-                                                <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}]} bind:value={colorPalette} />
+                                                <Select id="colorPalette" items={[{value:'Modern', name:'Modern'}, {value:'Soft Pastels', name:'Soft Pastels'}, {value:'Warm Pastels', name:'Warm Pastels'}, {value:'Warm Sunset', name:'Warm Sunset'}, {value:'Ocean Blues', name:'Ocean Blues'}]} bind:value={colorPalette} />
+                                                <div class="flex flex-wrap gap-1 mt-2">
+                                                    {#each palettes[colorPalette] || palettes['Modern'] as color}
+                                                        <div class="w-4 h-4 rounded-sm shadow-sm" style="background-color: {color};"></div>
+                                                    {/each}
+                                                </div>
                                             </div>
                                             <div class="pt-2">
                                                 <Checkbox bind:checked={showLegend}>Show Legend</Checkbox>
@@ -1114,14 +1193,17 @@
                                                 <Label for="chartDescription" class="mb-2">Description</Label>
                                                 <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="chartDescription" bind:value={chartDescription} placeholder="Optional description" rows="2" />
                                             </div>
-                                            <div>
-                                                <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
-                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
-                                            </div>
-                                            <div>
-                                                <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
-                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
-                                            </div>
+
+                                            {#if selectedChartType !== 'pie'}
+                                                <div>
+                                                    <Label for="xAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label (Categories)</Label>
+                                                    <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="xAxisLabel" bind:value={xAxisLabel} placeholder="Optional title" />
+                                                </div>
+                                                <div>
+                                                    <Label for="yAxisLabel" class="mb-2">{selectedChartType === 'bar' ? 'X' : 'Y'}-Axis Label (Values)</Label>
+                                                    <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="yAxisLabel" bind:value={yAxisLabel} placeholder="Optional title" />
+                                                </div>
+                                            {/if}
                                             {#if selectedChartType === 'bar' || selectedChartType === 'column'}
                                                 <div>
                                                     <Label for="yAxisWidth" class="mb-2">{selectedChartType === 'bar' ? 'Y' : 'X'}-Axis Label Width: {yAxisWidthLimit}px</Label>
@@ -1146,18 +1228,7 @@
                                 </Accordion>
 
 
-                            {:else if selectedChartType === 'pie'}
-                                <div>
-                                    <Label for="categoryCol" class="mb-2">Category Column</Label>
-                                    <Select id="categoryCol" items={categoricalColumns} bind:value={categoryCol} />
-                                </div>
-                                <div>
-                                    <Label for="valueCol" class="mb-2">Value Column (Numeric)</Label>
-                                    <Select id="valueCol" items={numericColumns} bind:value={valueCol} />
-                                </div>
-                                <div class="pt-2">
-                                    <Toggle bind:checked={showLegend}>Show Legend</Toggle>
-                                </div>
+
                             {:else if selectedChartType === 'gantt'}
                                 <div>
                                     <Label for="taskCol" class="mb-2">Task Name Column</Label>
