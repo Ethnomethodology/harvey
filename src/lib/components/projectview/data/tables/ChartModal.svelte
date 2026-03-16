@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper } from 'flowbite-svelte';
-    import { PieChart, BarChart, LineChart, ScatterChart, AlignLeft, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
+    import { PieChart, BarChart, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, Trash2, X, Plus, FolderOpen } from 'lucide-svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -14,7 +14,16 @@
     export let tablePath = '';
     export let columns = [];
     export let tableData = [];
+    export let schema = {};
     export let initialChart = null;
+
+    // Normalize path to match DB and Attachments Panel
+    $: normalizedTablePath = (() => {
+        const projectStoreState = get(project);
+        if (!tablePath || !projectStoreState || !projectStoreState.baseDirectory) return tablePath;
+        let relative = tablePath.startsWith(projectStoreState.baseDirectory) ? tablePath.substring(projectStoreState.baseDirectory.length) : tablePath;
+        return relative.replace(/\\/g, '/').replace(/^\//, '');
+    })();
 
     // Chart Options
     const chartTypes = [
@@ -22,7 +31,7 @@
         { value: 'line', name: 'Line Chart', icon: 'LineChart' },
         { value: 'scatter', name: 'Scatter Plot', icon: 'ScatterChart' },
         { value: 'pie', name: 'Pie Chart', icon: 'PieChart' },
-        { value: 'gantt', name: 'Gantt Chart', icon: 'AlignLeft' } // Using Gantt approximation for now
+        { value: 'gantt', name: 'Gantt Chart', icon: 'SquareChartGantt' } // Using Gantt approximation for now
     ];
 
     let activeTab = 'create';
@@ -47,10 +56,16 @@
 
     // Derived dropdown options
     $: numericColumns = columns.filter(c => {
+        const colSchema = schema[c.field];
+        if (colSchema && colSchema.type === 'Numeric') return true;
+        // Fallback if schema not well defined
         return tableData.some(row => !isNaN(parseFloat(row[c.field])) && isFinite(row[c.field]));
     }).map(c => ({ value: c.field, name: c.title || c.field }));
 
     $: dateColumns = columns.filter(c => {
+        const colSchema = schema[c.field];
+        if (colSchema && colSchema.type === 'DateTime') return true;
+        // Fallback if schema not well defined
         return tableData.some(row => {
             const val = row[c.field];
             return val && !isNaN(Date.parse(val));
@@ -75,13 +90,27 @@
         renderChart();
     }
 
+    let saveTimeout;
+    $: {
+        if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
+            // Reactive dependencies for auto-saving
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend];
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                if (chartName && selectedChartType) {
+                    saveChart(true);
+                }
+            }, 500);
+        }
+    }
+
     async function loadExistingCharts() {
         try {
             const projectStoreState = get(project);
             if (!projectStoreState.id) return;
             existingCharts = await invoke('load_chart_configs_command', {
                 projectId: projectStoreState.id,
-                tablePath: tablePath
+                tablePath: normalizedTablePath
             });
         } catch (error) {
             console.error('Failed to load existing charts:', error);
@@ -113,8 +142,15 @@
         }
     }
 
-    function selectChartType(type) {
+    async function selectChartType(type) {
         selectedChartType = type;
+        if (!isEditingExisting) {
+            // Auto-generate name and instantly "create" to enter edit mode safely
+            const count = existingCharts.length + 1;
+            chartName = `Chart-${count}`;
+            isEditingExisting = true; // Act as if we are editing now
+            await saveChart(true);
+        }
         if (chartInstance) {
             setTimeout(renderChart, 50);
         }
@@ -144,13 +180,13 @@
         }
     }
 
-    async function saveChart() {
+    async function saveChart(isAutoSave = false) {
         if (!chartName) {
-            notificationStore.add('Chart name is required.', 'error');
+            if (!isAutoSave) notificationStore.add('Chart name is required.', 'error');
             return;
         }
         if (!selectedChartType) {
-            notificationStore.add('Chart type must be selected.', 'error');
+            if (!isAutoSave) notificationStore.add('Chart type must be selected.', 'error');
             return;
         }
 
@@ -172,28 +208,29 @@
         try {
             await invoke('save_chart_config_command', {
                 projectId: projectStoreState.id,
-                tablePath: tablePath,
+                tablePath: normalizedTablePath,
                 chartName: chartName,
                 chartType: selectedChartType,
                 configJson: JSON.stringify(config)
             });
-            notificationStore.add('Chart saved successfully.', 'success');
+            if (!isAutoSave) notificationStore.add('Chart saved successfully.', 'success');
             await loadExistingCharts();
             dispatch('chartSaved');
         } catch (error) {
             console.error('Failed to save chart:', error);
-            notificationStore.add('Failed to save chart.', 'error');
+            if (!isAutoSave) notificationStore.add('Failed to save chart.', 'error');
         }
     }
 
-    async function deleteChart() {
-        if (!isEditingExisting) return;
+    async function deleteChart(name) {
+        const targetName = typeof name === 'string' ? name : chartName;
+        if (!targetName) return;
         const projectStoreState = get(project);
         try {
             await invoke('delete_chart_config_command', {
                 projectId: projectStoreState.id,
                 tablePath: tablePath,
-                chartName: chartName
+                chartName: targetName
             });
             notificationStore.add('Chart deleted.', 'success');
             resetForm();
@@ -438,16 +475,21 @@
                         <ul class="space-y-2">
                             {#each existingCharts as chart}
                                 <li>
-                                    <button
-                                        class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                        on:click={() => selectExistingChart(chart)}
-                                    >
-                                        <div class="flex justify-between items-center">
-                                            <div class="font-medium text-gray-900 dark:text-white truncate">{chart.chart_name}</div>
-                                            <div class="text-xs text-gray-400 dark:text-gray-500 ml-2 whitespace-nowrap">{new Date(chart.updated_at).toLocaleDateString()}</div>
+                                    <div class="w-full flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group">
+                                        <button
+                                            class="flex-1 text-left flex flex-col items-start pr-2 overflow-hidden"
+                                            on:click={() => selectExistingChart(chart)}
+                                        >
+                                            <div class="font-medium text-gray-900 dark:text-white truncate w-full">{chart.chart_name}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mt-1">{chart.chart_type}</div>
+                                        </button>
+                                        <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                                            <div class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{new Date(chart.updated_at).toLocaleDateString()}</div>
+                                            <Button size="xs" color="light" class="p-1 border-0 shadow-none opacity-0 group-hover:opacity-100 transition-opacity bg-transparent hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30" on:click={() => deleteChart(chart.chart_name)} title="Delete">
+                                                <Trash2 class="w-3.5 h-3.5" />
+                                            </Button>
                                         </div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mt-1">{chart.chart_type}</div>
-                                    </button>
+                                    </div>
                                 </li>
                             {/each}
                         </ul>
@@ -473,7 +515,7 @@
                                     {#if type.icon === 'LineChart'}<LineChart size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'ScatterChart'}<ScatterChart size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'PieChart'}<PieChart size={24} strokeWidth={2} />{/if}
-                                    {#if type.icon === 'AlignLeft'}<AlignLeft size={24} strokeWidth={2} />{/if}
+                                    {#if type.icon === 'SquareChartGantt'}<SquareChartGantt size={24} strokeWidth={2} />{/if}
                                 </div>
                                 <span class="font-medium text-sm text-gray-900 dark:text-white z-10">{type.name}</span>
                             </button>
@@ -501,20 +543,4 @@
         </div>
     </div>
 
-    <!-- Footer -->
-    <div slot="footer" class="flex items-center justify-between w-full border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 -m-6 p-4">
-        <div>
-            {#if isEditingExisting}
-                <Button color="red" on:click={deleteChart} size="sm" class="flex items-center gap-2">
-                    <Trash2 class="w-4 h-4" /> Delete
-                </Button>
-            {/if}
-        </div>
-        <div class="flex gap-3 ml-auto">
-            <Button color="alternative" on:click={() => { if(activeTab==='create' && chartName && selectedChartType) saveChart(); open = false; }} size="sm" class="px-5">Cancel</Button>
-            <Button color="blue" on:click={saveChart} size="sm" class="flex items-center gap-2 px-5">
-                <Save class="w-4 h-4" /> Save
-            </Button>
-        </div>
-    </div>
 </Modal>

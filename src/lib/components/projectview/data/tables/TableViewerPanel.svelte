@@ -44,7 +44,8 @@
         Italic,
         Underline,
         Eraser,
-        PieChart
+        PieChart,
+        ChartBar
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
@@ -3201,6 +3202,7 @@
         tablePath={tablePath}
         columns={tableColumnsForModal}
         tableData={tableData}
+        schema={tableSchema}
         initialChart={initialChartToLoad}
         on:chartSaved={() => {
             dispatch('requestviewchange', { type: 'refresh_metadata' });
@@ -3275,8 +3277,9 @@
             </button>
             <div class="separator mx-0.5"></div>
 
-            <button id="insert-charts" on:click={() => showChartModal = true} class="mini-toolbar-button" title="Insert Charts">
-                <PieChart size={14} />
+            <button id="insert-charts" on:click={() => showChartModal = true} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
+                <ChartBar size={14} />
+                <span>Insert Charts</span>
             </button>
         </div>
 
