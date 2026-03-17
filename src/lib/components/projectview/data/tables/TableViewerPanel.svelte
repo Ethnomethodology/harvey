@@ -3304,7 +3304,7 @@
             <div class="separator mx-0.5"></div>
 
             <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
-                <ChartBar, Table2 size={14} />
+                <ChartBar size={14} />
                 <span>Insert Charts</span>
             </button>
 
