@@ -99,6 +99,21 @@
         }
     }
 
+    function handleRequestConfigureView(event) {
+        const { view } = event.detail;
+        console.log('[DataView] Received requestConfigureView:', view);
+
+        if (tableViewRef && typeof tableViewRef.configureView === 'function') {
+            try {
+                tableViewRef.configureView(view);
+            } catch (err) {
+                console.error('[DataView] Error configuring view in table view:', err);
+            }
+        } else {
+            console.warn('[DataView] tableViewRef or configureView method not available yet.');
+        }
+    }
+
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
     project.subscribe(value => {
@@ -319,7 +334,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} />
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} />
                 {/if}
             </div>
         {/if}

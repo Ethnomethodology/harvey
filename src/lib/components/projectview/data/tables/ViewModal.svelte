@@ -202,7 +202,8 @@
             if (!isAutoSave) {
                 notificationStore.add('View saved successfully.', 'success');
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
-                open = false;
+            } else {
+                dispatch('viewSaved', { viewName, viewType: selectedViewType, config, isAutoSave: true });
             }
             await loadExistingViews();
         } catch (error) {

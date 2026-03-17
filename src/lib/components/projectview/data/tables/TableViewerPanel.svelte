@@ -2443,16 +2443,136 @@
         initialChartToLoad = chart;
     }
 
+    let currentActiveView = null;
+    let baseTableColumns = []; // Store base columns when applying a view
+
     export function openView(view) {
+        if (!view) return;
+        try {
+            const config = JSON.parse(view.config_json);
+            applyViewToTable(view.view_name, view.view_type, config);
+        } catch (e) {
+            console.error('Failed to parse view config on open:', e);
+            notificationStore.add('Failed to open view', 'error');
+        }
+    }
+
+    export function configureView(view) {
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialViewToLoad = null; showViewModal = true;
         initialViewToLoad = view;
     }
 
+    function applyViewToTable(viewName, viewType, config) {
+        if (!tabulatorInstance) return;
+
+        // Store base columns if not already stored
+        if (!currentActiveView) {
+            baseTableColumns = tabulatorInstance.getColumnDefinitions();
+        }
+
+        currentActiveView = viewName;
+
+        if (viewType === 'partial') {
+            tabulatorInstance.clearFilter();
+            if (config.selectedColumns && config.selectedColumns.length > 0) {
+                const allCols = tabulatorInstance.getColumns();
+                allCols.forEach(col => {
+                    const field = col.getField();
+                    if (field && field !== 'harvey_internal_id') {
+                        if (config.selectedColumns.includes(field)) {
+                            col.show();
+                        } else {
+                            col.hide();
+                        }
+                    }
+                });
+            }
+            if (config.filterField && config.filterValue) {
+                tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
+            }
+        } else if (viewType === 'pivot') {
+            const { rowField, colField, valueField, aggregation } = config;
+            if (!rowField || !valueField) return;
+
+            let groupedData = {};
+            let allColKeys = new Set();
+
+            tableData.forEach(row => {
+                const rVal = String(row[rowField] || '(Blank)');
+                const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
+                const vVal = parseFloat(row[valueField]) || 0;
+
+                if (!groupedData[rVal]) groupedData[rVal] = {};
+                if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
+                groupedData[rVal][cVal].push(vVal);
+                allColKeys.add(cVal);
+            });
+
+            let pivotCols = [
+                { field: rowField, title: rowField, frozen: true, editor: false }
+            ];
+
+            let sortedColKeys = Array.from(allColKeys).sort();
+            sortedColKeys.forEach(ck => {
+                pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
+            });
+
+            let pivotData = [];
+            for (const [rKey, cData] of Object.entries(groupedData)) {
+                let rowData = { [rowField]: rKey };
+                sortedColKeys.forEach(ck => {
+                    const vals = cData[ck] || [];
+                    let aggVal = 0;
+                    if (vals.length > 0) {
+                        if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
+                        else if (aggregation === 'Count') aggVal = vals.length;
+                        else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
+                        else if (aggregation === 'Min') aggVal = Math.min(...vals);
+                        else if (aggregation === 'Max') aggVal = Math.max(...vals);
+                    } else {
+                        aggVal = null;
+                    }
+
+                    rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                });
+                pivotData.push(rowData);
+            }
+
+            tabulatorInstance.setColumns(pivotCols);
+            tabulatorInstance.replaceData(pivotData);
+        }
+    }
+
+    function returnToBaseTable() {
+        if (!tabulatorInstance) return;
+        currentActiveView = null;
+
+        tabulatorInstance.clearFilter();
+
+        // Restore columns and base data
+        tabulatorInstance.setColumns(baseTableColumns);
+        tabulatorInstance.replaceData(tableData);
+
+        // Ensure standard columns are visible again based on base definition
+        const allCols = tabulatorInstance.getColumns();
+        allCols.forEach(col => {
+            const field = col.getField();
+            if (field !== 'harvey_internal_id') {
+                col.show();
+            } else {
+                col.hide();
+            }
+        });
+    }
+
     function handleApplyView(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
-        const { viewName, viewType, config } = event.detail;
+        const { viewName, viewType, config, isAutoSave } = event.detail;
         if (!tabulatorInstance) return;
+
+        // Do not auto-apply autosaves to the main UI unless it's already the active view
+        if (isAutoSave && currentActiveView !== viewName) return;
 
         if (viewType === 'partial') {
             // First, clear any existing filters
@@ -2478,7 +2598,6 @@
                 tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
             }
 
-            showViewModal = false; // Close modal after applying
         } else if (viewType === 'pivot') {
             const { rowField, colField, valueField, aggregation } = config;
             if (!rowField || !valueField) return;
@@ -2533,7 +2652,11 @@
             tabulatorInstance.setColumns(pivotCols);
             tabulatorInstance.replaceData(pivotData);
 
-            showViewModal = false;
+        }
+
+        if (!isAutoSave) {
+            // Apply it as active view when "Create" is explicitly called
+            applyViewToTable(viewName, viewType, config);
         }
     }
 
@@ -3340,6 +3463,14 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
+            {#if currentActiveView}
+                <button on:click={returnToBaseTable} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium px-2 py-1 mr-2" title="Return to Base Table">
+                    <Undo2 size={14} />
+                    <span>Return to Base Table</span>
+                </button>
+                <div class="separator mx-0.5 mr-2"></div>
+            {/if}
+
             <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
                 <Undo2 size={14} />
             </button>
