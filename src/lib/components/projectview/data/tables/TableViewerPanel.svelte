@@ -2574,6 +2574,8 @@
         currentActiveView = null;
         currentActiveViewType = null;
 
+        dispatch('requestviewchange', { type: 'reset_base' });
+
         // The safest and most robust way to return to the base table and avoid Tabulator
         // duplicating rowHeader columns (or other formatter issues) is to re-initialize it.
         if (tabulatorInstance) {
@@ -3105,12 +3107,22 @@
         tabulatorInstance.addRange(currentCell, currentCell);
     }
 
+    let enforcePositionHandler = null;
+
     function addFloatingAddRowButton() {
         if (!tabulatorInstance || !tableContainer) return;
 
-        // Remove any existing one first
-        let addRowBtn = tableContainer.querySelector(".tabulator-add-entry-row");
-        if (addRowBtn) addRowBtn.remove();
+        // Unbind previous handler to prevent duplicates
+        if (enforcePositionHandler) {
+            tabulatorInstance.off("renderComplete", enforcePositionHandler);
+            tabulatorInstance.off("scrollVertical", enforcePositionHandler);
+            tabulatorInstance.off("columnResized", enforcePositionHandler);
+            enforcePositionHandler = null;
+        }
+
+        // Remove all existing add row buttons
+        const existingBtns = tableContainer.querySelectorAll(".tabulator-add-entry-row");
+        existingBtns.forEach(btn => btn.remove());
 
         if (currentActiveViewType === 'pivot') return;
 
@@ -3121,7 +3133,7 @@
         // We append it to the internal Tabulator DOM but manage its display via Tabulator hooks
         // so it natively tracks with the virtual DOM bounds.
 
-        addRowBtn = document.createElement("div");
+        let addRowBtn = document.createElement("div");
         addRowBtn.className = "tabulator-row tabulator-add-entry-row cursor-pointer group flex items-center";
         addRowBtn.style.minHeight = "38px";
         addRowBtn.style.borderBottom = "1px solid var(--ui-select-border)";
@@ -3168,7 +3180,7 @@
         };
 
         // Attach event handlers to force it to always stick to the bottom of the virtual table DOM
-        const enforcePosition = () => {
+        enforcePositionHandler = () => {
             const holder = tableContainer.querySelector(".tabulator-table");
             if (holder) {
                 // If it's not the last child, make it the last child
@@ -3184,12 +3196,12 @@
             }
         };
 
-        enforcePosition();
+        enforcePositionHandler();
 
         // Bind to multiple events to ensure it stays pinned
-        tabulatorInstance.on("renderComplete", enforcePosition);
-        tabulatorInstance.on("scrollVertical", enforcePosition);
-        tabulatorInstance.on("columnResized", enforcePosition);
+        tabulatorInstance.on("renderComplete", enforcePositionHandler);
+        tabulatorInstance.on("scrollVertical", enforcePositionHandler);
+        tabulatorInstance.on("columnResized", enforcePositionHandler);
     }
 
     function goToNextMatch() {

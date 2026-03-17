@@ -114,6 +114,17 @@
         }
     }
 
+    let attachmentsPanelRef;
+
+    function handleRequestViewChange(event) {
+        if (event.type === 'reset_base' && attachmentsPanelRef) {
+            if (typeof attachmentsPanelRef.resetSelection === 'function') {
+                attachmentsPanelRef.resetSelection();
+            }
+        }
+        handleViewChangeRequest(event);
+    }
+
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
     project.subscribe(value => {
@@ -301,7 +312,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={(event) => handleViewChangeRequest(event.detail)} />                 {:else if activeViewType === 'images'}
+                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={(event) => handleRequestViewChange(event.detail)} />                 {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />
@@ -334,7 +345,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} />
+                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} />
                 {/if}
             </div>
         {/if}

@@ -19,6 +19,10 @@
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
 
+    export function resetSelection() {
+        currentTrackIndex = -1;
+    }
+
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
         if (typeof path === 'object' && path.view_name) return path.view_name;
