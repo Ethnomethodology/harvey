@@ -297,6 +297,22 @@
         return { pivotCols, pivotData };
     }
 
+    // Reactive statements for auto-saving config
+    $: if (isEditingExisting && viewName) {
+        // Track dependencies to trigger autosave
+        let _ = partialSelectedColumns;
+        let __ = partialFilterField;
+        let ___ = partialFilterValue;
+        let ____ = partialFilterOperator;
+        let _____ = pivotRowField;
+        let ______ = pivotColField;
+        let _______ = pivotValueField;
+        let ________ = pivotAggregation;
+        let _________ = viewDescription;
+
+        saveView(true);
+    }
+
     // Reactive statement to render the preview table
     $: if (open && isEditingExisting && selectedViewType === 'partial' && previewContainer) {
         // Debounce to allow container to render
@@ -315,7 +331,8 @@
                     layout: "fitDataFill",
                     height: "100%",
                     reactiveData: false, // Read only preview
-                    selectable: false
+                    selectable: false,
+                    nestedFieldSeparator: false
                 });
             } else {
                 // Update existing instance
@@ -337,6 +354,14 @@
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
         setTimeout(() => {
+            if (!pivotRowField || !pivotValueField) {
+                if (previewTabulatorInstance) {
+                    previewTabulatorInstance.destroy();
+                    previewTabulatorInstance = null;
+                }
+                return;
+            }
+
             const { pivotCols, pivotData } = generatePivotData(tableData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
 
             if (previewTabulatorInstance) {
@@ -499,9 +524,6 @@
                             {/if}
                             </Accordion>
 
-                            <div class="pt-6">
-                                <Button color="purple" class="w-full" on:click={() => saveView(false)}>Save View</Button>
-                            </div>
                         {/if}
                     </div>
                 {:else if activeTab === 'existing'}
