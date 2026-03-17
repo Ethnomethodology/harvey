@@ -2438,6 +2438,7 @@
     export let initialChartToLoad = null;
 
     export function openChart(chart) {
+        if (!tabulatorInstance) return;
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialChartToLoad = null; showChartModal = true;
         initialChartToLoad = chart;
@@ -2458,6 +2459,7 @@
     }
 
     export function configureView(view) {
+        if (!tabulatorInstance) return;
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialViewToLoad = null; showViewModal = true;
         initialViewToLoad = view;
@@ -2555,7 +2557,7 @@
             tabulatorInstance = null;
         }
 
-        initTabulator();
+        initializeTable(tablePath, hasHeaders, true);
     }
 
     function handleApplyView(event) {
