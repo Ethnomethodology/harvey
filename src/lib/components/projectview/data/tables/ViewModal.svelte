@@ -318,6 +318,7 @@
     $: if (open && isEditingExisting && selectedViewType === 'partial' && previewContainer) {
         // Debounce to allow container to render
         setTimeout(() => {
+            if (!previewContainer) return; // Verify still mounted
             if (!previewTabulatorInstance) {
                 // Initialize clean instance
                 const previewCols = allColumns.map(c => ({
@@ -355,6 +356,7 @@
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
         setTimeout(() => {
+            if (!previewContainer) return; // Verify still mounted
             if (!pivotRowField || !pivotValueField) {
                 if (previewTabulatorInstance) {
                     previewTabulatorInstance.destroy();
@@ -365,21 +367,24 @@
 
             const { pivotCols, pivotData } = generatePivotData(tableData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
 
-            if (previewTabulatorInstance) {
+            if (pivotCols.length > 0) {
+                if (previewTabulatorInstance) {
+                    previewTabulatorInstance.setColumns(pivotCols);
+                    previewTabulatorInstance.replaceData(pivotData);
+                } else {
+                    previewTabulatorInstance = new Tabulator(previewContainer, {
+                        data: pivotData,
+                        columns: pivotCols,
+                        layout: "fitDataFill",
+                        height: "100%",
+                        reactiveData: false,
+                        selectable: false,
+                        nestedFieldSeparator: false
+                    });
+                }
+            } else if (previewTabulatorInstance) {
                 previewTabulatorInstance.destroy();
                 previewTabulatorInstance = null;
-            }
-
-            if (pivotCols.length > 0) {
-                previewTabulatorInstance = new Tabulator(previewContainer, {
-                    data: pivotData,
-                    columns: pivotCols,
-                    layout: "fitDataFill",
-                    height: "100%",
-                    reactiveData: false,
-                    selectable: false,
-                    nestedFieldSeparator: false
-                });
             }
         }, 50);
     }

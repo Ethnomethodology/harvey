@@ -248,11 +248,11 @@
                                 <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Chart Options" id="chart-options-{i}" on:click|stopPropagation>
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
-                                <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50">
-                                    <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestOpenChart', { chart: attachment })}>
+                                <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click|stopPropagation={() => dispatch('requestOpenChart', { chart: attachment })}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
-                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={() => handleDeleteChart(attachment)}>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click|stopPropagation={() => handleDeleteChart(attachment)}>
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>
@@ -262,14 +262,14 @@
                                 <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="View Options" id="view-options-{i}" on:click|stopPropagation>
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
-                                <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50">
-                                    <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestOpenView', { view: attachment })}>
+                                <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click|stopPropagation={() => dispatch('requestOpenView', { view: attachment })}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
-                                    <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestConfigureView', { view: attachment })}>
+                                    <DropdownItem class="flex items-center gap-2" on:click|stopPropagation={() => dispatch('requestConfigureView', { view: attachment })}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
-                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={() => handleDeleteView(attachment)}>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click|stopPropagation={() => handleDeleteView(attachment)}>
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>

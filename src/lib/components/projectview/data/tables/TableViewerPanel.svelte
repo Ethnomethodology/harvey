@@ -2548,22 +2548,14 @@
         if (!tabulatorInstance) return;
         currentActiveView = null;
 
-        tabulatorInstance.clearFilter();
+        // The safest and most robust way to return to the base table and avoid Tabulator
+        // duplicating rowHeader columns (or other formatter issues) is to re-initialize it.
+        if (tabulatorInstance) {
+            tabulatorInstance.destroy();
+            tabulatorInstance = null;
+        }
 
-        // Restore columns and base data
-        tabulatorInstance.setColumns(baseTableColumns);
-        tabulatorInstance.replaceData(tableData);
-
-        // Ensure standard columns are visible again based on base definition
-        const allCols = tabulatorInstance.getColumns();
-        allCols.forEach(col => {
-            const field = col.getField();
-            if (field !== 'harvey_internal_id') {
-                col.show();
-            } else {
-                col.hide();
-            }
-        });
+        initTabulator();
     }
 
     function handleApplyView(event) {
