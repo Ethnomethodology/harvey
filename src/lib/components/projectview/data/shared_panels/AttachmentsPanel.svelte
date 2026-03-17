@@ -6,7 +6,7 @@
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, OpenInNewWindow, Settings } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -250,7 +250,7 @@
                                 </button>
                                 <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50">
                                     <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestOpenChart', { chart: attachment })}>
-                                        <OpenInNewWindow class="w-4 h-4 text-gray-500" /> Open
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={() => handleDeleteChart(attachment)}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -264,7 +264,7 @@
                                 </button>
                                 <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50">
                                     <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestOpenView', { view: attachment })}>
-                                        <OpenInNewWindow class="w-4 h-4 text-gray-500" /> Open
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2" on:click={() => dispatch('requestConfigureView', { view: attachment })}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
