@@ -255,7 +255,8 @@
     function resetForm() {
         chartDescription = '';
         selectedChartType = null;
-        dataSource = activeViewName || 'Base Table';
+        const isActiveViewValid = views.some(v => v.view_name === activeViewName);
+        dataSource = isActiveViewValid ? activeViewName : 'Base Table';
         xAxisCol = '';
         yAxisCol = '';
         categoryCol = '';

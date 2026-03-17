@@ -144,7 +144,9 @@
     function resetForm() {
         viewDescription = '';
         selectedViewType = null;
-        dataSource = activeViewName || 'Base Table';
+        // Default to activeViewName if it's a partial view, otherwise Base Table
+        const isActiveViewPartial = views.some(v => v.view_name === activeViewName && v.view_type === 'partial');
+        dataSource = isActiveViewPartial ? activeViewName : 'Base Table';
         partialSelectedColumns = allColumns.map(c => c.value);
         partialFilterField = '';
         partialFilterValue = '';
@@ -535,7 +537,7 @@
                                             <Select id="dataSource" bind:value={dataSource}>
                                                 <option value="Base Table">Base Table</option>
                                                 {#each views as view}
-                                                    {#if view.view_name !== viewName}
+                                                    {#if view.view_name !== viewName && view.view_type === 'partial'}
                                                         <option value={view.view_name}>{view.view_name}</option>
                                                     {/if}
                                                 {/each}
@@ -576,7 +578,7 @@
                                             <Select id="dataSource" bind:value={dataSource}>
                                                 <option value="Base Table">Base Table</option>
                                                 {#each views as view}
-                                                    {#if view.view_name !== viewName}
+                                                    {#if view.view_name !== viewName && view.view_type === 'partial'}
                                                         <option value={view.view_name}>{view.view_name}</option>
                                                     {/if}
                                                 {/each}
