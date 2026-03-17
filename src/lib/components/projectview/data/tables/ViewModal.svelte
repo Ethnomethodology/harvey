@@ -134,7 +134,29 @@
     async function initialCreate() {
         if (!viewName) viewName = `View-${existingViews.length + 1}`;
         isEditingExisting = true;
-        await saveView(false);
+        await saveView(true); // Don't trigger explicit non-autosave logic on initial UI transition
+    }
+
+    function getCurrentConfig() {
+        let config = { description: viewDescription };
+        if (selectedViewType === 'partial') {
+            config.selectedColumns = partialSelectedColumns;
+            config.filterField = partialFilterField;
+            config.filterValue = partialFilterValue;
+            config.filterOperator = partialFilterOperator;
+        } else if (selectedViewType === 'pivot') {
+            config.rowField = pivotRowField;
+            config.colField = pivotColField;
+            config.valueField = pivotValueField;
+            config.aggregation = pivotAggregation;
+        }
+        return config;
+    }
+
+    async function switchToView() {
+        await saveView(true);
+        dispatch('viewApplied', { viewName, viewType: selectedViewType, config: getCurrentConfig() });
+        open = false;
     }
 
     function selectExistingView(view) {
@@ -175,21 +197,7 @@
         const projectStoreState = get(project);
         if (!projectStoreState.id) return;
 
-        let config = {
-            description: viewDescription
-        };
-
-        if (selectedViewType === 'partial') {
-            config.selectedColumns = partialSelectedColumns;
-            config.filterField = partialFilterField;
-            config.filterValue = partialFilterValue;
-            config.filterOperator = partialFilterOperator;
-        } else if (selectedViewType === 'pivot') {
-            config.rowField = pivotRowField;
-            config.colField = pivotColField;
-            config.valueField = pivotValueField;
-            config.aggregation = pivotAggregation;
-        }
+        let config = getCurrentConfig();
 
         try {
             await invoke('save_table_view_command', {
@@ -403,12 +411,20 @@
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
             <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                {#if activeTab === 'create' && isEditingExisting && selectedViewType === 'pivot'}
+                    <LayoutGrid size={20} class="text-purple-600 dark:text-purple-400" />
+                {:else}
+                    <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                {/if}
             </div>
             <div>
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white">
                     {#if activeTab === 'create' && isEditingExisting}
-                        Edit View: {viewName || 'New View'}
+                        {#if selectedViewType === 'pivot'}
+                            Edit Pivot Table: {viewName || 'New View'}
+                        {:else}
+                            Edit Partial Table: {viewName || 'New View'}
+                        {/if}
                     {:else}
                         Create Views
                     {/if}
@@ -613,4 +629,11 @@
             {/if}
         </div>
     </div>
+
+    {#if activeTab === 'create' && isEditingExisting}
+    <div slot="footer" class="flex justify-end w-full space-x-2">
+        <Button color="alternative" on:click={handleModalClose}>Close</Button>
+        <Button color="purple" on:click={switchToView}>Switch to this view</Button>
+    </div>
+    {/if}
 </Modal>

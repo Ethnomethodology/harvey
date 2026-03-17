@@ -2447,10 +2447,14 @@
     let currentActiveView = null;
     let baseTableColumns = []; // Store base columns when applying a view
 
-    export function openView(view) {
+    export async function openView(view) {
         if (!view) return;
         try {
             const config = JSON.parse(view.config_json);
+            if (currentActiveView) {
+                // Must ensure we start from a clean slate so views don't stack their transformations
+                await returnToBaseTable();
+            }
             applyViewToTable(view.view_name, view.view_type, config);
         } catch (e) {
             console.error('Failed to parse view config on open:', e);
@@ -2546,7 +2550,7 @@
         }
     }
 
-    function returnToBaseTable() {
+    async function returnToBaseTable() {
         if (!tabulatorInstance) return;
         currentActiveView = null;
 
@@ -2557,101 +2561,30 @@
             tabulatorInstance = null;
         }
 
-        initializeTable(tablePath, hasHeaders, true);
+        await initializeTable(tablePath, hasHeaders, true);
     }
 
-    function handleApplyView(event) {
+    function handleViewSaved(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
+        // We only dynamically update the table if the view being autosaved is currently the active view.
         const { viewName, viewType, config, isAutoSave } = event.detail;
+        if (!tabulatorInstance || !isAutoSave || currentActiveView !== viewName) return;
+
+        // Perform in-place update if possible
+        applyViewToTable(viewName, viewType, config);
+    }
+
+    async function handleViewApplied(event) {
+        dispatch('requestviewchange', { type: 'refresh_metadata' });
+        const { viewName, viewType, config } = event.detail;
         if (!tabulatorInstance) return;
 
-        // Do not auto-apply autosaves to the main UI unless it's already the active view
-        if (isAutoSave && currentActiveView !== viewName) return;
-
-        if (viewType === 'partial') {
-            // First, clear any existing filters
-            tabulatorInstance.clearFilter();
-
-            // Handle Columns Visibility
-            if (config.selectedColumns && config.selectedColumns.length > 0) {
-                const allCols = tabulatorInstance.getColumns();
-                allCols.forEach(col => {
-                    const field = col.getField();
-                    if (field && field !== 'harvey_internal_id') {
-                        if (config.selectedColumns.includes(field)) {
-                            col.show();
-                        } else {
-                            col.hide();
-                        }
-                    }
-                });
-            }
-
-            // Handle Filter
-            if (config.filterField && config.filterValue) {
-                tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
-            }
-
-        } else if (viewType === 'pivot') {
-            const { rowField, colField, valueField, aggregation } = config;
-            if (!rowField || !valueField) return;
-
-            let groupedData = {};
-            let allColKeys = new Set();
-
-            // 1. Group Data
-            tableData.forEach(row => {
-                const rVal = String(row[rowField] || '(Blank)');
-                const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
-                const vVal = parseFloat(row[valueField]) || 0;
-
-                if (!groupedData[rVal]) groupedData[rVal] = {};
-                if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
-                groupedData[rVal][cVal].push(vVal);
-                allColKeys.add(cVal);
-            });
-
-            // 2. Build Columns for Tabulator
-            let pivotCols = [
-                { field: rowField, title: rowField, frozen: true, editor: false }
-            ];
-
-            let sortedColKeys = Array.from(allColKeys).sort();
-            sortedColKeys.forEach(ck => {
-                pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
-            });
-
-            // 3. Aggregate Values
-            let pivotData = [];
-            for (const [rKey, cData] of Object.entries(groupedData)) {
-                let rowData = { [rowField]: rKey };
-                sortedColKeys.forEach(ck => {
-                    const vals = cData[ck] || [];
-                    let aggVal = 0;
-                    if (vals.length > 0) {
-                        if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                        else if (aggregation === 'Count') aggVal = vals.length;
-                        else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                        else if (aggregation === 'Min') aggVal = Math.min(...vals);
-                        else if (aggregation === 'Max') aggVal = Math.max(...vals);
-                    } else {
-                        aggVal = null; // empty cell
-                    }
-
-                    rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
-                });
-                pivotData.push(rowData);
-            }
-
-            tabulatorInstance.setColumns(pivotCols);
-            tabulatorInstance.replaceData(pivotData);
-
+        // Explicitly switching to this view. Start from clean slate if another view was active.
+        if (currentActiveView && currentActiveView !== viewName) {
+            await returnToBaseTable();
         }
 
-        if (!isAutoSave) {
-            // Apply it as active view when "Create" is explicitly called
-            applyViewToTable(viewName, viewType, config);
-        }
+        applyViewToTable(viewName, viewType, config);
     }
 
     export async function getExportData() {
@@ -3421,7 +3354,8 @@
         tableData={tableData}
         schema={tableSchema}
         initialView={initialViewToLoad}
-        on:viewSaved={handleApplyView}
+        on:viewSaved={handleViewSaved}
+        on:viewApplied={handleViewApplied}
         on:viewDeleted={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
     />
 {/if}
