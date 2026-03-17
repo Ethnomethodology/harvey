@@ -31,6 +31,14 @@
         }
     }
 
+    export function openView(view) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openView === 'function') {
+            tableViewerPanelRef.openView(view);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or openView is not available.');
+        }
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});

@@ -26,6 +26,7 @@
     import EditFieldModal from '$lib/components/projectview/modals/EditFieldModal.svelte';
     import TableHeaderIcon from './TableHeaderIcon.svelte';
     import ChartModal from './ChartModal.svelte';
+    import ViewModal from './ViewModal.svelte';
     import TableIcon from './TableIcon.svelte';
     import { 
         Pencil, 
@@ -2439,6 +2440,12 @@
         initialChartToLoad = chart;
     }
 
+    export function openView(view) {
+        tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
+        initialViewToLoad = null; showViewModal = true;
+        initialViewToLoad = view;
+    }
+
     export async function getExportData() {
         if (!tabulatorInstance) return null;
         
@@ -3284,6 +3291,12 @@
             <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
                 <ChartBar size={14} />
                 <span>Insert Charts</span>
+            </button>
+
+            <div class="separator mx-0.5"></div>
+            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30" title="Create Views">
+                <Table2 size={14} />
+                <span>Create Views</span>
             </button>
         </div>
 

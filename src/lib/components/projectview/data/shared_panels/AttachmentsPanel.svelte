@@ -5,7 +5,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Trash2 } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2 } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -20,6 +20,7 @@
 
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
+        if (typeof path === 'object' && path.view_name) return path.view_name;
         return path.split(/[\/\\]/).pop() || path;
     }
 
@@ -28,8 +29,9 @@
             currentTrackIndex = index;
             const attachment = attachments[index];
             if (typeof attachment === 'object' && attachment.chart_name) {
-                // For table charts, dispatch a specific event with chart data
                 dispatch('requestOpenChart', { chart: attachment });
+            } else if (typeof attachment === 'object' && attachment.view_name) {
+                dispatch('requestOpenView', { view: attachment });
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }
@@ -60,6 +62,30 @@
         } catch (error) {
             console.error('Failed to delete chart via attachments panel:', error);
             notificationStore.add('Failed to delete chart.', 'error');
+        }
+    }
+
+    async function handleDeleteView(view) {
+        if (!view || !view.view_name) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete view ${view.view_name}?`, { title: 'Delete View', type: 'warning' });
+        if (!confirmed) return;
+
+        const projectStoreState = get(project);
+
+        try {
+            await invoke('delete_table_view_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                viewName: view.view_name
+            });
+            notificationStore.add('View deleted.', 'success');
+            attachments = attachments.filter(a => a.view_name !== view.view_name);
+            dispatch('viewSaved');
+        } catch (error) {
+            console.error('Failed to delete view via attachments panel:', error);
+            notificationStore.add('Failed to delete view.', 'error');
         }
     }
 
@@ -118,11 +144,15 @@
 
         try {
             if (itemType === 'table') {
-                // For tables, attachments are charts
-                attachments = await invoke('load_chart_configs_command', {
+                const charts = await invoke('load_chart_configs_command', {
                     projectId: projectStoreState.id,
                     tablePath: assetRelativePathToLoad
                 });
+                const views = await invoke('load_table_views_command', {
+                    projectId: projectStoreState.id,
+                    tablePath: assetRelativePathToLoad
+                });
+                attachments = [...charts, ...views];
             } else {
                 const result = await invoke('get_asset_metadata_command', {
                     projectId: projectStoreState.id,

@@ -389,6 +389,9 @@ pub fn run() {
             projectview::chart_commands::save_chart_config_command,
             projectview::chart_commands::load_chart_configs_command,
             projectview::chart_commands::delete_chart_config_command,
+            projectview::view_commands::save_table_view_command,
+            projectview::view_commands::load_table_views_command,
+            projectview::view_commands::delete_table_view_command,
 
             // --- Tag Handler Commands ---
             projectview::tag_handler::add_tag,

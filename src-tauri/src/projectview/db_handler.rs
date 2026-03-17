@@ -94,6 +94,34 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
 
+    // Create the table_views table
+    let _ = conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            view_name TEXT NOT NULL,
+            view_type TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(project_id, table_path, view_name)
+        )",
+        [],
+    );
+    info!("[DB] Initialized table_views table definition.");
+
+    // Create a trigger to update `updated_at` timestamp for table_views
+    let _ = conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_views_updated_at
+        AFTER UPDATE ON table_views
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_views SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END",
+        [],
+    );
+
     // Updated pdf_annotations table definition
     conn.execute(
         "CREATE TABLE IF NOT EXISTS pdf_annotations (
@@ -1630,6 +1658,9 @@ pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Res
     let _ = conn.execute("DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
     let _ = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
     let _ = conn.execute("DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+
+    // Delete associated table views
+    let _ = conn.execute("DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
 
     // Highlights reference 'asset_id' based on the schema, but could be 'document_path' in old logic. Delete from both to be safe.
     let _ = conn.execute("DELETE FROM highlights WHERE project_id = ?1 AND asset_id = ?2", params![project_id, asset_relative_path]);

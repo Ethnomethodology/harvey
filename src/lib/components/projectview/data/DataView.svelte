@@ -82,6 +82,21 @@
                 console.warn("[DataView] tableViewRef.openChart is not a function");
             }
         }
+
+    function handleRequestOpenView(event) {
+        const { view } = event.detail;
+        console.log('[DataView] Received requestOpenView:', view);
+
+        if (tableViewRef && typeof tableViewRef.openView === 'function') {
+            try {
+                tableViewRef.openView(view);
+            } catch (err) {
+                console.error('[DataView] Error opening view in table view:', err);
+            }
+        } else {
+            console.warn('[DataView] tableViewRef or openView method not available yet.');
+        }
+    }
     }
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
@@ -304,7 +319,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} />
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} />
                 {/if}
             </div>
         {/if}
