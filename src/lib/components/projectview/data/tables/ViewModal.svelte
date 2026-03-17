@@ -251,6 +251,7 @@
             previewTabulatorInstance.destroy();
             previewTabulatorInstance = null;
         }
+        open = false;
     }
 
     function generatePivotData(data, rowField, colField, valueField, aggregation) {

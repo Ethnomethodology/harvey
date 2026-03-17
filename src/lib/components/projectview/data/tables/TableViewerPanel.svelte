@@ -754,6 +754,14 @@
     }
 
     function getColumnContextMenu(column) {
+        if (currentActiveViewType === 'pivot') {
+            return [
+                { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
+                { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
+                { label: "Copy Field", action: (e, column) => copyColumn(column) }
+            ];
+        }
+
         const menu = [
             { label: "Edit Field", action: (e, column) => openFieldEditor(column) },
             { separator: true },
@@ -2445,6 +2453,7 @@
     }
 
     let currentActiveView = null;
+    let currentActiveViewType = null;
     let baseTableColumns = []; // Store base columns when applying a view
 
     export async function openView(view) {
@@ -2454,6 +2463,12 @@
             if (currentActiveView) {
                 // Must ensure we start from a clean slate so views don't stack their transformations
                 await returnToBaseTable();
+            }
+            // Wait for Tabulator to be fully initialized and ready
+            if (tabulatorInstance && !tableReady) {
+                await new Promise(resolve => {
+                    tabulatorInstance.on("tableBuilt", resolve);
+                });
             }
             applyViewToTable(view.view_name, view.view_type, config);
         } catch (e) {
@@ -2478,6 +2493,7 @@
         }
 
         currentActiveView = viewName;
+        currentActiveViewType = viewType;
 
         if (viewType === 'partial') {
             tabulatorInstance.clearFilter();
@@ -2553,6 +2569,7 @@
     async function returnToBaseTable() {
         if (!tabulatorInstance) return;
         currentActiveView = null;
+        currentActiveViewType = null;
 
         // The safest and most robust way to return to the base table and avoid Tabulator
         // duplicating rowHeader columns (or other formatter issues) is to re-initialize it.
@@ -2560,6 +2577,7 @@
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
+        tableReady = false;
 
         await initializeTable(tablePath, hasHeaders, true);
     }
@@ -2850,6 +2868,12 @@
                         action: () => highlightAction(option.value)
                     }));
 
+                    if (currentActiveViewType === 'pivot') {
+                        return [
+                            { label: "Copy Entry", action: (e, row) => copyRow(row) }
+                        ];
+                    }
+
                     const menu = [
                         { label: "Edit Entry", action: (e, row) => openEditEntryModal(row) },
                         { separator: true },
@@ -3078,16 +3102,18 @@
     function addFloatingAddRowButton() {
         if (!tabulatorInstance || !tableContainer) return;
 
+        // Remove any existing one first
+        let addRowBtn = tableContainer.querySelector(".tabulator-add-entry-row");
+        if (addRowBtn) addRowBtn.remove();
+
+        if (currentActiveViewType === 'pivot') return;
+
         const tableHolder = tableContainer.querySelector(".tabulator-table");
         if (!tableHolder) return;
 
         // Create a custom row element that acts as the "Add Entry" footer
         // We append it to the internal Tabulator DOM but manage its display via Tabulator hooks
         // so it natively tracks with the virtual DOM bounds.
-
-        // Remove any existing one first
-        let addRowBtn = tableContainer.querySelector(".tabulator-add-entry-row");
-        if (addRowBtn) addRowBtn.remove();
 
         addRowBtn = document.createElement("div");
         addRowBtn.className = "tabulator-row tabulator-add-entry-row cursor-pointer group flex items-center";
@@ -3392,7 +3418,7 @@
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
             {#if currentActiveView}
-                <button on:click={returnToBaseTable} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium px-2 py-1 mr-2" title="Return to Base Table">
+                <button on:click={returnToBaseTable} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30 font-medium px-2 py-1 mr-2" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
                 </button>
