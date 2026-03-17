@@ -1047,27 +1047,56 @@
                     });
                 }
 
+                // Calculate Min/Max Dates to force ECharts to draw all grid lines
+                let minDateMs = Number.MAX_SAFE_INTEGER;
+                let maxDateMs = 0;
+                validData.forEach(row => {
+                    const startMs = new Date(row[startDateCol]).getTime();
+                    const endMs = new Date(row[endDateCol]).getTime();
+                    if (startMs < minDateMs) minDateMs = startMs;
+                    if (endMs > maxDateMs) maxDateMs = endMs;
+                });
+                const spanMs = maxDateMs - minDateMs;
+
                 option.xAxis = {
                     type: 'time',
                     name: xAxisLabel,
                     nameLocation: 'middle',
                     nameGap: 30,
-                    splitLine: { show: ganttShowGridLines }
+                    splitLine: { show: ganttShowGridLines },
+                    min: minDateMs,
+                    max: maxDateMs
                 };
 
-                // Handle X-Axis Intervals
+                // Handle X-Axis Intervals by forcing minInterval, maxInterval, and splitNumber
                 if (ganttXAxisInterval === 'Years') {
+                    const intMs = 31536000000;
                     option.xAxis.axisLabel = { formatter: '{yyyy}' };
-                    option.xAxis.interval = 31536000000;
+                    option.xAxis.minInterval = intMs;
+                    option.xAxis.maxInterval = intMs;
+                    option.xAxis.interval = intMs;
+                    option.xAxis.splitNumber = Math.ceil(spanMs / intMs) + 1;
                 } else if (ganttXAxisInterval === 'Months') {
+                    const intMs = 2592000000;
                     option.xAxis.axisLabel = { formatter: '{MMM} {yyyy}' };
-                    option.xAxis.interval = 2592000000;
+                    option.xAxis.minInterval = intMs;
+                    option.xAxis.maxInterval = intMs;
+                    option.xAxis.interval = intMs;
+                    option.xAxis.splitNumber = Math.ceil(spanMs / intMs) + 1;
                 } else if (ganttXAxisInterval === 'Weeks') {
+                    const intMs = 604800000;
                     option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
-                    option.xAxis.interval = 604800000;
+                    option.xAxis.minInterval = intMs;
+                    option.xAxis.maxInterval = intMs;
+                    option.xAxis.interval = intMs;
+                    option.xAxis.splitNumber = Math.ceil(spanMs / intMs) + 1;
                 } else if (ganttXAxisInterval === 'Days') {
+                    const intMs = 86400000;
                     option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
-                    option.xAxis.interval = 86400000;
+                    option.xAxis.minInterval = intMs;
+                    option.xAxis.maxInterval = intMs;
+                    option.xAxis.interval = intMs;
+                    option.xAxis.splitNumber = Math.ceil(spanMs / intMs) + 1;
                 }
 
                 option.yAxis = {
