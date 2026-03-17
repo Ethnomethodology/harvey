@@ -76,6 +76,7 @@
     let ganttTaskDisplay = 'Stacked'; // Stacked, Clustered
     let ganttXAxisInterval = 'Auto'; // Auto, Years, Months, Weeks, Days
     let ganttShowGridLines = true;
+    let ganttColorByPhase = false;
 
     // Labels Configuration
     let xAxisLabel = '';
@@ -174,7 +175,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines];
+        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines, ganttColorByPhase];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -188,7 +189,7 @@
     $: {
         if (open && activeTab === 'create' && selectedChartType && isEditingExisting) {
             // Reactive dependencies for auto-saving
-            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines];
+            const state = [chartName, chartDescription, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines, ganttColorByPhase];
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
                 if (chartName && selectedChartType) {
@@ -243,6 +244,7 @@
         ganttTaskDisplay = 'Stacked';
         ganttXAxisInterval = 'Auto';
         ganttShowGridLines = true;
+        ganttColorByPhase = false;
         xAxisLabel = '';
         yAxisLabel = '';
         titlePosition = 'Top';
@@ -300,6 +302,7 @@
             ganttXAxisInterval = config.ganttXAxisInterval || 'Auto';
             // handle existing boolean
             ganttShowGridLines = config.ganttShowGridLines !== undefined ? config.ganttShowGridLines : true;
+            ganttColorByPhase = config.ganttColorByPhase || false;
             xAxisLabel = config.xAxisLabel || '';
             yAxisLabel = config.yAxisLabel || '';
             titlePosition = config.titlePosition || 'Top';
@@ -354,6 +357,7 @@
             ganttTaskDisplay,
             ganttXAxisInterval,
             ganttShowGridLines,
+            ganttColorByPhase,
             xAxisLabel,
             yAxisLabel,
             titlePosition,
@@ -982,17 +986,39 @@
                     categoriesMap.get(c).push(row);
                 });
 
+                option.color = palettes[colorPalette] || palettes['Modern'];
+
                 // Build Y-Axis Data based on Stacked vs Clustered
                 let yAxisData = [];
                 // mapping row to its Y-axis index
                 let rowToYIndex = new Map();
 
+                let yAxisRichConfig = {};
+                if (ganttColorByPhase) {
+                    let phaseIndex = 0;
+                    Array.from(categoriesMap.keys()).forEach(cat => {
+                        yAxisRichConfig[`phase${phaseIndex}`] = {
+                            backgroundColor: option.color[phaseIndex % option.color.length],
+                            color: '#fff',
+                            borderRadius: 4,
+                            padding: [4, 8]
+                        };
+                        phaseIndex++;
+                    });
+                }
+
                 if (ganttTaskDisplay === 'Clustered') {
                     let yIndex = 0;
+                    let phaseIndex = 0;
                     for (let [cat, rows] of categoriesMap.entries()) {
                         // Push Parent Phase (bold)
-                        yAxisData.push({ value: cat, textStyle: { fontWeight: 'bold' } });
+                        if (ganttColorByPhase) {
+                            yAxisData.push({ value: `{phase${phaseIndex}|${cat}}`, originalValue: cat });
+                        } else {
+                            yAxisData.push({ value: cat, textStyle: { fontWeight: 'bold' } });
+                        }
                         yIndex++;
+                        phaseIndex++;
 
                         // Push distinct tasks indented
                         const uniqueTasksInCat = Array.from(new Set(rows.map(r => r[taskCol])));
@@ -1007,9 +1033,17 @@
                     }
                 } else {
                     // Stacked (Current Behavior)
-                    yAxisData = Array.from(categoriesMap.keys());
+                    let phaseIndex = 0;
+                    Array.from(categoriesMap.keys()).forEach(cat => {
+                        if (ganttColorByPhase) {
+                            yAxisData.push({ value: `{phase${phaseIndex}|${cat}}`, originalValue: cat });
+                        } else {
+                            yAxisData.push(cat);
+                        }
+                        phaseIndex++;
+                    });
                     validData.forEach(r => {
-                        rowToYIndex.set(r, yAxisData.indexOf(r[yAxisCol]));
+                        rowToYIndex.set(r, Array.from(categoriesMap.keys()).indexOf(r[yAxisCol]));
                     });
                 }
 
@@ -1024,16 +1058,16 @@
                 // Handle X-Axis Intervals
                 if (ganttXAxisInterval === 'Years') {
                     option.xAxis.axisLabel = { formatter: '{yyyy}' };
-                    option.xAxis.minInterval = 31536000000;
+                    option.xAxis.interval = 31536000000;
                 } else if (ganttXAxisInterval === 'Months') {
                     option.xAxis.axisLabel = { formatter: '{MMM} {yyyy}' };
-                    option.xAxis.minInterval = 2592000000;
+                    option.xAxis.interval = 2592000000;
                 } else if (ganttXAxisInterval === 'Weeks') {
                     option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
-                    option.xAxis.minInterval = 604800000;
+                    option.xAxis.interval = 604800000;
                 } else if (ganttXAxisInterval === 'Days') {
                     option.xAxis.axisLabel = { formatter: '{MMM} {dd}' };
-                    option.xAxis.minInterval = 86400000;
+                    option.xAxis.interval = 86400000;
                 }
 
                 option.yAxis = {
@@ -1046,11 +1080,9 @@
                     axisLabel: {
                         width: yAxisWidthLimit,
                         overflow: longTextHandling === 'Wrap' ? 'break' : 'truncate',
-                        rich: {} // Enables textStyle formatting passed in the data object
+                        rich: yAxisRichConfig // Enables textStyle formatting passed in the data object
                     }
                 };
-
-                option.color = palettes[colorPalette] || palettes['Modern'];
 
                 const customRenderItem = function(params, api) {
                     var categoryIndex = api.value(0); // Y-axis
@@ -1096,13 +1128,32 @@
 
                 let seriesArray = [];
                 let colorIndex = 0;
+
+                // For coloring by phase, map each unique phase/lane to a color index
+                let phaseColorMap = new Map();
+                if (ganttColorByPhase) {
+                    let phaseIndex = 0;
+                    Array.from(categoriesMap.keys()).forEach(cat => {
+                        phaseColorMap.set(cat, phaseIndex++);
+                    });
+                }
+
                 for (let [taskName, dataPoints] of tasksMap.entries()) {
+                    let taskColor;
+                    if (ganttColorByPhase && dataPoints.length > 0) {
+                        const phase = dataPoints[0][4]; // Get the phase/lane of the first data point
+                        const phaseIdx = phaseColorMap.get(phase) || 0;
+                        taskColor = option.color[phaseIdx % option.color.length];
+                    } else {
+                        taskColor = option.color[colorIndex % option.color.length];
+                    }
+
                     seriesArray.push({
                         name: taskName,
                         type: 'custom',
                         renderItem: customRenderItem,
                         itemStyle: {
-                            color: option.color[colorIndex % option.color.length]
+                            color: taskColor
                         },
                         encode: {
                             x: [1, 2],
@@ -1408,6 +1459,9 @@
                                                 </div>
                                                 <div class="pt-2">
                                                     <Checkbox bind:checked={ganttShowGridLines}>Show Vertical Grid Lines</Checkbox>
+                                                </div>
+                                                <div class="pt-2">
+                                                    <Checkbox bind:checked={ganttColorByPhase}>Color Tasks by Phase</Checkbox>
                                                 </div>
                                             {/if}
                                             <div>
