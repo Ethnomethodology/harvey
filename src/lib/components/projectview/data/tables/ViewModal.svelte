@@ -364,6 +364,10 @@
                                 <Label for="viewName" class="mb-2">View Name</Label>
                                 <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewName" bind:value={viewName} placeholder="Enter view name" />
                             </div>
+                            <div>
+                                <Label for="viewDescription" class="mb-2">Description</Label>
+                                <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewDescription" bind:value={viewDescription} placeholder="Optional description" rows="2" />
+                            </div>
 
                             {#if selectedViewType === 'partial'}
                                 <Accordion flush>

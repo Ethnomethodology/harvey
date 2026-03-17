@@ -2449,15 +2449,6 @@
         initialViewToLoad = view;
     }
 
-    function resetView() {
-        if (!tabulatorInstance) return;
-        tabulatorInstance.clearFilter();
-        const allCols = tabulatorInstance.getColumns();
-        allCols.forEach(col => {
-            col.show();
-        });
-    }
-
     function handleApplyView(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
         const { viewName, viewType, config } = event.detail;
@@ -3358,9 +3349,6 @@
             <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30" title="Create Views">
                 <Table2 size={14} />
                 <span>Create Views</span>
-            </button>
-            <button id="reset-view" on:click={resetView} class="mini-toolbar-button" title="Reset View Filters and Columns">
-                <Undo2 size={14} />
             </button>
         </div>
 
