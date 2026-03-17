@@ -46,7 +46,7 @@
         Underline,
         Eraser,
         PieChart,
-        ChartBar,
+        ChartBar, Table2,
         Table2
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
@@ -777,6 +777,8 @@
 
     let showEditFieldModal = false;
     let showChartModal = false;
+    let showViewModal = false;
+    let initialViewToLoad = null;
     let editingFieldData = { name: '', schema: {} };
     let isAddingNewField = false;
     let newFieldPosition = 'after';
@@ -3205,6 +3207,18 @@
     />
 {/if}
 
+{#if showViewModal}
+    <ViewModal
+        bind:open={showViewModal}
+        tablePath={tablePath}
+        columns={tableColumnsForModal}
+        schema={tableSchema}
+        initialView={initialViewToLoad}
+        on:viewSaved={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
+        on:viewDeleted={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
+    />
+{/if}
+
 {#if showChartModal}
     <ChartModal
         bind:open={showChartModal}
@@ -3290,7 +3304,7 @@
             <div class="separator mx-0.5"></div>
 
             <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
-                <ChartBar size={14} />
+                <ChartBar, Table2 size={14} />
                 <span>Insert Charts</span>
             </button>
 
