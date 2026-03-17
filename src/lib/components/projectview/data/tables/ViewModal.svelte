@@ -17,6 +17,10 @@
     export let tableData = [];
     export let schema = {};
     export let initialView = null; // Used when opening a saved view from attachments
+    export let views = []; // Array of existing views
+    export let activeViewName = null; // Current active view from parent
+
+    import { applyViewConfigToData } from './viewTransform.js';
 
     let previewContainer;
     let previewTabulatorInstance;
@@ -43,6 +47,7 @@
     // Common fields
     let viewName = '';
     let viewDescription = '';
+    let dataSource = 'Base Table';
 
     // Partial View fields
     let partialSelectedColumns = [];
@@ -56,14 +61,39 @@
     let pivotValueField = '';
     let pivotAggregation = 'Sum'; // Sum, Count, Average, Min, Max
 
+    let activeData = [];
+    let activeColumns = [];
+    let activeSchema = {};
+
+    $: {
+        activeData = tableData;
+        activeColumns = columns;
+        activeSchema = schema;
+
+        if (dataSource && dataSource !== 'Base Table') {
+            const selectedView = views.find(v => v.view_name === dataSource);
+            if (selectedView) {
+                try {
+                    const config = JSON.parse(selectedView.config_json);
+                    const { transformedData, transformedColumns, transformedSchema } = applyViewConfigToData(tableData, columns, schema, config, selectedView.view_type);
+                    activeData = transformedData;
+                    activeColumns = transformedColumns;
+                    activeSchema = transformedSchema;
+                } catch(e) {
+                    console.error("Failed to transform data for view preview using parent view:", e);
+                }
+            }
+        }
+    }
+
     // Derived dropdown options
-    $: allColumns = columns.map(c => {
+    $: allColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         return { value: fieldName, name: fieldName };
     }).filter(c => c.value && c.value !== 'harvey_internal_id');
 
     $: numericColumns = allColumns.filter(c => {
-        const colSchema = schema[c.value];
+        const colSchema = activeSchema[c.value];
         if (colSchema && colSchema.type === 'Numeric') return true;
         return false;
     });
@@ -114,6 +144,7 @@
     function resetForm() {
         viewDescription = '';
         selectedViewType = null;
+        dataSource = activeViewName || 'Base Table';
         partialSelectedColumns = allColumns.map(c => c.value);
         partialFilterField = '';
         partialFilterValue = '';
@@ -138,7 +169,7 @@
     }
 
     function getCurrentConfig() {
-        let config = { description: viewDescription };
+        let config = { description: viewDescription, dataSource };
         if (selectedViewType === 'partial') {
             config.selectedColumns = partialSelectedColumns;
             config.filterField = partialFilterField;
@@ -165,6 +196,7 @@
         try {
             const config = JSON.parse(view.config_json);
             viewDescription = config.description || '';
+            dataSource = config.dataSource || 'Base Table';
 
             if (selectedViewType === 'partial') {
                 partialSelectedColumns = config.selectedColumns || [];
@@ -319,6 +351,7 @@
         let _______ = pivotValueField;
         let ________ = pivotAggregation;
         let _________ = viewDescription;
+        let __________ = dataSource;
 
         saveView(true);
     }
@@ -337,7 +370,7 @@
                 }));
 
                 previewTabulatorInstance = new Tabulator(previewContainer, {
-                    data: tableData,
+                    data: activeData,
                     columns: previewCols,
                     layout: "fitDataFill",
                     height: "100%",
@@ -347,6 +380,7 @@
                 });
             } else {
                 // Update existing instance
+                previewTabulatorInstance.replaceData(activeData);
                 const allCols = previewTabulatorInstance.getColumns();
                 allCols.forEach(col => {
                     const field = col.getField();
@@ -374,7 +408,7 @@
                 return;
             }
 
-            const { pivotCols, pivotData } = generatePivotData(tableData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
+            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
 
             if (pivotCols.length > 0) {
                 if (previewTabulatorInstance) {
@@ -494,8 +528,19 @@
 
                             {#if selectedViewType === 'partial'}
                                 <AccordionItem open>
-                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Columns & Fields</span>
+                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Data Mapping</span>
                                     <div class="space-y-4">
+                                        <div>
+                                            <Label for="dataSource" class="mb-2">Data Source</Label>
+                                            <Select id="dataSource" bind:value={dataSource}>
+                                                <option value="Base Table">Base Table</option>
+                                                {#each views as view}
+                                                    {#if view.view_name !== viewName}
+                                                        <option value={view.view_name}>{view.view_name}</option>
+                                                    {/if}
+                                                {/each}
+                                            </Select>
+                                        </div>
                                         <div>
                                             <Label class="mb-2">Select Visible Columns</Label>
                                             <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
@@ -524,8 +569,19 @@
                                 </AccordionItem>
                             {:else if selectedViewType === 'pivot'}
                                 <AccordionItem open>
-                                    <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Pivot Settings</span>
+                                    <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Data Mapping</span>
                                     <div class="space-y-4">
+                                        <div>
+                                            <Label for="dataSource" class="mb-2">Data Source</Label>
+                                            <Select id="dataSource" bind:value={dataSource}>
+                                                <option value="Base Table">Base Table</option>
+                                                {#each views as view}
+                                                    {#if view.view_name !== viewName}
+                                                        <option value={view.view_name}>{view.view_name}</option>
+                                                    {/if}
+                                                {/each}
+                                            </Select>
+                                        </div>
                                         <div>
                                             <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
                                             <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />

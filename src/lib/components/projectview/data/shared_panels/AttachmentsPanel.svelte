@@ -253,7 +253,7 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); dispatch('requestOpenChart', { chart: attachment }); }}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenChart', { chart: attachment }); }}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
@@ -267,10 +267,10 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); dispatch('requestOpenView', { view: attachment }); }}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenView', { view: attachment }); }}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); dispatch('requestConfigureView', { view: attachment }); }}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestConfigureView', { view: attachment }); }}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>

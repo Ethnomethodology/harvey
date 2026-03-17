@@ -8,6 +8,7 @@
     import notificationStore from '$lib/stores/notificationStore.js';
     import * as echarts from 'echarts';
     import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
+    import { applyViewConfigToData } from './viewTransform.js';
     import { writeFile } from '@tauri-apps/plugin-fs';
 
     const dispatch = createEventDispatcher();
@@ -43,9 +44,13 @@
     let isEditingExisting = false;
     let prevOpen = false;
 
+    export let views = []; // Prop to receive table views, to populate data source dropdown
+    export let activeViewName = null; // Prop to receive current active view from base table
+
     // Form fields
     let chartName = '';
     let chartDescription = '';
+    let dataSource = 'Base Table';
     let xAxisCol = '';
     let yAxisCol = '';
     let categoryCol = ''; // For Pie
@@ -104,37 +109,63 @@
     };
 
     // Derived dropdown options
-    $: numericColumns = columns.map(c => {
+    // Reactive computed fields based on selected Data Source
+    let activeData = [];
+    let activeColumns = [];
+    let activeSchema = {};
+
+    $: {
+        activeData = tableData;
+        activeColumns = columns;
+        activeSchema = schema;
+
+        if (dataSource && dataSource !== 'Base Table') {
+            const selectedView = views.find(v => v.view_name === dataSource);
+            if (selectedView) {
+                try {
+                    const config = JSON.parse(selectedView.config_json);
+                    const { transformedData, transformedColumns, transformedSchema } = applyViewConfigToData(tableData, columns, schema, config, selectedView.view_type);
+                    activeData = transformedData;
+                    activeColumns = transformedColumns;
+                    activeSchema = transformedSchema;
+                } catch(e) {
+                    console.error("Failed to transform data for chart using view:", e);
+                }
+            }
+        }
+    }
+
+    $: numericColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
-        const colSchema = schema[c.field];
+        const colSchema = activeSchema[c.field];
         if (colSchema && colSchema.type === 'Numeric') return true;
         // Fallback if schema not well defined
-        return tableData.some(row => row[c.field] !== null && row[c.field] !== undefined && row[c.field] !== '' && !isNaN(parseFloat(row[c.field])) && isFinite(row[c.field]));
+        return activeData.some(row => row[c.field] !== null && row[c.field] !== undefined && row[c.field] !== '' && !isNaN(parseFloat(row[c.field])) && isFinite(row[c.field]));
     }).map(c => ({ value: c.field, name: c.title }));
 
-    $: dateColumns = columns.map(c => {
+    $: dateColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
-        const colSchema = schema[c.field];
+        const colSchema = activeSchema[c.field];
         if (colSchema && colSchema.type === 'DateTime') return true;
         // Fallback if schema not well defined
-        return tableData.some(row => {
+        return activeData.some(row => {
             const val = row[c.field];
             return val && !isNaN(Date.parse(val));
         });
     }).map(c => ({ value: c.field, name: c.title }));
 
-    $: categoricalColumns = columns.map(c => {
+    $: categoricalColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { field: fieldName, title };
     }).filter(c => {
-        const colSchema = schema[c.field];
+        const colSchema = activeSchema[c.field];
         if (!colSchema) return true; // Fallback if no schema
         // short text, numeric and datetype fields
         if (colSchema.type === 'Text' && colSchema.subType === 'Small Text') return true;
@@ -146,7 +177,7 @@
     }).map(c => ({ value: c.field, name: c.title }));
 
     // Also keep allColumns for backwards compatibility or fallback if needed
-    $: allColumns = columns.map(c => {
+    $: allColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         const title = fieldName; // Ignore c.title because it is an HTML element in TableViewerPanel
         return { value: fieldName, name: title };
@@ -175,7 +206,7 @@
     // Re-render chart when data or config changes
     $: if (open && chartContainer && selectedChartType) {
         // Trigger render when any of these change
-        const _deps = [xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines, ganttColorByPhase];
+        const _deps = [dataSource, xAxisCol, yAxisCol, categoryCol, valueCol, startDateCol, endDateCol, taskCol, showLegend, chartName, chartDescription, tableData, aggregationType, breakdownCol, barType, sortOrder, xAxisLabel, yAxisLabel, titlePosition, yAxisWidthLimit, longTextHandling, showValueLabels, valueLabelPosition, colorPalette, legendPosition, lineType, lineStyleOption, scatterConnectPoints, scatterTrendline, pieStyle, ganttTaskDisplay, ganttXAxisInterval, ganttShowGridLines, ganttColorByPhase];
         if (typeof window !== 'undefined') {
             setTimeout(() => {
                 if (chartContainer) {
@@ -224,6 +255,7 @@
     function resetForm() {
         chartDescription = '';
         selectedChartType = null;
+        dataSource = activeViewName || 'Base Table';
         xAxisCol = '';
         yAxisCol = '';
         categoryCol = '';
@@ -280,6 +312,7 @@
         try {
             const config = JSON.parse(chart.config_json);
             chartDescription = config.description || '';
+            dataSource = config.dataSource || 'Base Table';
             xAxisCol = config.xAxisCol || '';
             yAxisCol = config.yAxisCol || '';
             categoryCol = config.categoryCol || '';
@@ -337,6 +370,7 @@
 
         const config = {
             description: chartDescription,
+            dataSource,
             xAxisCol,
             yAxisCol,
             categoryCol,
@@ -417,6 +451,8 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
         }
+
+        let currentData = activeData;
 
         let option = {
             title: { text: chartName || 'New Chart', subtext: chartDescription },
@@ -1360,6 +1396,15 @@
                                     <AccordionItem open>
                                         <span slot="header" class="flex items-center"><Database class="w-4 h-4 mr-2" />Data Mapping</span>
                                         <div class="space-y-4">
+                                            <div>
+                                                <Label for="dataSource" class="mb-2">Data Source</Label>
+                                                <Select id="dataSource" bind:value={dataSource}>
+                                                    <option value="Base Table">Base Table</option>
+                                                    {#each views as view}
+                                                        <option value={view.view_name}>{view.view_name}</option>
+                                                    {/each}
+                                                </Select>
+                                            </div>
                                             {#if selectedChartType === 'pie'}
                                                 <div>
                                                     <Label for="categoryCol" class="mb-2">Category Column</Label>

@@ -74,6 +74,7 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
+    let availableViews = [];
 
     let svelteUndoStack = [];
     let svelteRedoStack = [];
@@ -2692,6 +2693,23 @@
         return { data: formattedData, headers, styles: stylesMap };
     }
 
+    async function loadTableViews(pathForTable) {
+        try {
+            const projectStoreState = get(project);
+            if (!projectStoreState.id) return;
+            const baseDir = projectStoreState.baseDirectory;
+            let relative = pathForTable.startsWith(baseDir) ? pathForTable.substring(baseDir.length) : pathForTable;
+            const normalizedTablePath = relative.replace(/\\/g, '/').replace(/^\//, '');
+
+            availableViews = await invoke('load_table_views_command', {
+                projectId: projectStoreState.id,
+                tablePath: normalizedTablePath
+            });
+        } catch (error) {
+            console.error('Failed to load table views:', error);
+        }
+    }
+
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
         if (newHasHeaders !== null) hasHeaders = newHasHeaders;
         if (!pathForTable || !tableContainer) return;
@@ -2710,6 +2728,7 @@
         }
 
         try {
+            await loadTableViews(pathForTable);
             // 1. Load Table Data
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
@@ -3401,9 +3420,14 @@
         tableData={tableData}
         schema={computedSchema}
         initialView={initialViewToLoad}
+        views={availableViews}
+        activeViewName={currentActiveView}
         on:viewSaved={handleViewSaved}
         on:viewApplied={handleViewApplied}
-        on:viewDeleted={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
+        on:viewDeleted={() => {
+            loadTableViews(tablePath);
+            dispatch('requestviewchange', { type: 'refresh_metadata' });
+        }}
     />
 {/if}
 
@@ -3415,6 +3439,8 @@
         tableData={tableData}
         schema={computedSchema}
         initialChart={initialChartToLoad}
+        views={availableViews}
+        activeViewName={currentActiveView}
         on:chartSaved={() => {
             dispatch('requestviewchange', { type: 'refresh_metadata' });
         }}
