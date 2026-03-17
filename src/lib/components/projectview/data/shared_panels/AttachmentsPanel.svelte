@@ -5,7 +5,8 @@
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2 } from 'lucide-svelte';
+    import { Dropdown, DropdownItem } from 'flowbite-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -17,6 +18,10 @@
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
+
+    export function resetSelection() {
+        currentTrackIndex = -1;
+    }
 
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
@@ -243,13 +248,36 @@
                             </span>
                         </div>
                         {#if typeof attachment === 'object' && attachment.chart_name}
-                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete Chart" on:click|stopPropagation={() => handleDeleteChart(attachment)}>
-                                <Trash2 class="w-4 h-4" />
-                            </button>
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Chart Options" id="chart-options-{i}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenChart', { chart: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
                         {:else if typeof attachment === 'object' && attachment.view_name}
-                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete View" on:click|stopPropagation={() => handleDeleteView(attachment)}>
-                                <Trash2 class="w-4 h-4" />
-                            </button>
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="View Options" id="view-options-{i}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenView', { view: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestConfigureView', { view: attachment }); }}>
+                                        <Settings class="w-4 h-4 text-gray-500" /> Configure
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
                         {:else}
                             <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
                                 <PlayCircle class="w-4 h-4" />

@@ -17,6 +17,10 @@
     export let tableData = [];
     export let schema = {};
     export let initialView = null; // Used when opening a saved view from attachments
+    export let views = []; // Array of existing views
+    export let activeViewName = null; // Current active view from parent
+
+    import { applyViewConfigToData } from './viewTransform.js';
 
     let previewContainer;
     let previewTabulatorInstance;
@@ -43,6 +47,7 @@
     // Common fields
     let viewName = '';
     let viewDescription = '';
+    let dataSource = 'Base Table';
 
     // Partial View fields
     let partialSelectedColumns = [];
@@ -56,14 +61,39 @@
     let pivotValueField = '';
     let pivotAggregation = 'Sum'; // Sum, Count, Average, Min, Max
 
+    let activeData = [];
+    let activeColumns = [];
+    let activeSchema = {};
+
+    $: {
+        activeData = tableData;
+        activeColumns = columns;
+        activeSchema = schema;
+
+        if (dataSource && dataSource !== 'Base Table') {
+            const selectedView = views.find(v => v.view_name === dataSource);
+            if (selectedView) {
+                try {
+                    const config = JSON.parse(selectedView.config_json);
+                    const { transformedData, transformedColumns, transformedSchema } = applyViewConfigToData(tableData, columns, schema, config, selectedView.view_type);
+                    activeData = transformedData;
+                    activeColumns = transformedColumns;
+                    activeSchema = transformedSchema;
+                } catch(e) {
+                    console.error("Failed to transform data for view preview using parent view:", e);
+                }
+            }
+        }
+    }
+
     // Derived dropdown options
-    $: allColumns = columns.map(c => {
+    $: allColumns = activeColumns.map(c => {
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         return { value: fieldName, name: fieldName };
     }).filter(c => c.value && c.value !== 'harvey_internal_id');
 
     $: numericColumns = allColumns.filter(c => {
-        const colSchema = schema[c.value];
+        const colSchema = activeSchema[c.value];
         if (colSchema && colSchema.type === 'Numeric') return true;
         return false;
     });
@@ -114,6 +144,7 @@
     function resetForm() {
         viewDescription = '';
         selectedViewType = null;
+        dataSource = activeViewName || 'Base Table';
         partialSelectedColumns = allColumns.map(c => c.value);
         partialFilterField = '';
         partialFilterValue = '';
@@ -134,7 +165,29 @@
     async function initialCreate() {
         if (!viewName) viewName = `View-${existingViews.length + 1}`;
         isEditingExisting = true;
-        await saveView(false);
+        await saveView(true); // Don't trigger explicit non-autosave logic on initial UI transition
+    }
+
+    function getCurrentConfig() {
+        let config = { description: viewDescription, dataSource };
+        if (selectedViewType === 'partial') {
+            config.selectedColumns = partialSelectedColumns;
+            config.filterField = partialFilterField;
+            config.filterValue = partialFilterValue;
+            config.filterOperator = partialFilterOperator;
+        } else if (selectedViewType === 'pivot') {
+            config.rowField = pivotRowField;
+            config.colField = pivotColField;
+            config.valueField = pivotValueField;
+            config.aggregation = pivotAggregation;
+        }
+        return config;
+    }
+
+    async function switchToView() {
+        await saveView(true);
+        dispatch('viewApplied', { viewName, viewType: selectedViewType, config: getCurrentConfig() });
+        open = false;
     }
 
     function selectExistingView(view) {
@@ -143,6 +196,7 @@
         try {
             const config = JSON.parse(view.config_json);
             viewDescription = config.description || '';
+            dataSource = config.dataSource || 'Base Table';
 
             if (selectedViewType === 'partial') {
                 partialSelectedColumns = config.selectedColumns || [];
@@ -175,21 +229,7 @@
         const projectStoreState = get(project);
         if (!projectStoreState.id) return;
 
-        let config = {
-            description: viewDescription
-        };
-
-        if (selectedViewType === 'partial') {
-            config.selectedColumns = partialSelectedColumns;
-            config.filterField = partialFilterField;
-            config.filterValue = partialFilterValue;
-            config.filterOperator = partialFilterOperator;
-        } else if (selectedViewType === 'pivot') {
-            config.rowField = pivotRowField;
-            config.colField = pivotColField;
-            config.valueField = pivotValueField;
-            config.aggregation = pivotAggregation;
-        }
+        let config = getCurrentConfig();
 
         try {
             await invoke('save_table_view_command', {
@@ -202,7 +242,8 @@
             if (!isAutoSave) {
                 notificationStore.add('View saved successfully.', 'success');
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
-                open = false;
+            } else {
+                dispatch('viewSaved', { viewName, viewType: selectedViewType, config, isAutoSave: true });
             }
             await loadExistingViews();
         } catch (error) {
@@ -242,6 +283,7 @@
             previewTabulatorInstance.destroy();
             previewTabulatorInstance = null;
         }
+        open = false;
     }
 
     function generatePivotData(data, rowField, colField, valueField, aggregation) {
@@ -309,6 +351,7 @@
         let _______ = pivotValueField;
         let ________ = pivotAggregation;
         let _________ = viewDescription;
+        let __________ = dataSource;
 
         saveView(true);
     }
@@ -317,6 +360,7 @@
     $: if (open && isEditingExisting && selectedViewType === 'partial' && previewContainer) {
         // Debounce to allow container to render
         setTimeout(() => {
+            if (!previewContainer) return; // Verify still mounted
             if (!previewTabulatorInstance) {
                 // Initialize clean instance
                 const previewCols = allColumns.map(c => ({
@@ -326,7 +370,7 @@
                 }));
 
                 previewTabulatorInstance = new Tabulator(previewContainer, {
-                    data: tableData,
+                    data: activeData,
                     columns: previewCols,
                     layout: "fitDataFill",
                     height: "100%",
@@ -336,6 +380,7 @@
                 });
             } else {
                 // Update existing instance
+                previewTabulatorInstance.replaceData(activeData);
                 const allCols = previewTabulatorInstance.getColumns();
                 allCols.forEach(col => {
                     const field = col.getField();
@@ -354,6 +399,7 @@
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
         setTimeout(() => {
+            if (!previewContainer) return; // Verify still mounted
             if (!pivotRowField || !pivotValueField) {
                 if (previewTabulatorInstance) {
                     previewTabulatorInstance.destroy();
@@ -362,23 +408,26 @@
                 return;
             }
 
-            const { pivotCols, pivotData } = generatePivotData(tableData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
-
-            if (previewTabulatorInstance) {
-                previewTabulatorInstance.destroy();
-                previewTabulatorInstance = null;
-            }
+            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
 
             if (pivotCols.length > 0) {
-                previewTabulatorInstance = new Tabulator(previewContainer, {
-                    data: pivotData,
-                    columns: pivotCols,
-                    layout: "fitDataFill",
-                    height: "100%",
-                    reactiveData: false,
-                    selectable: false,
-                    nestedFieldSeparator: false
-                });
+                if (previewTabulatorInstance) {
+                    previewTabulatorInstance.setColumns(pivotCols);
+                    previewTabulatorInstance.replaceData(pivotData);
+                } else {
+                    previewTabulatorInstance = new Tabulator(previewContainer, {
+                        data: pivotData,
+                        columns: pivotCols,
+                        layout: "fitDataFill",
+                        height: "100%",
+                        reactiveData: false,
+                        selectable: false,
+                        nestedFieldSeparator: false
+                    });
+                }
+            } else if (previewTabulatorInstance) {
+                previewTabulatorInstance.destroy();
+                previewTabulatorInstance = null;
             }
         }, 50);
     }
@@ -397,12 +446,20 @@
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
             <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                {#if activeTab === 'create' && isEditingExisting && selectedViewType === 'pivot'}
+                    <LayoutGrid size={20} class="text-purple-600 dark:text-purple-400" />
+                {:else}
+                    <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                {/if}
             </div>
             <div>
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white">
                     {#if activeTab === 'create' && isEditingExisting}
-                        Edit View: {viewName || 'New View'}
+                        {#if selectedViewType === 'pivot'}
+                            Edit Pivot Table: {viewName || 'New View'}
+                        {:else}
+                            Edit Partial Table: {viewName || 'New View'}
+                        {/if}
                     {:else}
                         Create Views
                     {/if}
@@ -471,8 +528,19 @@
 
                             {#if selectedViewType === 'partial'}
                                 <AccordionItem open>
-                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Columns & Fields</span>
+                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Data Mapping</span>
                                     <div class="space-y-4">
+                                        <div>
+                                            <Label for="dataSource" class="mb-2">Data Source</Label>
+                                            <Select id="dataSource" bind:value={dataSource}>
+                                                <option value="Base Table">Base Table</option>
+                                                {#each views as view}
+                                                    {#if view.view_name !== viewName}
+                                                        <option value={view.view_name}>{view.view_name}</option>
+                                                    {/if}
+                                                {/each}
+                                            </Select>
+                                        </div>
                                         <div>
                                             <Label class="mb-2">Select Visible Columns</Label>
                                             <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
@@ -501,8 +569,19 @@
                                 </AccordionItem>
                             {:else if selectedViewType === 'pivot'}
                                 <AccordionItem open>
-                                    <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Pivot Settings</span>
+                                    <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Data Mapping</span>
                                     <div class="space-y-4">
+                                        <div>
+                                            <Label for="dataSource" class="mb-2">Data Source</Label>
+                                            <Select id="dataSource" bind:value={dataSource}>
+                                                <option value="Base Table">Base Table</option>
+                                                {#each views as view}
+                                                    {#if view.view_name !== viewName}
+                                                        <option value={view.view_name}>{view.view_name}</option>
+                                                    {/if}
+                                                {/each}
+                                            </Select>
+                                        </div>
                                         <div>
                                             <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
                                             <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />
@@ -607,4 +686,13 @@
             {/if}
         </div>
     </div>
+
+    <svelte:fragment slot="footer">
+        {#if activeTab === 'create' && isEditingExisting}
+        <div class="flex justify-end w-full space-x-2">
+            <Button color="alternative" on:click={handleModalClose}>Close</Button>
+            <Button color="purple" on:click={switchToView}>Switch to this view</Button>
+        </div>
+        {/if}
+    </svelte:fragment>
 </Modal>

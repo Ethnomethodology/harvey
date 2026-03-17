@@ -74,6 +74,7 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
+    let availableViews = [];
 
     let svelteUndoStack = [];
     let svelteRedoStack = [];
@@ -754,6 +755,14 @@
     }
 
     function getColumnContextMenu(column) {
+        if (currentActiveViewType === 'pivot') {
+            return [
+                { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
+                { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
+                { label: "Copy Field", action: (e, column) => copyColumn(column) }
+            ];
+        }
+
         const menu = [
             { label: "Edit Field", action: (e, column) => openFieldEditor(column) },
             { separator: true },
@@ -2438,27 +2447,59 @@
     export let initialChartToLoad = null;
 
     export function openChart(chart) {
+        if (!tabulatorInstance) return;
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialChartToLoad = null; showChartModal = true;
         initialChartToLoad = chart;
     }
 
-    export function openView(view) {
+    let currentActiveView = null;
+    let currentActiveViewType = null;
+    let baseTableColumns = []; // Store base columns when applying a view
+    let pivotDerivedSchema = {};
+    $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
+
+    export async function openView(view) {
+        if (!view) return;
+        try {
+            const config = JSON.parse(view.config_json);
+            if (currentActiveView) {
+                // Must ensure we start from a clean slate so views don't stack their transformations
+                await returnToBaseTable();
+            }
+            // Wait for Tabulator to be fully initialized and ready
+            if (tabulatorInstance && !tableReady) {
+                await new Promise(resolve => {
+                    tabulatorInstance.on("tableBuilt", resolve);
+                });
+            }
+            applyViewToTable(view.view_name, view.view_type, config);
+        } catch (e) {
+            console.error('Failed to parse view config on open:', e);
+            notificationStore.add('Failed to open view', 'error');
+        }
+    }
+
+    export function configureView(view) {
+        if (!tabulatorInstance) return;
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialViewToLoad = null; showViewModal = true;
         initialViewToLoad = view;
     }
 
-    function handleApplyView(event) {
-        dispatch('requestviewchange', { type: 'refresh_metadata' });
-        const { viewName, viewType, config } = event.detail;
+    function applyViewToTable(viewName, viewType, config) {
         if (!tabulatorInstance) return;
 
-        if (viewType === 'partial') {
-            // First, clear any existing filters
-            tabulatorInstance.clearFilter();
+        // Store base columns if not already stored
+        if (!currentActiveView) {
+            baseTableColumns = tabulatorInstance.getColumnDefinitions();
+        }
 
-            // Handle Columns Visibility
+        currentActiveView = viewName;
+        currentActiveViewType = viewType;
+
+        if (viewType === 'partial') {
+            tabulatorInstance.clearFilter();
             if (config.selectedColumns && config.selectedColumns.length > 0) {
                 const allCols = tabulatorInstance.getColumns();
                 allCols.forEach(col => {
@@ -2472,13 +2513,9 @@
                     }
                 });
             }
-
-            // Handle Filter
             if (config.filterField && config.filterValue) {
                 tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
             }
-
-            showViewModal = false; // Close modal after applying
         } else if (viewType === 'pivot') {
             const { rowField, colField, valueField, aggregation } = config;
             if (!rowField || !valueField) return;
@@ -2486,7 +2523,6 @@
             let groupedData = {};
             let allColKeys = new Set();
 
-            // 1. Group Data
             tableData.forEach(row => {
                 const rVal = String(row[rowField] || '(Blank)');
                 const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
@@ -2498,17 +2534,18 @@
                 allColKeys.add(cVal);
             });
 
-            // 2. Build Columns for Tabulator
             let pivotCols = [
                 { field: rowField, title: rowField, frozen: true, editor: false }
             ];
 
             let sortedColKeys = Array.from(allColKeys).sort();
+            let newPivotSchema = {};
             sortedColKeys.forEach(ck => {
                 pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
+                newPivotSchema[ck] = { type: 'Numeric', subType: 'Decimal' };
             });
+            pivotDerivedSchema = newPivotSchema;
 
-            // 3. Aggregate Values
             let pivotData = [];
             for (const [rKey, cData] of Object.entries(groupedData)) {
                 let rowData = { [rowField]: rKey };
@@ -2522,7 +2559,7 @@
                         else if (aggregation === 'Min') aggVal = Math.min(...vals);
                         else if (aggregation === 'Max') aggVal = Math.max(...vals);
                     } else {
-                        aggVal = null; // empty cell
+                        aggVal = null;
                     }
 
                     rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
@@ -2532,9 +2569,52 @@
 
             tabulatorInstance.setColumns(pivotCols);
             tabulatorInstance.replaceData(pivotData);
-
-            showViewModal = false;
         }
+
+        // Re-evaluate add entry row (removes it for pivot)
+        addFloatingAddRowButton();
+    }
+
+    async function returnToBaseTable() {
+        if (!tabulatorInstance) return;
+        currentActiveView = null;
+        currentActiveViewType = null;
+        pivotDerivedSchema = {};
+
+        dispatch('requestviewchange', { type: 'reset_base' });
+
+        // The safest and most robust way to return to the base table and avoid Tabulator
+        // duplicating rowHeader columns (or other formatter issues) is to re-initialize it.
+        if (tabulatorInstance) {
+            tabulatorInstance.destroy();
+            tabulatorInstance = null;
+        }
+        tableReady = false;
+
+        await initializeTable(tablePath, hasHeaders, true);
+    }
+
+    function handleViewSaved(event) {
+        dispatch('requestviewchange', { type: 'refresh_metadata' });
+        // We only dynamically update the table if the view being autosaved is currently the active view.
+        const { viewName, viewType, config, isAutoSave } = event.detail;
+        if (!tabulatorInstance || !isAutoSave || currentActiveView !== viewName) return;
+
+        // Perform in-place update if possible
+        applyViewToTable(viewName, viewType, config);
+    }
+
+    async function handleViewApplied(event) {
+        dispatch('requestviewchange', { type: 'refresh_metadata' });
+        const { viewName, viewType, config } = event.detail;
+        if (!tabulatorInstance) return;
+
+        // Explicitly switching to this view. Start from clean slate if another view was active.
+        if (currentActiveView && currentActiveView !== viewName) {
+            await returnToBaseTable();
+        }
+
+        applyViewToTable(viewName, viewType, config);
     }
 
     export async function getExportData() {
@@ -2613,6 +2693,23 @@
         return { data: formattedData, headers, styles: stylesMap };
     }
 
+    async function loadTableViews(pathForTable) {
+        try {
+            const projectStoreState = get(project);
+            if (!projectStoreState.id) return;
+            const baseDir = projectStoreState.baseDirectory;
+            let relative = pathForTable.startsWith(baseDir) ? pathForTable.substring(baseDir.length) : pathForTable;
+            const normalizedTablePath = relative.replace(/\\/g, '/').replace(/^\//, '');
+
+            availableViews = await invoke('load_table_views_command', {
+                projectId: projectStoreState.id,
+                tablePath: normalizedTablePath
+            });
+        } catch (error) {
+            console.error('Failed to load table views:', error);
+        }
+    }
+
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
         if (newHasHeaders !== null) hasHeaders = newHasHeaders;
         if (!pathForTable || !tableContainer) return;
@@ -2625,15 +2722,13 @@
         tableData = [];
 
         if (tabulatorInstance) {
-            if (addRowButtonEl) {
-                addRowButtonEl.remove();
-                addRowButtonEl = null;
-            }
+            tableContainer.querySelectorAll(".tabulator-add-entry-row").forEach(b => b.remove());
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
 
         try {
+            await loadTableViews(pathForTable);
             // 1. Load Table Data
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
@@ -2800,6 +2895,12 @@
                         action: () => highlightAction(option.value)
                     }));
 
+                    if (currentActiveViewType === 'pivot') {
+                        return [
+                            { label: "Copy Entry", action: (e, row) => copyRow(row) }
+                        ];
+                    }
+
                     const menu = [
                         { label: "Edit Entry", action: (e, row) => openEditEntryModal(row) },
                         { separator: true },
@@ -2827,7 +2928,10 @@
                     headerSort:false,
                     headerHozAlign:"center",
                     headerVAlign:"middle",
-                    editor:"textarea",
+                    editor: "textarea",
+                    editable: function(cell) {
+                        return currentActiveViewType !== 'pivot';
+                    },
                     editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:false },
                     resizable:"header",
                     width:200,
@@ -3025,8 +3129,24 @@
         tabulatorInstance.addRange(currentCell, currentCell);
     }
 
+    let enforcePositionHandler = null;
+
     function addFloatingAddRowButton() {
         if (!tabulatorInstance || !tableContainer) return;
+
+        // Unbind previous handler to prevent duplicates
+        if (enforcePositionHandler) {
+            tabulatorInstance.off("renderComplete", enforcePositionHandler);
+            tabulatorInstance.off("scrollVertical", enforcePositionHandler);
+            tabulatorInstance.off("columnResized", enforcePositionHandler);
+            enforcePositionHandler = null;
+        }
+
+        // Remove all existing add row buttons
+        const existingBtns = tableContainer.querySelectorAll(".tabulator-add-entry-row");
+        existingBtns.forEach(btn => btn.remove());
+
+        if (currentActiveViewType === 'pivot') return;
 
         const tableHolder = tableContainer.querySelector(".tabulator-table");
         if (!tableHolder) return;
@@ -3035,11 +3155,7 @@
         // We append it to the internal Tabulator DOM but manage its display via Tabulator hooks
         // so it natively tracks with the virtual DOM bounds.
 
-        // Remove any existing one first
-        let addRowBtn = tableContainer.querySelector(".tabulator-add-entry-row");
-        if (addRowBtn) addRowBtn.remove();
-
-        addRowBtn = document.createElement("div");
+        let addRowBtn = document.createElement("div");
         addRowBtn.className = "tabulator-row tabulator-add-entry-row cursor-pointer group flex items-center";
         addRowBtn.style.minHeight = "38px";
         addRowBtn.style.borderBottom = "1px solid var(--ui-select-border)";
@@ -3086,7 +3202,7 @@
         };
 
         // Attach event handlers to force it to always stick to the bottom of the virtual table DOM
-        const enforcePosition = () => {
+        enforcePositionHandler = () => {
             const holder = tableContainer.querySelector(".tabulator-table");
             if (holder) {
                 // If it's not the last child, make it the last child
@@ -3102,12 +3218,12 @@
             }
         };
 
-        enforcePosition();
+        enforcePositionHandler();
 
         // Bind to multiple events to ensure it stays pinned
-        tabulatorInstance.on("renderComplete", enforcePosition);
-        tabulatorInstance.on("scrollVertical", enforcePosition);
-        tabulatorInstance.on("columnResized", enforcePosition);
+        tabulatorInstance.on("renderComplete", enforcePositionHandler);
+        tabulatorInstance.on("scrollVertical", enforcePositionHandler);
+        tabulatorInstance.on("columnResized", enforcePositionHandler);
     }
 
     function goToNextMatch() {
@@ -3302,10 +3418,16 @@
         tablePath={tablePath}
         columns={tableColumnsForModal}
         tableData={tableData}
-        schema={tableSchema}
+        schema={computedSchema}
         initialView={initialViewToLoad}
-        on:viewSaved={handleApplyView}
-        on:viewDeleted={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
+        views={availableViews}
+        activeViewName={currentActiveView}
+        on:viewSaved={handleViewSaved}
+        on:viewApplied={handleViewApplied}
+        on:viewDeleted={() => {
+            loadTableViews(tablePath);
+            dispatch('requestviewchange', { type: 'refresh_metadata' });
+        }}
     />
 {/if}
 
@@ -3315,8 +3437,10 @@
         tablePath={tablePath}
         columns={tableColumnsForModal}
         tableData={tableData}
-        schema={tableSchema}
+        schema={computedSchema}
         initialChart={initialChartToLoad}
+        views={availableViews}
+        activeViewName={currentActiveView}
         on:chartSaved={() => {
             dispatch('requestviewchange', { type: 'refresh_metadata' });
         }}
@@ -3340,6 +3464,14 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
+            {#if currentActiveView}
+                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white border border-purple-600 rounded focus:outline-none focus:ring-2 focus:ring-purple-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
+                    <Undo2 size={14} />
+                    <span>Return to Base Table</span>
+                </button>
+                <div class="separator mx-0.5 mr-2"></div>
+            {/if}
+
             <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
                 <Undo2 size={14} />
             </button>
