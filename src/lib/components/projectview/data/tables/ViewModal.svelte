@@ -351,7 +351,8 @@
                     layout: "fitDataFill",
                     height: "100%",
                     reactiveData: false,
-                    selectable: false
+                    selectable: false,
+                    nestedFieldSeparator: false
                 });
             }
         }, 50);

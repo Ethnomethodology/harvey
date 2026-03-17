@@ -2758,6 +2758,7 @@
                 index: "harvey_internal_id",
                 layout: "fitData",
                 columns: generatedColumns,
+                nestedFieldSeparator: false,
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
