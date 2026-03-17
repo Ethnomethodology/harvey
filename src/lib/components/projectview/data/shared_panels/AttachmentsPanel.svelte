@@ -232,15 +232,22 @@
                                 {#if attachment.chart_type === 'scatter'}<ScatterChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                                 {#if attachment.chart_type === 'pie'}<PieChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                                 {#if attachment.chart_type === 'gantt'}<SquareChartGantt class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'object' && attachment.view_name}
+                                {#if attachment.view_type === 'partial'}<Table2 class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                             {:else}
                                 <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
-                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? attachment.chart_name : attachment}>
+                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name) : attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
                         {#if typeof attachment === 'object' && attachment.chart_name}
-                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete" on:click|stopPropagation={() => handleDeleteChart(attachment)}>
+                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete Chart" on:click|stopPropagation={() => handleDeleteChart(attachment)}>
+                                <Trash2 class="w-4 h-4" />
+                            </button>
+                        {:else if typeof attachment === 'object' && attachment.view_name}
+                            <button class="text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete View" on:click|stopPropagation={() => handleDeleteView(attachment)}>
                                 <Trash2 class="w-4 h-4" />
                             </button>
                         {:else}
