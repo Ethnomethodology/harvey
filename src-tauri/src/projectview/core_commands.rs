@@ -18,6 +18,7 @@ use std::{
 use quick_xml;
 use chrono::Utc;
 use super::db_handler::{self, delete_annotations_from_db};
+use crate::projectview::chart_handler;
 use super::shared_types::GroupData; // Added for group commands
 use rusqlite::{Connection, params}; // Added for opening DB connection in commands
 use tauri::Emitter;
