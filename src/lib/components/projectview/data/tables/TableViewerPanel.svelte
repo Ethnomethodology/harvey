@@ -2480,8 +2480,60 @@
 
             showViewModal = false; // Close modal after applying
         } else if (viewType === 'pivot') {
-            alert("Pivot table view rendering is not fully implemented yet.");
-            // Advanced Tabulator groupBy/aggregation logic goes here
+            const { rowField, colField, valueField, aggregation } = config;
+            if (!rowField || !valueField) return;
+
+            let groupedData = {};
+            let allColKeys = new Set();
+
+            // 1. Group Data
+            tableData.forEach(row => {
+                const rVal = String(row[rowField] || '(Blank)');
+                const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
+                const vVal = parseFloat(row[valueField]) || 0;
+
+                if (!groupedData[rVal]) groupedData[rVal] = {};
+                if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
+                groupedData[rVal][cVal].push(vVal);
+                allColKeys.add(cVal);
+            });
+
+            // 2. Build Columns for Tabulator
+            let pivotCols = [
+                { field: rowField, title: rowField, frozen: true, editor: false }
+            ];
+
+            let sortedColKeys = Array.from(allColKeys).sort();
+            sortedColKeys.forEach(ck => {
+                pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
+            });
+
+            // 3. Aggregate Values
+            let pivotData = [];
+            for (const [rKey, cData] of Object.entries(groupedData)) {
+                let rowData = { [rowField]: rKey };
+                sortedColKeys.forEach(ck => {
+                    const vals = cData[ck] || [];
+                    let aggVal = 0;
+                    if (vals.length > 0) {
+                        if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
+                        else if (aggregation === 'Count') aggVal = vals.length;
+                        else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
+                        else if (aggregation === 'Min') aggVal = Math.min(...vals);
+                        else if (aggregation === 'Max') aggVal = Math.max(...vals);
+                    } else {
+                        aggVal = null; // empty cell
+                    }
+
+                    rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                });
+                pivotData.push(rowData);
+            }
+
+            tabulatorInstance.setColumns(pivotCols);
+            tabulatorInstance.replaceData(pivotData);
+
+            showViewModal = false;
         }
     }
 

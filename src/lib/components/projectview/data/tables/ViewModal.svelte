@@ -202,6 +202,7 @@
             if (!isAutoSave) {
                 notificationStore.add('View saved successfully.', 'success');
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
+                open = false;
             }
             await loadExistingViews();
         } catch (error) {
@@ -243,6 +244,59 @@
         }
     }
 
+    function generatePivotData(data, rowField, colField, valueField, aggregation) {
+        if (!rowField || !valueField) return { pivotCols: [], pivotData: [] };
+
+        let groupedData = {};
+        let allColKeys = new Set();
+
+        // 1. Group Data
+        data.forEach(row => {
+            const rVal = String(row[rowField] || '(Blank)');
+            const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
+            const vVal = parseFloat(row[valueField]) || 0;
+
+            if (!groupedData[rVal]) groupedData[rVal] = {};
+            if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
+            groupedData[rVal][cVal].push(vVal);
+            allColKeys.add(cVal);
+        });
+
+        // 2. Build Columns for Tabulator
+        let pivotCols = [
+            { field: rowField, title: rowField, frozen: true }
+        ];
+
+        let sortedColKeys = Array.from(allColKeys).sort();
+        sortedColKeys.forEach(ck => {
+            pivotCols.push({ field: ck, title: ck, hozAlign: 'right' });
+        });
+
+        // 3. Aggregate Values
+        let pivotData = [];
+        for (const [rKey, cData] of Object.entries(groupedData)) {
+            let rowData = { [rowField]: rKey };
+            sortedColKeys.forEach(ck => {
+                const vals = cData[ck] || [];
+                let aggVal = 0;
+                if (vals.length > 0) {
+                    if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
+                    else if (aggregation === 'Count') aggVal = vals.length;
+                    else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
+                    else if (aggregation === 'Min') aggVal = Math.min(...vals);
+                    else if (aggregation === 'Max') aggVal = Math.max(...vals);
+                } else {
+                    aggVal = null; // empty cell
+                }
+
+                rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+            });
+            pivotData.push(rowData);
+        }
+
+        return { pivotCols, pivotData };
+    }
+
     // Reactive statement to render the preview table
     $: if (open && isEditingExisting && selectedViewType === 'partial' && previewContainer) {
         // Debounce to allow container to render
@@ -282,11 +336,25 @@
             }
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
-        // Destroy instance if switching to pivot temporarily
-         if (previewTabulatorInstance) {
-            previewTabulatorInstance.destroy();
-            previewTabulatorInstance = null;
-        }
+        setTimeout(() => {
+            const { pivotCols, pivotData } = generatePivotData(tableData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
+
+            if (previewTabulatorInstance) {
+                previewTabulatorInstance.destroy();
+                previewTabulatorInstance = null;
+            }
+
+            if (pivotCols.length > 0) {
+                previewTabulatorInstance = new Tabulator(previewContainer, {
+                    data: pivotData,
+                    columns: pivotCols,
+                    layout: "fitDataFill",
+                    height: "100%",
+                    reactiveData: false,
+                    selectable: false
+                });
+            }
+        }, 50);
     }
 
 </script>
@@ -360,75 +428,78 @@
                                 {viewTypes.find(t => t.value === selectedViewType)?.name || 'View Type'} Configuration
                             </h3>
 
-                            <div>
-                                <Label for="viewName" class="mb-2">View Name</Label>
-                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewName" bind:value={viewName} placeholder="Enter view name" />
-                            </div>
-                            <div>
-                                <Label for="viewDescription" class="mb-2">Description</Label>
-                                <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewDescription" bind:value={viewDescription} placeholder="Optional description" rows="2" />
-                            </div>
+                            <Accordion flush>
+                                <AccordionItem>
+                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />General Details</span>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <Label for="viewName" class="mb-2">View Name</Label>
+                                            <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewName" bind:value={viewName} placeholder="Enter view name" />
+                                        </div>
+                                        <div>
+                                            <Label for="viewDescription" class="mb-2">Description</Label>
+                                            <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewDescription" bind:value={viewDescription} placeholder="Optional description" rows="2" />
+                                        </div>
+                                    </div>
+                                </AccordionItem>
 
                             {#if selectedViewType === 'partial'}
-                                <Accordion flush>
-                                    <AccordionItem open>
-                                        <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Columns & Fields</span>
-                                        <div class="space-y-4">
-                                            <div>
-                                                <Label class="mb-2">Select Visible Columns</Label>
-                                                <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
-                                                <Helper class="mt-2">Columns not selected will be hidden in this view.</Helper>
-                                            </div>
+                                <AccordionItem open>
+                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Columns & Fields</span>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <Label class="mb-2">Select Visible Columns</Label>
+                                            <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
+                                            <Helper class="mt-2">Columns not selected will be hidden in this view.</Helper>
                                         </div>
-                                    </AccordionItem>
-                                    <AccordionItem>
-                                        <span slot="header" class="flex items-center"><Filter class="w-4 h-4 mr-2" />Default Filter</span>
-                                        <div class="space-y-4">
-                                            <div>
-                                                <Label for="filterField" class="mb-2">Filter Column</Label>
-                                                <Select id="filterField" items={[{value:'', name:'-- No Filter --'}, ...allColumns]} bind:value={partialFilterField} />
-                                            </div>
-                                            {#if partialFilterField}
-                                                <div>
-                                                    <Label for="filterOperator" class="mb-2">Operator</Label>
-                                                    <Select id="filterOperator" items={[{value:'=', name:'Equals'}, {value:'!=', name:'Not Equals'}, {value:'like', name:'Contains'}, {value:'>', name:'Greater Than'}, {value:'<', name:'Less Than'}]} bind:value={partialFilterOperator} />
-                                                </div>
-                                                <div>
-                                                    <Label for="filterValue" class="mb-2">Value</Label>
-                                                    <Input id="filterValue" autocomplete="off" bind:value={partialFilterValue} />
-                                                </div>
-                                            {/if}
+                                    </div>
+                                </AccordionItem>
+                                <AccordionItem>
+                                    <span slot="header" class="flex items-center"><Filter class="w-4 h-4 mr-2" />Default Filter</span>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <Label for="filterField" class="mb-2">Filter Column</Label>
+                                            <Select id="filterField" items={[{value:'', name:'-- No Filter --'}, ...allColumns]} bind:value={partialFilterField} />
                                         </div>
-                                    </AccordionItem>
-                                </Accordion>
+                                        {#if partialFilterField}
+                                            <div>
+                                                <Label for="filterOperator" class="mb-2">Operator</Label>
+                                                <Select id="filterOperator" items={[{value:'=', name:'Equals'}, {value:'!=', name:'Not Equals'}, {value:'like', name:'Contains'}, {value:'>', name:'Greater Than'}, {value:'<', name:'Less Than'}]} bind:value={partialFilterOperator} />
+                                            </div>
+                                            <div>
+                                                <Label for="filterValue" class="mb-2">Value</Label>
+                                                <Input id="filterValue" autocomplete="off" bind:value={partialFilterValue} />
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </AccordionItem>
                             {:else if selectedViewType === 'pivot'}
-                                <Accordion flush>
-                                    <AccordionItem open>
-                                        <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Pivot Settings</span>
-                                        <div class="space-y-4">
-                                            <div>
-                                                <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
-                                                <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />
-                                            </div>
-                                            <div>
-                                                <Label for="pivotCol" class="mb-2">Column Field (Pivot Across)</Label>
-                                                <Select id="pivotCol" items={[{value:'', name:'-- None --'}, ...allColumns]} bind:value={pivotColField} />
-                                            </div>
-                                            <div>
-                                                <Label for="pivotValue" class="mb-2">Value Field (To Aggregate)</Label>
-                                                <Select id="pivotValue" items={pivotValueOptions} bind:value={pivotValueField} />
-                                            </div>
-                                            <div>
-                                                <Label for="pivotAgg" class="mb-2">Aggregation Type</Label>
-                                                <Select id="pivotAgg" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={pivotAggregation} />
-                                            </div>
+                                <AccordionItem open>
+                                    <span slot="header" class="flex items-center"><LayoutGrid class="w-4 h-4 mr-2" />Pivot Settings</span>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
+                                            <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />
                                         </div>
-                                    </AccordionItem>
-                                </Accordion>
+                                        <div>
+                                            <Label for="pivotCol" class="mb-2">Column Field (Pivot Across)</Label>
+                                            <Select id="pivotCol" items={[{value:'', name:'-- None --'}, ...allColumns]} bind:value={pivotColField} />
+                                        </div>
+                                        <div>
+                                            <Label for="pivotValue" class="mb-2">Value Field (To Aggregate)</Label>
+                                            <Select id="pivotValue" items={pivotValueOptions} bind:value={pivotValueField} />
+                                        </div>
+                                        <div>
+                                            <Label for="pivotAgg" class="mb-2">Aggregation Type</Label>
+                                            <Select id="pivotAgg" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={pivotAggregation} />
+                                        </div>
+                                    </div>
+                                </AccordionItem>
                             {/if}
+                            </Accordion>
 
                             <div class="pt-6">
-                                <Button color="purple" class="w-full" on:click={() => saveView(false)}>Save & Open View</Button>
+                                <Button color="purple" class="w-full" on:click={() => saveView(false)}>Save View</Button>
                             </div>
                         {/if}
                     </div>
@@ -498,18 +569,12 @@
                         </div>
                         <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-hidden" bind:this={previewContainer}></div>
                     </div>
-                {:else}
-                    <div class="flex-1 w-full h-full p-8 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800">
-                        <div class="text-center">
-                            <div class="mx-auto w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
-                                <LayoutGrid size={32} />
-                            </div>
-                            <h4 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{viewName}</h4>
-                            <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
-                                Pivot Table preview is not currently supported in this modal.
-                                Configure your view settings on the left and click "Save & Open View".
-                            </p>
+                {:else if selectedViewType === 'pivot'}
+                    <div class="flex-1 w-full h-full p-4 bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800 flex flex-col">
+                        <div class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                            <LayoutGrid size={16} /> Live Preview: {viewName}
                         </div>
+                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-hidden" bind:this={previewContainer}></div>
                     </div>
                 {/if}
             {:else if activeTab === 'existing'}
