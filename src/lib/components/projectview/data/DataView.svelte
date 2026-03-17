@@ -82,6 +82,7 @@
                 console.warn("[DataView] tableViewRef.openChart is not a function");
             }
         }
+    }
 
     function handleRequestOpenView(event) {
         const { view } = event.detail;
@@ -96,7 +97,6 @@
         } else {
             console.warn('[DataView] tableViewRef or openView method not available yet.');
         }
-    }
     }
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
