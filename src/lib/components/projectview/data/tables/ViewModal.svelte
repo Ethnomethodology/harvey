@@ -630,10 +630,12 @@
         </div>
     </div>
 
-    {#if activeTab === 'create' && isEditingExisting}
-    <div slot="footer" class="flex justify-end w-full space-x-2">
-        <Button color="alternative" on:click={handleModalClose}>Close</Button>
-        <Button color="purple" on:click={switchToView}>Switch to this view</Button>
-    </div>
-    {/if}
+    <svelte:fragment slot="footer">
+        {#if activeTab === 'create' && isEditingExisting}
+        <div class="flex justify-end w-full space-x-2">
+            <Button color="alternative" on:click={handleModalClose}>Close</Button>
+            <Button color="purple" on:click={switchToView}>Switch to this view</Button>
+        </div>
+        {/if}
+    </svelte:fragment>
 </Modal>
