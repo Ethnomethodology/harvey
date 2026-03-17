@@ -196,7 +196,6 @@
             if (!isAutoSave) {
                 notificationStore.add('View saved successfully.', 'success');
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
-                open = false; // Close modal on explicit save
             }
             await loadExistingViews();
         } catch (error) {

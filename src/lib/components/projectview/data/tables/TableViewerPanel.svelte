@@ -2449,6 +2449,51 @@
         initialViewToLoad = view;
     }
 
+    function resetView() {
+        if (!tabulatorInstance) return;
+        tabulatorInstance.clearFilter();
+        const allCols = tabulatorInstance.getColumns();
+        allCols.forEach(col => {
+            col.show();
+        });
+    }
+
+    function handleApplyView(event) {
+        dispatch('requestviewchange', { type: 'refresh_metadata' });
+        const { viewName, viewType, config } = event.detail;
+        if (!tabulatorInstance) return;
+
+        if (viewType === 'partial') {
+            // First, clear any existing filters
+            tabulatorInstance.clearFilter();
+
+            // Handle Columns Visibility
+            if (config.selectedColumns && config.selectedColumns.length > 0) {
+                const allCols = tabulatorInstance.getColumns();
+                allCols.forEach(col => {
+                    const field = col.getField();
+                    if (field && field !== 'harvey_internal_id') {
+                        if (config.selectedColumns.includes(field)) {
+                            col.show();
+                        } else {
+                            col.hide();
+                        }
+                    }
+                });
+            }
+
+            // Handle Filter
+            if (config.filterField && config.filterValue) {
+                tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
+            }
+
+            showViewModal = false; // Close modal after applying
+        } else if (viewType === 'pivot') {
+            alert("Pivot table view rendering is not fully implemented yet.");
+            // Advanced Tabulator groupBy/aggregation logic goes here
+        }
+    }
+
     export async function getExportData() {
         if (!tabulatorInstance) return null;
         
@@ -3214,7 +3259,7 @@
         columns={tableColumnsForModal}
         schema={tableSchema}
         initialView={initialViewToLoad}
-        on:viewSaved={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
+        on:viewSaved={handleApplyView}
         on:viewDeleted={() => dispatch('requestviewchange', { type: 'refresh_metadata' })}
     />
 {/if}
@@ -3312,6 +3357,9 @@
             <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30" title="Create Views">
                 <Table2 size={14} />
                 <span>Create Views</span>
+            </button>
+            <button id="reset-view" on:click={resetView} class="mini-toolbar-button" title="Reset View Filters and Columns">
+                <Undo2 size={14} />
             </button>
         </div>
 
