@@ -2455,6 +2455,8 @@
     let currentActiveView = null;
     let currentActiveViewType = null;
     let baseTableColumns = []; // Store base columns when applying a view
+    let pivotDerivedSchema = {};
+    $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
     export async function openView(view) {
         if (!view) return;
@@ -2536,9 +2538,12 @@
             ];
 
             let sortedColKeys = Array.from(allColKeys).sort();
+            let newPivotSchema = {};
             sortedColKeys.forEach(ck => {
                 pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
+                newPivotSchema[ck] = { type: 'Numeric', subType: 'Decimal' };
             });
+            pivotDerivedSchema = newPivotSchema;
 
             let pivotData = [];
             for (const [rKey, cData] of Object.entries(groupedData)) {
@@ -2573,6 +2578,7 @@
         if (!tabulatorInstance) return;
         currentActiveView = null;
         currentActiveViewType = null;
+        pivotDerivedSchema = {};
 
         dispatch('requestviewchange', { type: 'reset_base' });
 
@@ -2698,10 +2704,7 @@
         tableData = [];
 
         if (tabulatorInstance) {
-            if (addRowButtonEl) {
-                addRowButtonEl.remove();
-                addRowButtonEl = null;
-            }
+            tableContainer.querySelectorAll(".tabulator-add-entry-row").forEach(b => b.remove());
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
@@ -3396,7 +3399,7 @@
         tablePath={tablePath}
         columns={tableColumnsForModal}
         tableData={tableData}
-        schema={tableSchema}
+        schema={computedSchema}
         initialView={initialViewToLoad}
         on:viewSaved={handleViewSaved}
         on:viewApplied={handleViewApplied}
@@ -3410,7 +3413,7 @@
         tablePath={tablePath}
         columns={tableColumnsForModal}
         tableData={tableData}
-        schema={tableSchema}
+        schema={computedSchema}
         initialChart={initialChartToLoad}
         on:chartSaved={() => {
             dispatch('requestviewchange', { type: 'refresh_metadata' });

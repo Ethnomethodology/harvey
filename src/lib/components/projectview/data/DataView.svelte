@@ -117,10 +117,11 @@
     let attachmentsPanelRef;
 
     function handleRequestViewChange(event) {
-        if (event.type === 'reset_base' && attachmentsPanelRef) {
-            if (typeof attachmentsPanelRef.resetSelection === 'function') {
+        if (event.type === 'reset_base') {
+            if (attachmentsPanelRef && typeof attachmentsPanelRef.resetSelection === 'function') {
                 attachmentsPanelRef.resetSelection();
             }
+            return;
         }
         handleViewChangeRequest(event);
     }
