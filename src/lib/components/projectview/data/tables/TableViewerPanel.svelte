@@ -2564,6 +2564,9 @@
             tabulatorInstance.setColumns(pivotCols);
             tabulatorInstance.replaceData(pivotData);
         }
+
+        // Re-evaluate add entry row (removes it for pivot)
+        addFloatingAddRowButton();
     }
 
     async function returnToBaseTable() {
@@ -2901,7 +2904,10 @@
                     headerSort:false,
                     headerHozAlign:"center",
                     headerVAlign:"middle",
-                    editor:"textarea",
+                    editor: "textarea",
+                    editable: function(cell) {
+                        return currentActiveViewType !== 'pivot';
+                    },
                     editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:false },
                     resizable:"header",
                     width:200,
@@ -3418,7 +3424,7 @@
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
             {#if currentActiveView}
-                <button on:click={returnToBaseTable} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30 font-medium px-2 py-1 mr-2" title="Return to Base Table">
+                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white border border-purple-600 rounded focus:outline-none focus:ring-2 focus:ring-purple-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
                 </button>
