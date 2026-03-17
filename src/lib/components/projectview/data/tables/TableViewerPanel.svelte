@@ -46,7 +46,7 @@
         Underline,
         Eraser,
         PieChart,
-        ChartBar, Table2,
+        ChartBar,
         Table2
     } from 'lucide-svelte';
     import { mount, createEventDispatcher } from 'svelte';
