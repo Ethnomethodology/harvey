@@ -3257,6 +3257,7 @@
         bind:open={showViewModal}
         tablePath={tablePath}
         columns={tableColumnsForModal}
+        tableData={tableData}
         schema={tableSchema}
         initialView={initialViewToLoad}
         on:viewSaved={handleApplyView}

@@ -10,10 +10,16 @@
     const dispatch = createEventDispatcher();
 
     export let open = false;
+    import { TabulatorFull as Tabulator } from 'tabulator-tables';
+
     export let tablePath = '';
     export let columns = [];
+    export let tableData = [];
     export let schema = {};
     export let initialView = null; // Used when opening a saved view from attachments
+
+    let previewContainer;
+    let previewTabulatorInstance;
 
     // Normalize path to match DB and Attachments Panel
     $: normalizedTablePath = (() => {
@@ -231,7 +237,56 @@
     }
 
     function handleModalClose() {
-        // Optional: Implement auto-save on close if editing
+        if (previewTabulatorInstance) {
+            previewTabulatorInstance.destroy();
+            previewTabulatorInstance = null;
+        }
+    }
+
+    // Reactive statement to render the preview table
+    $: if (open && isEditingExisting && selectedViewType === 'partial' && previewContainer) {
+        // Debounce to allow container to render
+        setTimeout(() => {
+            if (!previewTabulatorInstance) {
+                // Initialize clean instance
+                const previewCols = allColumns.map(c => ({
+                    field: c.value,
+                    title: c.name,
+                    visible: partialSelectedColumns.includes(c.value)
+                }));
+
+                previewTabulatorInstance = new Tabulator(previewContainer, {
+                    data: tableData,
+                    columns: previewCols,
+                    layout: "fitDataFill",
+                    height: "100%",
+                    reactiveData: false, // Read only preview
+                    selectable: false
+                });
+            } else {
+                // Update existing instance
+                const allCols = previewTabulatorInstance.getColumns();
+                allCols.forEach(col => {
+                    const field = col.getField();
+                    if (partialSelectedColumns.includes(field)) {
+                        col.show();
+                    } else {
+                        col.hide();
+                    }
+                });
+
+                previewTabulatorInstance.clearFilter();
+                if (partialFilterField && partialFilterValue) {
+                    previewTabulatorInstance.setFilter(partialFilterField, partialFilterOperator || 'like', partialFilterValue);
+                }
+            }
+        }, 50);
+    } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
+        // Destroy instance if switching to pivot temporarily
+         if (previewTabulatorInstance) {
+            previewTabulatorInstance.destroy();
+            previewTabulatorInstance = null;
+        }
     }
 
 </script>
@@ -432,21 +487,27 @@
                     </div>
                 </div>
             {:else if activeTab === 'create' && isEditingExisting}
-                <div class="flex-1 w-full h-full p-8 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800">
-                    <div class="text-center">
-                        <div class="mx-auto w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
-                            {#if selectedViewType === 'partial'}
-                                <Table2 size={32} />
-                            {:else}
-                                <LayoutGrid size={32} />
-                            {/if}
+                {#if selectedViewType === 'partial'}
+                    <div class="flex-1 w-full h-full p-4 bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800 flex flex-col">
+                        <div class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                            <Table2 size={16} /> Live Preview: {viewName}
                         </div>
-                        <h4 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{viewName}</h4>
-                        <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
-                            Configure your view settings on the left. Click "Save & Open View" when ready.
-                        </p>
+                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-hidden" bind:this={previewContainer}></div>
                     </div>
-                </div>
+                {:else}
+                    <div class="flex-1 w-full h-full p-8 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800">
+                        <div class="text-center">
+                            <div class="mx-auto w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
+                                <LayoutGrid size={32} />
+                            </div>
+                            <h4 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{viewName}</h4>
+                            <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
+                                Pivot Table preview is not currently supported in this modal.
+                                Configure your view settings on the left and click "Save & Open View".
+                            </p>
+                        </div>
+                    </div>
+                {/if}
             {:else if activeTab === 'existing'}
                  <div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 italic">
                     Select a view from the list to edit its configuration.
