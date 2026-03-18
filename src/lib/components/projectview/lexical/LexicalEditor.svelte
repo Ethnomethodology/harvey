@@ -2545,7 +2545,6 @@ $: if (editor && activeLayout) {
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-[100]">
       <slot name="toolbar_prepend"></slot>
 
-      {#if editable}
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}><Undo2 size={14} /></button>
       {/if}
@@ -2908,7 +2907,6 @@ $: if (editor && activeLayout) {
             </div>
           {/if}
         </div>
-      {/if}
       {/if}
     </div>
   {/if}
