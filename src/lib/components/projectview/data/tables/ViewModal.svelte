@@ -63,6 +63,13 @@
     let pivotColFields = [];
     let pivotValueFields = [{ field: '', aggregation: 'Sum' }];
 
+    // Survey View fields
+    let surveyGroupByType = 'Participants'; // 'Participants' or 'Questions'
+    let surveyUniqueIdentifierField = '';
+    let surveyParticipantIncludedFields = [];
+    let surveySelectedQuestions = [];
+    let surveyIncludedOtherFields = [];
+
     let activeData = [];
     let activeColumns = [];
     let activeSchema = {};
@@ -170,6 +177,12 @@
         pivotRowFields = [];
         pivotColFields = [];
         pivotValueFields = [{ field: '', aggregation: 'Sum' }];
+
+        surveyGroupByType = 'Participants';
+        surveyUniqueIdentifierField = '';
+        surveyParticipantIncludedFields = allColumns.map(c => c.value);
+        surveySelectedQuestions = [];
+        surveyIncludedOtherFields = [];
     }
 
     function selectViewType(type) {
@@ -202,6 +215,15 @@
             config.rowFields = pivotRowFields;
             config.colFields = pivotColFields;
             config.valueFields = pivotValueFields.filter(vf => vf.field); // filter out empties
+        } else if (selectedViewType === 'survey') {
+            config.surveyGroupByType = surveyGroupByType;
+            config.surveyUniqueIdentifierField = surveyUniqueIdentifierField;
+            if (surveyGroupByType === 'Participants') {
+                config.surveyParticipantIncludedFields = surveyParticipantIncludedFields;
+            } else {
+                config.surveySelectedQuestions = surveySelectedQuestions;
+                config.surveyIncludedOtherFields = surveyIncludedOtherFields;
+            }
         }
         return config;
     }
@@ -240,6 +262,12 @@
                 } else {
                     pivotValueFields = [{ field: '', aggregation: 'Sum' }];
                 }
+            } else if (selectedViewType === 'survey') {
+                surveyGroupByType = config.surveyGroupByType || 'Participants';
+                surveyUniqueIdentifierField = config.surveyUniqueIdentifierField || '';
+                surveyParticipantIncludedFields = config.surveyParticipantIncludedFields || allColumns.map(c => c.value);
+                surveySelectedQuestions = config.surveySelectedQuestions || [];
+                surveyIncludedOtherFields = config.surveyIncludedOtherFields || [];
             }
         } catch (e) {
             console.error('Failed to parse view config:', e);
@@ -716,6 +744,42 @@
                                                 <Plus class="w-4 h-4 mr-2" /> Add Value Field
                                             </Button>
                                         </div>
+                                    </div>
+                                </AccordionItem>
+                            {:else if selectedViewType === 'survey'}
+                                <AccordionItem open>
+                                    <span slot="header" class="flex items-center"><FileText class="w-4 h-4 mr-2" />Survey Configuration</span>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <Label for="surveyGroupByType" class="mb-2">Organize Survey Data By</Label>
+                                            <Select id="surveyGroupByType" items={[{value: 'Participants', name: 'Participants (One document per participant)'}, {value: 'Questions', name: 'Questions (One document per question)'}]} bind:value={surveyGroupByType} />
+                                        </div>
+
+                                        {#if surveyGroupByType === 'Participants'}
+                                            <div>
+                                                <Label for="participantUniqueId" class="mb-2">Participant Unique Identifier</Label>
+                                                <Select id="participantUniqueId" items={allColumns} bind:value={surveyUniqueIdentifierField} placeholder="Select unique ID field" />
+                                            </div>
+                                            <div>
+                                                <Label class="mb-2">Include Fields in Document</Label>
+                                                <MultiSelect items={allColumns} bind:value={surveyParticipantIncludedFields} placeholder="Select fields to include" />
+                                                <Helper class="mt-2">Selected fields will be included in each participant's document.</Helper>
+                                            </div>
+                                        {:else if surveyGroupByType === 'Questions'}
+                                            <div>
+                                                <Label for="questionUniqueId" class="mb-2">Participant Unique Identifier</Label>
+                                                <Select id="questionUniqueId" items={allColumns} bind:value={surveyUniqueIdentifierField} placeholder="Select unique ID field" />
+                                            </div>
+                                            <div>
+                                                <Label class="mb-2">Select Questions to Import</Label>
+                                                <MultiSelect items={allColumns} bind:value={surveySelectedQuestions} placeholder="Select questions" />
+                                                <Helper class="mt-2">A document will be created for each selected question.</Helper>
+                                            </div>
+                                            <div>
+                                                <Label class="mb-2">Include Other Fields (Optional)</Label>
+                                                <MultiSelect items={allColumns} bind:value={surveyIncludedOtherFields} placeholder="Select other fields to include" />
+                                            </div>
+                                        {/if}
                                     </div>
                                 </AccordionItem>
                             {/if}
