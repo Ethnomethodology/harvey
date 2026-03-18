@@ -2475,12 +2475,12 @@
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
 
-            const content = await invoke('load_lexical_document', {
-                args: { documentPath: absolutePath }
+            const content = await invoke('load_note_json', {
+                filePath: absolutePath
             });
 
             if (content) {
-                currentActiveDocumentJson = JSON.parse(content);
+                currentActiveDocumentJson = content;
                 isViewingDocument = true;
                 currentActiveDocumentPath = docPath;
                 dispatch('requestviewchange', { type: 'chart_opened', item: docPath });
