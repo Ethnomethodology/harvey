@@ -47,6 +47,14 @@
         }
     }
 
+    export function handleDeletedView(viewName) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.handleDeletedView === 'function') {
+            tableViewerPanelRef.handleDeletedView(viewName);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or handleDeletedView is not available.');
+        }
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});
