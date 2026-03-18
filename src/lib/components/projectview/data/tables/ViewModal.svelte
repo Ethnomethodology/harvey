@@ -33,9 +33,12 @@
         return relative.replace(/\\/g, '/').replace(/^\//, '');
     })();
 
+    import { FileText } from 'lucide-svelte';
+
     const viewTypes = [
         { value: 'partial', name: 'Partial Table View', description: 'Select specific columns and apply filters', icon: 'Table2' },
-        { value: 'pivot', name: 'Pivot Table', description: 'Summarize data with cross-tabulation', icon: 'LayoutGrid' }
+        { value: 'pivot', name: 'Pivot Table', description: 'Summarize data with cross-tabulation', icon: 'LayoutGrid' },
+        { value: 'survey', name: 'Survey Data Table', description: 'Generate documents from survey data', icon: 'FileText' }
     ];
 
     let activeTab = 'create';
@@ -756,6 +759,7 @@
                                 <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
                                     {#if type.icon === 'Table2'}<Table2 size={32} strokeWidth={1.5} />{/if}
                                     {#if type.icon === 'LayoutGrid'}<LayoutGrid size={32} strokeWidth={1.5} />{/if}
+                                    {#if type.icon === 'FileText'}<FileText size={32} strokeWidth={1.5} />{/if}
                                 </div>
                                 <div class="flex flex-col pt-1">
                                     <span class="font-bold text-lg text-gray-900 dark:text-white mb-1">{type.name}</span>
