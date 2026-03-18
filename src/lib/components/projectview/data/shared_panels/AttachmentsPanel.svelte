@@ -113,6 +113,7 @@
             notificationStore.add('View deleted.', 'success');
             attachments = attachments.filter(a => a.view_name !== view.view_name);
             dispatch('viewSaved');
+            dispatch('requestDeleteView', { viewName: view.view_name });
         } catch (error) {
             console.error('Failed to delete view via attachments panel:', error);
             notificationStore.add('Failed to delete view.', 'error');

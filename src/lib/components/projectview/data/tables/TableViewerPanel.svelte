@@ -2489,6 +2489,12 @@
         initialViewToLoad = view;
     }
 
+    export function handleDeletedView(deletedViewName) {
+        if (currentActiveView && currentActiveView === deletedViewName) {
+            returnToBaseTable();
+        }
+    }
+
     function applyViewToTable(viewName, viewType, config) {
         if (!tabulatorInstance) return;
 
