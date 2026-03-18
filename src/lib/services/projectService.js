@@ -916,7 +916,8 @@ export async function importTableSheet(sourceFilePath, projectXmlPath, sheetName
     const result = await invoke('import_table_file', {
         sourcePathStr: sourceFilePath,
         projectXmlPathStr: projectXmlPath,
-        sheetNameOpt: sheetName
+        sheetNameOpt: sheetName,
+        appendSheetName: true
     });
     if (result && result.table_path && result.preview_data) {
         return { ...result, filename: `${filename} (${sheetName})` };
@@ -982,7 +983,8 @@ export async function importTableFile(hasHeaders) {
         const result = await invoke('import_table_file', {
             sourcePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath,
-            sheetNameOpt: selectedSheets ? selectedSheets[0] : null
+            sheetNameOpt: selectedSheets ? selectedSheets[0] : null,
+            appendSheetName: false // For single-sheet imports directly from here, don't append the sheet name
         });
         console.log(`[ProjectService] Result from 'import_table_file':`, result);
 

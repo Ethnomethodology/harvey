@@ -35,6 +35,7 @@ pub async fn import_table_file(
     source_path_str: String,
     project_xml_path_str: String,
     sheet_name_opt: Option<String>,
+    append_sheet_name: Option<bool>,
 ) -> Result<Value, CommandError> {
     info!("[import_table_file] Importing table from: {}, Project XML Path: {}", source_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_path_str);
@@ -95,7 +96,9 @@ pub async fn import_table_file(
         return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
-    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+    let should_append_sheet = append_sheet_name.unwrap_or(true);
+
+    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() && should_append_sheet {
         let original_stem = Path::new(&original_source_filename_with_ext).file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let combined = format!("{}_{}", original_stem, sheet_name_opt.as_ref().unwrap());
         truncate_filename_stem(&format!("{}.csv", combined), MAX_FILENAME_STEM_LENGTH)
