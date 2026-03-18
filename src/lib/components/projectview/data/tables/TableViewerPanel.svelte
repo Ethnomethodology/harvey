@@ -2594,8 +2594,11 @@
         await initializeTable(tablePath, hasHeaders, true);
     }
 
-    function handleViewSaved(event) {
+    async function handleViewSaved(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
+
+        await loadTableViews(tablePath); // Refresh the list of available views for modals
+
         // We only dynamically update the table if the view being autosaved is currently the active view.
         const { viewName, viewType, config, isAutoSave } = event.detail;
         if (!tabulatorInstance || !isAutoSave || currentActiveView !== viewName) return;
@@ -2606,6 +2609,9 @@
 
     async function handleViewApplied(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
+
+        await loadTableViews(tablePath); // Ensure available views are up-to-date
+
         const { viewName, viewType, config } = event.detail;
         if (!tabulatorInstance) return;
 
