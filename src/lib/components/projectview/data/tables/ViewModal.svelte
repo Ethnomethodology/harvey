@@ -91,6 +91,20 @@
         return { value: fieldName, name: fieldName };
     }).filter(c => c.value && c.value !== 'harvey_internal_id');
 
+    $: requiredOrPrimaryColumns = allColumns.filter(c => {
+        const colSchema = activeSchema[c.value];
+        return colSchema && (colSchema.primary === true || colSchema.required === true);
+    }).map(c => c.value);
+
+    // Force inclusion of required/primary columns in the partial view selection
+    $: if (selectedViewType === 'partial' && partialSelectedColumns) {
+        const missingRequired = requiredOrPrimaryColumns.filter(f => !partialSelectedColumns.includes(f));
+        if (missingRequired.length > 0) {
+            // Re-assign to trigger reactivity and keep required columns selected
+            partialSelectedColumns = [...new Set([...partialSelectedColumns, ...requiredOrPrimaryColumns])];
+        }
+    }
+
     $: numericColumns = allColumns.filter(c => {
         const colSchema = activeSchema[c.value];
         if (colSchema && colSchema.type === 'Numeric') return true;
@@ -619,7 +633,7 @@
                                         <div>
                                             <Label class="mb-2">Select Visible Columns</Label>
                                             <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
-                                            <Helper class="mt-2">Columns not selected will be hidden in this view.</Helper>
+                                            <Helper class="mt-2">Columns not selected will be hidden in this view. <span class="font-semibold text-blue-600 dark:text-blue-400">Primary and required fields cannot be hidden.</span></Helper>
                                         </div>
                                     </div>
                                 </AccordionItem>

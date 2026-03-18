@@ -24,9 +24,13 @@ export function applyViewConfigToData(tableData, columns, schema, viewConfig, vi
             });
         }
         if (viewConfig.selectedColumns && viewConfig.selectedColumns.length > 0) {
+            // Ensure primary or required fields are always included, even if omitted from old saved configs
+            const requiredOrPrimaryFields = Object.keys(schema).filter(k => schema[k] && (schema[k].primary === true || schema[k].required === true));
+            const enforcedColumns = new Set([...viewConfig.selectedColumns, ...requiredOrPrimaryFields]);
+
             transformedColumns = transformedColumns.filter(col => {
                 const field = typeof col.getField === 'function' ? col.getField() : col.field;
-                return field === 'harvey_internal_id' || viewConfig.selectedColumns.includes(field);
+                return field === 'harvey_internal_id' || enforcedColumns.has(field);
             });
         }
     } else if (viewType === 'pivot') {
