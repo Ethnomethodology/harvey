@@ -479,6 +479,7 @@ fn to_json_response(headers: Vec<String>, records: Vec<Value>) -> Result<Value, 
 fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(has_headers)
+        .flexible(true) // Allows records to have different lengths than the header (like Excel handles trailing commas)
         .from_path(path)
         .map_err(|e| CommandError::from(format!("Failed to open CSV '{}': {}", path.display(), e)))?;
 
@@ -489,7 +490,7 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
             .map(|h| h.to_string())
             .collect::<Vec<String>>()
     } else {
-        let mut temp_rdr = csv::ReaderBuilder::new().has_headers(false).from_path(path)?;
+        let mut temp_rdr = csv::ReaderBuilder::new().has_headers(false).flexible(true).from_path(path)?;
         let first_record = temp_rdr.records().next().transpose()?.unwrap_or_default();
         let num_columns = first_record.len();
         (0..num_columns).map(|i| {
