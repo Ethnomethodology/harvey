@@ -3,6 +3,18 @@ use crate::projectview::view_handler::{self, ViewConfig};
 use log::info;
 
 #[tauri::command]
+pub async fn generate_survey_documents_command(
+    project_id: String,
+    table_path: String,
+    view_name: String,
+    config_json: String,
+    project_xml_path_str: String,
+) -> Result<Vec<String>, CommandError> {
+    info!("Generating survey documents for view: {} in table: {}", view_name, table_path);
+    view_handler::generate_survey_documents(&project_id, &table_path, &view_name, &config_json, &project_xml_path_str).await
+}
+
+#[tauri::command]
 pub async fn save_table_view_command(
     project_id: String,
     table_path: String,

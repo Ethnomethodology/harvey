@@ -393,6 +393,7 @@ pub fn run() {
             projectview::view_commands::save_table_view_command,
             projectview::view_commands::load_table_views_command,
             projectview::view_commands::delete_table_view_command,
+            projectview::view_commands::generate_survey_documents_command,
 
             // --- Tag Handler Commands ---
             projectview::tag_handler::add_tag,

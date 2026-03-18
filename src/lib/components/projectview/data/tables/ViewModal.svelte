@@ -300,7 +300,25 @@
                 configJson: JSON.stringify(config)
             });
             if (!isAutoSave) {
-                notificationStore.add('View saved successfully.', 'success');
+                if (selectedViewType === 'survey') {
+                    // For survey, generate the actual documents on explicit save
+                    try {
+                        notificationStore.add('Generating documents, this may take a moment...', 'info');
+                        await invoke('generate_survey_documents_command', {
+                            projectId: projectStoreState.id,
+                            tablePath: normalizedTablePath,
+                            viewName: viewName,
+                            configJson: JSON.stringify(config),
+                            projectXmlPathStr: projectStoreState.xmlPath
+                        });
+                        notificationStore.add('Survey documents generated. Check the Attachments Panel.', 'success');
+                    } catch (genError) {
+                        console.error('Failed to generate survey documents:', genError);
+                        notificationStore.add('View saved, but failed to generate documents.', 'error');
+                    }
+                } else {
+                    notificationStore.add('View saved successfully.', 'success');
+                }
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
             } else {
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config, isAutoSave: true });
@@ -612,7 +630,8 @@
 
     <div class="flex-1 flex overflow-hidden -m-6 h-full border-t border-gray-200 dark:border-gray-700">
         <!-- Left Sidebar: Create / Open Existing -->
-        <div class="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800">
+        <!-- For survey configuration, we expand the sidebar to fill or take more space since there's no live preview -->
+        <div class="border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800 transition-all duration-300 {activeTab === 'create' && isEditingExisting && selectedViewType === 'survey' ? 'w-[500px]' : 'w-80'}">
             {#if !(activeTab === 'create' && isEditingExisting)}
                 <div class="flex border-b border-gray-200 dark:border-gray-700">
                     <button
