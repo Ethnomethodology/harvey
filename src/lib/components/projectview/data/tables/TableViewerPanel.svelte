@@ -2525,26 +2525,44 @@
                 tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
             }
         } else if (viewType === 'pivot') {
-            const { rowField, colField, valueField, aggregation } = config;
-            if (!rowField || !valueField) return;
+            const { rowField, colField, rowFields, colFields, valueField, aggregation } = config;
+
+            let actualRowFields = rowFields || (rowField ? [rowField] : []);
+            let actualColFields = colFields || (colField ? [colField] : []);
+
+            if (actualRowFields.length === 0 || !valueField) return;
 
             let groupedData = {};
             let allColKeys = new Set();
+            let rowKeyToValuesMap = new Map();
 
             tableData.forEach(row => {
-                const rVal = String(row[rowField] || '(Blank)');
-                const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
+                const rVals = actualRowFields.map(f => String(row[f] || '(Blank)'));
+                const rKey = rVals.join(' | ');
+
+                if (!rowKeyToValuesMap.has(rKey)) {
+                    let rowValsObj = {};
+                    actualRowFields.forEach((f, i) => rowValsObj[f] = rVals[i]);
+                    rowKeyToValuesMap.set(rKey, rowValsObj);
+                }
+
+                let cKey = 'Total';
+                if (actualColFields.length > 0) {
+                    cKey = actualColFields.map(f => String(row[f] || '(Blank)')).join(' | ');
+                }
+
                 const vVal = parseFloat(row[valueField]) || 0;
 
-                if (!groupedData[rVal]) groupedData[rVal] = {};
-                if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
-                groupedData[rVal][cVal].push(vVal);
-                allColKeys.add(cVal);
+                if (!groupedData[rKey]) groupedData[rKey] = {};
+                if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
+                groupedData[rKey][cKey].push(vVal);
+                allColKeys.add(cKey);
             });
 
-            let pivotCols = [
-                { field: rowField, title: rowField, frozen: true, editor: false }
-            ];
+            let pivotCols = [];
+            actualRowFields.forEach(f => {
+                pivotCols.push({ field: f, title: f, frozen: true, editor: false });
+            });
 
             let sortedColKeys = Array.from(allColKeys).sort();
             let newPivotSchema = {};
@@ -2556,7 +2574,7 @@
 
             let pivotData = [];
             for (const [rKey, cData] of Object.entries(groupedData)) {
-                let rowData = { [rowField]: rKey };
+                let rowData = { ...rowKeyToValuesMap.get(rKey) };
                 sortedColKeys.forEach(ck => {
                     const vals = cData[ck] || [];
                     let aggVal = 0;

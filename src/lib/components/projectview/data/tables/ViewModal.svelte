@@ -56,8 +56,8 @@
     let partialFilterOperator = 'contains';
 
     // Pivot View fields
-    let pivotRowField = '';
-    let pivotColField = '';
+    let pivotRowFields = [];
+    let pivotColFields = [];
     let pivotValueField = '';
     let pivotAggregation = 'Sum'; // Sum, Count, Average, Min, Max
 
@@ -151,8 +151,8 @@
         partialFilterField = '';
         partialFilterValue = '';
         partialFilterOperator = 'contains';
-        pivotRowField = '';
-        pivotColField = '';
+        pivotRowFields = [];
+        pivotColFields = [];
         pivotValueField = '';
         pivotAggregation = 'Sum';
     }
@@ -178,8 +178,8 @@
             config.filterValue = partialFilterValue;
             config.filterOperator = partialFilterOperator;
         } else if (selectedViewType === 'pivot') {
-            config.rowField = pivotRowField;
-            config.colField = pivotColField;
+            config.rowFields = pivotRowFields;
+            config.colFields = pivotColFields;
             config.valueField = pivotValueField;
             config.aggregation = pivotAggregation;
         }
@@ -206,8 +206,13 @@
                 partialFilterValue = config.filterValue || '';
                 partialFilterOperator = config.filterOperator || 'contains';
             } else if (selectedViewType === 'pivot') {
-                pivotRowField = config.rowField || '';
-                pivotColField = config.colField || '';
+                // Handle backwards compatibility with old single-field config
+                if (config.rowField) pivotRowFields = [config.rowField];
+                else pivotRowFields = config.rowFields || [];
+
+                if (config.colField) pivotColFields = [config.colField];
+                else pivotColFields = config.colFields || [];
+
                 pivotValueField = config.valueField || '';
                 pivotAggregation = config.aggregation || 'Sum';
             }
@@ -288,28 +293,42 @@
         open = false;
     }
 
-    function generatePivotData(data, rowField, colField, valueField, aggregation) {
-        if (!rowField || !valueField) return { pivotCols: [], pivotData: [] };
+    function generatePivotData(data, rowFields, colFields, valueField, aggregation) {
+        if (!rowFields || rowFields.length === 0 || !valueField) return { pivotCols: [], pivotData: [] };
 
         let groupedData = {};
         let allColKeys = new Set();
+        let rowKeyToValuesMap = new Map(); // Maps compound row string -> object of individual row field values
 
         // 1. Group Data
         data.forEach(row => {
-            const rVal = String(row[rowField] || '(Blank)');
-            const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
+            const rVals = rowFields.map(f => String(row[f] || '(Blank)'));
+            const rKey = rVals.join(' | ');
+
+            if (!rowKeyToValuesMap.has(rKey)) {
+                let rowValsObj = {};
+                rowFields.forEach((f, i) => rowValsObj[f] = rVals[i]);
+                rowKeyToValuesMap.set(rKey, rowValsObj);
+            }
+
+            let cKey = 'Total';
+            if (colFields && colFields.length > 0) {
+                cKey = colFields.map(f => String(row[f] || '(Blank)')).join(' | ');
+            }
+
             const vVal = parseFloat(row[valueField]) || 0;
 
-            if (!groupedData[rVal]) groupedData[rVal] = {};
-            if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
-            groupedData[rVal][cVal].push(vVal);
-            allColKeys.add(cVal);
+            if (!groupedData[rKey]) groupedData[rKey] = {};
+            if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
+            groupedData[rKey][cKey].push(vVal);
+            allColKeys.add(cKey);
         });
 
         // 2. Build Columns for Tabulator
-        let pivotCols = [
-            { field: rowField, title: rowField, frozen: true }
-        ];
+        let pivotCols = [];
+        rowFields.forEach(f => {
+            pivotCols.push({ field: f, title: f, frozen: true });
+        });
 
         let sortedColKeys = Array.from(allColKeys).sort();
         sortedColKeys.forEach(ck => {
@@ -319,7 +338,7 @@
         // 3. Aggregate Values
         let pivotData = [];
         for (const [rKey, cData] of Object.entries(groupedData)) {
-            let rowData = { [rowField]: rKey };
+            let rowData = { ...rowKeyToValuesMap.get(rKey) };
             sortedColKeys.forEach(ck => {
                 const vals = cData[ck] || [];
                 let aggVal = 0;
@@ -348,8 +367,8 @@
         let __ = partialFilterField;
         let ___ = partialFilterValue;
         let ____ = partialFilterOperator;
-        let _____ = pivotRowField;
-        let ______ = pivotColField;
+        let _____ = pivotRowFields;
+        let ______ = pivotColFields;
         let _______ = pivotValueField;
         let ________ = pivotAggregation;
         let _________ = viewDescription;
@@ -402,7 +421,7 @@
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
         setTimeout(() => {
             if (!previewContainer) return; // Verify still mounted
-            if (!pivotRowField || !pivotValueField) {
+            if (!pivotRowFields || pivotRowFields.length === 0 || !pivotValueField) {
                 if (previewTabulatorInstance) {
                     previewTabulatorInstance.destroy();
                     previewTabulatorInstance = null;
@@ -410,7 +429,7 @@
                 return;
             }
 
-            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
+            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowFields, pivotColFields, pivotValueField, pivotAggregation);
 
             if (pivotCols.length > 0) {
                 if (previewTabulatorInstance) {
@@ -585,12 +604,12 @@
                                             </Select>
                                         </div>
                                         <div>
-                                            <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
-                                            <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />
+                                            <Label for="pivotRow" class="mb-2">Row Fields (Group By)</Label>
+                                            <MultiSelect id="pivotRow" items={allColumns} bind:value={pivotRowFields} placeholder="Select row fields" />
                                         </div>
                                         <div>
-                                            <Label for="pivotCol" class="mb-2">Column Field (Pivot Across)</Label>
-                                            <Select id="pivotCol" items={[{value:'', name:'-- None --'}, ...allColumns]} bind:value={pivotColField} />
+                                            <Label for="pivotCol" class="mb-2">Column Fields (Pivot Across)</Label>
+                                            <MultiSelect id="pivotCol" items={allColumns} bind:value={pivotColFields} placeholder="Select column fields" />
                                         </div>
                                         <div>
                                             <Label for="pivotValue" class="mb-2">Value Field (To Aggregate)</Label>
