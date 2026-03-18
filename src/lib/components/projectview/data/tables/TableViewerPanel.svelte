@@ -2451,12 +2451,14 @@
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialChartToLoad = null; showChartModal = true;
         initialChartToLoad = chart;
+        dispatch('requestviewchange', { type: 'chart_opened', item: chart });
     }
 
     let currentActiveView = null;
     let currentActiveViewType = null;
     let baseTableColumns = []; // Store base columns when applying a view
     let pivotDerivedSchema = {};
+    let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0, rowFields: [], colLeaves: [] };
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
     export async function openView(view) {
@@ -2474,6 +2476,7 @@
                 });
             }
             applyViewToTable(view.view_name, view.view_type, config);
+            dispatch('requestviewchange', { type: 'view_changed', item: view });
         } catch (e) {
             console.error('Failed to parse view config on open:', e);
             notificationStore.add('Failed to open view', 'error');
@@ -2485,6 +2488,12 @@
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialViewToLoad = null; showViewModal = true;
         initialViewToLoad = view;
+    }
+
+    export function handleDeletedView(deletedViewName) {
+        if (currentActiveView && currentActiveView === deletedViewName) {
+            returnToBaseTable();
+        }
     }
 
     function applyViewToTable(viewName, viewType, config) {
@@ -2517,58 +2526,152 @@
                 tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
             }
         } else if (viewType === 'pivot') {
-            const { rowField, colField, valueField, aggregation } = config;
-            if (!rowField || !valueField) return;
+            const { rowField, colField, rowFields, colFields, valueField, aggregation, valueFields } = config;
 
-            let groupedData = {};
-            let allColKeys = new Set();
-
-            tableData.forEach(row => {
-                const rVal = String(row[rowField] || '(Blank)');
-                const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
-                const vVal = parseFloat(row[valueField]) || 0;
-
-                if (!groupedData[rVal]) groupedData[rVal] = {};
-                if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
-                groupedData[rVal][cVal].push(vVal);
-                allColKeys.add(cVal);
-            });
-
-            let pivotCols = [
-                { field: rowField, title: rowField, frozen: true, editor: false }
-            ];
-
-            let sortedColKeys = Array.from(allColKeys).sort();
-            let newPivotSchema = {};
-            sortedColKeys.forEach(ck => {
-                pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
-                newPivotSchema[ck] = { type: 'Numeric', subType: 'Decimal' };
-            });
-            pivotDerivedSchema = newPivotSchema;
-
-            let pivotData = [];
-            for (const [rKey, cData] of Object.entries(groupedData)) {
-                let rowData = { [rowField]: rKey };
-                sortedColKeys.forEach(ck => {
-                    const vals = cData[ck] || [];
-                    let aggVal = 0;
-                    if (vals.length > 0) {
-                        if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                        else if (aggregation === 'Count') aggVal = vals.length;
-                        else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                        else if (aggregation === 'Min') aggVal = Math.min(...vals);
-                        else if (aggregation === 'Max') aggVal = Math.max(...vals);
-                    } else {
-                        aggVal = null;
-                    }
-
-                    rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
-                });
-                pivotData.push(rowData);
+            let actualRowFields = rowFields || (rowField ? [rowField] : []);
+            let actualColFields = colFields || (colField ? [colField] : []);
+            let actualValueFields = valueFields || [];
+            if (actualValueFields.length === 0 && valueField) {
+                actualValueFields.push({ field: valueField, aggregation: aggregation || 'Sum' });
             }
 
-            tabulatorInstance.setColumns(pivotCols);
-            tabulatorInstance.replaceData(pivotData);
+            if (actualRowFields.length === 0 || actualValueFields.length === 0) return;
+
+            let rowTree = {};
+            let allColLeaves = new Set();
+
+            tableData.forEach(row => {
+                let currentLevel = rowTree;
+                for (let i = 0; i < actualRowFields.length; i++) {
+                    const field = actualRowFields[i];
+                    const val = String(row[field] || '(Blank)');
+                    if (!currentLevel[val]) {
+                        currentLevel[val] = {
+                            _val: val,
+                            _field: field,
+                            _children: i === actualRowFields.length - 1 ? null : {},
+                            _data: []
+                        };
+                    }
+                    currentLevel = currentLevel[val]._children || currentLevel[val];
+                    if (i === actualRowFields.length - 1) {
+                        currentLevel._data.push(row);
+                    }
+                }
+
+                let cVals = actualColFields ? actualColFields.map(f => String(row[f] || '(Blank)')) : [];
+                actualValueFields.forEach(vf => {
+                    const keyParts = [...cVals, `${vf.field} (${vf.aggregation})`];
+                    allColLeaves.add(JSON.stringify(keyParts));
+                });
+            });
+
+            const colLeaves = Array.from(allColLeaves).map(c => JSON.parse(c)).sort();
+
+            function aggregateRows(rows, vfParts, colFieldsArray) {
+                const matchColParts = vfParts.slice(0, -1);
+                const vfPart = vfParts[vfParts.length - 1];
+                const match = vfPart.match(/(.+) \((Sum|Count|Average|Min|Max)\)$/);
+                if (!match) return null;
+                const vField = match[1];
+                const aggType = match[2];
+
+                let filteredRows = rows;
+                if (colFieldsArray && colFieldsArray.length > 0) {
+                    filteredRows = rows.filter(r => {
+                        return colFieldsArray.every((cf, i) => String(r[cf] || '(Blank)') === matchColParts[i]);
+                    });
+                }
+
+                if (filteredRows.length === 0) return null;
+
+                let vals = filteredRows.map(r => parseFloat(r[vField]) || 0);
+                if (aggType === 'Sum') return vals.reduce((a,b)=>a+b, 0);
+                if (aggType === 'Count') return vals.length;
+                if (aggType === 'Average') return vals.reduce((a,b)=>a+b, 0) / vals.length;
+                if (aggType === 'Min') return Math.min(...vals);
+                if (aggType === 'Max') return Math.max(...vals);
+                return null;
+            }
+
+            let flatRows = [];
+
+            function traverseRowTree(nodeMap, currentDepth) {
+                let totalRowSpan = 0;
+                let childRows = [];
+
+                const keys = Object.keys(nodeMap).sort();
+                for (const k of keys) {
+                    const node = nodeMap[k];
+                    let rowSpan = 1;
+                    let descendants = [];
+
+                    if (node._children) {
+                        const res = traverseRowTree(node._children, currentDepth + 1);
+                        rowSpan = res.totalRowSpan;
+                        descendants = res.childRows;
+                    } else {
+                        let rowData = {};
+                        colLeaves.forEach((colLeafParts, i) => {
+                            const aggVal = aggregateRows(node._data, colLeafParts, actualColFields);
+                            rowData[`val_${i}`] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                        });
+                        descendants = [{ data: rowData, headers: [] }];
+                    }
+
+                    totalRowSpan += rowSpan;
+
+                    descendants.forEach((d, i) => {
+                        d.headers.unshift({ val: k, rowspan: i === 0 ? rowSpan : 0 });
+                    });
+
+                    childRows.push(...descendants);
+                }
+
+                return { totalRowSpan, childRows };
+            }
+
+            let { childRows } = traverseRowTree(rowTree, 0);
+
+            const colDepth = (actualColFields ? actualColFields.length : 0) + 1;
+            let colHeaders = Array.from({length: colDepth}, () => []);
+
+            for (let level = 0; level < colDepth; level++) {
+                let currentVal = null;
+                let colspan = 0;
+
+                colLeaves.forEach((leafParts, idx) => {
+                    const val = leafParts[level];
+                    if (val !== currentVal) {
+                        if (colspan > 0) colHeaders[level].push({ val: currentVal, colspan });
+                        currentVal = val;
+                        colspan = 1;
+                    } else {
+                        colspan++;
+                    }
+
+                    if (idx === colLeaves.length - 1) {
+                        colHeaders[level].push({ val: currentVal, colspan });
+                    }
+                });
+            }
+
+            // Pivot views are natively rendered, so store them in reactive vars rather than Tabulator
+            generatedPivotResult = {
+                colHeaders,
+                rows: childRows,
+                rowFieldsCount: actualRowFields.length,
+                colLeavesCount: colLeaves.length,
+                colLeaves: colLeaves, // We need this for export mapping
+                rowFields: actualRowFields // Keep track of the resolved row fields array
+            };
+
+            // Generate basic schema for export
+            let newPivotSchema = {};
+            colLeaves.forEach((leafParts, idx) => {
+                newPivotSchema[`val_${idx}`] = { type: 'Numeric', subType: 'Decimal' };
+            });
+            pivotDerivedSchema = newPivotSchema;
         }
 
         // Re-evaluate add entry row (removes it for pivot)
@@ -2594,18 +2697,25 @@
         await initializeTable(tablePath, hasHeaders, true);
     }
 
-    function handleViewSaved(event) {
+    async function handleViewSaved(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
+
+        await loadTableViews(tablePath); // Refresh the list of available views for modals
+
         // We only dynamically update the table if the view being autosaved is currently the active view.
         const { viewName, viewType, config, isAutoSave } = event.detail;
         if (!tabulatorInstance || !isAutoSave || currentActiveView !== viewName) return;
 
         // Perform in-place update if possible
         applyViewToTable(viewName, viewType, config);
+        dispatch('requestviewchange', { type: 'view_changed', item: { view_name: viewName, view_type: viewType } });
     }
 
     async function handleViewApplied(event) {
         dispatch('requestviewchange', { type: 'refresh_metadata' });
+
+        await loadTableViews(tablePath); // Ensure available views are up-to-date
+
         const { viewName, viewType, config } = event.detail;
         if (!tabulatorInstance) return;
 
@@ -2615,9 +2725,34 @@
         }
 
         applyViewToTable(viewName, viewType, config);
+        dispatch('requestviewchange', { type: 'view_changed', item: { view_name: viewName, view_type: viewType } });
     }
 
     export async function getExportData() {
+        if (currentActiveViewType === 'pivot') {
+            // For export, we flatten the pivot data into a 2D array of rows
+            let rowFields = generatedPivotResult.rowFields || [];
+
+            const headers = [...rowFields, ...generatedPivotResult.colLeaves.map(parts => parts.join(' '))];
+            const data = generatedPivotResult.rows.map(row => {
+                let out = {};
+                // We map header names directly for the exporter
+                row.headers.forEach((h, i) => {
+                    if (rowFields[i]) out[rowFields[i]] = h.val;
+                });
+                for (let i = 0; i < generatedPivotResult.colLeavesCount; i++) {
+                    out[generatedPivotResult.colLeaves[i].join(' ')] = row.data[`val_${i}`] !== undefined ? row.data[`val_${i}`] : '';
+                }
+                return out;
+            });
+
+            return {
+                data,
+                headers,
+                styles: {}
+            };
+        }
+
         if (!tabulatorInstance) return null;
         
         const data = tabulatorInstance.getData();
@@ -2951,20 +3086,23 @@
                         span.className = "row-number-text group-hover:hidden";
                         span.textContent = rowNum;
                         
-                        const button = document.createElement("button");
-                        button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
-                        button.title = "Edit Entry";
-                        
-                        mount(TableIcon, {
-                            target: button,
-                            props: { icon: Pencil, size: 14 }
-                        });
+                        if (currentActiveViewType !== 'pivot') {
+                            const button = document.createElement("button");
+                            button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
+                            button.title = "Edit Entry";
+
+                            mount(TableIcon, {
+                                target: button,
+                                props: { icon: Pencil, size: 14 }
+                            });
+                            container.appendChild(button);
+                        }
                         
                         container.appendChild(span);
-                        container.appendChild(button);
                         return container;
                     },
                     cellClick: (e, cell) => {
+                        if (currentActiveViewType === 'pivot') return;
                         if (e.target.closest('.edit-icon-placeholder')) {
                             e.preventDefault();
                             e.stopPropagation();
@@ -3424,9 +3562,13 @@
         activeViewName={currentActiveView}
         on:viewSaved={handleViewSaved}
         on:viewApplied={handleViewApplied}
-        on:viewDeleted={() => {
+        on:viewDeleted={(event) => {
+            const deletedViewName = event.detail?.viewName;
             loadTableViews(tablePath);
             dispatch('requestviewchange', { type: 'refresh_metadata' });
+            if (currentActiveView && currentActiveView === deletedViewName) {
+                returnToBaseTable();
+            }
         }}
     />
 {/if}
@@ -3465,7 +3607,7 @@
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
             {#if currentActiveView}
-                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white border border-purple-600 rounded focus:outline-none focus:ring-2 focus:ring-purple-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
+                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
                 </button>
@@ -3531,7 +3673,7 @@
             </button>
 
             <div class="separator mx-0.5"></div>
-            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30" title="Create Views">
+            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot'}>
                 <Table2 size={14} />
                 <span>Create Views</span>
             </button>
@@ -3654,7 +3796,65 @@
         {:else if error}
              <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10">Error: {error}</div>
         {/if}
-        <div bind:this={tableContainer} class="w-full h-full">
+
+        {#if currentActiveViewType === 'pivot'}
+            <div class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20">
+                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                        {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
+                            {#each generatedPivotResult.colHeaders as headerRow, levelIndex}
+                                <tr>
+                                    {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
+                                        {#each generatedPivotResult.rowFields as rowField}
+                                            <th scope="col" class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom">
+                                                {rowField}
+                                            </th>
+                                        {/each}
+                                    {:else if generatedPivotResult.rowFieldsCount > 0}
+                                        <th colspan={generatedPivotResult.rowFieldsCount} class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"></th>
+                                    {/if}
+
+                                    {#each headerRow as h}
+                                        <th scope="col" colspan={h.colspan} class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex === generatedPivotResult.colHeaders.length - 1 ? 'bg-gray-100 dark:bg-gray-700' : 'bg-gray-200 dark:bg-gray-600'}">
+                                            {h.val}
+                                        </th>
+                                    {/each}
+                                </tr>
+                            {/each}
+                        {/if}
+                    </thead>
+                    <tbody>
+                        {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
+                            {#each generatedPivotResult.rows as row, i}
+                                <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                    {#each row.headers as header}
+                                        {#if header.rowspan > 0}
+                                            <td rowspan={header.rowspan} class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top">
+                                                {header.val}
+                                            </td>
+                                        {/if}
+                                    {/each}
+
+                                    {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex}
+                                        <td class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700">
+                                            {row.data[`val_${colIndex}`] !== undefined ? row.data[`val_${colIndex}`] : ''}
+                                        </td>
+                                    {/each}
+                                </tr>
+                            {/each}
+                        {:else}
+                            <tr>
+                                <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
+                                    No data available.
+                                </td>
+                            </tr>
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        {/if}
+
+        <div bind:this={tableContainer} class="w-full h-full" style="display: {currentActiveViewType === 'pivot' ? 'none' : 'block'};">
              {#if !isLoading && !error && tableData.length === 0 && tablePath}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}

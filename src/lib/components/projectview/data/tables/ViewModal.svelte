@@ -56,10 +56,9 @@
     let partialFilterOperator = 'contains';
 
     // Pivot View fields
-    let pivotRowField = '';
-    let pivotColField = '';
-    let pivotValueField = '';
-    let pivotAggregation = 'Sum'; // Sum, Count, Average, Min, Max
+    let pivotRowFields = [];
+    let pivotColFields = [];
+    let pivotValueFields = [{ field: '', aggregation: 'Sum' }];
 
     let activeData = [];
     let activeColumns = [];
@@ -91,6 +90,20 @@
         const fieldName = typeof c.getField === 'function' ? c.getField() : c.field;
         return { value: fieldName, name: fieldName };
     }).filter(c => c.value && c.value !== 'harvey_internal_id');
+
+    $: requiredOrPrimaryColumns = allColumns.filter(c => {
+        const colSchema = activeSchema[c.value];
+        return colSchema && (colSchema.primary === true || colSchema.required === true);
+    }).map(c => c.value);
+
+    // Force inclusion of required/primary columns in the partial view selection
+    $: if (selectedViewType === 'partial' && partialSelectedColumns) {
+        const missingRequired = requiredOrPrimaryColumns.filter(f => !partialSelectedColumns.includes(f));
+        if (missingRequired.length > 0) {
+            // Re-assign to trigger reactivity and keep required columns selected
+            partialSelectedColumns = [...new Set([...partialSelectedColumns, ...requiredOrPrimaryColumns])];
+        }
+    }
 
     $: numericColumns = allColumns.filter(c => {
         const colSchema = activeSchema[c.value];
@@ -144,15 +157,16 @@
     function resetForm() {
         viewDescription = '';
         selectedViewType = null;
-        dataSource = activeViewName || 'Base Table';
+        // Default to activeViewName if it's a partial view, otherwise Base Table
+        const isActiveViewPartial = views.some(v => v.view_name === activeViewName && v.view_type === 'partial');
+        dataSource = isActiveViewPartial ? activeViewName : 'Base Table';
         partialSelectedColumns = allColumns.map(c => c.value);
         partialFilterField = '';
         partialFilterValue = '';
         partialFilterOperator = 'contains';
-        pivotRowField = '';
-        pivotColField = '';
-        pivotValueField = '';
-        pivotAggregation = 'Sum';
+        pivotRowFields = [];
+        pivotColFields = [];
+        pivotValueFields = [{ field: '', aggregation: 'Sum' }];
     }
 
     function selectViewType(type) {
@@ -176,10 +190,9 @@
             config.filterValue = partialFilterValue;
             config.filterOperator = partialFilterOperator;
         } else if (selectedViewType === 'pivot') {
-            config.rowField = pivotRowField;
-            config.colField = pivotColField;
-            config.valueField = pivotValueField;
-            config.aggregation = pivotAggregation;
+            config.rowFields = pivotRowFields;
+            config.colFields = pivotColFields;
+            config.valueFields = pivotValueFields.filter(vf => vf.field); // filter out empties
         }
         return config;
     }
@@ -204,10 +217,20 @@
                 partialFilterValue = config.filterValue || '';
                 partialFilterOperator = config.filterOperator || 'contains';
             } else if (selectedViewType === 'pivot') {
-                pivotRowField = config.rowField || '';
-                pivotColField = config.colField || '';
-                pivotValueField = config.valueField || '';
-                pivotAggregation = config.aggregation || 'Sum';
+                // Handle backwards compatibility with old single-field config
+                if (config.rowField) pivotRowFields = [config.rowField];
+                else pivotRowFields = config.rowFields || [];
+
+                if (config.colField) pivotColFields = [config.colField];
+                else pivotColFields = config.colFields || [];
+
+                if (config.valueFields && config.valueFields.length > 0) {
+                    pivotValueFields = config.valueFields;
+                } else if (config.valueField) {
+                    pivotValueFields = [{ field: config.valueField, aggregation: config.aggregation || 'Sum' }];
+                } else {
+                    pivotValueFields = [{ field: '', aggregation: 'Sum' }];
+                }
             }
         } catch (e) {
             console.error('Failed to parse view config:', e);
@@ -286,57 +309,139 @@
         open = false;
     }
 
-    function generatePivotData(data, rowField, colField, valueField, aggregation) {
-        if (!rowField || !valueField) return { pivotCols: [], pivotData: [] };
-
-        let groupedData = {};
-        let allColKeys = new Set();
-
-        // 1. Group Data
-        data.forEach(row => {
-            const rVal = String(row[rowField] || '(Blank)');
-            const cVal = colField ? String(row[colField] || '(Blank)') : 'Total';
-            const vVal = parseFloat(row[valueField]) || 0;
-
-            if (!groupedData[rVal]) groupedData[rVal] = {};
-            if (!groupedData[rVal][cVal]) groupedData[rVal][cVal] = [];
-            groupedData[rVal][cVal].push(vVal);
-            allColKeys.add(cVal);
-        });
-
-        // 2. Build Columns for Tabulator
-        let pivotCols = [
-            { field: rowField, title: rowField, frozen: true }
-        ];
-
-        let sortedColKeys = Array.from(allColKeys).sort();
-        sortedColKeys.forEach(ck => {
-            pivotCols.push({ field: ck, title: ck, hozAlign: 'right' });
-        });
-
-        // 3. Aggregate Values
-        let pivotData = [];
-        for (const [rKey, cData] of Object.entries(groupedData)) {
-            let rowData = { [rowField]: rKey };
-            sortedColKeys.forEach(ck => {
-                const vals = cData[ck] || [];
-                let aggVal = 0;
-                if (vals.length > 0) {
-                    if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                    else if (aggregation === 'Count') aggVal = vals.length;
-                    else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                    else if (aggregation === 'Min') aggVal = Math.min(...vals);
-                    else if (aggregation === 'Max') aggVal = Math.max(...vals);
-                } else {
-                    aggVal = null; // empty cell
-                }
-
-                rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
-            });
-            pivotData.push(rowData);
+    function generatePivotData(data, rowFields, colFields, valueField, aggregation, valueFieldsObj = []) {
+        let actualValueFields = valueFieldsObj.filter(vf => vf.field);
+        if (actualValueFields.length === 0 && valueField) {
+            actualValueFields.push({ field: valueField, aggregation: aggregation || 'Sum' });
         }
 
-        return { pivotCols, pivotData };
+        if (!rowFields || rowFields.length === 0 || actualValueFields.length === 0) return { colHeaders: [], rows: [] };
+
+        let rowTree = {};
+        let allColLeaves = new Set();
+
+        data.forEach(row => {
+            let currentLevel = rowTree;
+            for (let i = 0; i < rowFields.length; i++) {
+                const field = rowFields[i];
+                const val = String(row[field] || '(Blank)');
+                if (!currentLevel[val]) {
+                    currentLevel[val] = {
+                        _val: val,
+                        _field: field,
+                        _children: i === rowFields.length - 1 ? null : {},
+                        _data: []
+                    };
+                }
+                currentLevel = currentLevel[val]._children || currentLevel[val];
+                if (i === rowFields.length - 1) {
+                    currentLevel._data.push(row);
+                }
+            }
+
+            let cVals = colFields ? colFields.map(f => String(row[f] || '(Blank)')) : [];
+            actualValueFields.forEach(vf => {
+                const keyParts = [...cVals, `${vf.field} (${vf.aggregation})`];
+                allColLeaves.add(JSON.stringify(keyParts));
+            });
+        });
+
+        const colLeaves = Array.from(allColLeaves).map(c => JSON.parse(c)).sort();
+
+        function aggregateRows(rows, vfParts, colFieldsArray) {
+            const matchColParts = vfParts.slice(0, -1);
+            const vfPart = vfParts[vfParts.length - 1];
+            const match = vfPart.match(/(.+) \((Sum|Count|Average|Min|Max)\)$/);
+            if (!match) return null;
+            const vField = match[1];
+            const aggType = match[2];
+
+            let filteredRows = rows;
+            if (colFieldsArray && colFieldsArray.length > 0) {
+                filteredRows = rows.filter(r => {
+                    return colFieldsArray.every((cf, i) => String(r[cf] || '(Blank)') === matchColParts[i]);
+                });
+            }
+
+            if (filteredRows.length === 0) return null;
+
+            let vals = filteredRows.map(r => parseFloat(r[vField]) || 0);
+            if (aggType === 'Sum') return vals.reduce((a,b)=>a+b, 0);
+            if (aggType === 'Count') return vals.length;
+            if (aggType === 'Average') return vals.reduce((a,b)=>a+b, 0) / vals.length;
+            if (aggType === 'Min') return Math.min(...vals);
+            if (aggType === 'Max') return Math.max(...vals);
+            return null;
+        }
+
+        let flatRows = [];
+
+        function traverseRowTree(nodeMap, currentDepth) {
+            let totalRowSpan = 0;
+            let childRows = [];
+
+            const keys = Object.keys(nodeMap).sort();
+            for (const k of keys) {
+                const node = nodeMap[k];
+                let rowSpan = 1;
+                let descendants = [];
+
+                if (node._children) {
+                    const res = traverseRowTree(node._children, currentDepth + 1);
+                    rowSpan = res.totalRowSpan;
+                    descendants = res.childRows;
+                } else {
+                    let rowData = {};
+                    colLeaves.forEach((colLeafParts, i) => {
+                        const aggVal = aggregateRows(node._data, colLeafParts, colFields);
+                        rowData[`val_${i}`] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                    });
+                    descendants = [{ data: rowData, headers: [] }];
+                }
+
+                totalRowSpan += rowSpan;
+
+                descendants.forEach((d, i) => {
+                    d.headers.unshift({ val: k, rowspan: i === 0 ? rowSpan : 0 });
+                });
+
+                childRows.push(...descendants);
+            }
+
+            return { totalRowSpan, childRows };
+        }
+
+        let { childRows } = traverseRowTree(rowTree, 0);
+
+        const colDepth = (colFields ? colFields.length : 0) + 1;
+        let colHeaders = Array.from({length: colDepth}, () => []);
+
+        for (let level = 0; level < colDepth; level++) {
+            let currentVal = null;
+            let colspan = 0;
+
+            colLeaves.forEach((leafParts, idx) => {
+                const val = leafParts[level];
+                if (val !== currentVal) {
+                    if (colspan > 0) colHeaders[level].push({ val: currentVal, colspan });
+                    currentVal = val;
+                    colspan = 1;
+                } else {
+                    colspan++;
+                }
+
+                if (idx === colLeaves.length - 1) {
+                    colHeaders[level].push({ val: currentVal, colspan });
+                }
+            });
+        }
+
+        return {
+            colHeaders,
+            rows: childRows,
+            rowFieldsCount: rowFields.length,
+            colLeavesCount: colLeaves.length
+        };
     }
 
     // Reactive statements for auto-saving config
@@ -346,10 +451,9 @@
         let __ = partialFilterField;
         let ___ = partialFilterValue;
         let ____ = partialFilterOperator;
-        let _____ = pivotRowField;
-        let ______ = pivotColField;
-        let _______ = pivotValueField;
-        let ________ = pivotAggregation;
+        let _____ = pivotRowFields;
+        let ______ = pivotColFields;
+        let _______ = JSON.stringify(pivotValueFields);
         let _________ = viewDescription;
         let __________ = dataSource;
 
@@ -398,38 +502,23 @@
             }
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
-        setTimeout(() => {
-            if (!previewContainer) return; // Verify still mounted
-            if (!pivotRowField || !pivotValueField) {
-                if (previewTabulatorInstance) {
-                    previewTabulatorInstance.destroy();
-                    previewTabulatorInstance = null;
-                }
-                return;
-            }
+        // Pivot tables are now rendered natively with HTML/Tailwind, so we destroy any active tabulator instance
+        if (previewTabulatorInstance) {
+            previewTabulatorInstance.destroy();
+            previewTabulatorInstance = null;
+        }
+    }
 
-            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowField, pivotColField, pivotValueField, pivotAggregation);
+    // Reactive pivot data generation for native HTML rendering
+    let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0 };
 
-            if (pivotCols.length > 0) {
-                if (previewTabulatorInstance) {
-                    previewTabulatorInstance.setColumns(pivotCols);
-                    previewTabulatorInstance.replaceData(pivotData);
-                } else {
-                    previewTabulatorInstance = new Tabulator(previewContainer, {
-                        data: pivotData,
-                        columns: pivotCols,
-                        layout: "fitDataFill",
-                        height: "100%",
-                        reactiveData: false,
-                        selectable: false,
-                        nestedFieldSeparator: false
-                    });
-                }
-            } else if (previewTabulatorInstance) {
-                previewTabulatorInstance.destroy();
-                previewTabulatorInstance = null;
-            }
-        }, 50);
+    $: if (open && isEditingExisting && selectedViewType === 'pivot') {
+        const validValueFields = pivotValueFields.filter(vf => vf.field);
+        if (pivotRowFields && pivotRowFields.length > 0 && validValueFields.length > 0) {
+            generatedPivotResult = generatePivotData(activeData, pivotRowFields, pivotColFields, validValueFields[0].field, validValueFields[0].aggregation, validValueFields);
+        } else {
+            generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0 };
+        }
     }
 
 </script>
@@ -445,11 +534,11 @@
 >
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
-            <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 {#if activeTab === 'create' && isEditingExisting && selectedViewType === 'pivot'}
-                    <LayoutGrid size={20} class="text-purple-600 dark:text-purple-400" />
+                    <LayoutGrid size={20} class="text-blue-600 dark:text-blue-400" />
                 {:else}
-                    <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                    <Table2 size={20} class="text-blue-600 dark:text-blue-400" />
                 {/if}
             </div>
             <div>
@@ -477,13 +566,13 @@
             {#if !(activeTab === 'create' && isEditingExisting)}
                 <div class="flex border-b border-gray-200 dark:border-gray-700">
                     <button
-                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
                         on:click={() => handleTabChange('create')}
                     >
                         <div class="flex items-center justify-center gap-2"><Plus size={16}/> Create</div>
                     </button>
                     <button
-                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
                         on:click={() => handleTabChange('existing')}
                     >
                         <div class="flex items-center justify-center gap-2"><FolderOpen size={16}/> Existing</div>
@@ -535,7 +624,7 @@
                                             <Select id="dataSource" bind:value={dataSource}>
                                                 <option value="Base Table">Base Table</option>
                                                 {#each views as view}
-                                                    {#if view.view_name !== viewName}
+                                                    {#if view.view_name !== viewName && view.view_type === 'partial'}
                                                         <option value={view.view_name}>{view.view_name}</option>
                                                     {/if}
                                                 {/each}
@@ -544,7 +633,7 @@
                                         <div>
                                             <Label class="mb-2">Select Visible Columns</Label>
                                             <MultiSelect items={allColumns} bind:value={partialSelectedColumns} placeholder="Select fields to display" />
-                                            <Helper class="mt-2">Columns not selected will be hidden in this view.</Helper>
+                                            <Helper class="mt-2">Columns not selected will be hidden in this view. <span class="font-semibold text-blue-600 dark:text-blue-400">Primary and required fields cannot be hidden.</span></Helper>
                                         </div>
                                     </div>
                                 </AccordionItem>
@@ -576,27 +665,34 @@
                                             <Select id="dataSource" bind:value={dataSource}>
                                                 <option value="Base Table">Base Table</option>
                                                 {#each views as view}
-                                                    {#if view.view_name !== viewName}
+                                                    {#if view.view_name !== viewName && view.view_type === 'partial'}
                                                         <option value={view.view_name}>{view.view_name}</option>
                                                     {/if}
                                                 {/each}
                                             </Select>
                                         </div>
                                         <div>
-                                            <Label for="pivotRow" class="mb-2">Row Field (Group By)</Label>
-                                            <Select id="pivotRow" items={allColumns} bind:value={pivotRowField} />
+                                            <Label for="pivotRow" class="mb-2">Row Fields (Group By)</Label>
+                                            <MultiSelect id="pivotRow" items={allColumns} bind:value={pivotRowFields} placeholder="Select row fields" />
                                         </div>
                                         <div>
-                                            <Label for="pivotCol" class="mb-2">Column Field (Pivot Across)</Label>
-                                            <Select id="pivotCol" items={[{value:'', name:'-- None --'}, ...allColumns]} bind:value={pivotColField} />
+                                            <Label for="pivotCol" class="mb-2">Column Fields (Pivot Across)</Label>
+                                            <MultiSelect id="pivotCol" items={allColumns} bind:value={pivotColFields} placeholder="Select column fields" />
                                         </div>
                                         <div>
-                                            <Label for="pivotValue" class="mb-2">Value Field (To Aggregate)</Label>
-                                            <Select id="pivotValue" items={pivotValueOptions} bind:value={pivotValueField} />
-                                        </div>
-                                        <div>
-                                            <Label for="pivotAgg" class="mb-2">Aggregation Type</Label>
-                                            <Select id="pivotAgg" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={pivotAggregation} />
+                                            <Label class="mb-2">Values to Aggregate</Label>
+                                            {#each pivotValueFields as vf, index}
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <Select class="flex-1" items={pivotValueOptions} bind:value={vf.field} placeholder="Select value field" />
+                                                    <Select class="w-32" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={vf.aggregation} />
+                                                    <Button color="red" size="sm" outline class="p-2" on:click={() => pivotValueFields = pivotValueFields.filter((_, i) => i !== index)} disabled={pivotValueFields.length === 1}>
+                                                        <Trash2 class="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            {/each}
+                                            <Button color="light" size="sm" class="mt-1" on:click={() => pivotValueFields = [...pivotValueFields, { field: '', aggregation: 'Sum' }]}>
+                                                <Plus class="w-4 h-4 mr-2" /> Add Value Field
+                                            </Button>
                                         </div>
                                     </div>
                                 </AccordionItem>
@@ -642,23 +738,25 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {#each viewTypes as type}
                             <button
-                                class="flex flex-col items-start p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
-                                class:border-purple-500={selectedViewType === type.value}
+                                class="flex items-start gap-4 p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
+                                class:border-blue-500={selectedViewType === type.value}
                                 class:ring-2={selectedViewType === type.value}
-                                class:ring-purple-500={selectedViewType === type.value}
+                                class:ring-blue-500={selectedViewType === type.value}
                                 on:click={() => selectViewType(type.value)}
                             >
-                                <div class="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-4 text-purple-600 dark:text-purple-400">
-                                    {#if type.icon === 'Table2'}<Table2 size={24} strokeWidth={2} />{/if}
-                                    {#if type.icon === 'LayoutGrid'}<LayoutGrid size={24} strokeWidth={2} />{/if}
+                                <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                    {#if type.icon === 'Table2'}<Table2 size={32} strokeWidth={1.5} />{/if}
+                                    {#if type.icon === 'LayoutGrid'}<LayoutGrid size={32} strokeWidth={1.5} />{/if}
                                 </div>
-                                <span class="font-bold text-lg text-gray-900 dark:text-white mb-2">{type.name}</span>
-                                <span class="text-sm text-gray-500 dark:text-gray-400">{type.description}</span>
+                                <div class="flex flex-col pt-1">
+                                    <span class="font-bold text-lg text-gray-900 dark:text-white mb-1">{type.name}</span>
+                                    <span class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{type.description}</span>
+                                </div>
                             </button>
                         {/each}
                     </div>
                     <div class="absolute bottom-6 right-6 z-10">
-                        <Button color="purple" disabled={!selectedViewType} on:click={initialCreate} class="px-6 shadow-md">
+                        <Button color="blue" disabled={!selectedViewType} on:click={initialCreate} class="px-6 shadow-md">
                             Create View
                         </Button>
                     </div>
@@ -676,7 +774,65 @@
                         <div class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-2">
                             <LayoutGrid size={16} /> Live Preview: {viewName}
                         </div>
-                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-hidden" bind:this={previewContainer}></div>
+                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-auto">
+                            <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                                    <!-- Render Multi-level Column Headers -->
+                                    {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
+                                        {#each generatedPivotResult.colHeaders as headerRow, levelIndex}
+                                            <tr>
+                                                <!-- Only render row field labels in the bottom-most header row -->
+                                                {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
+                                                    {#each pivotRowFields as rowField}
+                                                        <th scope="col" class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom">
+                                                            {rowField}
+                                                        </th>
+                                                    {/each}
+                                                {:else if pivotRowFields.length > 0}
+                                                    <!-- Spacer for multi-level columns above row fields -->
+                                                    <th colspan={pivotRowFields.length} class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"></th>
+                                                {/if}
+
+                                                {#each headerRow as h}
+                                                    <th scope="col" colspan={h.colspan} class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex === generatedPivotResult.colHeaders.length - 1 ? 'bg-gray-100 dark:bg-gray-700' : 'bg-gray-200 dark:bg-gray-600'}">
+                                                        {h.val}
+                                                    </th>
+                                                {/each}
+                                            </tr>
+                                        {/each}
+                                    {/if}
+                                </thead>
+                                <tbody>
+                                    {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
+                                        {#each generatedPivotResult.rows as row, i}
+                                            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                                <!-- Render row headers with rowspan -->
+                                                {#each row.headers as header}
+                                                    {#if header.rowspan > 0}
+                                                        <td rowspan={header.rowspan} class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top">
+                                                            {header.val}
+                                                        </td>
+                                                    {/if}
+                                                {/each}
+
+                                                <!-- Render data cells -->
+                                                {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex}
+                                                    <td class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700">
+                                                        {row.data[`val_${colIndex}`] !== undefined ? row.data[`val_${colIndex}`] : ''}
+                                                    </td>
+                                                {/each}
+                                            </tr>
+                                        {/each}
+                                    {:else}
+                                        <tr>
+                                            <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
+                                                Select row, column, and value fields to generate pivot preview.
+                                            </td>
+                                        </tr>
+                                    {/if}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 {/if}
             {:else if activeTab === 'existing'}
@@ -691,7 +847,7 @@
         {#if activeTab === 'create' && isEditingExisting}
         <div class="flex justify-end w-full space-x-2">
             <Button color="alternative" on:click={handleModalClose}>Close</Button>
-            <Button color="purple" on:click={switchToView}>Switch to this view</Button>
+            <Button color="blue" on:click={switchToView}>Switch to this view</Button>
         </div>
         {/if}
     </svelte:fragment>
