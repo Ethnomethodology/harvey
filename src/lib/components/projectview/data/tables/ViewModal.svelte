@@ -549,6 +549,8 @@
             <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 {#if activeTab === 'create' && isEditingExisting && selectedViewType === 'pivot'}
                     <LayoutGrid size={20} class="text-blue-600 dark:text-blue-400" />
+                {:else if activeTab === 'create' && isEditingExisting && selectedViewType === 'survey'}
+                    <FileText size={20} class="text-blue-600 dark:text-blue-400" />
                 {:else}
                     <Table2 size={20} class="text-blue-600 dark:text-blue-400" />
                 {/if}
@@ -558,6 +560,8 @@
                     {#if activeTab === 'create' && isEditingExisting}
                         {#if selectedViewType === 'pivot'}
                             Edit Pivot Table: {viewName || 'New View'}
+                        {:else if selectedViewType === 'survey'}
+                            Edit Survey Data Table: {viewName || 'New View'}
                         {:else}
                             Edit Partial Table: {viewName || 'New View'}
                         {/if}
@@ -845,6 +849,20 @@
                                     {/if}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                {:else if selectedViewType === 'survey'}
+                    <div class="flex-1 w-full h-full p-8 bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center">
+                        <div class="max-w-md text-center space-y-4">
+                            <div class="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center">
+                                <FileText size={32} />
+                            </div>
+                            <h4 class="text-xl font-bold text-gray-900 dark:text-white">Survey Data Documents</h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                This view generates individual Lexical JSON documents based on your configuration.
+                                Click <strong class="text-gray-700 dark:text-gray-200">Switch to this view</strong> below to generate and save these files.
+                                They will be accessible via the <strong class="text-gray-700 dark:text-gray-200">Attachments Panel</strong>.
+                            </p>
                         </div>
                     </div>
                 {/if}
