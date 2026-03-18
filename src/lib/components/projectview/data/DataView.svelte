@@ -123,16 +123,17 @@
 
     function handleRequestOpenLexicalDocument(event) {
         const { docPath } = event.detail;
-        // Dispatch upward so ProjectView handles it properly and switches to document view
-        forwardEvent({
-            type: 'requestviewchange',
-            detail: {
-                tabName: 'data',
-                loadNotePath: docPath,
-                viewType: 'document',
-                originalDocType: 'document'
+        console.log('[DataView] Received requestOpenLexicalDocument:', docPath);
+
+        if (activeViewType === 'tables' && tableViewRef && typeof tableViewRef.openLexicalDocument === 'function') {
+            try {
+                tableViewRef.openLexicalDocument(docPath);
+            } catch (err) {
+                console.error('[DataView] Error opening lexical document in table view:', err);
             }
-        });
+        } else {
+            console.warn('[DataView] tableViewRef or openLexicalDocument method not available yet.');
+        }
     }
 
     let attachmentsPanelRef;

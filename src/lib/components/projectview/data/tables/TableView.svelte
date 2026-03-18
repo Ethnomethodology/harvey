@@ -55,6 +55,14 @@
         }
     }
 
+    export function openLexicalDocument(docPath) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openLexicalDocument === 'function') {
+            tableViewerPanelRef.openLexicalDocument(docPath);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or openLexicalDocument is not available.');
+        }
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});

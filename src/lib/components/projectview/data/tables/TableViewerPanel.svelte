@@ -61,6 +61,7 @@
         Badge
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
+    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -75,6 +76,10 @@
     let error = null;
     let currentLoadedPath = null;
     let availableViews = [];
+
+    let isViewingDocument = false;
+    let currentActiveDocumentPath = null;
+    let currentActiveDocumentJson = null;
 
     let svelteUndoStack = [];
     let svelteRedoStack = [];
@@ -2461,11 +2466,37 @@
     let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0, rowFields: [], colLeaves: [] };
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
+    export async function openLexicalDocument(docPath) {
+        if (!docPath) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+
+            const content = await invoke('load_lexical_document', {
+                args: { documentPath: absolutePath }
+            });
+
+            if (content) {
+                currentActiveDocumentJson = JSON.parse(content);
+                isViewingDocument = true;
+                currentActiveDocumentPath = docPath;
+                dispatch('requestviewchange', { type: 'chart_opened', item: docPath });
+            } else {
+                console.error("Document content was empty.");
+            }
+        } catch (e) {
+            console.error('Failed to open document:', e);
+        }
+    }
+
     export async function openView(view) {
         if (!view) return;
         try {
             const config = JSON.parse(view.config_json);
-            if (currentActiveView) {
+            if (currentActiveView || isViewingDocument) {
                 // Must ensure we start from a clean slate so views don't stack their transformations
                 await returnToBaseTable();
             }
@@ -2679,10 +2710,12 @@
     }
 
     async function returnToBaseTable() {
-        if (!tabulatorInstance) return;
+        if (!tabulatorInstance && !isViewingDocument) return;
         currentActiveView = null;
         currentActiveViewType = null;
         pivotDerivedSchema = {};
+        isViewingDocument = false;
+        currentActiveDocumentPath = null;
 
         dispatch('requestviewchange', { type: 'reset_base' });
 
@@ -2720,7 +2753,7 @@
         if (!tabulatorInstance) return;
 
         // Explicitly switching to this view. Start from clean slate if another view was active.
-        if (currentActiveView && currentActiveView !== viewName) {
+        if ((currentActiveView && currentActiveView !== viewName) || isViewingDocument) {
             await returnToBaseTable();
         }
 
@@ -3606,7 +3639,7 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
-            {#if currentActiveView}
+            {#if currentActiveView || isViewingDocument}
                 <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
@@ -3797,7 +3830,23 @@
              <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10">Error: {error}</div>
         {/if}
 
-        {#if currentActiveViewType === 'pivot'}
+        {#if isViewingDocument}
+            <div class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20">
+                {#key currentActiveDocumentPath}
+                    <div class="lexical-viewer-wrapper h-full w-full overflow-y-auto p-4">
+                        <LexicalEditor
+                            initialJson={currentActiveDocumentJson}
+                            editable={false}
+                            placeholder="Loading document..."
+                            enableTableCellMenu={false}
+                            enableTableCellResize={false}
+                            enableSearch={false}
+                            documentPath={currentActiveDocumentPath}
+                        />
+                    </div>
+                {/key}
+            </div>
+        {:else if currentActiveViewType === 'pivot'}
             <div class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20">
                 <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
                     <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
@@ -3854,8 +3903,8 @@
             </div>
         {/if}
 
-        <div bind:this={tableContainer} class="w-full h-full" style="display: {currentActiveViewType === 'pivot' ? 'none' : 'block'};">
-             {#if !isLoading && !error && tableData.length === 0 && tablePath}
+        <div bind:this={tableContainer} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+             {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}
         </div>
