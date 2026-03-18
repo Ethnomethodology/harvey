@@ -98,8 +98,20 @@ pub async fn generate_survey_documents(
 
     // Load table data - ensure absolute path is passed
     let abs_table_path = project_base_dir.join(table_path);
-    let table_data: Value = table_handler::load_table_data(abs_table_path.to_string_lossy().to_string()).await?;
-    let rows = table_data.as_array().ok_or_else(|| CommandError::Io("Table data is not an array".to_string()))?;
+    let table_data: Value = table_handler::load_table_data(abs_table_path.to_string_lossy().to_string())
+        .await
+        .map_err(|e| {
+            error!("[Survey Generation] Failed to load table data from abs_table_path='{}': {:?}", abs_table_path.display(), e);
+            e
+        })?;
+
+    // table_data from load_table_data is typically an object: { "headers": [...], "data": [...] }
+    let rows = table_data.get("data")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| {
+            error!("[Survey Generation] Table data payload is not an object containing a 'data' array. Actual: {:?}", table_data);
+            CommandError::Io("Table data is not an array".to_string())
+        })?;
 
     let mut generated_files = Vec::new();
 
