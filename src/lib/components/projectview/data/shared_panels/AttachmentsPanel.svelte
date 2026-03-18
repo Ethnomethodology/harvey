@@ -264,6 +264,8 @@
         }
 
         try {
+            let loadedAttachments = [];
+
             if (itemType === 'table') {
                 const charts = await invoke('load_chart_configs_command', {
                     projectId: projectStoreState.id,
@@ -273,8 +275,11 @@
                     projectId: projectStoreState.id,
                     tablePath: assetRelativePathToLoad
                 });
-                attachments = [...charts, ...views];
-            } else {
+                loadedAttachments = [...charts, ...views];
+            }
+
+            // Always attempt to load raw file attachments from asset_metadata for all types
+            try {
                 const result = await invoke('get_asset_metadata_command', {
                     projectId: projectStoreState.id,
                     assetRelativePath: assetRelativePathToLoad
@@ -284,10 +289,15 @@
                     const customFields = JSON.parse(result.custom_fields_json);
                     const attachmentsField = customFields.find(f => f.key === 'attachments');
                     if (attachmentsField && attachmentsField.value) {
-                        attachments = JSON.parse(attachmentsField.value);
+                        const fileAttachments = JSON.parse(attachmentsField.value);
+                        loadedAttachments = [...loadedAttachments, ...fileAttachments];
                     }
                 }
+            } catch (metaError) {
+                console.error(`[AttachmentsPanel] Could not load raw asset_metadata attachments:`, metaError);
             }
+
+            attachments = loadedAttachments;
         } catch (error) {
             console.error(`[AttachmentsPanel] Error loading metadata for ${assetRelativePathToLoad}:`, error);
         } finally {

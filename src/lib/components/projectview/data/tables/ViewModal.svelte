@@ -999,7 +999,13 @@
                                 </div>
 
                                 <div class="flex justify-end pt-4">
-                                    <Button color="blue" size="lg" on:click={() => switchToView()} class="shadow-md flex items-center gap-2">
+                                    <Button
+                                        color="blue"
+                                        size="lg"
+                                        on:click={() => switchToView()}
+                                        class="shadow-md flex items-center gap-2"
+                                        disabled={!viewName || !surveyUniqueIdentifierField || (surveyGroupByType === 'Participants' ? surveyParticipantIncludedFields.length === 0 : surveySelectedQuestions.length === 0)}
+                                    >
                                         <FileText size={18} /> Generate Documents
                                     </Button>
                                 </div>
