@@ -518,9 +518,14 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
         for (i, header) in headers.iter().enumerate() {
             let value_str = record.get(i).unwrap_or("").trim();
             let value_json = if let Ok(num) = value_str.parse::<f64>() {
-                json!(num)
+                // Serde JSON cannot serialize NaN or Infinity. If a CSV has "NaN", "Inf", etc. we must store it as a string or null.
+                if num.is_finite() {
+                    json!(num)
+                } else {
+                    json!(value_str)
+                }
             } else if let Ok(b) = value_str.parse::<bool>() {
-                    json!(b)
+                json!(b)
             } else {
                 json!(value_str)
             };
