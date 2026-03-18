@@ -122,6 +122,11 @@
                 attachmentsPanelRef.resetSelection();
             }
             return;
+        } else if (event.type === 'view_changed' || event.type === 'chart_opened') {
+            if (attachmentsPanelRef && typeof attachmentsPanelRef.setSelectionByObject === 'function') {
+                attachmentsPanelRef.setSelectionByObject(event.item);
+            }
+            return;
         }
         handleViewChangeRequest(event);
     }

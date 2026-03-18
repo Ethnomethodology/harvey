@@ -23,6 +23,31 @@
         currentTrackIndex = -1;
     }
 
+    export function setSelectionByObject(attachmentObj) {
+        if (!attachmentObj || !attachments) {
+            currentTrackIndex = -1;
+            return;
+        }
+
+        const targetName = attachmentObj.chart_name || attachmentObj.view_name;
+        const targetType = attachmentObj.chart_type || attachmentObj.view_type;
+
+        if (!targetName) return;
+
+        const idx = attachments.findIndex(a => {
+            if (typeof a !== 'object') return false;
+            const aName = a.chart_name || a.view_name;
+            const aType = a.chart_type || a.view_type;
+            return aName === targetName && aType === targetType;
+        });
+
+        if (idx !== -1) {
+            currentTrackIndex = idx;
+        } else {
+            currentTrackIndex = -1;
+        }
+    }
+
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
         if (typeof path === 'object' && path.view_name) return path.view_name;

@@ -2451,6 +2451,7 @@
         tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id");
         initialChartToLoad = null; showChartModal = true;
         initialChartToLoad = chart;
+        dispatch('requestviewchange', { type: 'chart_opened', item: chart });
     }
 
     let currentActiveView = null;
@@ -2474,6 +2475,7 @@
                 });
             }
             applyViewToTable(view.view_name, view.view_type, config);
+            dispatch('requestviewchange', { type: 'view_changed', item: view });
         } catch (e) {
             console.error('Failed to parse view config on open:', e);
             notificationStore.add('Failed to open view', 'error');
@@ -2605,6 +2607,7 @@
 
         // Perform in-place update if possible
         applyViewToTable(viewName, viewType, config);
+        dispatch('requestviewchange', { type: 'view_changed', item: { view_name: viewName, view_type: viewType } });
     }
 
     async function handleViewApplied(event) {
@@ -2621,6 +2624,7 @@
         }
 
         applyViewToTable(viewName, viewType, config);
+        dispatch('requestviewchange', { type: 'view_changed', item: { view_name: viewName, view_type: viewType } });
     }
 
     export async function getExportData() {
@@ -3433,9 +3437,13 @@
         activeViewName={currentActiveView}
         on:viewSaved={handleViewSaved}
         on:viewApplied={handleViewApplied}
-        on:viewDeleted={() => {
+        on:viewDeleted={(event) => {
+            const deletedViewName = event.detail?.viewName;
             loadTableViews(tablePath);
             dispatch('requestviewchange', { type: 'refresh_metadata' });
+            if (currentActiveView && currentActiveView === deletedViewName) {
+                returnToBaseTable();
+            }
         }}
     />
 {/if}
