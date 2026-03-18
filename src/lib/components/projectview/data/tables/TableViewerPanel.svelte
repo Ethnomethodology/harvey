@@ -3637,9 +3637,10 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+     {#if !isViewingDocument}
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
-            {#if currentActiveView || isViewingDocument}
+            {#if currentActiveView}
                 <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
@@ -3781,6 +3782,7 @@
          </div>
          {/if}
     </div>
+    {/if}
 
     <div class="flex-grow overflow-auto min-h-0 relative">
         {#if showUrlPopover}
@@ -3831,18 +3833,45 @@
         {/if}
 
         {#if isViewingDocument}
-            <div class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20">
+            <div class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20 flex flex-col">
                 {#key currentActiveDocumentPath}
-                    <div class="lexical-viewer-wrapper h-full w-full overflow-y-auto p-4">
+                    <div class="flex-grow min-h-0">
                         <LexicalEditor
                             initialJson={currentActiveDocumentJson}
                             editable={false}
                             placeholder="Loading document..."
                             enableTableCellMenu={false}
                             enableTableCellResize={false}
-                            enableSearch={false}
+                            enableSearch={true}
                             documentPath={currentActiveDocumentPath}
-                        />
+                            toolbarConfig={{
+                                undo: false,
+                                redo: false,
+                                blockType: true,
+                                bold: true,
+                                italic: true,
+                                underline: true,
+                                strikethrough: false,
+                                align: false,
+                                insertMenu: false,
+                                link: false,
+                                outdent: false,
+                                indent: false,
+                                textColor: false,
+                                highlight: true,
+                                clearFormatting: false,
+                                search: true,
+                                fontFamily: false
+                            }}
+                        >
+                            <svelte:fragment slot="toolbar_prepend">
+                                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
+                                    <Undo2 size={14} />
+                                    <span>Return to Base Table</span>
+                                </button>
+                                <div class="separator mx-0.5 mr-2"></div>
+                            </svelte:fragment>
+                        </LexicalEditor>
                     </div>
                 {/key}
             </div>
