@@ -738,18 +738,20 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {#each viewTypes as type}
                             <button
-                                class="flex flex-col items-start p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
+                                class="flex items-start gap-4 p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
                                 class:border-blue-500={selectedViewType === type.value}
                                 class:ring-2={selectedViewType === type.value}
                                 class:ring-blue-500={selectedViewType === type.value}
                                 on:click={() => selectViewType(type.value)}
                             >
-                                <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                                    {#if type.icon === 'Table2'}<Table2 size={24} strokeWidth={2} />{/if}
-                                    {#if type.icon === 'LayoutGrid'}<LayoutGrid size={24} strokeWidth={2} />{/if}
+                                <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                    {#if type.icon === 'Table2'}<Table2 size={32} strokeWidth={1.5} />{/if}
+                                    {#if type.icon === 'LayoutGrid'}<LayoutGrid size={32} strokeWidth={1.5} />{/if}
                                 </div>
-                                <span class="font-bold text-lg text-gray-900 dark:text-white mb-2">{type.name}</span>
-                                <span class="text-sm text-gray-500 dark:text-gray-400">{type.description}</span>
+                                <div class="flex flex-col pt-1">
+                                    <span class="font-bold text-lg text-gray-900 dark:text-white mb-1">{type.name}</span>
+                                    <span class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{type.description}</span>
+                                </div>
                             </button>
                         {/each}
                     </div>
