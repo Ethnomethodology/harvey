@@ -229,7 +229,8 @@
     }
 
     async function switchToView() {
-        await saveView(true);
+        // Survey type requires explicit, non-autosave logic to trigger document generation
+        await saveView(selectedViewType !== 'survey');
         dispatch('viewApplied', { viewName, viewType: selectedViewType, config: getCurrentConfig() });
         open = false;
     }
