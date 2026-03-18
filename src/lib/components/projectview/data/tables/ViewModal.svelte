@@ -447,11 +447,11 @@
 >
     <div slot="header" class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center space-x-3">
-            <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 {#if activeTab === 'create' && isEditingExisting && selectedViewType === 'pivot'}
-                    <LayoutGrid size={20} class="text-purple-600 dark:text-purple-400" />
+                    <LayoutGrid size={20} class="text-blue-600 dark:text-blue-400" />
                 {:else}
-                    <Table2 size={20} class="text-purple-600 dark:text-purple-400" />
+                    <Table2 size={20} class="text-blue-600 dark:text-blue-400" />
                 {/if}
             </div>
             <div>
@@ -479,13 +479,13 @@
             {#if !(activeTab === 'create' && isEditingExisting)}
                 <div class="flex border-b border-gray-200 dark:border-gray-700">
                     <button
-                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'create' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
                         on:click={() => handleTabChange('create')}
                     >
                         <div class="flex items-center justify-center gap-2"><Plus size={16}/> Create</div>
                     </button>
                     <button
-                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
+                        class="flex-1 py-3 text-sm font-medium border-b-2 {activeTab === 'existing' ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:dark:text-gray-300'}"
                         on:click={() => handleTabChange('existing')}
                     >
                         <div class="flex items-center justify-center gap-2"><FolderOpen size={16}/> Existing</div>
@@ -644,13 +644,13 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {#each viewTypes as type}
                             <button
-                                class="flex flex-col items-start p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
-                                class:border-purple-500={selectedViewType === type.value}
+                                class="flex flex-col items-start p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden text-left"
+                                class:border-blue-500={selectedViewType === type.value}
                                 class:ring-2={selectedViewType === type.value}
-                                class:ring-purple-500={selectedViewType === type.value}
+                                class:ring-blue-500={selectedViewType === type.value}
                                 on:click={() => selectViewType(type.value)}
                             >
-                                <div class="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-4 text-purple-600 dark:text-purple-400">
+                                <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
                                     {#if type.icon === 'Table2'}<Table2 size={24} strokeWidth={2} />{/if}
                                     {#if type.icon === 'LayoutGrid'}<LayoutGrid size={24} strokeWidth={2} />{/if}
                                 </div>
@@ -660,7 +660,7 @@
                         {/each}
                     </div>
                     <div class="absolute bottom-6 right-6 z-10">
-                        <Button color="purple" disabled={!selectedViewType} on:click={initialCreate} class="px-6 shadow-md">
+                        <Button color="blue" disabled={!selectedViewType} on:click={initialCreate} class="px-6 shadow-md">
                             Create View
                         </Button>
                     </div>
@@ -693,7 +693,7 @@
         {#if activeTab === 'create' && isEditingExisting}
         <div class="flex justify-end w-full space-x-2">
             <Button color="alternative" on:click={handleModalClose}>Close</Button>
-            <Button color="purple" on:click={switchToView}>Switch to this view</Button>
+            <Button color="blue" on:click={switchToView}>Switch to this view</Button>
         </div>
         {/if}
     </svelte:fragment>

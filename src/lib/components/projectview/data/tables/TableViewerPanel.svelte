@@ -2957,20 +2957,23 @@
                         span.className = "row-number-text group-hover:hidden";
                         span.textContent = rowNum;
                         
-                        const button = document.createElement("button");
-                        button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
-                        button.title = "Edit Entry";
-                        
-                        mount(TableIcon, {
-                            target: button,
-                            props: { icon: Pencil, size: 14 }
-                        });
+                        if (currentActiveViewType !== 'pivot') {
+                            const button = document.createElement("button");
+                            button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
+                            button.title = "Edit Entry";
+
+                            mount(TableIcon, {
+                                target: button,
+                                props: { icon: Pencil, size: 14 }
+                            });
+                            container.appendChild(button);
+                        }
                         
                         container.appendChild(span);
-                        container.appendChild(button);
                         return container;
                     },
                     cellClick: (e, cell) => {
+                        if (currentActiveViewType === 'pivot') return;
                         if (e.target.closest('.edit-icon-placeholder')) {
                             e.preventDefault();
                             e.stopPropagation();
@@ -3471,7 +3474,7 @@
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
             {#if currentActiveView}
-                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white border border-purple-600 rounded focus:outline-none focus:ring-2 focus:ring-purple-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
+                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
                     <Undo2 size={14} />
                     <span>Return to Base Table</span>
                 </button>
@@ -3537,7 +3540,7 @@
             </button>
 
             <div class="separator mx-0.5"></div>
-            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot'}>
+            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot'}>
                 <Table2 size={14} />
                 <span>Create Views</span>
             </button>

@@ -467,7 +467,7 @@
                 // Determine whether required axis cols are present depending on aggregation.
                 // If Count, we technically only need xAxisCol, but UI enforces yAxisCol selection.
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
-                let validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '');
+                let validData = activeData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '');
                 if (aggregationType !== 'Count') {
                     validData = validData.filter(row => row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
                 }
@@ -721,7 +721,7 @@
                 }
             } else if (selectedChartType === 'scatter') {
                 if (!xAxisCol || !yAxisCol) { chartInstance.clear(); return; }
-                const validData = tableData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '' && row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
+                const validData = activeData.filter(row => row[xAxisCol] !== null && row[xAxisCol] !== undefined && row[xAxisCol] !== '' && row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '');
 
                 // Title
                 let titleConfig = { text: chartName || 'New Chart' };
@@ -868,7 +868,7 @@
                 option.series = seriesArray;
             } else if (selectedChartType === 'pie') {
                 if (!categoryCol || !valueCol) { chartInstance.clear(); return; }
-                const validData = tableData.filter(row => row[categoryCol] !== null && row[categoryCol] !== undefined && row[categoryCol] !== '' && row[valueCol] !== null && row[valueCol] !== undefined && row[valueCol] !== '');
+                const validData = activeData.filter(row => row[categoryCol] !== null && row[categoryCol] !== undefined && row[categoryCol] !== '' && row[valueCol] !== null && row[valueCol] !== undefined && row[valueCol] !== '');
 
                 // Title
                 let titleConfig = { text: chartName || 'New Chart' };
@@ -948,7 +948,7 @@
             } else if (selectedChartType === 'gantt') {
                 if (!yAxisCol || !taskCol || !startDateCol || !endDateCol) { chartInstance.clear(); return; }
 
-                const validData = tableData.filter(row =>
+                const validData = activeData.filter(row =>
                     row[yAxisCol] !== null && row[yAxisCol] !== undefined && row[yAxisCol] !== '' &&
                     row[taskCol] !== null && row[taskCol] !== undefined && row[taskCol] !== '' &&
                     row[startDateCol] !== null && row[startDateCol] !== undefined && row[startDateCol] !== '' &&
