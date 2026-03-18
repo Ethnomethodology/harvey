@@ -2458,8 +2458,7 @@
     let currentActiveViewType = null;
     let baseTableColumns = []; // Store base columns when applying a view
     let pivotDerivedSchema = {};
-    let generatedPivotTableCols = [];
-    let generatedPivotTableData = [];
+    let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0, rowFields: [], colLeaves: [] };
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
     export async function openView(view) {
@@ -2538,81 +2537,141 @@
 
             if (actualRowFields.length === 0 || actualValueFields.length === 0) return;
 
-            let groupedData = {};
-            let allColKeys = new Set();
-            let rowKeyToValuesMap = new Map();
+            let rowTree = {};
+            let allColLeaves = new Set();
 
             tableData.forEach(row => {
-                const rVals = actualRowFields.map(f => String(row[f] || '(Blank)'));
-                const rKey = rVals.join(' | ');
-
-                if (!rowKeyToValuesMap.has(rKey)) {
-                    let rowValsObj = {};
-                    actualRowFields.forEach((f, i) => rowValsObj[f] = rVals[i]);
-                    rowKeyToValuesMap.set(rKey, rowValsObj);
+                let currentLevel = rowTree;
+                for (let i = 0; i < actualRowFields.length; i++) {
+                    const field = actualRowFields[i];
+                    const val = String(row[field] || '(Blank)');
+                    if (!currentLevel[val]) {
+                        currentLevel[val] = {
+                            _val: val,
+                            _field: field,
+                            _children: i === actualRowFields.length - 1 ? null : {},
+                            _data: []
+                        };
+                    }
+                    currentLevel = currentLevel[val]._children || currentLevel[val];
+                    if (i === actualRowFields.length - 1) {
+                        currentLevel._data.push(row);
+                    }
                 }
 
-                let baseCKey = 'Total';
-                if (actualColFields.length > 0) {
-                    baseCKey = actualColFields.map(f => String(row[f] || '(Blank)')).join(' | ');
-                }
-
-                if (!groupedData[rKey]) groupedData[rKey] = {};
-
+                let cVals = actualColFields ? actualColFields.map(f => String(row[f] || '(Blank)')) : [];
                 actualValueFields.forEach(vf => {
-                    const cKey = actualColFields.length > 0 ? `${baseCKey} - ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
-                    const vVal = parseFloat(row[vf.field]) || 0;
-
-                    if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
-                    groupedData[rKey][cKey].push(vVal);
-                    allColKeys.add(cKey);
+                    const keyParts = [...cVals, `${vf.field} (${vf.aggregation})`];
+                    allColLeaves.add(JSON.stringify(keyParts));
                 });
             });
 
-            let pivotCols = [];
-            actualRowFields.forEach(f => {
-                pivotCols.push({ field: f, title: f, frozen: true, editor: false });
-            });
+            const colLeaves = Array.from(allColLeaves).map(c => JSON.parse(c)).sort();
 
-            let sortedColKeys = Array.from(allColKeys).sort();
-            let newPivotSchema = {};
-            sortedColKeys.forEach(ck => {
-                pivotCols.push({ field: ck, title: ck, hozAlign: 'right', editor: false });
-                newPivotSchema[ck] = { type: 'Numeric', subType: 'Decimal' };
-            });
-            pivotDerivedSchema = newPivotSchema;
+            function aggregateRows(rows, vfParts, colFieldsArray) {
+                const matchColParts = vfParts.slice(0, -1);
+                const vfPart = vfParts[vfParts.length - 1];
+                const match = vfPart.match(/(.+) \((Sum|Count|Average|Min|Max)\)$/);
+                if (!match) return null;
+                const vField = match[1];
+                const aggType = match[2];
 
-            let pivotData = [];
-            for (const [rKey, cData] of Object.entries(groupedData)) {
-                let rowData = { ...rowKeyToValuesMap.get(rKey) };
-                sortedColKeys.forEach(ck => {
-                    const vals = cData[ck] || [];
-                    const match = ck.match(/\((Sum|Count|Average|Min|Max)\)$/);
-                    const aggType = match ? match[1] : 'Sum';
+                let filteredRows = rows;
+                if (colFieldsArray && colFieldsArray.length > 0) {
+                    filteredRows = rows.filter(r => {
+                        return colFieldsArray.every((cf, i) => String(r[cf] || '(Blank)') === matchColParts[i]);
+                    });
+                }
 
-                    let aggVal = 0;
-                    if (vals.length > 0) {
-                        if (aggType === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                        else if (aggType === 'Count') aggVal = vals.length;
-                        else if (aggType === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                        else if (aggType === 'Min') aggVal = Math.min(...vals);
-                        else if (aggType === 'Max') aggVal = Math.max(...vals);
+                if (filteredRows.length === 0) return null;
+
+                let vals = filteredRows.map(r => parseFloat(r[vField]) || 0);
+                if (aggType === 'Sum') return vals.reduce((a,b)=>a+b, 0);
+                if (aggType === 'Count') return vals.length;
+                if (aggType === 'Average') return vals.reduce((a,b)=>a+b, 0) / vals.length;
+                if (aggType === 'Min') return Math.min(...vals);
+                if (aggType === 'Max') return Math.max(...vals);
+                return null;
+            }
+
+            let flatRows = [];
+
+            function traverseRowTree(nodeMap, currentDepth) {
+                let totalRowSpan = 0;
+                let childRows = [];
+
+                const keys = Object.keys(nodeMap).sort();
+                for (const k of keys) {
+                    const node = nodeMap[k];
+                    let rowSpan = 1;
+                    let descendants = [];
+
+                    if (node._children) {
+                        const res = traverseRowTree(node._children, currentDepth + 1);
+                        rowSpan = res.totalRowSpan;
+                        descendants = res.childRows;
                     } else {
-                        aggVal = null;
+                        let rowData = {};
+                        colLeaves.forEach((colLeafParts, i) => {
+                            const aggVal = aggregateRows(node._data, colLeafParts, actualColFields);
+                            rowData[`val_${i}`] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                        });
+                        descendants = [{ data: rowData, headers: [] }];
                     }
 
-                    rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                    totalRowSpan += rowSpan;
+
+                    descendants.forEach((d, i) => {
+                        d.headers.unshift({ val: k, rowspan: i === 0 ? rowSpan : 0 });
+                    });
+
+                    childRows.push(...descendants);
+                }
+
+                return { totalRowSpan, childRows };
+            }
+
+            let { childRows } = traverseRowTree(rowTree, 0);
+
+            const colDepth = (actualColFields ? actualColFields.length : 0) + 1;
+            let colHeaders = Array.from({length: colDepth}, () => []);
+
+            for (let level = 0; level < colDepth; level++) {
+                let currentVal = null;
+                let colspan = 0;
+
+                colLeaves.forEach((leafParts, idx) => {
+                    const val = leafParts[level];
+                    if (val !== currentVal) {
+                        if (colspan > 0) colHeaders[level].push({ val: currentVal, colspan });
+                        currentVal = val;
+                        colspan = 1;
+                    } else {
+                        colspan++;
+                    }
+
+                    if (idx === colLeaves.length - 1) {
+                        colHeaders[level].push({ val: currentVal, colspan });
+                    }
                 });
-                pivotData.push(rowData);
             }
 
             // Pivot views are natively rendered, so store them in reactive vars rather than Tabulator
-            generatedPivotTableCols = pivotCols;
-            generatedPivotTableData = pivotData;
+            generatedPivotResult = {
+                colHeaders,
+                rows: childRows,
+                rowFieldsCount: actualRowFields.length,
+                colLeavesCount: colLeaves.length,
+                colLeaves: colLeaves, // We need this for export mapping
+                rowFields: actualRowFields // Keep track of the resolved row fields array
+            };
 
-            // To ensure charts can still hook onto the derived dataset, we must also update activeData internally
-            // inside ChartModal via viewTransform.js (already done), but since tableData here isn't mutated
-            // we just hide the standard Tabulator instance via UI logic.
+            // Generate basic schema for export
+            let newPivotSchema = {};
+            colLeaves.forEach((leafParts, idx) => {
+                newPivotSchema[`val_${idx}`] = { type: 'Numeric', subType: 'Decimal' };
+            });
+            pivotDerivedSchema = newPivotSchema;
         }
 
         // Re-evaluate add entry row (removes it for pivot)
@@ -2671,9 +2730,25 @@
 
     export async function getExportData() {
         if (currentActiveViewType === 'pivot') {
+            // For export, we flatten the pivot data into a 2D array of rows
+            let rowFields = generatedPivotResult.rowFields || [];
+
+            const headers = [...rowFields, ...generatedPivotResult.colLeaves.map(parts => parts.join(' '))];
+            const data = generatedPivotResult.rows.map(row => {
+                let out = {};
+                // We map header names directly for the exporter
+                row.headers.forEach((h, i) => {
+                    if (rowFields[i]) out[rowFields[i]] = h.val;
+                });
+                for (let i = 0; i < generatedPivotResult.colLeavesCount; i++) {
+                    out[generatedPivotResult.colLeaves[i].join(' ')] = row.data[`val_${i}`] !== undefined ? row.data[`val_${i}`] : '';
+                }
+                return out;
+            });
+
             return {
-                data: generatedPivotTableData,
-                headers: generatedPivotTableCols.map(c => c.field),
+                data,
+                headers,
                 styles: {}
             };
         }
@@ -3724,29 +3799,52 @@
 
         {#if currentActiveViewType === 'pivot'}
             <div class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20">
-                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
-                        <tr>
-                            {#each generatedPivotTableCols as col}
-                                <th scope="col" class="px-6 py-3 whitespace-nowrap {col.hozAlign === 'right' ? 'text-right' : ''} border-b border-gray-200 dark:border-gray-600">
-                                    {col.title}
-                                </th>
+                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                        {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
+                            {#each generatedPivotResult.colHeaders as headerRow, levelIndex}
+                                <tr>
+                                    {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
+                                        {#each generatedPivotResult.rowFields as rowField}
+                                            <th scope="col" class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom">
+                                                {rowField}
+                                            </th>
+                                        {/each}
+                                    {:else if generatedPivotResult.rowFieldsCount > 0}
+                                        <th colspan={generatedPivotResult.rowFieldsCount} class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"></th>
+                                    {/if}
+
+                                    {#each headerRow as h}
+                                        <th scope="col" colspan={h.colspan} class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex === generatedPivotResult.colHeaders.length - 1 ? 'bg-gray-100 dark:bg-gray-700' : 'bg-gray-200 dark:bg-gray-600'}">
+                                            {h.val}
+                                        </th>
+                                    {/each}
+                                </tr>
                             {/each}
-                        </tr>
+                        {/if}
                     </thead>
                     <tbody>
-                        {#each generatedPivotTableData as row, i}
-                            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                {#each generatedPivotTableCols as col}
-                                    <td class="px-6 py-4 whitespace-nowrap {col.frozen ? 'font-medium text-gray-900 dark:text-white' : ''} {col.hozAlign === 'right' ? 'text-right' : ''}">
-                                        {row[col.field] !== null && row[col.field] !== undefined ? row[col.field] : ''}
-                                    </td>
-                                {/each}
-                            </tr>
-                        {/each}
-                        {#if generatedPivotTableData.length === 0}
+                        {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
+                            {#each generatedPivotResult.rows as row, i}
+                                <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                    {#each row.headers as header}
+                                        {#if header.rowspan > 0}
+                                            <td rowspan={header.rowspan} class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top">
+                                                {header.val}
+                                            </td>
+                                        {/if}
+                                    {/each}
+
+                                    {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex}
+                                        <td class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700">
+                                            {row.data[`val_${colIndex}`] !== undefined ? row.data[`val_${colIndex}`] : ''}
+                                        </td>
+                                    {/each}
+                                </tr>
+                            {/each}
+                        {:else}
                             <tr>
-                                <td colspan={Math.max(generatedPivotTableCols.length, 1)} class="px-6 py-8 text-center text-gray-500">
+                                <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
                                     No data available.
                                 </td>
                             </tr>

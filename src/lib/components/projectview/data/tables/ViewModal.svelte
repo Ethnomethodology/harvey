@@ -301,77 +301,133 @@
             actualValueFields.push({ field: valueField, aggregation: aggregation || 'Sum' });
         }
 
-        if (!rowFields || rowFields.length === 0 || actualValueFields.length === 0) return { pivotCols: [], pivotData: [] };
+        if (!rowFields || rowFields.length === 0 || actualValueFields.length === 0) return { colHeaders: [], rows: [] };
 
-        let groupedData = {};
-        let allColKeys = new Set();
-        let rowKeyToValuesMap = new Map(); // Maps compound row string -> object of individual row field values
+        let rowTree = {};
+        let allColLeaves = new Set();
 
-        // 1. Group Data
         data.forEach(row => {
-            const rVals = rowFields.map(f => String(row[f] || '(Blank)'));
-            const rKey = rVals.join(' | ');
-
-            if (!rowKeyToValuesMap.has(rKey)) {
-                let rowValsObj = {};
-                rowFields.forEach((f, i) => rowValsObj[f] = rVals[i]);
-                rowKeyToValuesMap.set(rKey, rowValsObj);
-            }
-
-            let baseCKey = 'Total';
-            if (colFields && colFields.length > 0) {
-                baseCKey = colFields.map(f => String(row[f] || '(Blank)')).join(' | ');
-            }
-
-            if (!groupedData[rKey]) groupedData[rKey] = {};
-
-            actualValueFields.forEach(vf => {
-                const cKey = colFields && colFields.length > 0 ? `${baseCKey} - ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
-                const vVal = parseFloat(row[vf.field]) || 0;
-
-                if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
-                groupedData[rKey][cKey].push(vVal);
-                allColKeys.add(cKey);
-            });
-        });
-
-        // 2. Build Columns for Tabulator (and HTML Table)
-        let pivotCols = [];
-        rowFields.forEach(f => {
-            pivotCols.push({ field: f, title: f, frozen: true });
-        });
-
-        let sortedColKeys = Array.from(allColKeys).sort();
-        sortedColKeys.forEach(ck => {
-            pivotCols.push({ field: ck, title: ck, hozAlign: 'right' });
-        });
-
-        // 3. Aggregate Values
-        let pivotData = [];
-        for (const [rKey, cData] of Object.entries(groupedData)) {
-            let rowData = { ...rowKeyToValuesMap.get(rKey) };
-            sortedColKeys.forEach(ck => {
-                const vals = cData[ck] || [];
-                const match = ck.match(/\((Sum|Count|Average|Min|Max)\)$/);
-                const aggType = match ? match[1] : 'Sum';
-
-                let aggVal = 0;
-                if (vals.length > 0) {
-                    if (aggType === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                    else if (aggType === 'Count') aggVal = vals.length;
-                    else if (aggType === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                    else if (aggType === 'Min') aggVal = Math.min(...vals);
-                    else if (aggType === 'Max') aggVal = Math.max(...vals);
-                } else {
-                    aggVal = null; // empty cell
+            let currentLevel = rowTree;
+            for (let i = 0; i < rowFields.length; i++) {
+                const field = rowFields[i];
+                const val = String(row[field] || '(Blank)');
+                if (!currentLevel[val]) {
+                    currentLevel[val] = {
+                        _val: val,
+                        _field: field,
+                        _children: i === rowFields.length - 1 ? null : {},
+                        _data: []
+                    };
                 }
+                currentLevel = currentLevel[val]._children || currentLevel[val];
+                if (i === rowFields.length - 1) {
+                    currentLevel._data.push(row);
+                }
+            }
 
-                rowData[ck] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+            let cVals = colFields ? colFields.map(f => String(row[f] || '(Blank)')) : [];
+            actualValueFields.forEach(vf => {
+                const keyParts = [...cVals, `${vf.field} (${vf.aggregation})`];
+                allColLeaves.add(JSON.stringify(keyParts));
             });
-            pivotData.push(rowData);
+        });
+
+        const colLeaves = Array.from(allColLeaves).map(c => JSON.parse(c)).sort();
+
+        function aggregateRows(rows, vfParts, colFieldsArray) {
+            const matchColParts = vfParts.slice(0, -1);
+            const vfPart = vfParts[vfParts.length - 1];
+            const match = vfPart.match(/(.+) \((Sum|Count|Average|Min|Max)\)$/);
+            if (!match) return null;
+            const vField = match[1];
+            const aggType = match[2];
+
+            let filteredRows = rows;
+            if (colFieldsArray && colFieldsArray.length > 0) {
+                filteredRows = rows.filter(r => {
+                    return colFieldsArray.every((cf, i) => String(r[cf] || '(Blank)') === matchColParts[i]);
+                });
+            }
+
+            if (filteredRows.length === 0) return null;
+
+            let vals = filteredRows.map(r => parseFloat(r[vField]) || 0);
+            if (aggType === 'Sum') return vals.reduce((a,b)=>a+b, 0);
+            if (aggType === 'Count') return vals.length;
+            if (aggType === 'Average') return vals.reduce((a,b)=>a+b, 0) / vals.length;
+            if (aggType === 'Min') return Math.min(...vals);
+            if (aggType === 'Max') return Math.max(...vals);
+            return null;
         }
 
-        return { pivotCols, pivotData };
+        let flatRows = [];
+
+        function traverseRowTree(nodeMap, currentDepth) {
+            let totalRowSpan = 0;
+            let childRows = [];
+
+            const keys = Object.keys(nodeMap).sort();
+            for (const k of keys) {
+                const node = nodeMap[k];
+                let rowSpan = 1;
+                let descendants = [];
+
+                if (node._children) {
+                    const res = traverseRowTree(node._children, currentDepth + 1);
+                    rowSpan = res.totalRowSpan;
+                    descendants = res.childRows;
+                } else {
+                    let rowData = {};
+                    colLeaves.forEach((colLeafParts, i) => {
+                        const aggVal = aggregateRows(node._data, colLeafParts, colFields);
+                        rowData[`val_${i}`] = aggVal !== null ? (Number.isInteger(aggVal) ? aggVal : parseFloat(aggVal.toFixed(2))) : '';
+                    });
+                    descendants = [{ data: rowData, headers: [] }];
+                }
+
+                totalRowSpan += rowSpan;
+
+                descendants.forEach((d, i) => {
+                    d.headers.unshift({ val: k, rowspan: i === 0 ? rowSpan : 0 });
+                });
+
+                childRows.push(...descendants);
+            }
+
+            return { totalRowSpan, childRows };
+        }
+
+        let { childRows } = traverseRowTree(rowTree, 0);
+
+        const colDepth = (colFields ? colFields.length : 0) + 1;
+        let colHeaders = Array.from({length: colDepth}, () => []);
+
+        for (let level = 0; level < colDepth; level++) {
+            let currentVal = null;
+            let colspan = 0;
+
+            colLeaves.forEach((leafParts, idx) => {
+                const val = leafParts[level];
+                if (val !== currentVal) {
+                    if (colspan > 0) colHeaders[level].push({ val: currentVal, colspan });
+                    currentVal = val;
+                    colspan = 1;
+                } else {
+                    colspan++;
+                }
+
+                if (idx === colLeaves.length - 1) {
+                    colHeaders[level].push({ val: currentVal, colspan });
+                }
+            });
+        }
+
+        return {
+            colHeaders,
+            rows: childRows,
+            rowFieldsCount: rowFields.length,
+            colLeavesCount: colLeaves.length
+        };
     }
 
     // Reactive statements for auto-saving config
@@ -440,18 +496,14 @@
     }
 
     // Reactive pivot data generation for native HTML rendering
-    let generatedPivotTableCols = [];
-    let generatedPivotTableData = [];
+    let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0 };
 
     $: if (open && isEditingExisting && selectedViewType === 'pivot') {
         const validValueFields = pivotValueFields.filter(vf => vf.field);
         if (pivotRowFields && pivotRowFields.length > 0 && validValueFields.length > 0) {
-            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowFields, pivotColFields, validValueFields[0].field, validValueFields[0].aggregation, validValueFields);
-            generatedPivotTableCols = pivotCols;
-            generatedPivotTableData = pivotData;
+            generatedPivotResult = generatePivotData(activeData, pivotRowFields, pivotColFields, validValueFields[0].field, validValueFields[0].aggregation, validValueFields);
         } else {
-            generatedPivotTableCols = [];
-            generatedPivotTableData = [];
+            generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0 };
         }
     }
 
@@ -707,30 +759,58 @@
                             <LayoutGrid size={16} /> Live Preview: {viewName}
                         </div>
                         <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-auto">
-                            <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
-                                    <tr>
-                                        {#each generatedPivotTableCols as col}
-                                            <th scope="col" class="px-6 py-3 whitespace-nowrap {col.hozAlign === 'right' ? 'text-right' : ''} border-b border-gray-200 dark:border-gray-600">
-                                                {col.title}
-                                            </th>
+                            <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                                    <!-- Render Multi-level Column Headers -->
+                                    {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
+                                        {#each generatedPivotResult.colHeaders as headerRow, levelIndex}
+                                            <tr>
+                                                <!-- Only render row field labels in the bottom-most header row -->
+                                                {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
+                                                    {#each pivotRowFields as rowField}
+                                                        <th scope="col" class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom">
+                                                            {rowField}
+                                                        </th>
+                                                    {/each}
+                                                {:else if pivotRowFields.length > 0}
+                                                    <!-- Spacer for multi-level columns above row fields -->
+                                                    <th colspan={pivotRowFields.length} class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"></th>
+                                                {/if}
+
+                                                {#each headerRow as h}
+                                                    <th scope="col" colspan={h.colspan} class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex === generatedPivotResult.colHeaders.length - 1 ? 'bg-gray-100 dark:bg-gray-700' : 'bg-gray-200 dark:bg-gray-600'}">
+                                                        {h.val}
+                                                    </th>
+                                                {/each}
+                                            </tr>
                                         {/each}
-                                    </tr>
+                                    {/if}
                                 </thead>
                                 <tbody>
-                                    {#each generatedPivotTableData as row, i}
-                                        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                            {#each generatedPivotTableCols as col}
-                                                <td class="px-6 py-4 whitespace-nowrap {col.frozen ? 'font-medium text-gray-900 dark:text-white' : ''} {col.hozAlign === 'right' ? 'text-right' : ''}">
-                                                    {row[col.field] !== null && row[col.field] !== undefined ? row[col.field] : ''}
-                                                </td>
-                                            {/each}
-                                        </tr>
-                                    {/each}
-                                    {#if generatedPivotTableData.length === 0}
+                                    {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
+                                        {#each generatedPivotResult.rows as row, i}
+                                            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                                <!-- Render row headers with rowspan -->
+                                                {#each row.headers as header}
+                                                    {#if header.rowspan > 0}
+                                                        <td rowspan={header.rowspan} class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top">
+                                                            {header.val}
+                                                        </td>
+                                                    {/if}
+                                                {/each}
+
+                                                <!-- Render data cells -->
+                                                {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex}
+                                                    <td class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700">
+                                                        {row.data[`val_${colIndex}`] !== undefined ? row.data[`val_${colIndex}`] : ''}
+                                                    </td>
+                                                {/each}
+                                            </tr>
+                                        {/each}
+                                    {:else}
                                         <tr>
-                                            <td colspan={Math.max(generatedPivotTableCols.length, 1)} class="px-6 py-8 text-center text-gray-500">
-                                                Select row/column/value fields to generate pivot preview.
+                                            <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
+                                                Select row, column, and value fields to generate pivot preview.
                                             </td>
                                         </tr>
                                     {/if}

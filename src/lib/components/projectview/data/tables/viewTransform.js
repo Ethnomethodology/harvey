@@ -66,8 +66,8 @@ export function applyViewConfigToData(tableData, columns, schema, viewConfig, vi
 
                 actualValueFields.forEach(vf => {
                     // Create a unique column key per value field to avoid collision
-                    // e.g. "East | Sales (Sum)", or just "Sales (Sum)" if no columns
-                    const cKey = actualColFields.length > 0 ? `${baseCKey} - ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
+                    // For charts, we explicitly flatten the multi-dimensional structure so eCharts can read it easily
+                    const cKey = actualColFields.length > 0 ? `${baseCKey} | ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
 
                     const vVal = parseFloat(row[vf.field]) || 0;
 
@@ -78,9 +78,11 @@ export function applyViewConfigToData(tableData, columns, schema, viewConfig, vi
             });
 
             let pivotCols = [];
-            actualRowFields.forEach(f => {
-                pivotCols.push({ field: f, title: f, frozen: true, editor: false });
-            });
+
+            // To make chart selection UX reasonable, we construct a single "Row Fields" string
+            // representation since eCharts prefers a flat 1D X-axis category
+            const compositeRowField = actualRowFields.join(' | ');
+            pivotCols.push({ field: compositeRowField, title: compositeRowField, frozen: true, editor: false });
 
             let sortedColKeys = Array.from(allColKeys).sort();
             sortedColKeys.forEach(ck => {
@@ -90,7 +92,7 @@ export function applyViewConfigToData(tableData, columns, schema, viewConfig, vi
 
             let pivotData = [];
             for (const [rKey, cData] of Object.entries(groupedData)) {
-                let rowData = { ...rowKeyToValuesMap.get(rKey) };
+                let rowData = { [compositeRowField]: rKey }; // Just the composite string
 
                 // Keep track of aggregation mapping per column key for final processing
                 sortedColKeys.forEach(ck => {
