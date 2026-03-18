@@ -121,6 +121,20 @@
         }
     }
 
+    function handleRequestOpenLexicalDocument(event) {
+        const { docPath } = event.detail;
+        // Dispatch upward so ProjectView handles it properly and switches to document view
+        forwardEvent({
+            type: 'requestviewchange',
+            detail: {
+                tabName: 'data',
+                loadNotePath: docPath,
+                viewType: 'document',
+                originalDocType: 'document'
+            }
+        });
+    }
+
     let attachmentsPanelRef;
 
     function handleRequestViewChange(event) {
@@ -358,7 +372,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} />
+                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} />
                 {/if}
             </div>
         {/if}

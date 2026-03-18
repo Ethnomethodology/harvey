@@ -6,7 +6,7 @@
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from 'lucide-svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -18,6 +18,42 @@
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
+
+    // We will group string attachments by their folder if they are inside attachments/something/
+    let groupedAttachments = { root: [], folders: {} };
+    let expandedFolders = {};
+
+    function processAttachmentsForGrouping(rawAttachments) {
+        let root = [];
+        let folders = {};
+
+        rawAttachments.forEach((attachment, originalIndex) => {
+            // Objects (charts, views) or files not matching the pattern go to root
+            if (typeof attachment !== 'string') {
+                root.push({ attachment, originalIndex });
+                return;
+            }
+
+            // We expect string paths. Let's see if it's inside a nested folder under attachments
+            // Example: "harvey_files/tables/xyz/attachments/survey_2026_participants/Participant_1.json"
+            const parts = attachment.split(/[\/\\]/);
+            const attachmentsIdx = parts.indexOf('attachments');
+
+            if (attachmentsIdx !== -1 && parts.length > attachmentsIdx + 2) {
+                // It's in a subfolder: attachments -> folder_name -> file_name
+                const folderName = parts[attachmentsIdx + 1];
+                if (!folders[folderName]) {
+                    folders[folderName] = [];
+                    expandedFolders[folderName] = expandedFolders[folderName] || false;
+                }
+                folders[folderName].push({ attachment, originalIndex });
+            } else {
+                root.push({ attachment, originalIndex });
+            }
+        });
+
+        groupedAttachments = { root, folders };
+    }
 
     export function resetSelection() {
         currentTrackIndex = -1;
@@ -46,6 +82,11 @@
         } else {
             currentTrackIndex = -1;
         }
+    }
+
+    function toggleFolder(folderName) {
+        expandedFolders[folderName] = !expandedFolders[folderName];
+        expandedFolders = { ...expandedFolders };
     }
 
     function getFileName(path) {
@@ -246,9 +287,14 @@
         } catch (error) {
             console.error(`[AttachmentsPanel] Error loading metadata for ${assetRelativePathToLoad}:`, error);
         } finally {
+            processAttachmentsForGrouping(attachments);
             isLoading = false;
             previousProcessedItemPath = assetRelativePathToLoad;
         }
+    }
+
+    $: if (attachments) {
+        processAttachmentsForGrouping(attachments);
     }
 
     $: {
@@ -293,12 +339,68 @@
             <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">Loading...</p>
         {:else if attachments.length > 0}
             <ul class="divide-y divide-gray-200 dark:divide-gray-800">
-                {#each attachments as attachment, i (attachment)}
+                <!-- Render Folders First -->
+                {#each Object.keys(groupedAttachments.folders) as folderName}
+                    <li class="flex flex-col border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <div
+                            class="p-2 flex items-center justify-between group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            on:click={() => toggleFolder(folderName)}
+                        >
+                            <div class="flex items-center space-x-2 truncate">
+                                {#if expandedFolders[folderName]}
+                                    <FolderOpenIcon class="w-4 h-4 text-blue-500 shrink-0" />
+                                {:else}
+                                    <FolderClosed class="w-4 h-4 text-blue-500 shrink-0" />
+                                {/if}
+                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate" title={folderName}>
+                                    {folderName}
+                                </span>
+                            </div>
+                            <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">{groupedAttachments.folders[folderName].length} items</span>
+                        </div>
+
+                        {#if expandedFolders[folderName]}
+                            <ul class="pl-4 bg-gray-50/50 dark:bg-gray-900/50 pb-1">
+                                {#each groupedAttachments.folders[folderName] as { attachment, originalIndex } (attachment)}
+                                    <li
+                                        class="py-1.5 pr-2 pl-3 flex items-center justify-between group cursor-pointer border-l-2 border-transparent hover:border-blue-400"
+                                        class:bg-blue-100={currentTrackIndex === originalIndex}
+                                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                                        on:click={() => { playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}
+                                    >
+                                        <div class="flex items-center space-x-2 truncate">
+                                            <FileText class="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                            <span class="text-xs text-gray-700 dark:text-gray-300 truncate" title={getFileName(attachment)}>
+                                                {getFileName(attachment)}
+                                            </span>
+                                        </div>
+                                        <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center shrink-0">
+                                            <button class="text-gray-500 dark:text-gray-400 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Document Options" id="doc-options-folder-{originalIndex}" on:click|stopPropagation>
+                                                <MoreVertical class="w-3.5 h-3.5" />
+                                            </button>
+                                            <Dropdown triggeredBy="#doc-options-folder-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                                    <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                                </DropdownItem>
+                                                <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                                    <Trash2 class="w-4 h-4" /> Delete
+                                                </DropdownItem>
+                                            </Dropdown>
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </li>
+                {/each}
+
+                <!-- Render Root Items -->
+                {#each groupedAttachments.root as { attachment, originalIndex } (attachment)}
                     <li
                         class="p-2 flex items-center justify-between group cursor-pointer"
-                        class:bg-blue-100={currentTrackIndex === i}
-                        class:dark:bg-blue-800={currentTrackIndex === i}
-                        on:click={() => playTrack(i)}
+                        class:bg-blue-100={currentTrackIndex === originalIndex}
+                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                        on:click={() => playTrack(originalIndex)}
                     >
                         <div class="flex items-center space-x-3 truncate">
                             {#if typeof attachment === 'object' && attachment.chart_name}
@@ -322,11 +424,11 @@
                         </div>
                         {#if typeof attachment === 'object' && attachment.chart_name}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Chart Options" id="chart-options-{i}" on:click|stopPropagation>
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Chart Options" id="chart-options-{originalIndex}" on:click|stopPropagation>
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
-                                <Dropdown triggeredBy="#chart-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenChart', { chart: attachment }); }}>
+                                <Dropdown triggeredBy="#chart-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenChart', { chart: attachment }); }}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
@@ -336,14 +438,14 @@
                             </div>
                         {:else if typeof attachment === 'object' && attachment.view_name}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="View Options" id="view-options-{i}" on:click|stopPropagation>
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="View Options" id="view-options-{originalIndex}" on:click|stopPropagation>
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
-                                <Dropdown triggeredBy="#view-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenView', { view: attachment }); }}>
+                                <Dropdown triggeredBy="#view-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenView', { view: attachment }); }}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestConfigureView', { view: attachment }); }}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestConfigureView', { view: attachment }); }}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
@@ -353,11 +455,11 @@
                             </div>
                         {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Document Options" id="doc-options-{i}" on:click|stopPropagation>
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Document Options" id="doc-options-{originalIndex}" on:click|stopPropagation>
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
-                                <Dropdown triggeredBy="#doc-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                <Dropdown triggeredBy="#doc-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
                                         <ExternalLink class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
@@ -366,7 +468,7 @@
                                 </Dropdown>
                             </div>
                         {:else}
-                            <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
+                            <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(originalIndex)}>
                                 <PlayCircle class="w-4 h-4" />
                             </button>
                         {/if}

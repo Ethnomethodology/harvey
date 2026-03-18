@@ -98,10 +98,28 @@
         }
     }
 
-    // Reload attachments when itemPath changes
+    // Logic for finding parent table if document is an attachment of a table
+    let parentTablePath = null;
+
     $: if (itemPath) {
         mediaPath = null;
         loadAttachments(itemPath);
+
+        // Check if this document is an attachment to a table
+        // Example path: .../tables/table_name/attachments/survey_2026_participants/doc.json
+        const normalizedPath = itemPath.replace(/\\/g, '/');
+        const match = normalizedPath.match(/(.*\/tables\/([^\/]+))\/attachments\//);
+        if (match) {
+            const tableBaseDir = match[1];
+            const tableName = match[2];
+            // We assume the table file has the same name as the folder (e.g., table_name.csv)
+            // To be safe, we don't know the exact extension (.csv, .xlsx), so we just store the dir
+            // and rely on DataView routing logic if we pass the original table file, or we can just
+            // construct the likely .csv path. Wait, the backend creates table folders with the same name as the file stem.
+            parentTablePath = `${tableBaseDir}/${tableName}.csv`;
+        } else {
+            parentTablePath = null;
+        }
     }
 
     onMount(() => {
@@ -109,14 +127,30 @@
         if (itemPath) loadAttachments(itemPath);
 	});
 
-    $: { 
-        // console.log(`[DocumentView] Path is now ${itemPath}, isPdf is ${isPdf}, isJsonDoc is ${isJsonDoc}`);
+    function returnToBaseTable() {
+        if (parentTablePath) {
+            dispatch('requestviewchange', {
+                tabName: 'data',
+                loadNotePath: parentTablePath,
+                viewType: 'table',
+                originalDocType: 'csv' // Fallback to csv, DataView resolves it
+            });
+        }
     }
 
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->
 <div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-gray-900">
+    {#if parentTablePath}
+        <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
+            <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs shadow-sm" title="Return to Base Table">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-undo-2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+                <span>Return to Base Table</span>
+            </button>
+        </div>
+    {/if}
+
     {#if mediaPath}
         <div class="border-b border-gray-200 dark:border-gray-700 flex flex-col {!isVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}">
             <MediaPlayer

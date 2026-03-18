@@ -312,7 +312,7 @@
                             configJson: JSON.stringify(config),
                             projectXmlPathStr: projectStoreState.xmlPath
                         });
-                        notificationStore.add('Survey documents generated. Check the Attachments Panel.', 'success');
+                        notificationStore.add('Survey documents successfully generated. They are now available under the Attachments Panel.', 'success');
                     } catch (genError) {
                         console.error('Failed to generate survey documents:', genError);
                         notificationStore.add('View saved, but failed to generate documents.', 'error');
@@ -631,8 +631,8 @@
 
     <div class="flex-1 flex overflow-hidden -m-6 h-full border-t border-gray-200 dark:border-gray-700">
         <!-- Left Sidebar: Create / Open Existing -->
-        <!-- For survey configuration, we expand the sidebar to fill or take more space since there's no live preview -->
-        <div class="border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800 transition-all duration-300 {activeTab === 'create' && isEditingExisting && selectedViewType === 'survey' ? 'w-[500px]' : 'w-80'}">
+        <div class="border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-800 transition-all duration-300 w-80"
+             style="{activeTab === 'create' && isEditingExisting && selectedViewType === 'survey' ? 'display: none;' : ''}">
             {#if !(activeTab === 'create' && isEditingExisting)}
                 <div class="flex border-b border-gray-200 dark:border-gray-700">
                     <button
@@ -666,26 +666,27 @@
                                 Select a view type from the right panel and click Create to begin configuring.
                             </div>
                         {:else}
-                            <h3 class="text-center font-bold text-lg text-gray-800 dark:text-gray-200 pb-2">
-                                {viewTypes.find(t => t.value === selectedViewType)?.name || 'View Type'} Configuration
-                            </h3>
+                            {#if selectedViewType !== 'survey'}
+                                <h3 class="text-center font-bold text-lg text-gray-800 dark:text-gray-200 pb-2">
+                                    {viewTypes.find(t => t.value === selectedViewType)?.name || 'View Type'} Configuration
+                                </h3>
 
-                            <Accordion flush>
-                                <AccordionItem>
-                                    <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />General Details</span>
-                                    <div class="space-y-4">
-                                        <div>
-                                            <Label for="viewName" class="mb-2">View Name</Label>
-                                            <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewName" bind:value={viewName} placeholder="Enter view name" />
+                                <Accordion flush>
+                                    <AccordionItem>
+                                        <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />General Details</span>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <Label for="viewName" class="mb-2">View Name</Label>
+                                                <Input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewName" bind:value={viewName} placeholder="Enter view name" />
+                                            </div>
+                                            <div>
+                                                <Label for="viewDescription" class="mb-2">Description</Label>
+                                                <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewDescription" bind:value={viewDescription} placeholder="Optional description" rows="2" />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <Label for="viewDescription" class="mb-2">Description</Label>
-                                            <Textarea autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="viewDescription" bind:value={viewDescription} placeholder="Optional description" rows="2" />
-                                        </div>
-                                    </div>
-                                </AccordionItem>
+                                    </AccordionItem>
 
-                            {#if selectedViewType === 'partial'}
+                                {#if selectedViewType === 'partial'}
                                 <AccordionItem open>
                                     <span slot="header" class="flex items-center"><Table2 class="w-4 h-4 mr-2" />Data Mapping</span>
                                     <div class="space-y-4">
@@ -766,44 +767,9 @@
                                         </div>
                                     </div>
                                 </AccordionItem>
-                            {:else if selectedViewType === 'survey'}
-                                <AccordionItem open>
-                                    <span slot="header" class="flex items-center"><FileText class="w-4 h-4 mr-2" />Survey Configuration</span>
-                                    <div class="space-y-4">
-                                        <div>
-                                            <Label for="surveyGroupByType" class="mb-2">Organize Survey Data By</Label>
-                                            <Select id="surveyGroupByType" items={[{value: 'Participants', name: 'Participants (One document per participant)'}, {value: 'Questions', name: 'Questions (One document per question)'}]} bind:value={surveyGroupByType} />
-                                        </div>
-
-                                        {#if surveyGroupByType === 'Participants'}
-                                            <div>
-                                                <Label for="participantUniqueId" class="mb-2">Participant Unique Identifier</Label>
-                                                <Select id="participantUniqueId" items={allColumns} bind:value={surveyUniqueIdentifierField} placeholder="Select unique ID field" />
-                                            </div>
-                                            <div>
-                                                <Label class="mb-2">Include Fields in Document</Label>
-                                                <MultiSelect items={allColumns} bind:value={surveyParticipantIncludedFields} placeholder="Select fields to include" />
-                                                <Helper class="mt-2">Selected fields will be included in each participant's document.</Helper>
-                                            </div>
-                                        {:else if surveyGroupByType === 'Questions'}
-                                            <div>
-                                                <Label for="questionUniqueId" class="mb-2">Participant Unique Identifier</Label>
-                                                <Select id="questionUniqueId" items={allColumns} bind:value={surveyUniqueIdentifierField} placeholder="Select unique ID field" />
-                                            </div>
-                                            <div>
-                                                <Label class="mb-2">Select Questions to Import</Label>
-                                                <MultiSelect items={allColumns} bind:value={surveySelectedQuestions} placeholder="Select questions" />
-                                                <Helper class="mt-2">A document will be created for each selected question.</Helper>
-                                            </div>
-                                            <div>
-                                                <Label class="mb-2">Include Other Fields (Optional)</Label>
-                                                <MultiSelect items={allColumns} bind:value={surveyIncludedOtherFields} placeholder="Select other fields to include" />
-                                            </div>
-                                        {/if}
-                                    </div>
-                                </AccordionItem>
+                                {/if}
+                                </Accordion>
                             {/if}
-                            </Accordion>
 
                         {/if}
                     </div>
@@ -942,17 +908,102 @@
                         </div>
                     </div>
                 {:else if selectedViewType === 'survey'}
-                    <div class="flex-1 w-full h-full p-8 bg-gray-50/50 dark:bg-gray-900/50 border-l border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center">
-                        <div class="max-w-md text-center space-y-4">
-                            <div class="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center">
-                                <FileText size={32} />
+                    <div class="flex-1 w-full h-full bg-white dark:bg-gray-900 overflow-y-auto custom-scrollbar p-8">
+                        <div class="max-w-3xl mx-auto space-y-8">
+                            <div>
+                                <h4 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <FileText class="w-6 h-6 text-blue-600" />
+                                    Configure Survey Data Documents
+                                </h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                                    This tool will generate individual Lexical JSON documents from your survey data table, organizing the responses based on your configuration below.
+                                </p>
                             </div>
-                            <h4 class="text-xl font-bold text-gray-900 dark:text-white">Survey Data Documents</h4>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                This view generates individual Lexical JSON documents based on your configuration.
-                                Click <strong class="text-gray-700 dark:text-gray-200">Switch to this view</strong> below to generate and save these files.
-                                They will be accessible via the <strong class="text-gray-700 dark:text-gray-200">Attachments Panel</strong>.
-                            </p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div class="col-span-1 md:col-span-2">
+                                    <Label for="surveyViewName" class="mb-2 font-semibold">View Name</Label>
+                                    <Input id="surveyViewName" bind:value={viewName} placeholder="E.g., Survey_2026" />
+                                </div>
+                                <div class="col-span-1 md:col-span-2">
+                                    <Label for="surveyViewDescription" class="mb-2 font-semibold">Description (Optional)</Label>
+                                    <Textarea id="surveyViewDescription" bind:value={viewDescription} placeholder="What is this survey data view for?" rows="2" />
+                                </div>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div>
+                                    <Label class="mb-2 text-lg font-bold">How would you like to organize your survey data?</Label>
+                                    <div class="flex gap-4">
+                                        <button
+                                            class="flex-1 p-4 border rounded-lg text-left transition-all {surveyGroupByType === 'Participants' ? 'border-blue-500 ring-2 ring-blue-500/50 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
+                                            on:click={() => surveyGroupByType = 'Participants'}
+                                        >
+                                            <div class="font-bold text-gray-900 dark:text-white">By Participants</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">One document will be created for each participant row.</div>
+                                        </button>
+                                        <button
+                                            class="flex-1 p-4 border rounded-lg text-left transition-all {surveyGroupByType === 'Questions' ? 'border-blue-500 ring-2 ring-blue-500/50 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
+                                            on:click={() => surveyGroupByType = 'Questions'}
+                                        >
+                                            <div class="font-bold text-gray-900 dark:text-white">By Questions</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">One document will be created for each selected question.</div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border border-gray-200 dark:border-gray-700 space-y-6 shadow-sm">
+                                    <div>
+                                        <Label for="uniqueIdField" class="mb-2 font-semibold">Unique Identifier of the Participant</Label>
+                                        <Select id="uniqueIdField" items={allColumns} bind:value={surveyUniqueIdentifierField} placeholder="Select a field that uniquely identifies each participant" />
+                                    </div>
+
+                                    {#if surveyGroupByType === 'Participants'}
+                                        <div>
+                                            <Label class="mb-2 font-semibold">Fields to Include in Document</Label>
+                                            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+                                                <div class="flex flex-col gap-2">
+                                                    {#each allColumns as col}
+                                                        <Checkbox
+                                                            checked={surveyParticipantIncludedFields.includes(col.value)}
+                                                            on:change={(e) => {
+                                                                if (e.target.checked) {
+                                                                    surveyParticipantIncludedFields = [...surveyParticipantIncludedFields, col.value];
+                                                                } else {
+                                                                    surveyParticipantIncludedFields = surveyParticipantIncludedFields.filter(f => f !== col.value);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {col.name}
+                                                        </Checkbox>
+                                                    {/each}
+                                                </div>
+                                            </div>
+                                            <Helper class="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                                                This will create {activeData.length} document(s) (one for each participant), containing the selected fields.
+                                            </Helper>
+                                        </div>
+                                    {:else if surveyGroupByType === 'Questions'}
+                                        <div>
+                                            <Label class="mb-2 font-semibold">Select Questions to Import</Label>
+                                            <MultiSelect items={allColumns} bind:value={surveySelectedQuestions} placeholder="Select the columns that represent questions" />
+                                        </div>
+                                        <div>
+                                            <Label class="mb-2 font-semibold">Include Other Fields (Optional)</Label>
+                                            <MultiSelect items={allColumns} bind:value={surveyIncludedOtherFields} placeholder="Select other fields to include besides the questions and identifier" />
+                                            <Helper class="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                                                This will create {surveySelectedQuestions.length} document(s) (one for each question selected). Each document will list all participant responses.
+                                            </Helper>
+                                        </div>
+                                    {/if}
+                                </div>
+
+                                <div class="flex justify-end pt-4">
+                                    <Button color="blue" size="lg" on:click={() => switchToView()} class="shadow-md flex items-center gap-2">
+                                        <FileText size={18} /> Generate Documents
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 {/if}
@@ -966,10 +1017,12 @@
 
     <svelte:fragment slot="footer">
         {#if activeTab === 'create' && isEditingExisting}
-        <div class="flex justify-end w-full space-x-2">
-            <Button color="alternative" on:click={handleModalClose}>Close</Button>
-            <Button color="blue" on:click={switchToView}>Switch to this view</Button>
-        </div>
+            <div class="flex justify-end w-full space-x-2">
+                <Button color="alternative" on:click={handleModalClose}>Close</Button>
+                {#if selectedViewType !== 'survey'}
+                    <Button color="blue" on:click={switchToView}>Switch to this view</Button>
+                {/if}
+            </div>
         {/if}
     </svelte:fragment>
 </Modal>
