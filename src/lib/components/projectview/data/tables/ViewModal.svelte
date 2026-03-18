@@ -182,7 +182,13 @@
     async function initialCreate() {
         if (!viewName) viewName = `View-${existingViews.length + 1}`;
         isEditingExisting = true;
-        await saveView(true); // Don't trigger explicit non-autosave logic on initial UI transition
+
+        // Survey views generate actual documents on save.
+        // We do not want to auto-save and trigger generation on initial creation
+        // before the user has configured the survey options.
+        if (selectedViewType !== 'survey') {
+            await saveView(true); // Don't trigger explicit non-autosave logic on initial UI transition
+        }
     }
 
     function getCurrentConfig() {
@@ -457,7 +463,7 @@
     }
 
     // Reactive statements for auto-saving config
-    $: if (isEditingExisting && viewName) {
+    $: if (isEditingExisting && viewName && selectedViewType !== 'survey') {
         // Track dependencies to trigger autosave
         let _ = partialSelectedColumns;
         let __ = partialFilterField;
