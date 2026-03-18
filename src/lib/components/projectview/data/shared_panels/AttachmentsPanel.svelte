@@ -99,7 +99,12 @@
         if (!view || !view.view_name) return;
 
         const { ask } = await import('@tauri-apps/plugin-dialog');
-        const confirmed = await ask(`Are you sure you want to delete view ${view.view_name}?`, { title: 'Delete View', type: 'warning' });
+        let promptMessage = `Are you sure you want to delete view ${view.view_name}?`;
+        if (view.view_type === 'survey') {
+            promptMessage += `\n\nWARNING: Deleting this Survey Data Table view will also permanently delete ALL generated .json documents associated with it. This action cannot be undone.`;
+        }
+
+        const confirmed = await ask(promptMessage, { title: 'Delete View', type: 'warning' });
         if (!confirmed) return;
 
         const projectStoreState = get(project);
@@ -108,15 +113,55 @@
             await invoke('delete_table_view_command', {
                 projectId: projectStoreState.id,
                 tablePath: previousProcessedItemPath,
-                viewName: view.view_name
+                viewName: view.view_name,
+                projectXmlPathStr: projectStoreState.xmlPath
             });
             notificationStore.add('View deleted.', 'success');
-            attachments = attachments.filter(a => a.view_name !== view.view_name);
+
+            // If it was a survey view, we need to completely reload to clear out the deleted documents
+            if (view.view_type === 'survey') {
+                await loadAttachments(previousProcessedItemPath);
+            } else {
+                attachments = attachments.filter(a => a.view_name !== view.view_name);
+            }
             dispatch('viewSaved');
             dispatch('requestDeleteView', { viewName: view.view_name });
         } catch (error) {
             console.error('Failed to delete view via attachments panel:', error);
             notificationStore.add('Failed to delete view.', 'error');
+        }
+    }
+
+    async function handleDeleteDocument(documentPath) {
+        if (!documentPath) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to permanently delete this document?\n\nThis action cannot be undone.`, { title: 'Delete Document', type: 'warning' });
+        if (!confirmed) return;
+
+        const projectStoreState = get(project);
+        if (!projectStoreState.xmlPath || !previousProcessedItemPath) return;
+
+        try {
+            // Document paths in attachments list might be absolute (due to legacy behavior) or relative.
+            // The backend handles resolving this properly now in delete_attachment_command.
+            // But we try to pass a relative path if possible.
+            let attachmentRelPath = documentPath;
+            if (documentPath.startsWith(projectStoreState.baseDirectory)) {
+                attachmentRelPath = documentPath.substring(projectStoreState.baseDirectory.length);
+                attachmentRelPath = attachmentRelPath.replace(/\\/g, '/').replace(/^\//, '');
+            }
+
+            await invoke('delete_attachment_command', {
+                projectXmlPathStr: projectStoreState.xmlPath,
+                assetRelativePath: previousProcessedItemPath,
+                attachmentRelativePath: attachmentRelPath
+            });
+            notificationStore.add('Document deleted.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+        } catch (error) {
+            console.error('Failed to delete document:', error);
+            notificationStore.add(`Failed to delete document: ${error}`, 'error');
         }
     }
 
@@ -266,6 +311,8 @@
                             {:else if typeof attachment === 'object' && attachment.view_name}
                                 {#if attachment.view_type === 'partial'}<Table2 class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                                 {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
+                                <FileText class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else}
                                 <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
@@ -300,6 +347,20 @@
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Document Options" id="doc-options-{i}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#doc-options-{i}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = i; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>

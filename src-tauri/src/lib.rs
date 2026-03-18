@@ -380,6 +380,7 @@ pub fn run() {
             projectview::metadata_commands::update_asset_metadata_command,
             projectview::metadata_commands::get_project_assets_for_link_command,
             projectview::attachment_commands::upload_attachment,
+            projectview::attachment_commands::delete_attachment_command,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
             projectview::metadata_commands::get_all_custom_field_definitions_command,

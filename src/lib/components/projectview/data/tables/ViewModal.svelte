@@ -280,15 +280,24 @@
         if (!targetName) return;
 
         const { ask } = await import('@tauri-apps/plugin-dialog');
-        const confirmed = await ask(`Are you sure you want to delete view ${targetName}?`, { title: 'Delete View', type: 'warning' });
+        const projectStoreState = get(project);
+        let promptMessage = `Are you sure you want to delete view ${targetName}?`;
+
+        // Find if it's a survey view to warn about documents
+        const viewToDelete = views.find(v => v.view_name === targetName);
+        if (viewToDelete && viewToDelete.view_type === 'survey') {
+            promptMessage += `\n\nWARNING: Deleting this Survey Data Table view will also permanently delete ALL generated .json documents associated with it. This action cannot be undone.`;
+        }
+
+        const confirmed = await ask(promptMessage, { title: 'Delete View', type: 'warning' });
         if (!confirmed) return;
 
-        const projectStoreState = get(project);
         try {
             await invoke('delete_table_view_command', {
                 projectId: projectStoreState.id,
                 tablePath: normalizedTablePath,
-                viewName: targetName
+                viewName: targetName,
+                projectXmlPathStr: projectStoreState.xmlPath
             });
             notificationStore.add('View deleted.', 'success');
             resetForm();

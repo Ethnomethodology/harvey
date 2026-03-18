@@ -28,7 +28,8 @@ pub async fn delete_table_view_command(
     project_id: String,
     table_path: String,
     view_name: String,
+    project_xml_path_str: String,
 ) -> Result<(), CommandError> {
     info!("Deleting table view: {} for table: {} in project: {}", view_name, table_path, project_id);
-    view_handler::delete_table_view(&project_id, &table_path, &view_name)
+    view_handler::delete_table_view(&project_id, &table_path, &view_name, &project_xml_path_str)
 }
