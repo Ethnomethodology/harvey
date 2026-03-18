@@ -2458,6 +2458,8 @@
     let currentActiveViewType = null;
     let baseTableColumns = []; // Store base columns when applying a view
     let pivotDerivedSchema = {};
+    let generatedPivotTableCols = [];
+    let generatedPivotTableData = [];
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
     export async function openView(view) {
@@ -2525,12 +2527,16 @@
                 tabulatorInstance.setFilter(config.filterField, config.filterOperator || 'like', config.filterValue);
             }
         } else if (viewType === 'pivot') {
-            const { rowField, colField, rowFields, colFields, valueField, aggregation } = config;
+            const { rowField, colField, rowFields, colFields, valueField, aggregation, valueFields } = config;
 
             let actualRowFields = rowFields || (rowField ? [rowField] : []);
             let actualColFields = colFields || (colField ? [colField] : []);
+            let actualValueFields = valueFields || [];
+            if (actualValueFields.length === 0 && valueField) {
+                actualValueFields.push({ field: valueField, aggregation: aggregation || 'Sum' });
+            }
 
-            if (actualRowFields.length === 0 || !valueField) return;
+            if (actualRowFields.length === 0 || actualValueFields.length === 0) return;
 
             let groupedData = {};
             let allColKeys = new Set();
@@ -2546,17 +2552,21 @@
                     rowKeyToValuesMap.set(rKey, rowValsObj);
                 }
 
-                let cKey = 'Total';
+                let baseCKey = 'Total';
                 if (actualColFields.length > 0) {
-                    cKey = actualColFields.map(f => String(row[f] || '(Blank)')).join(' | ');
+                    baseCKey = actualColFields.map(f => String(row[f] || '(Blank)')).join(' | ');
                 }
 
-                const vVal = parseFloat(row[valueField]) || 0;
-
                 if (!groupedData[rKey]) groupedData[rKey] = {};
-                if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
-                groupedData[rKey][cKey].push(vVal);
-                allColKeys.add(cKey);
+
+                actualValueFields.forEach(vf => {
+                    const cKey = actualColFields.length > 0 ? `${baseCKey} - ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
+                    const vVal = parseFloat(row[vf.field]) || 0;
+
+                    if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
+                    groupedData[rKey][cKey].push(vVal);
+                    allColKeys.add(cKey);
+                });
             });
 
             let pivotCols = [];
@@ -2577,13 +2587,16 @@
                 let rowData = { ...rowKeyToValuesMap.get(rKey) };
                 sortedColKeys.forEach(ck => {
                     const vals = cData[ck] || [];
+                    const match = ck.match(/\((Sum|Count|Average|Min|Max)\)$/);
+                    const aggType = match ? match[1] : 'Sum';
+
                     let aggVal = 0;
                     if (vals.length > 0) {
-                        if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                        else if (aggregation === 'Count') aggVal = vals.length;
-                        else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                        else if (aggregation === 'Min') aggVal = Math.min(...vals);
-                        else if (aggregation === 'Max') aggVal = Math.max(...vals);
+                        if (aggType === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
+                        else if (aggType === 'Count') aggVal = vals.length;
+                        else if (aggType === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
+                        else if (aggType === 'Min') aggVal = Math.min(...vals);
+                        else if (aggType === 'Max') aggVal = Math.max(...vals);
                     } else {
                         aggVal = null;
                     }
@@ -2593,8 +2606,13 @@
                 pivotData.push(rowData);
             }
 
-            tabulatorInstance.setColumns(pivotCols);
-            tabulatorInstance.replaceData(pivotData);
+            // Pivot views are natively rendered, so store them in reactive vars rather than Tabulator
+            generatedPivotTableCols = pivotCols;
+            generatedPivotTableData = pivotData;
+
+            // To ensure charts can still hook onto the derived dataset, we must also update activeData internally
+            // inside ChartModal via viewTransform.js (already done), but since tableData here isn't mutated
+            // we just hide the standard Tabulator instance via UI logic.
         }
 
         // Re-evaluate add entry row (removes it for pivot)
@@ -2652,6 +2670,14 @@
     }
 
     export async function getExportData() {
+        if (currentActiveViewType === 'pivot') {
+            return {
+                data: generatedPivotTableData,
+                headers: generatedPivotTableCols.map(c => c.field),
+                styles: {}
+            };
+        }
+
         if (!tabulatorInstance) return null;
         
         const data = tabulatorInstance.getData();
@@ -3695,7 +3721,42 @@
         {:else if error}
              <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10">Error: {error}</div>
         {/if}
-        <div bind:this={tableContainer} class="w-full h-full">
+
+        {#if currentActiveViewType === 'pivot'}
+            <div class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20">
+                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            {#each generatedPivotTableCols as col}
+                                <th scope="col" class="px-6 py-3 whitespace-nowrap {col.hozAlign === 'right' ? 'text-right' : ''} border-b border-gray-200 dark:border-gray-600">
+                                    {col.title}
+                                </th>
+                            {/each}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#each generatedPivotTableData as row, i}
+                            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                {#each generatedPivotTableCols as col}
+                                    <td class="px-6 py-4 whitespace-nowrap {col.frozen ? 'font-medium text-gray-900 dark:text-white' : ''} {col.hozAlign === 'right' ? 'text-right' : ''}">
+                                        {row[col.field] !== null && row[col.field] !== undefined ? row[col.field] : ''}
+                                    </td>
+                                {/each}
+                            </tr>
+                        {/each}
+                        {#if generatedPivotTableData.length === 0}
+                            <tr>
+                                <td colspan={Math.max(generatedPivotTableCols.length, 1)} class="px-6 py-8 text-center text-gray-500">
+                                    No data available.
+                                </td>
+                            </tr>
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        {/if}
+
+        <div bind:this={tableContainer} class="w-full h-full" style="display: {currentActiveViewType === 'pivot' ? 'none' : 'block'};">
              {#if !isLoading && !error && tableData.length === 0 && tablePath}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}

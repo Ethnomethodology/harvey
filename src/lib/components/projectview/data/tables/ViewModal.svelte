@@ -58,8 +58,7 @@
     // Pivot View fields
     let pivotRowFields = [];
     let pivotColFields = [];
-    let pivotValueField = '';
-    let pivotAggregation = 'Sum'; // Sum, Count, Average, Min, Max
+    let pivotValueFields = [{ field: '', aggregation: 'Sum' }];
 
     let activeData = [];
     let activeColumns = [];
@@ -153,8 +152,7 @@
         partialFilterOperator = 'contains';
         pivotRowFields = [];
         pivotColFields = [];
-        pivotValueField = '';
-        pivotAggregation = 'Sum';
+        pivotValueFields = [{ field: '', aggregation: 'Sum' }];
     }
 
     function selectViewType(type) {
@@ -180,8 +178,7 @@
         } else if (selectedViewType === 'pivot') {
             config.rowFields = pivotRowFields;
             config.colFields = pivotColFields;
-            config.valueField = pivotValueField;
-            config.aggregation = pivotAggregation;
+            config.valueFields = pivotValueFields.filter(vf => vf.field); // filter out empties
         }
         return config;
     }
@@ -213,8 +210,13 @@
                 if (config.colField) pivotColFields = [config.colField];
                 else pivotColFields = config.colFields || [];
 
-                pivotValueField = config.valueField || '';
-                pivotAggregation = config.aggregation || 'Sum';
+                if (config.valueFields && config.valueFields.length > 0) {
+                    pivotValueFields = config.valueFields;
+                } else if (config.valueField) {
+                    pivotValueFields = [{ field: config.valueField, aggregation: config.aggregation || 'Sum' }];
+                } else {
+                    pivotValueFields = [{ field: '', aggregation: 'Sum' }];
+                }
             }
         } catch (e) {
             console.error('Failed to parse view config:', e);
@@ -293,8 +295,13 @@
         open = false;
     }
 
-    function generatePivotData(data, rowFields, colFields, valueField, aggregation) {
-        if (!rowFields || rowFields.length === 0 || !valueField) return { pivotCols: [], pivotData: [] };
+    function generatePivotData(data, rowFields, colFields, valueField, aggregation, valueFieldsObj = []) {
+        let actualValueFields = valueFieldsObj.filter(vf => vf.field);
+        if (actualValueFields.length === 0 && valueField) {
+            actualValueFields.push({ field: valueField, aggregation: aggregation || 'Sum' });
+        }
+
+        if (!rowFields || rowFields.length === 0 || actualValueFields.length === 0) return { pivotCols: [], pivotData: [] };
 
         let groupedData = {};
         let allColKeys = new Set();
@@ -311,20 +318,24 @@
                 rowKeyToValuesMap.set(rKey, rowValsObj);
             }
 
-            let cKey = 'Total';
+            let baseCKey = 'Total';
             if (colFields && colFields.length > 0) {
-                cKey = colFields.map(f => String(row[f] || '(Blank)')).join(' | ');
+                baseCKey = colFields.map(f => String(row[f] || '(Blank)')).join(' | ');
             }
 
-            const vVal = parseFloat(row[valueField]) || 0;
-
             if (!groupedData[rKey]) groupedData[rKey] = {};
-            if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
-            groupedData[rKey][cKey].push(vVal);
-            allColKeys.add(cKey);
+
+            actualValueFields.forEach(vf => {
+                const cKey = colFields && colFields.length > 0 ? `${baseCKey} - ${vf.field} (${vf.aggregation})` : `${vf.field} (${vf.aggregation})`;
+                const vVal = parseFloat(row[vf.field]) || 0;
+
+                if (!groupedData[rKey][cKey]) groupedData[rKey][cKey] = [];
+                groupedData[rKey][cKey].push(vVal);
+                allColKeys.add(cKey);
+            });
         });
 
-        // 2. Build Columns for Tabulator
+        // 2. Build Columns for Tabulator (and HTML Table)
         let pivotCols = [];
         rowFields.forEach(f => {
             pivotCols.push({ field: f, title: f, frozen: true });
@@ -341,13 +352,16 @@
             let rowData = { ...rowKeyToValuesMap.get(rKey) };
             sortedColKeys.forEach(ck => {
                 const vals = cData[ck] || [];
+                const match = ck.match(/\((Sum|Count|Average|Min|Max)\)$/);
+                const aggType = match ? match[1] : 'Sum';
+
                 let aggVal = 0;
                 if (vals.length > 0) {
-                    if (aggregation === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
-                    else if (aggregation === 'Count') aggVal = vals.length;
-                    else if (aggregation === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
-                    else if (aggregation === 'Min') aggVal = Math.min(...vals);
-                    else if (aggregation === 'Max') aggVal = Math.max(...vals);
+                    if (aggType === 'Sum') aggVal = vals.reduce((a,b)=>a+b, 0);
+                    else if (aggType === 'Count') aggVal = vals.length;
+                    else if (aggType === 'Average') aggVal = vals.reduce((a,b)=>a+b, 0) / vals.length;
+                    else if (aggType === 'Min') aggVal = Math.min(...vals);
+                    else if (aggType === 'Max') aggVal = Math.max(...vals);
                 } else {
                     aggVal = null; // empty cell
                 }
@@ -369,8 +383,7 @@
         let ____ = partialFilterOperator;
         let _____ = pivotRowFields;
         let ______ = pivotColFields;
-        let _______ = pivotValueField;
-        let ________ = pivotAggregation;
+        let _______ = JSON.stringify(pivotValueFields);
         let _________ = viewDescription;
         let __________ = dataSource;
 
@@ -419,38 +432,27 @@
             }
         }, 50);
     } else if (open && isEditingExisting && selectedViewType === 'pivot' && previewContainer) {
-        setTimeout(() => {
-            if (!previewContainer) return; // Verify still mounted
-            if (!pivotRowFields || pivotRowFields.length === 0 || !pivotValueField) {
-                if (previewTabulatorInstance) {
-                    previewTabulatorInstance.destroy();
-                    previewTabulatorInstance = null;
-                }
-                return;
-            }
+        // Pivot tables are now rendered natively with HTML/Tailwind, so we destroy any active tabulator instance
+        if (previewTabulatorInstance) {
+            previewTabulatorInstance.destroy();
+            previewTabulatorInstance = null;
+        }
+    }
 
-            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowFields, pivotColFields, pivotValueField, pivotAggregation);
+    // Reactive pivot data generation for native HTML rendering
+    let generatedPivotTableCols = [];
+    let generatedPivotTableData = [];
 
-            if (pivotCols.length > 0) {
-                if (previewTabulatorInstance) {
-                    previewTabulatorInstance.setColumns(pivotCols);
-                    previewTabulatorInstance.replaceData(pivotData);
-                } else {
-                    previewTabulatorInstance = new Tabulator(previewContainer, {
-                        data: pivotData,
-                        columns: pivotCols,
-                        layout: "fitDataFill",
-                        height: "100%",
-                        reactiveData: false,
-                        selectable: false,
-                        nestedFieldSeparator: false
-                    });
-                }
-            } else if (previewTabulatorInstance) {
-                previewTabulatorInstance.destroy();
-                previewTabulatorInstance = null;
-            }
-        }, 50);
+    $: if (open && isEditingExisting && selectedViewType === 'pivot') {
+        const validValueFields = pivotValueFields.filter(vf => vf.field);
+        if (pivotRowFields && pivotRowFields.length > 0 && validValueFields.length > 0) {
+            const { pivotCols, pivotData } = generatePivotData(activeData, pivotRowFields, pivotColFields, validValueFields[0].field, validValueFields[0].aggregation, validValueFields);
+            generatedPivotTableCols = pivotCols;
+            generatedPivotTableData = pivotData;
+        } else {
+            generatedPivotTableCols = [];
+            generatedPivotTableData = [];
+        }
     }
 
 </script>
@@ -612,12 +614,19 @@
                                             <MultiSelect id="pivotCol" items={allColumns} bind:value={pivotColFields} placeholder="Select column fields" />
                                         </div>
                                         <div>
-                                            <Label for="pivotValue" class="mb-2">Value Field (To Aggregate)</Label>
-                                            <Select id="pivotValue" items={pivotValueOptions} bind:value={pivotValueField} />
-                                        </div>
-                                        <div>
-                                            <Label for="pivotAgg" class="mb-2">Aggregation Type</Label>
-                                            <Select id="pivotAgg" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={pivotAggregation} />
+                                            <Label class="mb-2">Values to Aggregate</Label>
+                                            {#each pivotValueFields as vf, index}
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <Select class="flex-1" items={pivotValueOptions} bind:value={vf.field} placeholder="Select value field" />
+                                                    <Select class="w-32" items={[{value:'Sum', name:'Sum'}, {value:'Count', name:'Count'}, {value:'Average', name:'Average'}, {value:'Min', name:'Min'}, {value:'Max', name:'Max'}]} bind:value={vf.aggregation} />
+                                                    <Button color="red" size="sm" outline class="p-2" on:click={() => pivotValueFields = pivotValueFields.filter((_, i) => i !== index)} disabled={pivotValueFields.length === 1}>
+                                                        <Trash2 class="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            {/each}
+                                            <Button color="light" size="sm" class="mt-1" on:click={() => pivotValueFields = [...pivotValueFields, { field: '', aggregation: 'Sum' }]}>
+                                                <Plus class="w-4 h-4 mr-2" /> Add Value Field
+                                            </Button>
                                         </div>
                                     </div>
                                 </AccordionItem>
@@ -697,7 +706,37 @@
                         <div class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-2">
                             <LayoutGrid size={16} /> Live Preview: {viewName}
                         </div>
-                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-hidden" bind:this={previewContainer}></div>
+                        <div class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm overflow-auto">
+                            <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        {#each generatedPivotTableCols as col}
+                                            <th scope="col" class="px-6 py-3 whitespace-nowrap {col.hozAlign === 'right' ? 'text-right' : ''} border-b border-gray-200 dark:border-gray-600">
+                                                {col.title}
+                                            </th>
+                                        {/each}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#each generatedPivotTableData as row, i}
+                                        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                            {#each generatedPivotTableCols as col}
+                                                <td class="px-6 py-4 whitespace-nowrap {col.frozen ? 'font-medium text-gray-900 dark:text-white' : ''} {col.hozAlign === 'right' ? 'text-right' : ''}">
+                                                    {row[col.field] !== null && row[col.field] !== undefined ? row[col.field] : ''}
+                                                </td>
+                                            {/each}
+                                        </tr>
+                                    {/each}
+                                    {#if generatedPivotTableData.length === 0}
+                                        <tr>
+                                            <td colspan={Math.max(generatedPivotTableCols.length, 1)} class="px-6 py-8 text-center text-gray-500">
+                                                Select row/column/value fields to generate pivot preview.
+                                            </td>
+                                        </tr>
+                                    {/if}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 {/if}
             {:else if activeTab === 'existing'}
