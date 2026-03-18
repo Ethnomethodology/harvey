@@ -30,6 +30,10 @@
         rawAttachments.forEach((attachment, originalIndex) => {
             // Objects (charts, views) or files not matching the pattern go to root
             if (typeof attachment !== 'string') {
+                // Ignore the "survey" view configuration object itself from rendering in the attachments list,
+                // as its generated documents are what we want to show.
+                if (attachment.view_type === 'survey') return;
+
                 root.push({ attachment, originalIndex });
                 return;
             }

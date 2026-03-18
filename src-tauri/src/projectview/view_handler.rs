@@ -96,8 +96,9 @@ pub async fn generate_survey_documents(
             .map_err(|e| CommandError::Io(format!("Failed to create attachments dir: {}", e)))?;
     }
 
-    // Load table data
-    let table_data: Value = table_handler::load_table_data(table_path.to_string()).await?;
+    // Load table data - ensure absolute path is passed
+    let abs_table_path = project_base_dir.join(table_path);
+    let table_data: Value = table_handler::load_table_data(abs_table_path.to_string_lossy().to_string()).await?;
     let rows = table_data.as_array().ok_or_else(|| CommandError::Io("Table data is not an array".to_string()))?;
 
     let mut generated_files = Vec::new();
