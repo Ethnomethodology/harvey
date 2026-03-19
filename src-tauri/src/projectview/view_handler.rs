@@ -189,21 +189,8 @@ pub async fn generate_survey_documents(
                     "indent": 0
                 }));
 
-                // Blank line gap between Field Name and Value
-                lexical_children.push(create_lexical_paragraph_json_value(""));
-
                 // Value paragraph
                 lexical_children.push(create_lexical_paragraph_json_value(&value_str));
-
-                // Blank line gap before next pair
-                lexical_children.push(create_lexical_paragraph_json_value(""));
-            }
-
-            // Remove trailing blank line if it exists
-            if let Some(last) = lexical_children.last() {
-                if last["children"].as_array().map_or(false, |c| c.len() == 1 && c[0]["type"] == "linebreak") {
-                    lexical_children.pop();
-                }
             }
 
             let doc_json = json!({
@@ -270,10 +257,6 @@ pub async fn generate_survey_documents(
                 "format": "",
                 "indent": 0
             }));
-
-            // Two line gap after H2
-            lexical_children.push(create_lexical_paragraph_json_value(""));
-            lexical_children.push(create_lexical_paragraph_json_value(""));
 
             for (index, row_val) in rows.iter().enumerate() {
                 let row = row_val.as_object().unwrap();
@@ -373,9 +356,6 @@ pub async fn generate_survey_documents(
                     "type": "horizontalrule",
                     "version": 1
                 }));
-
-                // One blank line after the divider for spacing before the next entry
-                lexical_children.push(create_lexical_paragraph_json_value(""));
             }
 
             let doc_json = json!({

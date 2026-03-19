@@ -177,21 +177,6 @@ impl Drop for CancelGuard {
 /// Creates a Lexical JSON structure for a single paragraph containing the given text.
 /// This is suitable for the content of a single cell, using ExtendedTextNode.
 pub fn create_lexical_paragraph_json_value(text: &str) -> JsonValue {
-    if text.is_empty() {
-        // Return a truly empty paragraph containing a linebreak node to ensure Lexical renders vertical space
-        return json!({
-            "type": "paragraph",
-            "version": 1,
-            "children": [{
-                "type": "linebreak",
-                "version": 1
-            }],
-            "direction": "ltr",
-            "format": "",
-            "indent": 0
-        });
-    }
-
     json!({
         "type": "paragraph",
         "version": 1,
