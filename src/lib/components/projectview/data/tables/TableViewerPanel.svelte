@@ -82,6 +82,7 @@
     let isViewingDocument = false;
     let currentActiveDocumentPath = null;
     let currentActiveDocumentJson = null;
+    let currentActiveDocumentHighlights = [];
 
     let svelteUndoStack = [];
     let svelteRedoStack = [];
@@ -2482,10 +2483,36 @@
         }
     }, 750);
 
+    const debouncedLexicalHighlightsSave = debounce(async (docPath, highlights) => {
+        if (!docPath || !highlights) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+            await invoke('save_highlight_changes', {
+                projectId: projectStoreState.id,
+                documentPath: absolutePath,
+                highlightsJson: JSON.stringify(highlights)
+            });
+        } catch (e) {
+            console.error('Failed to autosave lexical highlights:', e);
+        }
+    }, 750);
+
     function handleLexicalDocumentChange(event) {
         const { jsonString } = event.detail;
         if (currentActiveDocumentPath && jsonString) {
             debouncedLexicalSave(currentActiveDocumentPath, jsonString);
+        }
+    }
+
+    function handleLexicalHighlightsChange(event) {
+        const { highlights } = event.detail;
+        if (currentActiveDocumentPath && highlights) {
+            setDocumentHighlights(highlights); // Update global store immediately so HighlightsPanel sees it
+            debouncedLexicalHighlightsSave(currentActiveDocumentPath, highlights);
         }
     }
 
@@ -2502,8 +2529,23 @@
                 filePath: absolutePath
             });
 
+            // Load highlights
+            let loadedHighlights = [];
+            try {
+                const hData = await invoke('load_lexical_highlights', {
+                    args: { projectId: projectStoreState.id, documentPath: absolutePath }
+                });
+                if (hData) {
+                    loadedHighlights = JSON.parse(hData);
+                }
+            } catch (hErr) {
+                console.error('Failed to load highlights for lexical document:', hErr);
+            }
+
             if (content) {
                 currentActiveDocumentJson = content;
+                currentActiveDocumentHighlights = loadedHighlights;
+                setDocumentHighlights(loadedHighlights); // Immediately push to store for HighlightsPanel
                 isViewingDocument = true;
                 currentActiveDocumentPath = docPath;
                 activeSubItemPath = docPath;
@@ -3871,7 +3913,10 @@
                             enableTableCellResize={true}
                             enableSearch={true}
                             documentPath={currentActiveDocumentPath}
+                            initialHighlights={currentActiveDocumentHighlights}
+                            documentHighlights={$project.currentDocumentHighlights}
                             on:change={handleLexicalDocumentChange}
+                            on:highlightschange={handleLexicalHighlightsChange}
                             toolbarConfig={{
                                 undo: true,
                                 redo: true,
