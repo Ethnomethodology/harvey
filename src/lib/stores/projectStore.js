@@ -325,7 +325,14 @@ export function setDocumentHighlights(highlights) {
             }
         });
 
-        const updatedState = { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        const updatedState = { ...p, currentDocumentHighlights: highlights };
+
+        // We only want to mark document metadata as dirty if the active document is actually a document type
+        // This prevents tables (which also use this field to display highlights in the panel for their attachments)
+        // from triggering false saves that cause "Missing JSON content" errors.
+        if (p.selectedDocumentType !== 'tables' && p.selectedDocumentType !== 'table') {
+             updatedState.isDocumentMetadataDirty = true;
+        }
 
         if (isMediaNoteActive) {
             updatedState.isMediaNoteTranscriptDirty = true;
