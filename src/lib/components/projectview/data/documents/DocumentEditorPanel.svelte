@@ -68,7 +68,6 @@
                 if (editorRef) editorRef.resetEditorState('');
             }
         } else if (currentJson !== prevCurrentJson && currentJson) {
-            // Keep editorJsonState in sync when currentJson updates after path change (e.g. async load)
             editorJsonState = currentJson;
             if (editorRef) editorRef.resetEditorState(currentJson);
         }
@@ -88,7 +87,6 @@
             } else {
                 initialHighlights = [];
             }
-            // Update global store immediately so HighlightsPanel sees it
             setDocumentHighlights(initialHighlights);
         } catch (e) {
             console.error("Error loading lexical highlights:", e);

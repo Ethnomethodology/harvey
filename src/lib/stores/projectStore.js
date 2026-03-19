@@ -310,6 +310,7 @@ export function setActiveDocumentEditorRef(editorInstance) { project.update(p =>
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
 export function setDocumentHighlights(highlights) {
     project.update(p => {
+        // We consider the document active if it's a normal doc, OR if it's a table but we have a sub-item active (handled externally)
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
         const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
 

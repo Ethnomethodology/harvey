@@ -40,7 +40,9 @@
         });
     });
 
-	$: if (refreshKey) {
+    let prevRefreshKey = null;
+	$: if (refreshKey !== prevRefreshKey) {
+        prevRefreshKey = refreshKey;
 		if (itemPath) {
             let pathForHighlights = itemPath;
             const p = get(project);
