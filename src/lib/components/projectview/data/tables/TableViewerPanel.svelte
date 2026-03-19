@@ -2484,20 +2484,28 @@
     }, 750);
 
     const debouncedLexicalHighlightsSave = debounce(async (docPath, highlights) => {
-        if (!docPath || !highlights) return;
+        if (!docPath || !highlights || !Array.isArray(highlights)) return;
         try {
             const projectStoreState = get(project);
             let absolutePath = docPath;
             if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
-            await invoke('save_highlight_changes', {
-                projectId: projectStoreState.id,
-                filePath: absolutePath,
-                highlightsJson: JSON.stringify(highlights)
-            });
+
+            for (const highlight of highlights) {
+                try {
+                    await invoke('save_highlight_changes', {
+                        projectId: projectStoreState.id,
+                        filePath: absolutePath,
+                        docType: 'document',
+                        highlight: highlight
+                    });
+                } catch (saveErr) {
+                    console.error(`Failed to autosave highlight ${highlight.id}:`, saveErr);
+                }
+            }
         } catch (e) {
-            console.error('Failed to autosave lexical highlights:', e);
+            console.error('Failed to autosave lexical highlights batch:', e);
         }
     }, 750);
 
