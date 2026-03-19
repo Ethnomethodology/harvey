@@ -2516,6 +2516,13 @@
         }
     }
 
+    // Reactive watcher to capture tags/comments added via the HighlightsPanel sidebar
+    // when a survey document is actively being viewed in the table viewer.
+    $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
+        // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
+        debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
+    }
+
     export async function openLexicalDocument(docPath) {
         if (!docPath) return;
         try {
