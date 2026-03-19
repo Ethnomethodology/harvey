@@ -3847,10 +3847,10 @@
                             toolbarConfig={{
                                 undo: false,
                                 redo: false,
-                                blockType: true,
-                                bold: true,
-                                italic: true,
-                                underline: true,
+                                blockType: false,
+                                bold: false,
+                                italic: false,
+                                underline: false,
                                 strikethrough: false,
                                 align: false,
                                 insertMenu: false,
@@ -3858,7 +3858,7 @@
                                 outdent: false,
                                 indent: false,
                                 textColor: false,
-                                highlight: true,
+                                highlight: false,
                                 clearFormatting: false,
                                 search: true,
                                 fontFamily: false
