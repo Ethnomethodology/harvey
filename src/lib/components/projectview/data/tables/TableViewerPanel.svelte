@@ -19,7 +19,7 @@
         loadTableSchema,
         saveTableSchema
     } from '$lib/services/projectService.js';
-    import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
+    import { project, setTableHighlights, setLoadedTableHighlights, setDocumentHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
