@@ -50,21 +50,29 @@
     }
 
     let prevPath = null;
-    $: if (selectedPath !== prevPath) {
-        prevPath = selectedPath;
-        if (selectedPath) {
-            console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
-            if (currentJson) { 
-                editorJsonState = currentJson;
-                 if (editorRef) editorRef.resetEditorState(currentJson);
-            } else if (!isLoading) {
+    let prevCurrentJson = null;
+    $: {
+        if (selectedPath !== prevPath) {
+            prevPath = selectedPath;
+            if (selectedPath) {
+                console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
+                if (currentJson) {
+                    editorJsonState = currentJson;
+                     if (editorRef) editorRef.resetEditorState(currentJson);
+                } else if (!isLoading) {
+                    editorJsonState = '';
+                     if (editorRef) editorRef.resetEditorState('');
+                }
+            } else {
                 editorJsonState = '';
-                 if (editorRef) editorRef.resetEditorState('');
+                if (editorRef) editorRef.resetEditorState('');
             }
-        } else {
-            editorJsonState = '';
-            if (editorRef) editorRef.resetEditorState('');
+        } else if (currentJson !== prevCurrentJson && currentJson) {
+            // Keep editorJsonState in sync when currentJson updates after path change (e.g. async load)
+            editorJsonState = currentJson;
+            if (editorRef) editorRef.resetEditorState(currentJson);
         }
+        prevCurrentJson = currentJson;
     }
 
     async function loadHighlightsForDocument(path) {
@@ -80,9 +88,12 @@
             } else {
                 initialHighlights = [];
             }
+            // Update global store immediately so HighlightsPanel sees it
+            setDocumentHighlights(initialHighlights);
         } catch (e) {
             console.error("Error loading lexical highlights:", e);
             initialHighlights = [];
+            setDocumentHighlights([]);
         }
     }
 
