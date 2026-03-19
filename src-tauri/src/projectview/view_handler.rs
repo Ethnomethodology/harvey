@@ -134,11 +134,14 @@ pub async fn generate_survey_documents(
             let row = row_val.as_object().unwrap();
             let participant_id = if !survey_unique_identifier_field.is_empty() {
                 row.get(survey_unique_identifier_field)
-                    .and_then(|v: &Value| v.as_str())
-                    .unwrap_or(&format!("Participant_{}", index + 1))
-                    .to_string()
+                    .and_then(|v: &Value| {
+                        if v.is_string() { Some(v.as_str().unwrap().to_string()) }
+                        else if v.is_null() { None }
+                        else { Some(v.to_string()) }
+                    })
+                    .unwrap_or_else(|| format!("{}", index + 1))
             } else {
-                format!("Participant_{}", index + 1)
+                format!("{}", index + 1)
             };
 
             // Sanitize filename
@@ -176,10 +179,13 @@ pub async fn generate_survey_documents(
                     "indent": 0
                 }));
 
+                // Blank line gap between Field Name and Value
+                lexical_children.push(create_lexical_paragraph_json_value(""));
+
                 // Value paragraph
                 lexical_children.push(create_lexical_paragraph_json_value(&value_str));
 
-                // Empty line gap between pairs
+                // Blank line gap before next pair
                 lexical_children.push(create_lexical_paragraph_json_value(""));
             }
 
@@ -263,9 +269,12 @@ pub async fn generate_survey_documents(
                 let row = row_val.as_object().unwrap();
                 let participant_id_text = if !survey_unique_identifier_field.is_empty() {
                     let val = row.get(survey_unique_identifier_field)
-                        .and_then(|v: &Value| v.as_str())
-                        .unwrap_or(&format!("Participant_{}", index + 1))
-                        .to_string();
+                        .and_then(|v: &Value| {
+                            if v.is_string() { Some(v.as_str().unwrap().to_string()) }
+                            else if v.is_null() { None }
+                            else { Some(v.to_string()) }
+                        })
+                        .unwrap_or_else(|| format!("{}", index + 1));
                     format!("{}: {}", survey_unique_identifier_field, val)
                 } else {
                     format!("Participant: {}", index + 1)

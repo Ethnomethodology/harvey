@@ -196,7 +196,7 @@
                         resetForm();
                         activeTab = 'create';
                         isEditingExisting = false;
-                        chartName = `Chart-${existingCharts.length + 1}`;
+                        chartName = `Chart_${existingCharts.length + 1}`;
                     }
                 });
             }
@@ -248,7 +248,7 @@
         if (tab === 'create') {
             resetForm();
             isEditingExisting = false;
-            chartName = `Chart-${existingCharts.length + 1}`;
+            chartName = `Chart_${existingCharts.length + 1}`;
         }
     }
 
@@ -302,7 +302,7 @@
 
 
     async function initialCreate() {
-        if (!chartName) chartName = `Chart-${existingCharts.length + 1}`;
+        if (!chartName) chartName = `Chart_${existingCharts.length + 1}`;
         isEditingExisting = true;
         await saveChart(false);
     }

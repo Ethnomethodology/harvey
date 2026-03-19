@@ -135,7 +135,7 @@
                         resetForm();
                         activeTab = 'create';
                         isEditingExisting = false;
-                        viewName = `View-${existingViews.length + 1}`;
+                        viewName = `View_${existingViews.length + 1}`;
                     }
                 });
             }
@@ -160,7 +160,7 @@
         if (tab === 'create') {
             resetForm();
             isEditingExisting = false;
-            viewName = `View-${existingViews.length + 1}`;
+            viewName = `View_${existingViews.length + 1}`;
         }
     }
 
@@ -193,7 +193,7 @@
     }
 
     async function initialCreate() {
-        if (!viewName) viewName = `View-${existingViews.length + 1}`;
+        if (!viewName) viewName = `View_${existingViews.length + 1}`;
         isEditingExisting = true;
 
         // Survey views generate actual documents on save.
