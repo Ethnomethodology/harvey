@@ -3869,19 +3869,19 @@
                             toolbarConfig={{
                                 undo: true,
                                 redo: true,
-                                blockType: true,
+                                blockType: false,
                                 bold: true,
                                 italic: true,
                                 underline: true,
-                                strikethrough: false,
+                                strikethrough: true,
                                 align: false,
                                 insertMenu: false,
                                 link: false,
                                 outdent: false,
                                 indent: false,
-                                textColor: false,
+                                textColor: true,
                                 highlight: true,
-                                clearFormatting: true,
+                                clearFormatting: false,
                                 search: true,
                                 fontFamily: false
                             }}

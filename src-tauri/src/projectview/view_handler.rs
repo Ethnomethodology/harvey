@@ -178,6 +178,16 @@ pub async fn generate_survey_documents(
 
                 // Value paragraph
                 lexical_children.push(create_lexical_paragraph_json_value(&value_str));
+
+                // Empty line gap between pairs
+                lexical_children.push(create_lexical_paragraph_json_value(""));
+            }
+
+            // Remove trailing blank line if it exists
+            if let Some(last) = lexical_children.last() {
+                if last["children"].as_array().map_or(true, |c| c.is_empty() || c[0]["text"].as_str() == Some("")) {
+                    lexical_children.pop();
+                }
             }
 
             let doc_json = json!({
@@ -245,27 +255,33 @@ pub async fn generate_survey_documents(
                 "indent": 0
             }));
 
+            // Two line gap after H2
+            lexical_children.push(create_lexical_paragraph_json_value(""));
+            lexical_children.push(create_lexical_paragraph_json_value(""));
+
             for (index, row_val) in rows.iter().enumerate() {
                 let row = row_val.as_object().unwrap();
-                let participant_id = if !survey_unique_identifier_field.is_empty() {
-                    row.get(survey_unique_identifier_field)
+                let participant_id_text = if !survey_unique_identifier_field.is_empty() {
+                    let val = row.get(survey_unique_identifier_field)
                         .and_then(|v: &Value| v.as_str())
                         .unwrap_or(&format!("Participant_{}", index + 1))
-                        .to_string()
+                        .to_string();
+                    format!("{}: {}", survey_unique_identifier_field, val)
                 } else {
-                    format!("Participant_{}", index + 1)
+                    format!("Participant: {}", index + 1)
                 };
 
-                // Add participant ID as bold
+                // Add participant ID as H3
                 lexical_children.push(json!({
-                    "type": "paragraph",
+                    "type": "heading",
+                    "tag": "h3",
                     "version": 1,
                     "children": [{
                         "detail": 0,
-                        "format": 1,
+                        "format": 0,
                         "mode": "normal",
                         "style": "",
-                        "text": participant_id,
+                        "text": participant_id_text,
                         "type": "extended-text",
                         "version": 1,
                         "highlightId": null
@@ -288,7 +304,26 @@ pub async fn generate_survey_documents(
                     lexical_children.push(create_lexical_paragraph_json_value(&format!("{}: {}", other_field, other_val)));
                 }
 
-                // Add response
+                // Add 'Answer' in bold
+                lexical_children.push(json!({
+                    "type": "paragraph",
+                    "version": 1,
+                    "children": [{
+                        "detail": 0,
+                        "format": 1, // bold
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Answer",
+                        "type": "extended-text",
+                        "version": 1,
+                        "highlightId": null
+                    }],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 0
+                }));
+
+                // Add actual answer response
                 let response_val = row.get(question)
                     .map(|v: &Value| {
                         if v.is_string() { v.as_str().unwrap().to_string() }
@@ -299,7 +334,13 @@ pub async fn generate_survey_documents(
 
                 lexical_children.push(create_lexical_paragraph_json_value(&response_val));
 
-                // Add a blank separator paragraph for readability
+                // Horizontal rule divider
+                lexical_children.push(json!({
+                    "type": "horizontalrule",
+                    "version": 1
+                }));
+
+                // One blank line after the divider for spacing before the next entry
                 lexical_children.push(create_lexical_paragraph_json_value(""));
             }
 

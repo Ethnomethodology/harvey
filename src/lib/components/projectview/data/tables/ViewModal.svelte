@@ -38,7 +38,7 @@
     const viewTypes = [
         { value: 'partial', name: 'Partial Table View', description: 'Select specific columns and apply filters', icon: 'Table2' },
         { value: 'pivot', name: 'Pivot Table', description: 'Summarize data with cross-tabulation', icon: 'LayoutGrid' },
-        { value: 'survey', name: 'Survey Data Table', description: 'Generate documents from survey data', icon: 'FileText' }
+        { value: 'survey', name: 'Survey Data Table', description: 'Organise survey responses into documents', icon: 'FileText' }
     ];
 
     let activeTab = 'create';
@@ -623,7 +623,7 @@
                     {/if}
                 </h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Create customized lenses into your table data.
+                    Create custom views of your table data.
                 </p>
             </div>
         </div>
@@ -913,10 +913,10 @@
                             <div>
                                 <h4 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <FileText class="w-6 h-6 text-blue-600" />
-                                    Configure Survey Data Documents
+                                    Configure Survey Data Table
                                 </h4>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                                    This tool will generate individual Lexical JSON documents from your survey data table, organizing the responses based on your configuration below.
+                                    This tool will generate individual documents from your survey data table, organizing the responses based on your configuration below.
                                 </p>
                             </div>
 
@@ -940,7 +940,7 @@
                                             on:click={() => surveyGroupByType = 'Participants'}
                                         >
                                             <div class="font-bold text-gray-900 dark:text-white">By Participants</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">One document will be created for each participant row.</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">One document will be created for each participant response.</div>
                                         </button>
                                         <button
                                             class="flex-1 p-4 border rounded-lg text-left transition-all {surveyGroupByType === 'Questions' ? 'border-blue-500 ring-2 ring-blue-500/50 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
@@ -980,7 +980,7 @@
                                                 </div>
                                             </div>
                                             <Helper class="mt-2 text-blue-600 dark:text-blue-400 font-medium">
-                                                This will create {activeData.length} document(s) (one for each participant), containing the selected fields.
+                                                This will create {activeData.length} document{activeData.length === 1 ? '' : 's'} (one for each participant), containing the selected fields.
                                             </Helper>
                                         </div>
                                     {:else if surveyGroupByType === 'Questions'}
@@ -992,7 +992,7 @@
                                             <Label class="mb-2 font-semibold">Include Other Fields (Optional)</Label>
                                             <MultiSelect items={allColumns} bind:value={surveyIncludedOtherFields} placeholder="Select other fields to include besides the questions and identifier" />
                                             <Helper class="mt-2 text-blue-600 dark:text-blue-400 font-medium">
-                                                This will create {surveySelectedQuestions.length} document(s) (one for each question selected). Each document will list all participant responses.
+                                                This will create {surveySelectedQuestions.length} document{surveySelectedQuestions.length === 1 ? '' : 's'} (one for each question selected). Each document will list all participant responses.
                                             </Helper>
                                         </div>
                                     {/if}

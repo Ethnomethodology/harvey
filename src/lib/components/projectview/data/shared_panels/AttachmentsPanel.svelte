@@ -370,7 +370,20 @@
                                     {folderName}
                                 </span>
                             </div>
-                            <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">{groupedAttachments.folders[folderName].length} items</span>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="text-xs text-gray-400 dark:text-gray-500 group-hover:hidden transition-opacity">{groupedAttachments.folders[folderName].length} items</span>
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                                    title="Delete Folder"
+                                    on:click|stopPropagation={() => {
+                                        // The view name is the folder name without the trailing "_participants" or "_questions"
+                                        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                                                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+                                        handleDeleteView({ view_name: viewName, view_type: 'survey' });
+                                    }}
+                                >
+                                    <Trash2 class="w-3.5 h-3.5 text-red-500" />
+                                </button>
+                            </div>
                         </div>
 
                         {#if expandedFolders[folderName]}
