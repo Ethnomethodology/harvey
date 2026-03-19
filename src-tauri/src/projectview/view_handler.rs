@@ -137,6 +137,11 @@ pub async fn generate_survey_documents(
                     .and_then(|v: &Value| {
                         if v.is_string() { Some(v.as_str().unwrap().to_string()) }
                         else if v.is_null() { None }
+                        else if v.is_f64() {
+                            let f = v.as_f64().unwrap();
+                            if f.fract() == 0.0 { Some((f as i64).to_string()) }
+                            else { Some(f.to_string()) }
+                        }
                         else { Some(v.to_string()) }
                     })
                     .unwrap_or_else(|| format!("{}", index + 1))
@@ -156,6 +161,11 @@ pub async fn generate_survey_documents(
                     .map(|v: &Value| {
                         if v.is_string() { v.as_str().unwrap().to_string() }
                         else if v.is_null() { "".to_string() }
+                        else if v.is_f64() {
+                            let f = v.as_f64().unwrap();
+                            if f.fract() == 0.0 { (f as i64).to_string() }
+                            else { f.to_string() }
+                        }
                         else { v.to_string() }
                     })
                     .unwrap_or_default();
@@ -191,7 +201,7 @@ pub async fn generate_survey_documents(
 
             // Remove trailing blank line if it exists
             if let Some(last) = lexical_children.last() {
-                if last["children"].as_array().map_or(true, |c| c.is_empty() || c[0]["text"].as_str() == Some("")) {
+                if last["children"].as_array().map_or(false, |c| c.len() == 1 && c[0]["type"] == "linebreak") {
                     lexical_children.pop();
                 }
             }
@@ -272,6 +282,11 @@ pub async fn generate_survey_documents(
                         .and_then(|v: &Value| {
                             if v.is_string() { Some(v.as_str().unwrap().to_string()) }
                             else if v.is_null() { None }
+                            else if v.is_f64() {
+                                let f = v.as_f64().unwrap();
+                                if f.fract() == 0.0 { Some((f as i64).to_string()) }
+                                else { Some(f.to_string()) }
+                            }
                             else { Some(v.to_string()) }
                         })
                         .unwrap_or_else(|| format!("{}", index + 1));
@@ -306,6 +321,11 @@ pub async fn generate_survey_documents(
                         .map(|v: &Value| {
                             if v.is_string() { v.as_str().unwrap().to_string() }
                             else if v.is_null() { "".to_string() }
+                            else if v.is_f64() {
+                                let f = v.as_f64().unwrap();
+                                if f.fract() == 0.0 { (f as i64).to_string() }
+                                else { f.to_string() }
+                            }
                             else { v.to_string() }
                         })
                         .unwrap_or_default();
@@ -337,6 +357,11 @@ pub async fn generate_survey_documents(
                     .map(|v: &Value| {
                         if v.is_string() { v.as_str().unwrap().to_string() }
                         else if v.is_null() { "".to_string() }
+                        else if v.is_f64() {
+                            let f = v.as_f64().unwrap();
+                            if f.fract() == 0.0 { (f as i64).to_string() }
+                            else { f.to_string() }
+                        }
                         else { v.to_string() }
                     })
                     .unwrap_or_default();
