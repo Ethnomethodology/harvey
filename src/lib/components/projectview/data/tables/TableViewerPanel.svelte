@@ -19,7 +19,7 @@
         loadTableSchema,
         saveTableSchema
     } from '$lib/services/projectService.js';
-    import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
+    import { project, setTableHighlights, setLoadedTableHighlights, setDocumentHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
@@ -61,9 +61,12 @@
         Badge
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
+    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     export let tablePath = '';
     export let hasHeaders = true;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     const dispatch = createEventDispatcher();
 
@@ -75,6 +78,11 @@
     let error = null;
     let currentLoadedPath = null;
     let availableViews = [];
+
+    let isViewingDocument = false;
+    let currentActiveDocumentPath = null;
+    let currentActiveDocumentJson = null;
+    let currentActiveDocumentHighlights = [];
 
     let svelteUndoStack = [];
     let svelteRedoStack = [];
@@ -2461,11 +2469,116 @@
     let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0, rowFields: [], colLeaves: [] };
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
+    const debouncedLexicalSave = debounce(async (docPath, jsonString) => {
+        if (!docPath || !jsonString) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+            await invoke('save_note_json', { targetPath: absolutePath, jsonContent: jsonString });
+        } catch (e) {
+            console.error('Failed to autosave lexical document:', e);
+        }
+    }, 750);
+
+    const debouncedLexicalHighlightsSave = debounce(async (docPath, highlights) => {
+        if (!docPath || !highlights || !Array.isArray(highlights)) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+
+            for (const highlight of highlights) {
+                try {
+                    await invoke('save_highlight_changes', {
+                        projectId: projectStoreState.id,
+                        filePath: absolutePath,
+                        docType: 'document',
+                        highlight: highlight
+                    });
+                } catch (saveErr) {
+                    console.error(`Failed to autosave highlight ${highlight.id}:`, saveErr);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to autosave lexical highlights batch:', e);
+        }
+    }, 750);
+
+    function handleLexicalDocumentChange(event) {
+        const { jsonString } = event.detail;
+        if (currentActiveDocumentPath && jsonString) {
+            debouncedLexicalSave(currentActiveDocumentPath, jsonString);
+        }
+    }
+
+    function handleLexicalHighlightsChange(event) {
+        const { highlights } = event.detail;
+        if (currentActiveDocumentPath && highlights) {
+            setDocumentHighlights(highlights); // Update global store immediately so HighlightsPanel sees it
+            debouncedLexicalHighlightsSave(currentActiveDocumentPath, highlights);
+        }
+    }
+
+    // Reactive watcher to capture tags/comments added via the HighlightsPanel sidebar
+    // when a survey document is actively being viewed in the table viewer.
+    $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
+        // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
+        debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
+    }
+
+    export async function openLexicalDocument(docPath) {
+        if (!docPath) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+
+            const content = await invoke('load_note_json', {
+                filePath: absolutePath
+            });
+
+            // Load highlights
+            let loadedHighlights = [];
+            try {
+                const hData = await invoke('load_lexical_highlights', {
+                    args: { projectId: projectStoreState.id, documentPath: absolutePath }
+                });
+                if (hData) {
+                    loadedHighlights = JSON.parse(hData);
+                }
+            } catch (hErr) {
+                console.error('Failed to load highlights for lexical document:', hErr);
+            }
+
+            if (content) {
+                currentActiveDocumentJson = content;
+                currentActiveDocumentHighlights = loadedHighlights;
+                setDocumentHighlights(loadedHighlights); // Immediately push to store for HighlightsPanel
+                isViewingDocument = true;
+                currentActiveDocumentPath = docPath;
+                activeSubItemPath = docPath;
+                activeSubItemType = 'doc';
+                dispatch('requestviewchange', { type: 'chart_opened', item: docPath });
+            } else {
+                console.error("Document content was empty.");
+            }
+        } catch (e) {
+            console.error('Failed to open document:', e);
+        }
+    }
+
     export async function openView(view) {
         if (!view) return;
         try {
             const config = JSON.parse(view.config_json);
-            if (currentActiveView) {
+            if (currentActiveView || isViewingDocument) {
                 // Must ensure we start from a clean slate so views don't stack their transformations
                 await returnToBaseTable();
             }
@@ -2679,10 +2792,14 @@
     }
 
     async function returnToBaseTable() {
-        if (!tabulatorInstance) return;
+        if (!tabulatorInstance && !isViewingDocument) return;
         currentActiveView = null;
         currentActiveViewType = null;
         pivotDerivedSchema = {};
+        isViewingDocument = false;
+        currentActiveDocumentPath = null;
+        activeSubItemPath = null;
+        activeSubItemType = null;
 
         dispatch('requestviewchange', { type: 'reset_base' });
 
@@ -2720,7 +2837,7 @@
         if (!tabulatorInstance) return;
 
         // Explicitly switching to this view. Start from clean slate if another view was active.
-        if (currentActiveView && currentActiveView !== viewName) {
+        if ((currentActiveView && currentActiveView !== viewName) || isViewingDocument) {
             await returnToBaseTable();
         }
 
@@ -3604,6 +3721,7 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+     {#if !isViewingDocument}
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
             {#if currentActiveView}
@@ -3748,6 +3866,7 @@
          </div>
          {/if}
     </div>
+    {/if}
 
     <div class="flex-grow overflow-auto min-h-0 relative">
         {#if showUrlPopover}
@@ -3797,7 +3916,54 @@
              <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10">Error: {error}</div>
         {/if}
 
-        {#if currentActiveViewType === 'pivot'}
+        {#if isViewingDocument}
+            <div class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20 flex flex-col">
+                {#key currentActiveDocumentPath}
+                    <div class="flex-grow min-h-0">
+                        <LexicalEditor
+                            initialJson={currentActiveDocumentJson}
+                            editable={true}
+                            placeholder="Start typing your document..."
+                            enableTableCellMenu={true}
+                            enableTableCellResize={true}
+                            enableSearch={true}
+                            documentPath={currentActiveDocumentPath}
+                            initialHighlights={currentActiveDocumentHighlights}
+                            documentHighlights={$project.currentDocumentHighlights}
+                            on:change={handleLexicalDocumentChange}
+                            on:highlightschange={handleLexicalHighlightsChange}
+                            toolbarConfig={{
+                                undo: true,
+                                redo: true,
+                                blockType: false,
+                                bold: true,
+                                italic: true,
+                                underline: true,
+                                strikethrough: true,
+                                align: false,
+                                insertMenu: false,
+                                link: false,
+                                outdent: false,
+                                indent: false,
+                                textColor: true,
+                                highlight: true,
+                                clearFormatting: false,
+                                search: true,
+                                fontFamily: false
+                            }}
+                        >
+                            <svelte:fragment slot="toolbar_prepend">
+                                <button on:click={returnToBaseTable} class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm" title="Return to Base Table">
+                                    <Undo2 size={14} />
+                                    <span>Return to Base Table</span>
+                                </button>
+                                <div class="separator mx-0.5 mr-2"></div>
+                            </svelte:fragment>
+                        </LexicalEditor>
+                    </div>
+                {/key}
+            </div>
+        {:else if currentActiveViewType === 'pivot'}
             <div class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20">
                 <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
                     <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
@@ -3854,8 +4020,8 @@
             </div>
         {/if}
 
-        <div bind:this={tableContainer} class="w-full h-full" style="display: {currentActiveViewType === 'pivot' ? 'none' : 'block'};">
-             {#if !isLoading && !error && tableData.length === 0 && tablePath}
+        <div bind:this={tableContainer} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+             {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}
         </div>

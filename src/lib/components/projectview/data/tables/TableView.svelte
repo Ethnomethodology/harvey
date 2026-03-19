@@ -7,6 +7,8 @@
 
     export let itemPath = null; // Receives the full path from DataView
     export let hasHeaders = true;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     const dispatch = createEventDispatcher();
 
@@ -55,6 +57,14 @@
         }
     }
 
+    export function openLexicalDocument(docPath) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openLexicalDocument === 'function') {
+            tableViewerPanelRef.openLexicalDocument(docPath);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or openLexicalDocument is not available.');
+        }
+    }
+
     onMount(() => {
 		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});
@@ -73,6 +83,8 @@
                 bind:this={tableViewerPanelRef} 
                 tablePath={itemPath} 
                 hasHeaders={hasHeaders} 
+                bind:activeSubItemPath
+                bind:activeSubItemType
                 on:requestviewchange={forwardEvent}
             />
         {:else}

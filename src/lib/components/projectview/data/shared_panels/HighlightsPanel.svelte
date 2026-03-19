@@ -88,6 +88,10 @@
         } else if (p.currentImportedTranscriptPath) {
             effectiveType = 'imported_transcript';
             activeHighlights = p.currentImportedTranscriptHighlights || [];
+        } else if (itemType === 'doc') {
+            // Overrides for sub-items like Lexical docs opened inside TableViewer
+            effectiveType = 'doc';
+            activeHighlights = p.currentDocumentHighlights || [];
         } else if (selectedType === 'tables') {
             effectiveType = 'table';
             activeHighlights = p.currentTableHighlights || [];

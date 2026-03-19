@@ -109,7 +109,7 @@
         if (itemPath) loadAttachments(itemPath);
 	});
 
-    $: { 
+    $: {
         // console.log(`[DocumentView] Path is now ${itemPath}, isPdf is ${isPdf}, isJsonDoc is ${isJsonDoc}`);
     }
 

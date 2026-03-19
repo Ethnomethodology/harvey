@@ -380,6 +380,7 @@ pub fn run() {
             projectview::metadata_commands::update_asset_metadata_command,
             projectview::metadata_commands::get_project_assets_for_link_command,
             projectview::attachment_commands::upload_attachment,
+            projectview::attachment_commands::delete_attachment_command,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
             projectview::metadata_commands::get_all_custom_field_definitions_command,
@@ -392,6 +393,7 @@ pub fn run() {
             projectview::view_commands::save_table_view_command,
             projectview::view_commands::load_table_views_command,
             projectview::view_commands::delete_table_view_command,
+            projectview::view_commands::generate_survey_documents_command,
 
             // --- Tag Handler Commands ---
             projectview::tag_handler::add_tag,

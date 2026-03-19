@@ -10,6 +10,113 @@ use chrono::Utc;
 use serde_json::json;
 
 #[tauri::command]
+pub async fn delete_attachment_command(
+    project_xml_path_str: String,
+    asset_relative_path: String,
+    attachment_relative_path: String,
+) -> Result<(), String> {
+    debug!("[CMD] delete_attachment_command: asset={}, attachment={}", asset_relative_path, attachment_relative_path);
+
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = project_xml_path.parent().ok_or_else(|| "Could not get project base directory.".to_string())?;
+
+    let project_xml_content = fs::read_to_string(&project_xml_path)
+        .map_err(|e| format!("Failed to read project XML: {}", e))?;
+    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content)
+        .map_err(|e| format!("Failed to parse project XML: {}", e))?;
+
+    let project_id = project_data.project_uuid;
+    if project_id.is_empty() {
+        return Err("Project UUID is missing in the project file.".to_string());
+    }
+
+    // Convert relative attachment path to absolute
+    let attachment_abs_path = project_base_dir.join(&attachment_relative_path);
+
+    // Delete file from disk if it exists
+    if attachment_abs_path.exists() {
+        if let Err(e) = fs::remove_file(&attachment_abs_path) {
+            log::warn!("Failed to delete attachment file from disk {}: {}", attachment_abs_path.display(), e);
+        }
+    }
+
+    // Delete attachment metadata from DB
+    if let Err(e) = db_handler::delete_asset_metadata(&project_id, &attachment_relative_path) {
+        log::warn!("Failed to delete attachment metadata from DB {}: {}", attachment_relative_path, e);
+    }
+
+    // Remove attachment from the parent asset's custom_fields list
+    match db_handler::load_asset_metadata(&project_id, &asset_relative_path) {
+        Ok(Some(metadata_from_db)) => {
+            let mut custom_fields: Vec<serde_json::Value> = metadata_from_db.custom_fields_json
+                .as_deref()
+                .and_then(|json| serde_json::from_str(json).ok())
+                .unwrap_or_else(Vec::new);
+
+            let mut attachments: Vec<String> = custom_fields.iter()
+                .find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments"))
+                .and_then(|f| f.get("value").and_then(|v| v.as_str()))
+                .and_then(|v| serde_json::from_str(v).ok())
+                .unwrap_or_else(Vec::new);
+
+            // The JSON value we look for might be the absolute path string as stored historically,
+            // or the relative path. We will remove it if it matches the relative path or absolute path.
+            let abs_path_str = attachment_abs_path.to_string_lossy().to_string();
+            let rel_path_str = attachment_relative_path.replace("\\", "/");
+            attachments.retain(|p| {
+                let p_normalized = p.replace("\\", "/");
+                p_normalized != rel_path_str && p_normalized != abs_path_str
+            });
+
+            let attachments_json_string = json!(attachments).to_string();
+
+            if let Some(existing_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
+                if let Some(obj) = existing_field.as_object_mut() {
+                    obj.insert("value".to_string(), json!(attachments_json_string));
+                }
+            }
+
+            let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+
+            let file_metadata = FileMetadata {
+                file_name: metadata_from_db.file_name,
+                file_path: metadata_from_db.file_path,
+                last_modified: Utc::now().to_rfc3339(),
+                title: metadata_from_db.title.unwrap_or_default(),
+                description: metadata_from_db.description.unwrap_or_default(),
+                summary: metadata_from_db.summary.unwrap_or_default(),
+                duration_seconds: metadata_from_db.duration_seconds,
+                width: metadata_from_db.width,
+                height: metadata_from_db.height,
+                frame_rate: metadata_from_db.frame_rate,
+                bit_rate: metadata_from_db.bit_rate,
+                audio_codec: metadata_from_db.audio_codec,
+                video_codec: metadata_from_db.video_codec,
+                created_at: metadata_from_db.creation_time,
+                original_import_path: metadata_from_db.original_import_path,
+                speaker_names: metadata_from_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+                waveform_data: metadata_from_db.waveform_data,
+                language_code: metadata_from_db.language_code,
+                properties: metadata_from_db.properties,
+                file_type: metadata_from_db.file_type.unwrap_or_default(),
+            };
+
+            db_handler::save_asset_metadata(
+                &project_id,
+                &file_metadata,
+                &asset_relative_path,
+                &metadata_from_db.asset_type,
+                Some(&updated_custom_fields_json_str)
+            ).map_err(|e| e.to_string())?;
+        },
+        _ => {} // Parent asset metadata not found or error, can't update attachments list
+    }
+
+    info!("[CMD] Successfully deleted attachment: {}", attachment_relative_path);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn upload_attachment(
     _app_handle: AppHandle,
     project_xml_path_str: String,

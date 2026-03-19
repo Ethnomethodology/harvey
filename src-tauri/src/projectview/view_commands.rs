@@ -3,6 +3,18 @@ use crate::projectview::view_handler::{self, ViewConfig};
 use log::info;
 
 #[tauri::command]
+pub async fn generate_survey_documents_command(
+    project_id: String,
+    table_path: String,
+    view_name: String,
+    config_json: String,
+    project_xml_path_str: String,
+) -> Result<Vec<String>, CommandError> {
+    info!("Generating survey documents for view: {} in table: {}", view_name, table_path);
+    view_handler::generate_survey_documents(&project_id, &table_path, &view_name, &config_json, &project_xml_path_str).await
+}
+
+#[tauri::command]
 pub async fn save_table_view_command(
     project_id: String,
     table_path: String,
@@ -28,7 +40,8 @@ pub async fn delete_table_view_command(
     project_id: String,
     table_path: String,
     view_name: String,
+    project_xml_path_str: String,
 ) -> Result<(), CommandError> {
     info!("Deleting table view: {} for table: {} in project: {}", view_name, table_path, project_id);
-    view_handler::delete_table_view(&project_id, &table_path, &view_name)
+    view_handler::delete_table_view(&project_id, &table_path, &view_name, &project_xml_path_str)
 }
