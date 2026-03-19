@@ -2493,7 +2493,7 @@
             }
             await invoke('save_highlight_changes', {
                 projectId: projectStoreState.id,
-                documentPath: absolutePath,
+                filePath: absolutePath,
                 highlightsJson: JSON.stringify(highlights)
             });
         } catch (e) {
