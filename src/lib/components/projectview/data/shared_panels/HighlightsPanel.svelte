@@ -29,28 +29,41 @@
                 console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
 
                 let pathForHighlights = itemPath;
+                let effectiveItemType = itemType;
                 const p = get(project);
                 if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
                      pathForHighlights = p.activeTranscriptPathInDataTab;
+                } else if ((itemType === 'table' || itemType === 'tables') && p.selectedDocumentPath && p.selectedDocumentPath !== itemPath) {
+                    effectiveItemType = 'doc';
+                    pathForHighlights = p.selectedDocumentPath;
                 }
 
-                await loadHighlightsForFile(pathForHighlights, itemType);
+                await loadHighlightsForFile(pathForHighlights, effectiveItemType);
                 await fetchAllTags(); // Also refresh the list of all available tags
             }
         });
     });
 
-    let prevRefreshKey = null;
-	$: if (refreshKey !== prevRefreshKey) {
-        prevRefreshKey = refreshKey;
+	$: if (refreshKey) {
 		if (itemPath) {
             let pathForHighlights = itemPath;
+            let effectiveItemType = itemType;
             const p = get(project);
+
+            // Map the media note path to its active transcript path
             if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
                  pathForHighlights = p.activeTranscriptPathInDataTab;
             }
+            // If the itemPath is the active document and it's a table sub-item (like a survey doc),
+            // we should treat its effective type as 'doc' for loading highlights.
+            else if ((itemType === 'table' || itemType === 'tables') && p.selectedDocumentPath && p.selectedDocumentPath !== itemPath) {
+                // If a sub-document is open in a table, the path changes to the sub-document.
+                // We should load highlights for it as a doc.
+                effectiveItemType = 'doc';
+                pathForHighlights = p.selectedDocumentPath;
+            }
 
-			loadHighlightsForFile(pathForHighlights, itemType);
+			loadHighlightsForFile(pathForHighlights, effectiveItemType);
 			fetchAllTags();
 		}
 	}

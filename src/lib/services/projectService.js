@@ -143,12 +143,34 @@ export async function loadHighlightsForFile(filePath, itemType) {
         // If not, this part needs to be implemented. For now, let's log it.
         console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
     } else { // 'doc' (non-PDF), etc.
-        const metadata = await loadDocumentMetadata(filePath);
-        if (metadata && metadata.highlights) {
-            const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
-            setDocumentHighlights(metadata.highlights);
+        // Differentiate between generic doc metadata and explicitly lexical documents (like survey tables)
+        if (filePath.toLowerCase().endsWith('.json')) {
+            try {
+                const { project } = await import('$lib/stores/projectStore.js');
+                const projState = get(project);
+                const hData = await invoke('load_lexical_highlights', {
+                    args: { projectId: projState.id, documentPath: filePath }
+                });
+                const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
+                if (hData) {
+                    const loadedHighlights = JSON.parse(hData);
+                    setDocumentHighlights(loadedHighlights);
+                } else {
+                    setDocumentHighlights([]);
+                }
+            } catch (e) {
+                console.error(`[ProjectService] Error loading lexical highlights for ${filePath}:`, e);
+                const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
+                setDocumentHighlights([]);
+            }
         } else {
-            console.log(`[ProjectService] No highlights found for document type '${itemType}'.`);
+            const metadata = await loadDocumentMetadata(filePath);
+            if (metadata && metadata.highlights) {
+                const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
+                setDocumentHighlights(metadata.highlights);
+            } else {
+                console.log(`[ProjectService] No highlights found for document type '${itemType}'.`);
+            }
         }
     }
 }
