@@ -7,6 +7,8 @@
 
     export let itemPath = null; // Receives the full path from DataView
     export let hasHeaders = true;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     const dispatch = createEventDispatcher();
 
@@ -81,6 +83,8 @@
                 bind:this={tableViewerPanelRef} 
                 tablePath={itemPath} 
                 hasHeaders={hasHeaders} 
+                bind:activeSubItemPath
+                bind:activeSubItemType
                 on:requestviewchange={forwardEvent}
             />
         {:else}

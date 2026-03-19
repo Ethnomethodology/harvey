@@ -65,6 +65,8 @@
 
     export let tablePath = '';
     export let hasHeaders = true;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     const dispatch = createEventDispatcher();
 
@@ -2504,6 +2506,8 @@
                 currentActiveDocumentJson = content;
                 isViewingDocument = true;
                 currentActiveDocumentPath = docPath;
+                activeSubItemPath = docPath;
+                activeSubItemType = 'doc';
                 dispatch('requestviewchange', { type: 'chart_opened', item: docPath });
             } else {
                 console.error("Document content was empty.");
@@ -2737,6 +2741,8 @@
         pivotDerivedSchema = {};
         isViewingDocument = false;
         currentActiveDocumentPath = null;
+        activeSubItemPath = null;
+        activeSubItemType = null;
 
         dispatch('requestviewchange', { type: 'reset_base' });
 

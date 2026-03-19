@@ -33,6 +33,8 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
+    let activeSubItemPath = null; // Sub-item context for nested Lexical views
+    let activeSubItemType = null;
     export let tableViewRef;
     let imageViewRef;
     let documentViewRef;
@@ -340,7 +342,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={(event) => handleRequestViewChange(event.detail)} />                 {:else if activeViewType === 'images'}
+                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} bind:activeSubItemPath bind:activeSubItemType on:requestviewchange={(event) => handleRequestViewChange(event.detail)} />                 {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />
@@ -371,7 +373,7 @@
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
-                    <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
+                    <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
                     <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} />
                 {/if}
