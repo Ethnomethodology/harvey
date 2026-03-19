@@ -2466,6 +2466,27 @@
     let generatedPivotResult = { colHeaders: [], rows: [], rowFieldsCount: 0, colLeavesCount: 0, rowFields: [], colLeaves: [] };
     $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
 
+    const debouncedLexicalSave = debounce(async (docPath, jsonString) => {
+        if (!docPath || !jsonString) return;
+        try {
+            const projectStoreState = get(project);
+            let absolutePath = docPath;
+            if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
+            }
+            await invoke('save_note_json', { targetPath: absolutePath, jsonContent: jsonString });
+        } catch (e) {
+            console.error('Failed to autosave lexical document:', e);
+        }
+    }, 750);
+
+    function handleLexicalDocumentChange(event) {
+        const { jsonString } = event.detail;
+        if (currentActiveDocumentPath && jsonString) {
+            debouncedLexicalSave(currentActiveDocumentPath, jsonString);
+        }
+    }
+
     export async function openLexicalDocument(docPath) {
         if (!docPath) return;
         try {
@@ -3838,19 +3859,20 @@
                     <div class="flex-grow min-h-0">
                         <LexicalEditor
                             initialJson={currentActiveDocumentJson}
-                            editable={false}
-                            placeholder="Loading document..."
-                            enableTableCellMenu={false}
-                            enableTableCellResize={false}
+                            editable={true}
+                            placeholder="Start typing your document..."
+                            enableTableCellMenu={true}
+                            enableTableCellResize={true}
                             enableSearch={true}
                             documentPath={currentActiveDocumentPath}
+                            on:change={handleLexicalDocumentChange}
                             toolbarConfig={{
-                                undo: false,
-                                redo: false,
-                                blockType: false,
-                                bold: false,
-                                italic: false,
-                                underline: false,
+                                undo: true,
+                                redo: true,
+                                blockType: true,
+                                bold: true,
+                                italic: true,
+                                underline: true,
                                 strikethrough: false,
                                 align: false,
                                 insertMenu: false,
@@ -3858,8 +3880,8 @@
                                 outdent: false,
                                 indent: false,
                                 textColor: false,
-                                highlight: false,
-                                clearFormatting: false,
+                                highlight: true,
+                                clearFormatting: true,
                                 search: true,
                                 fontFamily: false
                             }}
