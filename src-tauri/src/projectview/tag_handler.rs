@@ -479,7 +479,7 @@ pub fn remove_tag_from_highlight(
     // Determine the table and column to update based on doc_type
     let (table_name, json_column, path_column) = match doc_type.as_str() {
         // pdf_annotations stores highlights for multiple "types"
-        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
         "table" => ("table_styles", "styles", "table_path"),
         _ => {
             let err_msg = format!("Unsupported document type for tag removal: {}", doc_type);

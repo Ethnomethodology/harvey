@@ -217,7 +217,7 @@
                     // Just update data
                     tabulatorInstance.replaceData(processedHighlights)
                         .then(() => {
-                            if (tabulatorInstance) {
+                            if (tabulatorInstance && tableContainer && tableContainer.offsetWidth > 0) {
                                 tabulatorInstance.redraw();
                             }
                         })
