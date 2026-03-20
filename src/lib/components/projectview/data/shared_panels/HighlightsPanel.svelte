@@ -195,7 +195,9 @@
             setTableHighlights(newHighlights);
             await saveTableHighlights();
         } else {
-            setDocumentHighlights(newHighlights);
+            // For survey docs, if it's an attachment of a table, avoid marking the global document dirty
+            const isSurveyDoc = itemType === 'doc' && itemPath && itemPath.includes('.attachments');
+            setDocumentHighlights(newHighlights, !isSurveyDoc);
         }
     }
 

@@ -2492,18 +2492,13 @@
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
 
-            for (const highlight of highlights) {
-                try {
-                    await invoke('save_highlight_changes', {
-                        projectId: projectStoreState.id,
-                        filePath: absolutePath,
-                        docType: 'document',
-                        highlight: highlight
-                    });
-                } catch (saveErr) {
-                    console.error(`Failed to autosave highlight ${highlight.id}:`, saveErr);
+            await invoke('save_lexical_highlights', {
+                args: {
+                    projectId: projectStoreState.id,
+                    documentPath: absolutePath,
+                    highlightsJson: JSON.stringify(highlights)
                 }
-            }
+            });
         } catch (e) {
             console.error('Failed to autosave lexical highlights batch:', e);
         }
