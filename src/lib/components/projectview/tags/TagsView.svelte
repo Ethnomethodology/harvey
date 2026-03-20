@@ -3,7 +3,7 @@
     import { onMount, afterUpdate, onDestroy, createEventDispatcher } from 'svelte';
     import { slide } from 'svelte/transition';
     import { invoke } from '@tauri-apps/api/core';
-    import { confirm } from '@tauri-apps/plugin-dialog';
+    import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { dndzone } from 'svelte-dnd-action';
     import { project } from '$lib/stores/projectStore.js';
@@ -17,7 +17,7 @@
         addTag
     } from '$lib/stores/tagStore.js';
     import { refresher } from '$lib/stores/refresherStore.js';
-    import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { addCommentToHighlight, deleteComment, updateComment, removeTagFromHighlightLocal } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
@@ -590,13 +590,36 @@
     }
 
     async function handleUntag(highlight) {
-        // TODO: Implement untagging functionality.
-        // This requires removing the tag from the specific annotation in the backend or updating the document.
-        // For now, we'll log it and maybe show a message.
-        console.warn('Untagging from Tags view is not yet fully implemented.', highlight);
-        const doUntag = await confirm('Untagging from this view is not yet supported. Please inspect the file to remove the tag.', { title: 'Not Implemented', kind: 'info' });
-        if (doUntag) {
-             handleInspect(highlight);
+        if (!highlight || !highlight.source || !$selectedTag) return;
+
+        const tagName = $selectedTag.name;
+        const confirmUntag = await confirm(`Are you sure you want to remove the tag "${tagName}" from this highlight?`, { title: 'Confirm Untag', kind: 'warning' });
+
+        if (!confirmUntag) return;
+
+        try {
+            await invoke('remove_tag_from_highlight', {
+                projectId: get(project).id,
+                highlightId: highlight.id,
+                tagToRemove: tagName,
+                filePath: highlight.source.file_path,
+                docType: highlight.source.file_type
+            });
+
+            // Also update local store if the file is currently loaded
+            removeTagFromHighlightLocal(highlight.id, tagName, highlight.source.file_type, highlight.source.file_path);
+
+            // Update Tabulator instance if available
+            if (tabulatorInstance) {
+                tabulatorInstance.deleteRow(highlight.id);
+                // Also update the tag's highlight count
+                if (currentTableMode === 'tag') {
+                    $selectedTag.highlight_count = Math.max(0, ($selectedTag.highlight_count || 1) - 1);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to remove tag from highlight:', error);
+            await message(`Failed to untag: ${error}`, { title: 'Error', kind: 'error' });
         }
     }
 
