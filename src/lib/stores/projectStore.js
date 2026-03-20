@@ -807,8 +807,13 @@ export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.er
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
 export function setImportedTranscriptHighlights(highlights, markDirty = true) {
     project.update(store => {
-        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
         const currentJson = JSON.stringify(highlights);
+
+        if (!markDirty) {
+            store.initialImportedTranscriptHighlights = JSON.parse(currentJson);
+        }
+
+        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
 
         store.currentImportedTranscriptHighlights = highlights;
         if (markDirty) {
