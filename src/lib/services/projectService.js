@@ -1997,8 +1997,8 @@ export async function saveDocumentContent(filePath, jsonContent) {
 
     let mainContentSaveError = null;
     try {
-        const highlights_json = (projState.isDocumentMetadataDirty && projState.currentDocumentHighlights?.length > 0)
-            ? JSON.stringify(projState.currentDocumentHighlights)
+        const highlights_json = projState.isDocumentMetadataDirty
+            ? JSON.stringify(projState.currentDocumentHighlights || [])
             : null;
 
         await invoke('save_note_json', {
@@ -2017,7 +2017,7 @@ export async function saveDocumentContent(filePath, jsonContent) {
         }
 
         // Mark metadata (highlights) as saved
-        if (highlights_json) {
+        if (highlights_json !== null) {
             markDocumentMetadataAsSaved(projState.currentDocumentFileLevelMetadata);
         }
 
@@ -2103,8 +2103,8 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     try {
         let finalHighlightsJson = highlightsJson;
         if (finalHighlightsJson === null) {
-            finalHighlightsJson = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
-                ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+            finalHighlightsJson = projState.isImportedTranscriptMetadataDirty
+                ? JSON.stringify(projState.currentImportedTranscriptHighlights || [])
                 : null;
         }
 
