@@ -453,32 +453,41 @@
     }
 
     async function handleCommentAction(event) {
-        const { type, highlightId, comment, commentId, text } = event.detail;
+        const { type, detail } = event;
+        const { highlightId, commentId, newText, comment } = detail;
         const highlight = selectedHighlight;
         if (!highlight) return;
+
+        // Map event types to backend action names
+        const actionMap = {
+            'addcomment': 'add',
+            'editcomment': 'update',
+            'deletecomment': 'delete'
+        };
+        const action = actionMap[type] || 'add';
 
         try {
             await invoke('manage_highlight_comment', {
                 projectId: get(project).id,
                 highlightId: highlightId,
-                action: type,
+                action: action,
                 commentId: commentId,
                 comment: comment,
-                text: text,
+                text: newText,
                 filePath: highlight.source.file_path,
                 docType: highlight.source.file_type
             });
 
             // Update local Svelte store if the file is currently open
-            manageCommentInHighlightLocal(highlightId, type, comment, commentId, text, highlight.source.file_type, highlight.source.file_path);
+            manageCommentInHighlightLocal(highlightId, action, comment, commentId, newText, highlight.source.file_type, highlight.source.file_path);
 
             // Update local selectedHighlight to reflect changes in CommentsPanel immediately
-            if (type === 'add') {
+            if (action === 'add') {
                 highlight.comments = [...(highlight.comments || []), comment];
-            } else if (type === 'delete') {
+            } else if (action === 'delete') {
                 highlight.comments = (highlight.comments || []).filter(c => c.id !== commentId && c.parentId !== commentId);
-            } else if (type === 'update') {
-                highlight.comments = (highlight.comments || []).map(c => c.id === commentId ? { ...c, text } : c);
+            } else if (action === 'update') {
+                highlight.comments = (highlight.comments || []).map(c => c.id === commentId ? { ...c, text: newText } : c);
             }
             selectedHighlight = { ...highlight };
 
@@ -490,8 +499,8 @@
                 }
             }
         } catch (error) {
-            console.error(`Failed to ${type} comment:`, error);
-            await message(`Failed to ${type} comment: ${error}`, { title: 'Error', kind: 'error' });
+            console.error(`Failed to ${action} comment:`, error);
+            await message(`Failed to ${action} comment: ${error}`, { title: 'Error', kind: 'error' });
         }
     }
 
