@@ -1459,24 +1459,29 @@ function scrollToHighlight(id) {
     const tryScroll = () => {
         // Recursive function to find node by highlight ID - MUST be called inside tryScroll to retry search
         const findNodeKey = () => {
+            if (!editor) return null;
             let foundKey = null;
-            editor.getEditorState().read(() => {
-                const root = _getRoot();
-                const nodesToVisit = [root];
-                while(nodesToVisit.length > 0) {
-                    const node = nodesToVisit.pop();
-                    if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
-                        foundKey = node.getKey();
-                        break;
-                    }
-                    if (node.getChildren) {
-                        const children = node.getChildren();
-                        for (let i = children.length - 1; i >= 0; i--) {
-                            nodesToVisit.push(children[i]);
+            try {
+                editor.getEditorState().read(() => {
+                    const root = _getRoot();
+                    const nodesToVisit = [root];
+                    while(nodesToVisit.length > 0) {
+                        const node = nodesToVisit.pop();
+                        if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                            foundKey = node.getKey();
+                            break;
+                        }
+                        if (node.getChildren) {
+                            const children = node.getChildren();
+                            for (let i = children.length - 1; i >= 0; i--) {
+                                nodesToVisit.push(children[i]);
+                            }
                         }
                     }
-                }
-            });
+                });
+            } catch (error) {
+                console.error("[LexicalEditor] Error in scrollToHighlight:", error);
+            }
             return foundKey;
         };
 
@@ -3080,7 +3085,7 @@ $: if (editor && activeLayout) {
         while(nodesToVisit.length > 0) {
             const currentNode = nodesToVisit.pop();
             if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
-                currentNode.setStyle('background-color: transparent;');
+                currentNode.setStyle('');
                 currentNode.setHighlightId(null);
             }
             if (currentNode.getChildren) {
