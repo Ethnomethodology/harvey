@@ -184,6 +184,8 @@
   let areHighlightsReady = false; // Track if highlights have been loaded from backend
   let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
 
+  let previousDocumentHighlightsIds = new Set();
+
   let isResizing = false;
   let resizeDirection = null;
   let resizeTargetCellKey = null;
@@ -311,6 +313,7 @@
       });
       if (highlightsJson && editor) {
         const highlights = JSON.parse(highlightsJson);
+        previousDocumentHighlightsIds = new Set(highlights.map(h => h.id));
         editor.update(() => {
           for (const highlight of highlights) {
             const node = _getNodeByKey(highlight.nodeKey);
@@ -1443,6 +1446,7 @@ function gatherAllHighlights() {
 function updateAndSaveHighlights(highlights) {
     if (!editor || !documentPath) return;
 
+    previousDocumentHighlightsIds = new Set(highlights.map(h => h.id));
     dispatch('highlightschange', { highlights });
 }
 
@@ -2115,6 +2119,49 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
   }
+
+function handleDocumentHighlightsChange(highlights) {
+    if (!editor || !areHighlightsReady || !areNodesReady) return;
+
+    const currentHighlightsIds = new Set(highlights.map(h => h.id));
+    let hasDeletions = false;
+    let deletedIds = new Set();
+
+    for (const id of previousDocumentHighlightsIds) {
+        if (!currentHighlightsIds.has(id)) {
+            hasDeletions = true;
+            deletedIds.add(id);
+        }
+    }
+
+    if (hasDeletions) {
+        editor.update(() => {
+            const root = _getRoot();
+            const nodesToVisit = [root];
+            while (nodesToVisit.length > 0) {
+                const currentNode = nodesToVisit.pop();
+                if (_isExtendedTextNode(currentNode)) {
+                    const id = currentNode.getHighlightId();
+                    if (id && deletedIds.has(id)) {
+                        currentNode.setStyle('');
+                        currentNode.setHighlightId(null);
+                    }
+                }
+                if (currentNode.getChildren) {
+                    const children = currentNode.getChildren();
+                    for (let i = children.length - 1; i >= 0; i--) {
+                        nodesToVisit.push(children[i]);
+                    }
+                }
+            }
+        });
+    }
+
+    // Update our reference
+    previousDocumentHighlightsIds = currentHighlightsIds;
+}
+
+$: handleDocumentHighlightsChange(documentHighlights);
 
 function updateSearchHighlights() {
   if (typeof CSS === 'undefined' || !CSS.highlights) {
