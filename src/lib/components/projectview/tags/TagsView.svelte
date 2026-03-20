@@ -311,10 +311,10 @@
         }});
 
         columns.push({
-            title: "Actions", width: "10%", hozAlign: "center",
+            title: "Actions", field: "comments", width: "10%", hozAlign: "center",
             formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
-                const commentCount = highlight.comments.length;
+                const commentCount = (highlight.comments || []).length;
 
                 const container = document.createElement("div");
                 container.className = "flex items-center justify-center gap-4";
