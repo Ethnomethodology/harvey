@@ -154,6 +154,7 @@ fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
         "document" => "document",
         "pdf" => "document",
         "table" => "table",
+        "survey_doc" => "table",
         "imported_transcript" => "transcript",
         "audio_transcript" => "audio_transcript",
         "video_transcript" => "video_transcript",
@@ -255,7 +256,12 @@ fn determine_asset_type(
         }
     }
 
-    // 5. Fallback to extension-based detection
+    // 5. Path-based check for Survey Documents (Lexical JSONs within Table attachments)
+    if path_str_lower.contains("harvey_files/tables/") && path_str_lower.contains("/attachments/") && path_str_lower.ends_with(".json") {
+        return "survey_doc".to_string();
+    }
+
+    // 6. Fallback to extension-based detection
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     match extension {
         "pdf" => "document".to_string(),

@@ -9,7 +9,7 @@
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
-    import { Tags, MessageCircle, MoreVertical, Trash2 } from 'lucide-svelte';
+    import { Tags, MessageCircle, MoreVertical, Trash2, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
 
     export let itemPath = null;
@@ -121,6 +121,26 @@
             activeHighlights = p.currentDocumentHighlights || [];
         }
     }
+
+    $: IconComponent = (() => {
+        const p = $project;
+        const currentPath = p.selectedDocumentPath || p.selectedMediaNotePath || itemPath;
+        
+        // Survey table view documents should use the Sheet icon
+        if (currentPath && currentPath.toLowerCase().includes('harvey_files/tables/') && currentPath.toLowerCase().endsWith('.json')) {
+            return Sheet;
+        }
+        
+        switch (effectiveType) {
+            case 'table': return Sheet;
+            case 'media': return p.selectedMediaNotePath?.toLowerCase().match(/\.(mp4|mov|avi)$/) ? Film : Music;
+            case 'pdf': return FileText;
+            case 'image': return ImageIcon;
+            case 'imported_transcript': return MessageSquareText;
+            case 'doc': return FileText;
+            default: return null;
+        }
+    })();
 
     $: selectedHighlightForComments = activeHighlights.find(h => h.id === selectedHighlightId) || null;
 
@@ -277,6 +297,9 @@
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
     <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
         <div class="flex items-center space-x-2">
+            {#if IconComponent}
+                <svelte:component this={IconComponent} size={16} class="ml-1" />
+            {/if}
             <span class="ml-1">Highlights</span>
         </div>
     </div>

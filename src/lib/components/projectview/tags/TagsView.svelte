@@ -149,7 +149,12 @@
     import { mount } from 'svelte';
 
     // --- Icons ---
-    function getIconComponentForFileType(fileType) {
+    function getIconComponentForFileType(fileType, filePath = '') {
+        // Survey table view documents should use the Sheet icon
+        if (fileType === 'survey_doc' || (filePath && filePath.toLowerCase().includes('harvey_files/tables/') && filePath.toLowerCase().endsWith('.json'))) {
+            return Sheet;
+        }
+
         switch (fileType) {
             case 'audio': return Music;
             case 'video': return Film;
@@ -207,10 +212,6 @@
                 initializeTable(processedHighlights);
             } else if (tableReady) {
                 // Check if we need to switch column structure
-                // We rely on a custom property 'isGroupView' on the instance or check columns
-                // But getting columns can be buggy if not ready.
-                // Simplest is to check if we switched modes.
-                // We can store the current mode in a variable
                 if (currentTableMode !== (isGroupView ? 'group' : 'tag')) {
                     initializeTable(processedHighlights);
                 } else {
@@ -233,6 +234,10 @@
         }
     }
 
+    $: if (tabulatorInstance && tableReady && $tagSearchQuery !== undefined) {
+        tabulatorInstance.setFilter("text", "like", $tagSearchQuery);
+    }
+
     let currentTableMode = null; // 'tag' or 'group'
 
     function initializeTable(data) {
@@ -250,7 +255,7 @@
                 const highlight = cell.getRow().getData();
                 const filePath = highlight.source.file_path;
                 const fileName = filePath.split(/[\\/]/).pop();
-                const IconComponent = getIconComponentForFileType(highlight.source.file_type);
+                const IconComponent = getIconComponentForFileType(highlight.source.file_type, filePath);
                 const isDarkMode = document.documentElement.classList.contains('dark');
                 const iconTextColor = (highlight.color && isDarkMode) ? '#111827' : 'currentColor';
 

@@ -400,7 +400,7 @@ pub async fn generate_survey_documents(
                 file_name: file_name,
                 file_path: new_file.clone(),
                 last_modified: chrono::Utc::now().to_rfc3339(),
-                file_type: "document".to_string(), // Lexical docs are 'document'
+                file_type: "survey_doc".to_string(), // Use 'survey_doc' for specific handling
                 ..Default::default()
             };
 
