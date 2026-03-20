@@ -328,12 +328,10 @@ export function setDocumentHighlights(highlights) {
 
         const updatedState = { ...p, currentDocumentHighlights: highlights };
 
-        // We only want to mark document metadata as dirty if the active document is actually a document type
-        // This prevents tables (which also use this field to display highlights in the panel for their attachments)
-        // from triggering false saves that cause "Missing JSON content" errors.
-        if (p.selectedDocumentType !== 'tables' && p.selectedDocumentType !== 'table') {
-             updatedState.isDocumentMetadataDirty = true;
-        }
+        // Mark document metadata as dirty if a document is active.
+        // For tables, we only mark it dirty if highlights are actually being updated 
+        // (which happens when a survey document sub-item is open).
+        updatedState.isDocumentMetadataDirty = true;
 
         if (isMediaNoteActive) {
             updatedState.isMediaNoteTranscriptDirty = true;
@@ -341,6 +339,25 @@ export function setDocumentHighlights(highlights) {
 
 
         return updatedState;
+    });
+    highlightsLastUpdated.set(new Date());
+}
+
+export function setLoadedDocumentHighlights(highlights) {
+    project.update(p => {
+        highlights.forEach(h => {
+            if (h.tags && Array.isArray(h.tags)) {
+                h.tags.forEach(tag => {
+                    addTag(tag);
+                });
+            }
+        });
+
+        return { 
+            ...p, 
+            currentDocumentHighlights: highlights,
+            isDocumentMetadataDirty: false 
+        };
     });
     highlightsLastUpdated.set(new Date());
 }

@@ -146,22 +146,45 @@ export async function loadHighlightsForFile(filePath, itemType) {
         // Differentiate between generic doc metadata and explicitly lexical documents (like survey tables)
         if (filePath.toLowerCase().endsWith('.json')) {
             try {
-                const { project } = await import('$lib/stores/projectStore.js');
+                const { project, setDocumentHighlights } = await import('$lib/stores/projectStore.js');
                 const projState = get(project);
+                
+                if (!projState.id) {
+                    console.warn('[ProjectService] loadHighlightsForFile: Project ID missing, skipping Lexical highlights load.');
+                    return;
+                }
+
+                // Ensure we have an absolute path if possible for the backend key
+                let absolutePath = filePath;
+                const isAbsolute = filePath.startsWith('/') || filePath.startsWith('\\') || filePath.includes(':');
+                if (!isAbsolute && projState?.baseDirectory) {
+                    const baseDir = projState.baseDirectory.replace(/\\/g, '/').replace(/\/$/, '');
+                    const relPart = filePath.replace(/\\/g, '/').replace(/^\//, '');
+                    absolutePath = `${baseDir}/${relPart}`;
+                }
+                
+                // Normalize path for consistent DB lookup (absolute, forward slashes)
+                const normalizedKeyPath = absolutePath.replace(/\\/g, '/');
+
                 const hData = await invoke('load_lexical_highlights', {
-                    args: { projectId: projState.id, documentPath: filePath }
+                    args: { projectId: projState.id, documentPath: normalizedKeyPath }
                 });
-                const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
                 if (hData) {
+                    const { setLoadedDocumentHighlights } = await import('$lib/stores/projectStore.js');
                     const loadedHighlights = JSON.parse(hData);
-                    setDocumentHighlights(loadedHighlights);
+                    setLoadedDocumentHighlights(loadedHighlights);
                 } else {
-                    setDocumentHighlights([]);
+                    // Only clear if we are sure we are looking at the right file
+                    const currentProj = get(project);
+                    const currentActivePath = (currentProj.selectedDocumentPath || currentProj.selectedMediaNotePath || '').replace(/\\/g, '/');
+                    if (currentActivePath === normalizedKeyPath) {
+                        const { setLoadedDocumentHighlights } = await import('$lib/stores/projectStore.js');
+                        setLoadedDocumentHighlights([]);
+                    }
                 }
             } catch (e) {
                 console.error(`[ProjectService] Error loading lexical highlights for ${filePath}:`, e);
-                const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
-                setDocumentHighlights([]);
+                // Do not clear highlights on error to avoid flickering/loss of data
             }
         } else {
             const metadata = await loadDocumentMetadata(filePath);

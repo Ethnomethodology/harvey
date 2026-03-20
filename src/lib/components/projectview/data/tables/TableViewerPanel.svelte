@@ -19,7 +19,7 @@
         loadTableSchema,
         saveTableSchema
     } from '$lib/services/projectService.js';
-    import { project, setTableHighlights, setLoadedTableHighlights, setDocumentHighlights } from '$lib/stores/projectStore.js';
+    import { project, setTableHighlights, setLoadedTableHighlights, setDocumentHighlights, setLoadedDocumentHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     import EditEntryModal from '$lib/components/projectview/modals/EditEntryModal.svelte';
@@ -140,6 +140,12 @@
         
         // Trigger a reformat of entries to apply new styles
         reformatAllRows();
+    }
+
+    // Restore survey document view if activeSubItemPath is provided on mount
+    $: if (activeSubItemPath && !isViewingDocument && activeSubItemType === 'doc' && tableReady) {
+        console.log('[TableViewerPanel] Restoring survey document view for:', activeSubItemPath);
+        openLexicalDocument(activeSubItemPath);
     }
 
     async function toggleStyle(styleType) {
@@ -2477,6 +2483,7 @@
             if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
+            absolutePath = absolutePath.replace(/\\/g, '/');
             await invoke('save_note_json', { targetPath: absolutePath, jsonContent: jsonString });
         } catch (e) {
             console.error('Failed to autosave lexical document:', e);
@@ -2491,19 +2498,15 @@
             if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
+            absolutePath = absolutePath.replace(/\\/g, '/');
 
-            for (const highlight of highlights) {
-                try {
-                    await invoke('save_highlight_changes', {
-                        projectId: projectStoreState.id,
-                        filePath: absolutePath,
-                        docType: 'document',
-                        highlight: highlight
-                    });
-                } catch (saveErr) {
-                    console.error(`Failed to autosave highlight ${highlight.id}:`, saveErr);
+            await invoke('save_lexical_highlights', {
+                args: {
+                    projectId: projectStoreState.id,
+                    documentPath: absolutePath,
+                    highlightsJson: JSON.stringify(highlights)
                 }
-            }
+            });
         } catch (e) {
             console.error('Failed to autosave lexical highlights batch:', e);
         }
@@ -2526,7 +2529,7 @@
 
     // Reactive watcher to capture tags/comments added via the HighlightsPanel sidebar
     // when a survey document is actively being viewed in the table viewer.
-    $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
+    $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights && $project.isDocumentMetadataDirty) {
         // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
         debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
     }
@@ -2539,6 +2542,7 @@
             if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
                 absolutePath = `${projectStoreState.baseDirectory}/${docPath.replace(/^\/+/, '')}`;
             }
+            absolutePath = absolutePath.replace(/\\/g, '/');
 
             const content = await invoke('load_note_json', {
                 filePath: absolutePath
@@ -2560,10 +2564,10 @@
             if (content) {
                 currentActiveDocumentJson = content;
                 currentActiveDocumentHighlights = loadedHighlights;
-                setDocumentHighlights(loadedHighlights); // Immediately push to store for HighlightsPanel
+                setLoadedDocumentHighlights(loadedHighlights); // Use the new non-dirty setter
                 isViewingDocument = true;
-                currentActiveDocumentPath = docPath;
-                activeSubItemPath = docPath;
+                currentActiveDocumentPath = absolutePath;
+                activeSubItemPath = absolutePath;
                 activeSubItemType = 'doc';
                 dispatch('requestviewchange', { type: 'chart_opened', item: docPath });
             } else {

@@ -35,7 +35,7 @@
                      pathForHighlights = p.activeTranscriptPathInDataTab;
                 } else if ((itemType === 'table' || itemType === 'tables') && p.selectedDocumentPath && p.selectedDocumentPath !== itemPath) {
                     effectiveItemType = 'doc';
-                    pathForHighlights = p.selectedDocumentPath;
+                    pathForHighlights = itemPath;
                 }
 
                 await loadHighlightsForFile(pathForHighlights, effectiveItemType);
@@ -44,7 +44,7 @@
         });
     });
 
-	$: if (refreshKey) {
+	$: if (refreshKey || itemPath || itemType) {
 		if (itemPath) {
             let pathForHighlights = itemPath;
             let effectiveItemType = itemType;
@@ -60,7 +60,7 @@
                 // If a sub-document is open in a table, the path changes to the sub-document.
                 // We should load highlights for it as a doc.
                 effectiveItemType = 'doc';
-                pathForHighlights = p.selectedDocumentPath;
+                pathForHighlights = itemPath;
             }
 
 			loadHighlightsForFile(pathForHighlights, effectiveItemType);
@@ -103,7 +103,7 @@
         } else if (p.currentImportedTranscriptPath) {
             effectiveType = 'imported_transcript';
             activeHighlights = p.currentImportedTranscriptHighlights || [];
-        } else if (itemType === 'doc') {
+        } else if (itemType === 'doc' || ((itemType === 'table' || itemType === 'tables') && currentPath && currentPath !== itemPath)) {
             // Overrides for sub-items like Lexical docs opened inside TableViewer
             effectiveType = 'doc';
             activeHighlights = p.currentDocumentHighlights || [];

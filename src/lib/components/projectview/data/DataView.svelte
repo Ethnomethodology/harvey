@@ -203,6 +203,11 @@
             activeItemPath = pathFromStore;
             activeViewType = typeFromStore;
             activeItemTypeForInfoPanel = itemTypeForInfo; // Update type for InfoPanel
+            
+            // Reset sub-item context when switching main items
+            activeSubItemPath = null;
+            activeSubItemType = null;
+
             console.debug(`[DataView Store Sub] Synced. Path: ${activeItemPath}, ViewType: ${activeViewType}, InfoPanelType: ${activeItemTypeForInfoPanel}`);
         } else if (activeItemTypeForInfoPanel !== itemTypeForInfo) {
             // Path and view type might be same, but specific type for info panel changed (e.g. media_note to audio)
@@ -373,7 +378,9 @@
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
-                    <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
+                    {#key (activeSubItemPath || activeItemPath)}
+                        <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
+                    {/key}
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
                     <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} />
                 {/if}
