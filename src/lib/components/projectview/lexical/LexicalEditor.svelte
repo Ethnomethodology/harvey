@@ -1369,7 +1369,7 @@ function gatherAllHighlights() {
     if (allTextNodes.length === 0) return [];
 
     // Use latest highlights from store for metadata merging
-    const currentHighlights = get(project).currentDocumentHighlights || [];
+    const currentHighlights = documentHighlights || [];
     const existingHighlightsMap = new Map(currentHighlights.map(h => [h.id, h]));
 
     // 2. Group into blocks that are contiguous in the document flow
@@ -1450,35 +1450,38 @@ function updateAndSaveHighlights(highlights) {
     dispatch('highlightschange', { highlights });
 }
 
-function scrollToHighlight(id) {
-    if (!id || !editor) return;
+function scrollToHighlight(id, currentEditor) {
+    if (!id || !currentEditor) return;
     
     let attempts = 0;
     const maxAttempts = 15; // Increased attempts
     
     const tryScroll = () => {
+        if (!currentEditor) return;
+
         // Recursive function to find node by highlight ID - MUST be called inside tryScroll to retry search
         const findNodeKey = () => {
-            if (!editor) return null;
             let foundKey = null;
             try {
-                editor.getEditorState().read(() => {
-                    const root = _getRoot();
-                    const nodesToVisit = [root];
-                    while(nodesToVisit.length > 0) {
-                        const node = nodesToVisit.pop();
-                        if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
-                            foundKey = node.getKey();
-                            break;
-                        }
-                        if (node.getChildren) {
-                            const children = node.getChildren();
-                            for (let i = children.length - 1; i >= 0; i--) {
-                                nodesToVisit.push(children[i]);
+                if (currentEditor && typeof currentEditor.getEditorState === 'function') {
+                    currentEditor.getEditorState().read(() => {
+                        const root = _getRoot();
+                        const nodesToVisit = [root];
+                        while(nodesToVisit.length > 0) {
+                            const node = nodesToVisit.pop();
+                            if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                                foundKey = node.getKey();
+                                break;
+                            }
+                            if (node.getChildren) {
+                                const children = node.getChildren();
+                                for (let i = children.length - 1; i >= 0; i--) {
+                                    nodesToVisit.push(children[i]);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
             } catch (error) {
                 console.error("[LexicalEditor] Error in scrollToHighlight:", error);
             }
@@ -1488,7 +1491,7 @@ function scrollToHighlight(id) {
         const targetNodeKey = findNodeKey();
 
         if (targetNodeKey) {
-            const domElement = editor.getElementByKey(targetNodeKey);
+            const domElement = currentEditor.getElementByKey(targetNodeKey);
             if (domElement) {
                 console.log(`[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`);
                 domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1501,7 +1504,10 @@ function scrollToHighlight(id) {
                 }, 2000);
                 
                 // Success - clear the request
-                project.update(p => ({ ...p, requestedHighlightId: null }));
+                project.update(p => {
+                    if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
+                    return p;
+                });
                 return;
             }
         }
@@ -1512,7 +1518,10 @@ function scrollToHighlight(id) {
             setTimeout(tryScroll, 150); // Slightly longer delay between retries
         } else {
             console.warn(`[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`);
-            project.update(p => ({ ...p, requestedHighlightId: null }));
+            project.update(p => {
+                if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
+                return p;
+            });
         }
     };
     
@@ -1521,8 +1530,8 @@ function scrollToHighlight(id) {
 }
 
 // Trigger scroll when editor is ready AND highlights are loaded AND nodes are loaded AND there is a requested ID
-$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady) {
-    scrollToHighlight($project.requestedHighlightId);
+$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady && editor) {
+    scrollToHighlight($project.requestedHighlightId, editor);
 }
 
   function handleBlockTypeChange(event) {

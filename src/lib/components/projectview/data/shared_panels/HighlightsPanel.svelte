@@ -256,6 +256,14 @@
         const newHighlights = activeHighlights.filter(h => h.id !== highlightId);
 
         await handleHighlightsUpdate(newHighlights);
+
+        // Also clear requestedHighlightId to avoid Lexical scrolling errors
+        project.update(p => {
+            if (p.requestedHighlightId === highlightId) {
+                return { ...p, requestedHighlightId: null };
+            }
+            return p;
+        });
     }
 </script>
 
