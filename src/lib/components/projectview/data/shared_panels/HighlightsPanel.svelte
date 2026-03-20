@@ -88,6 +88,9 @@
         } else if (p.currentImportedTranscriptPath) {
             effectiveType = 'imported_transcript';
             activeHighlights = p.currentImportedTranscriptHighlights || [];
+        } else if (currentPath?.toLowerCase().endsWith('.pdf') || (itemPath && itemPath.toLowerCase().endsWith('.pdf'))) {
+            effectiveType = 'pdf';
+            activeHighlights = p.currentPdfAnnotations || [];
         } else if (itemType === 'doc') {
             // Overrides for sub-items like Lexical docs opened inside TableViewer
             effectiveType = 'doc';
@@ -98,9 +101,6 @@
         } else if (selectedType === 'images') {
             effectiveType = 'image';
             activeHighlights = p.currentImageAnnotations || [];
-        } else if (currentPath?.toLowerCase().endsWith('.pdf')) {
-            effectiveType = 'pdf';
-            activeHighlights = p.currentPdfAnnotations || [];
         } else {
             effectiveType = 'doc';
             activeHighlights = p.currentDocumentHighlights || [];
