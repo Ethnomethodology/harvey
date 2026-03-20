@@ -17,7 +17,7 @@
         addTag
     } from '$lib/stores/tagStore.js';
     import { refresher } from '$lib/stores/refresherStore.js';
-    import { addCommentToHighlight, deleteComment, updateComment, removeTagFromHighlightLocal } from '$lib/stores/projectStore.js';
+    import { manageCommentInHighlightLocal, removeTagFromHighlightLocal } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
@@ -458,33 +458,40 @@
         if (!highlight) return;
 
         try {
-            if (type === 'add') {
-                await addCommentToHighlight(highlightId, comment, highlight.source.file_type);
-            } else if (type === 'update') {
-                await updateComment(highlightId, commentId, text, highlight.source.file_type);
-            } else if (type === 'delete') {
-                await deleteComment(highlightId, commentId, highlight.source.file_type);
-            }
+            await invoke('manage_highlight_comment', {
+                projectId: get(project).id,
+                highlightId: highlightId,
+                action: type,
+                commentId: commentId,
+                comment: comment,
+                text: text,
+                filePath: highlight.source.file_path,
+                docType: highlight.source.file_type
+            });
 
-            // Update local selectedHighlight to reflect changes in CommentsPanel
-            // We need to find the updated highlight in our processedHighlights
-            // Or just update the local object's comments array.
-            // But projectStore functions update the store, so we should ideally reactive-ly get it.
-            // For immediate UI update in the modal:
+            // Update local Svelte store if the file is currently open
+            manageCommentInHighlightLocal(highlightId, type, comment, commentId, text, highlight.source.file_type, highlight.source.file_path);
+
+            // Update local selectedHighlight to reflect changes in CommentsPanel immediately
+            if (type === 'add') {
+                highlight.comments = [...(highlight.comments || []), comment];
+            } else if (type === 'delete') {
+                highlight.comments = (highlight.comments || []).filter(c => c.id !== commentId && c.parentId !== commentId);
+            } else if (type === 'update') {
+                highlight.comments = (highlight.comments || []).map(c => c.id === commentId ? { ...c, text } : c);
+            }
+            selectedHighlight = { ...highlight };
+
+            // Update Tabulator instance row data
             if (tabulatorInstance) {
-                // Find the row in Tabulator and refresh it
                 const row = tabulatorInstance.getRow(highlightId);
                 if (row) {
-                    const rowData = row.getData();
-                    // Sync the comments
-                    // This is a bit manual because projectStore doesn't return the new array
-                    // and we are working with a copy in Tabulator.
-                    // But processedHighlights will update via reactivity ($tagInfo).
-                    // Let's rely on the store subscription if possible.
+                    row.update({ comments: selectedHighlight.comments });
                 }
             }
         } catch (error) {
             console.error(`Failed to ${type} comment:`, error);
+            await message(`Failed to ${type} comment: ${error}`, { title: 'Error', kind: 'error' });
         }
     }
 

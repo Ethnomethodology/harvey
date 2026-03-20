@@ -467,6 +467,69 @@ export function removeTagFromHighlightLocal(highlightId, tagName, docType, fileP
     });
 }
 
+export function manageCommentInHighlightLocal(highlightId, action, commentObj, commentId, text, docType, filePath) {
+    project.update(p => {
+        let highlights, key, dirtyFlag, pathKey;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'imported_transcript' || docType === 'transcript' || docType === 'audio_transcript' || docType === 'video_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+            pathKey = 'currentImportedTranscriptPath';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'table') {
+            highlights = p.currentTableHighlights;
+            key = 'currentTableHighlights';
+            dirtyFlag = 'isTableHighlightsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'selectedDocumentPath';
+        }
+
+        // Only update if the file currently loaded in the store matches the highlight's file
+        if (p[pathKey] !== filePath) {
+            return p;
+        }
+
+        if (!highlights || !Array.isArray(highlights)) return p;
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const currentComments = h.comments || [];
+                if (action === 'add') {
+                    return { ...h, comments: [...currentComments, commentObj] };
+                } else if (action === 'delete') {
+                    return { ...h, comments: currentComments.filter(c => c.id !== commentId && c.parentId !== commentId) };
+                } else if (action === 'update') {
+                    return {
+                        ...h, comments: currentComments.map(c => {
+                            if (c.id === commentId) {
+                                return { ...c, text };
+                            }
+                            return c;
+                        })
+                    };
+                }
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
 export function deleteComment(highlightId, commentId, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
