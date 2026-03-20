@@ -588,15 +588,37 @@
     // --- Action Handlers ---
     function handleInspect(highlight) {
         if (!highlight || !highlight.source) return;
+
+        project.update(p => ({
+            ...p,
+            requestedHighlightId: highlight.id
+        }));
+
+        let loadNotePath = highlight.source.file_path;
+        let viewType = highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' :
+                       highlight.source.file_type === 'csv' ? 'table' :
+                       highlight.source.file_type === 'image' ? 'image' :
+                       highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document';
+        let attachmentToOpen = null;
+
+        // Check if the file is a survey table view document (an attachment of a table)
+        const parts = highlight.source.file_path.split(/[\\/]/);
+        const attachmentsIndex = parts.indexOf('attachments');
+        if (attachmentsIndex !== -1 && attachmentsIndex > 0) {
+            const tableDirParts = parts.slice(0, attachmentsIndex);
+            const tableNameWithoutExt = parts[attachmentsIndex + 1];
+            // Base tables are always imported as .csv inside Harvey
+            loadNotePath = [...tableDirParts, tableNameWithoutExt + '.csv'].join('/');
+            viewType = 'table';
+            attachmentToOpen = highlight.source.file_path;
+        }
+
         dispatch('requestviewchange', {
             tabName: 'data',
-            loadNotePath: highlight.source.file_path,
-            highlightId: highlight.id,
-            viewType: highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' : 
-                      highlight.source.file_type === 'csv' ? 'table' :
-                      highlight.source.file_type === 'image' ? 'image' : 
-                      highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document',
-            originalDocType: highlight.source.file_type
+            loadNotePath,
+            viewType,
+            originalDocType: highlight.source.file_type,
+            attachmentToOpen
         });
     }
 

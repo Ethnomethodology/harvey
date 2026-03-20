@@ -2519,7 +2519,7 @@
     function handleLexicalHighlightsChange(event) {
         const { highlights } = event.detail;
         if (currentActiveDocumentPath && highlights) {
-            setDocumentHighlights(highlights); // Update global store immediately so HighlightsPanel sees it
+            setDocumentHighlights(highlights, false); // Update global store immediately so HighlightsPanel sees it, but don't mark global file dirty
             debouncedLexicalHighlightsSave(currentActiveDocumentPath, highlights);
         }
     }
@@ -2560,7 +2560,7 @@
             if (content) {
                 currentActiveDocumentJson = content;
                 currentActiveDocumentHighlights = loadedHighlights;
-                setDocumentHighlights(loadedHighlights); // Immediately push to store for HighlightsPanel
+                setDocumentHighlights(loadedHighlights, false); // Immediately push to store for HighlightsPanel without marking base file dirty
                 isViewingDocument = true;
                 currentActiveDocumentPath = docPath;
                 activeSubItemPath = docPath;

@@ -308,7 +308,7 @@ export function markDocumentChangesDiscarded() { project.update(p => { if (p.sel
 export function clearDocumentEditorState() { project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, currentImageAnnotations: [], initialImageAnnotations: [], isImageAnnotationsDirty: false, currentTableHighlights: [], initialTableHighlights: [], isTableHighlightsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-export function setDocumentHighlights(highlights) {
+export function setDocumentHighlights(highlights, markDirty = true) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
         const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
@@ -325,12 +325,13 @@ export function setDocumentHighlights(highlights) {
             }
         });
 
-        const updatedState = { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
-
-        if (isMediaNoteActive) {
-            updatedState.isMediaNoteTranscriptDirty = true;
+        const updatedState = { ...p, currentDocumentHighlights: highlights };
+        if (markDirty) {
+            updatedState.isDocumentMetadataDirty = true;
+            if (isMediaNoteActive) {
+                updatedState.isMediaNoteTranscriptDirty = true;
+            }
         }
-
 
         return updatedState;
     });

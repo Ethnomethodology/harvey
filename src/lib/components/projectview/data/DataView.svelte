@@ -227,8 +227,10 @@
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
+        const attachmentToOpen = eventDetailFromDispatch?.attachmentToOpen;
+
         // If the requested path and type are already active, do nothing.
-        if (pathForView === activeItemPath && typeForView === activeViewType) {
+        if (pathForView === activeItemPath && typeForView === activeViewType && !attachmentToOpen) {
             console.debug(`[DataView] Requested view change to already active item. Path: ${pathForView}, Type: ${typeForView}. Aborting redundant action.`);
             return;
         }
@@ -279,6 +281,13 @@
             activeItemTypeForInfoPanel = null;
         }
         console.debug(`[DataView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
+
+        if (attachmentToOpen) {
+            // Wait for the view components to mount and initialize before trying to open the attachment
+            setTimeout(() => {
+                handleRequestOpenLexicalDocument({ detail: { docPath: attachmentToOpen } });
+            }, 100);
+        }
     }
 
     function handleRightBarTabChange(event) {
