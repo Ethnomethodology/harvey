@@ -241,7 +241,18 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str("</a>");
             }
             "table" => {
-                 html.push_str("<table border=\"1\"><tbody>");
+                 if let Some(col_widths) = node.get("colWidths").and_then(|cw| cw.as_array()) {
+                    html.push_str("<table border=\"1\"><colgroup>");
+                    for cw in col_widths {
+                        if let Some(width) = cw.as_f64() {
+                            html.push_str(&format!("<col style=\"width: {}px;\" />", width));
+                        }
+                    }
+                    html.push_str("</colgroup><tbody>");
+                 } else {
+                    html.push_str("<table border=\"1\"><tbody>");
+                 }
+
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
@@ -259,13 +270,22 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str("</tr>");
             }
             "tablecell" => {
-                 html.push_str("<td>");
+                 let is_header = node.get("headerState").and_then(|h| h.as_u64()).unwrap_or(0) > 0;
+                 let tag = if is_header { "th" } else { "td" };
+                 
+                 let width_style = if let Some(width) = node.get("width").and_then(|w| w.as_f64()) {
+                     format!(" style=\"width: {}px;\"", width)
+                 } else {
+                     "".to_string()
+                 };
+
+                 html.push_str(&format!("<{}{}>", tag, width_style));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
                     }
                  }
-                 html.push_str("</td>");
+                 html.push_str(&format!("</{}>", tag));
             }
             "image" => {
                  let filename = node.get("filename").and_then(|f| f.as_str()).unwrap_or("image.png");
