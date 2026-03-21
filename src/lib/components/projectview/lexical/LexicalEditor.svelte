@@ -545,8 +545,8 @@
         text: { bold: 'font-bold', italic: 'italic', underline: 'underline', strikethrough: 'line-through' },
         heading: { h1: 'text-2xl font-bold mb-1 mt-2', h2: 'text-xl font-semibold mb-1 mt-1', h3: 'text-lg font-semibold mb-1' },
         list: {
-          ul: 'list-disc list-inside mb-1 pl-4',
-          ol: 'list-decimal list-inside mb-1 pl-4',
+          ul: 'list-disc list-outside mb-1 pl-5 ml-2',
+          ol: 'list-decimal list-outside mb-1 pl-5 ml-2',
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
