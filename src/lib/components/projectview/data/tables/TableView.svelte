@@ -60,8 +60,10 @@
     export function openLexicalDocument(docPath) {
         if (tableViewerPanelRef && typeof tableViewerPanelRef.openLexicalDocument === 'function') {
             tableViewerPanelRef.openLexicalDocument(docPath);
+            return true;
         } else {
-            console.warn('[TableView] tableViewerPanelRef or openLexicalDocument is not available.');
+            console.warn('[TableView] tableViewerPanelRef or openLexicalDocument method not available yet.');
+            return false;
         }
     }
 

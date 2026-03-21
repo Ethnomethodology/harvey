@@ -268,3 +268,69 @@ pub async fn upload_attachment(
         Err(e) => Err(format!("Error loading asset metadata: {}", e)),
     }
 }
+
+#[tauri::command]
+pub async fn get_base_asset_for_attachment(
+    project_xml_path_str: String,
+    attachment_relative_path: String,
+) -> Result<Option<String>, String> {
+    debug!("[CMD] get_base_asset_for_attachment: attachment={}", attachment_relative_path);
+
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = project_xml_path.parent().ok_or_else(|| "Could not get project base directory.".to_string())?;
+
+    let project_xml_content = fs::read_to_string(&project_xml_path)
+        .map_err(|e| format!("Failed to read project XML: {}", e))?;
+    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content)
+        .map_err(|e| format!("Failed to parse project XML: {}", e))?;
+
+    let project_id = project_data.project_uuid;
+    if project_id.is_empty() {
+        return Err("Project UUID is missing in the project file.".to_string());
+    }
+
+    let attachment_abs_path = project_base_dir.join(&attachment_relative_path).to_string_lossy().to_string();
+    let norm_rel_target = attachment_relative_path.replace("\\", "/");
+
+    let db_path = db_handler::get_db_path().map_err(|e| e.to_string())?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let search_str = format!("%{}%", norm_rel_target.split('/').last().unwrap_or(&norm_rel_target));
+    
+    let mut stmt = conn.prepare(
+        "SELECT asset_relative_path, custom_fields_json 
+         FROM asset_metadata 
+         WHERE project_id = ?1 AND custom_fields_json LIKE ?2"
+    ).map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query(rusqlite::params![project_id, search_str]).map_err(|e| e.to_string())?;
+
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let asset_path: String = row.get(0).map_err(|e| e.to_string())?;
+        let custom_fields_json: Option<String> = row.get(1).map_err(|e| e.to_string())?;
+
+        if let Some(json_str) = custom_fields_json {
+            if let Ok(fields) = serde_json::from_str::<Vec<serde_json::Value>>(&json_str) {
+                for field in fields {
+                    if field.get("key").and_then(|k| k.as_str()) == Some("attachments") {
+                        if let Some(val_str) = field.get("value").and_then(|v| v.as_str()) {
+                            if let Ok(attachments) = serde_json::from_str::<Vec<String>>(val_str) {
+                                for att in attachments {
+                                    let p_normalized = att.replace("\\", "/");
+                                    if p_normalized == norm_rel_target || 
+                                       attachment_abs_path.replace("\\", "/").ends_with(&p_normalized) || 
+                                       norm_rel_target.ends_with(&p_normalized) {
+                                        let full_path = project_base_dir.join(&asset_path).to_string_lossy().to_string();
+                                        return Ok(Some(full_path));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}

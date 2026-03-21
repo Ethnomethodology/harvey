@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/data/DataView.svelte -->
 <script>
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount, createEventDispatcher, tick } from 'svelte';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import DataTopBar from './DataTopBar.svelte';
 	import DataLeftPanel from './DataLeftPanel.svelte';
@@ -123,19 +123,30 @@
         }
     }
 
-    function handleRequestOpenLexicalDocument(event) {
+    export function handleRequestOpenLexicalDocument(event) {
         const { docPath } = event.detail;
         console.log('[DataView] Received requestOpenLexicalDocument:', docPath);
 
-        if (activeViewType === 'tables' && tableViewRef && typeof tableViewRef.openLexicalDocument === 'function') {
-            try {
-                tableViewRef.openLexicalDocument(docPath);
-            } catch (err) {
-                console.error('[DataView] Error opening lexical document in table view:', err);
+        let retries = 0;
+        const tryOpen = () => {
+            if (activeViewType === 'tables' && tableViewRef && typeof tableViewRef.openLexicalDocument === 'function') {
+                try {
+                    const success = tableViewRef.openLexicalDocument(docPath);
+                    if (success !== false) return;
+                } catch (err) {
+                    console.error('[DataView] Error opening lexical document in table view:', err);
+                    return;
+                }
             }
-        } else {
-            console.warn('[DataView] tableViewRef or openLexicalDocument method not available yet.');
-        }
+            
+            retries++;
+            if (retries < 20) {
+                setTimeout(tryOpen, 100);
+            } else {
+                console.warn('[DataView] tableViewRef or openLexicalDocument method failed to become available after 2s.');
+            }
+        };
+        tryOpen();
     }
 
     let attachmentsPanelRef;
@@ -283,10 +294,13 @@
         console.debug(`[DataView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
 
         if (attachmentToOpen) {
-            // Wait for the view components to mount and initialize before trying to open the attachment
-            setTimeout(() => {
-                handleRequestOpenLexicalDocument({ detail: { docPath: attachmentToOpen } });
-            }, 100);
+            // Wait for Svelte to fully destroy old components and mount new ones based on activeItemPath change
+            await tick();
+            
+            // Open the attachments panel
+            panelStateStore.setActiveInfoPanelTab('attachments');
+
+            handleRequestOpenLexicalDocument({ detail: { docPath: attachmentToOpen } });
         }
     }
 

@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
     import { get } from 'svelte/store';
+    import { invoke } from '@tauri-apps/api/core';
     import { onMount, onDestroy } from 'svelte';
     import { refresher } from '$lib/stores/refresherStore.js';
 
@@ -195,9 +196,27 @@
             setTableHighlights(newHighlights);
             await saveTableHighlights();
         } else {
-            // For survey docs, if it's an attachment of a table, avoid marking the global document dirty
-            const isSurveyDoc = itemType === 'doc' && itemPath && itemPath.includes('.attachments');
-            setDocumentHighlights(newHighlights, !isSurveyDoc);
+            // For survey docs or sub-documents, avoid marking the global document dirty
+            const isSubDocument = (itemType === 'doc' || get(project).selectedDocumentType === 'tables') && 
+                                  itemPath && 
+                                  (itemPath.includes('/attachments/') || itemPath.includes('.attachments'));
+            setDocumentHighlights(newHighlights, !isSubDocument);
+
+            if (isSubDocument) {
+                try {
+                    const hData = JSON.stringify(newHighlights);
+                    let projectStoreState = get(project);
+                    let absolutePath = itemPath;
+                    if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                        absolutePath = `${projectStoreState.baseDirectory}/${itemPath.replace(/^[/\\\\]+/, '')}`;
+                    }
+                    await invoke('save_lexical_highlights', {
+                        args: { projectId: projectStoreState.id, documentPath: absolutePath, highlightsJson: hData }
+                    });
+                } catch (error) {
+                    console.error('Failed to save sub-document highlights:', error);
+                }
+            }
         }
     }
 
@@ -224,7 +243,7 @@
         }
     }
 
-    function handleCommentAction(event) {
+    async function handleCommentAction(event) {
         const { type, detail } = event;
         const { highlightId, commentId, newText, comment } = detail;
 
@@ -237,9 +256,29 @@
         }
 
         if (effectiveType === 'image') {
-            saveImageAnnotations();
+            await saveImageAnnotations();
         } else if (effectiveType === 'table') {
-            saveTableHighlights();
+            await saveTableHighlights();
+        } else {
+            const isSubDocument = (itemType === 'doc' || get(project).selectedDocumentType === 'tables') && 
+                                  itemPath && 
+                                  (itemPath.includes('/attachments/') || itemPath.includes('.attachments'));
+            if (isSubDocument) {
+                try {
+                    const latestHighlights = get(project).currentDocumentHighlights;
+                    const hData = JSON.stringify(latestHighlights);
+                    let projectStoreState = get(project);
+                    let absolutePath = itemPath;
+                    if (!absolutePath.startsWith('/') && !absolutePath.startsWith('\\') && !absolutePath.includes(':') && projectStoreState?.baseDirectory) {
+                        absolutePath = `${projectStoreState.baseDirectory}/${itemPath.replace(/^[/\\\\]+/, '')}`;
+                    }
+                    await invoke('save_lexical_highlights', {
+                        args: { projectId: projectStoreState.id, documentPath: absolutePath, highlightsJson: hData }
+                    });
+                } catch (error) {
+                    console.error('Failed to save sub-document comments:', error);
+                }
+            }
         }
     }
 

@@ -586,7 +586,7 @@
     let currentEditingGroup = null;
 
     // --- Action Handlers ---
-    function handleInspect(highlight) {
+    async function handleInspect(highlight) {
         if (!highlight || !highlight.source) return;
 
         project.update(p => ({
@@ -600,24 +600,44 @@
                        highlight.source.file_type === 'image' ? 'image' :
                        highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document';
         let attachmentToOpen = null;
+        let originalDocType = highlight.source.file_type;
+        
+        const isAttachment = originalDocType === 'document-attachment' || originalDocType === 'transcript-attachment' || highlight.source.file_path.includes('/attachments/');
 
-        // Check if the file is a survey table view document (an attachment of a table)
-        const parts = highlight.source.file_path.split(/[\\/]/);
-        const attachmentsIndex = parts.indexOf('attachments');
-        if (attachmentsIndex !== -1 && attachmentsIndex > 0) {
-            const tableDirParts = parts.slice(0, attachmentsIndex);
-            const tableNameWithoutExt = parts[attachmentsIndex + 1];
-            // Base tables are always imported as .csv inside Harvey
-            loadNotePath = [...tableDirParts, tableNameWithoutExt + '.csv'].join('/');
-            viewType = 'table';
-            attachmentToOpen = highlight.source.file_path;
+        if (isAttachment) {
+            try {
+                // Fetch the base asset that owns this attachment
+                const baseAssetPath = await invoke('get_base_asset_for_attachment', {
+                    projectXmlPathStr: $project.xmlPath,
+                    attachmentRelativePath: highlight.source.file_path
+                });
+                
+                if (baseAssetPath) {
+                    loadNotePath = baseAssetPath;
+                    attachmentToOpen = highlight.source.file_path;
+                    
+                    if (baseAssetPath.endsWith('.csv') || baseAssetPath.endsWith('.xlsx')) {
+                        viewType = 'table';
+                    } else if (baseAssetPath.includes('harvey_files/Documents/')) {
+                        viewType = 'document';
+                    } else if (baseAssetPath.includes('harvey_files/Transcripts/')) {
+                        viewType = 'transcript';
+                    } else if (baseAssetPath.includes('harvey_files/Media/')) {
+                        viewType = 'media';
+                    }
+                } else {
+                    console.warn("Base asset not found for attachment:", highlight.source.file_path);
+                }
+            } catch (e) {
+                console.error("Failed to find base asset for attachment:", e);
+            }
         }
 
         dispatch('requestviewchange', {
             tabName: 'data',
             loadNotePath,
             viewType,
-            originalDocType: highlight.source.file_type,
+            originalDocType,
             attachmentToOpen
         });
     }
