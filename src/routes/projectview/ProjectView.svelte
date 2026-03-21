@@ -712,7 +712,7 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
     }
 
 	async function handleRequestOpenTab(event) {
-        const { tabName, loadNotePath, highlightId, viewType, originalDocType } = event.detail;
+        const { tabName, loadNotePath, highlightId, viewType, originalDocType, attachmentToOpen } = event.detail;
         if (!tabName || !loadNotePath) return;
 
         const proj = get(project);
@@ -817,6 +817,18 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
         const stillLoading = projState.isDocumentLoading || projState.isImportedTranscriptLoading || projState.isMediaNoteTranscriptLoading;
         if (!stillLoading && !projState.isTranscribing && !projState.isImportingAsset) {
             project.update(p => ({...p, isLoading: false }));
+        }
+
+        if (tabName === 'data' && attachmentToOpen) {
+            await tick(); // ensure UI is updated before opening attachment panel
+            if (panelStateStore) {
+                panelStateStore.setActiveInfoPanelTab('attachments');
+            }
+            if (dataViewRef && typeof dataViewRef.handleRequestOpenLexicalDocument === 'function') {
+                dataViewRef.handleRequestOpenLexicalDocument({ detail: { docPath: attachmentToOpen } });
+            } else {
+                console.warn('[ProjectView] dataViewRef or handleRequestOpenLexicalDocument not available');
+            }
         }
     }
 

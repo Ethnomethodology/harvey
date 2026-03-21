@@ -131,12 +131,14 @@ export async function loadHighlightsForFile(filePath, itemType) {
         return;
     }
 
+    const lowerPath = filePath.toLowerCase();
+
     // Determine the correct loading function based on itemType
-    if (itemType === 'doc' && filePath.toLowerCase().endsWith('.pdf')) {
+    if (itemType === 'doc' && lowerPath.endsWith('.pdf')) {
         await loadPdfAnnotationsFromFile(filePath);
     } else if (itemType === 'images') {
         await loadImageAnnotations(filePath);
-    } else if (itemType === 'tables' || itemType === 'table') {
+    } else if (itemType === 'tables' || itemType === 'table' || lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
         await loadTableHighlights(filePath);
     } else if (itemType === 'imported_transcript') {
         // Assuming there's a function to load highlights for imported transcripts

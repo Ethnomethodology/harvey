@@ -607,7 +607,7 @@
         }
     }
 
-    $: if ($project.requestedHighlightId && tableReady) {
+    $: if ($project.requestedHighlightId && tableReady && !isViewingDocument) {
         scrollToHighlight($project.requestedHighlightId);
     }
 
