@@ -902,9 +902,9 @@
 
     <!-- Right Panel: Highlight content (Now a floating panel) -->
     {#if isCommentsPanelOpen}
-        <div class="fixed inset-0 bg-black bg-opacity-50 z-30" on:click={() => isCommentsPanelOpen = false}></div>
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-[10000]" on:click={() => isCommentsPanelOpen = false}></div>
         <div
-            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40 rounded-lg"
+            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-xl z-[10001] rounded-xl"
             transition:slide={{ duration: 300, axis: 'x' }}
         >
             {#if selectedHighlight}

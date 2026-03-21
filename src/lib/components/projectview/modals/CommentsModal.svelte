@@ -22,6 +22,7 @@
     let editingText = '';
     let replyingToCommentId = null;
     let replyingToCommentText = '';
+    let textareaWrapper: HTMLDivElement;
 
     function handleAction(action, comment) {
         if (action === 'delete') {
@@ -32,6 +33,7 @@
         } else if (action === 'reply') {
             replyingToCommentId = comment.id;
             replyingToCommentText = comment.text;
+            setTimeout(() => textareaWrapper?.querySelector('textarea')?.focus(), 0);
         }
     }
 
@@ -73,6 +75,12 @@
 
     function closeModal() {
         dispatch('close');
+    }
+
+    function handleKeydown(e: KeyboardEvent) {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            handleAddComment();
+        }
     }
 </script>
 
@@ -205,17 +213,20 @@
                 </button>
             </div>
         {/if}
+        <div bind:this={textareaWrapper} on:keydown={handleKeydown}>
         <Textarea
             bind:value={newCommentText}
             placeholder={replyingToCommentId ? 'Write a reply...' : 'Add a comment...'}
             rows="3"
             class="bg-white dark:bg-gray-800"
             autocomplete="off"
-            autocorrect="off"
+            spellcheck="false"
         />
+        </div>
     </div>
 
     <svelte:fragment slot="footer">
+        <span class="text-[10px] text-gray-400 dark:text-gray-500 mr-auto">⌘↵ to submit</span>
         <Button color="alternative" on:click={closeModal}>Close</Button>
         <Button 
             color="blue" 
