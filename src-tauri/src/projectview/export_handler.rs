@@ -647,6 +647,12 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
+    // Add resource path to resolve attachments/ relative to the transcript's directory
+    if let Some(parent) = source_path.parent() {
+        pandoc_args.push("--resource-path".to_string());
+        pandoc_args.push(parent.to_string_lossy().to_string());
+    }
+
     info!("[export_transcript_to_docx] Executing Pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
 
     let (mut rx, _child) = get_python_command(&app_handle)?
@@ -1922,6 +1928,12 @@ pub async fn export_document_to_docx<R: Runtime>(
     if let Some(lua_path) = lua_filter_path {
         pandoc_args.push("--lua-filter".to_string());
         pandoc_args.push(lua_path.to_string_lossy().to_string());
+    }
+
+    // Add resource path to resolve attachments/ relative to the document's directory
+    if let Some(parent) = source_path.parent() {
+        pandoc_args.push("--resource-path".to_string());
+        pandoc_args.push(parent.to_string_lossy().to_string());
     }
 
     info!("[export_document_to_docx] Executing Pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
