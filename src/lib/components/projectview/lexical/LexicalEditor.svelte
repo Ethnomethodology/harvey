@@ -807,9 +807,15 @@
                     } else {
                         _insertNodes([tableNode]);
                     }
-                    const newParagraph = _createParagraphNode();
-                    tableNode.insertAfter(newParagraph);
-                    newParagraph.selectStart();
+                    const pBefore = _createParagraphNode();
+                    pBefore.append(_createTextNode('\u00A0')); // Add a non-breaking space to ensure it's selectable? Or just leave empty?
+                    // Usually an empty paragraph is fine in Lexical as it often has a default <br> internally.
+                    // But let's check other usages. Line 810 uses empty paragraph.
+                    
+                    const pAfter = _createParagraphNode();
+                    tableNode.insertBefore(pBefore);
+                    tableNode.insertAfter(pAfter);
+                    pAfter.selectStart();
                 });
                 return true;
             },
