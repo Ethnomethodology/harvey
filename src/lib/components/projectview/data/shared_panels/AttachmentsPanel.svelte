@@ -108,6 +108,9 @@
                 dispatch('requestOpenChart', { chart: attachment });
             } else if (typeof attachment === 'object' && attachment.view_name) {
                 dispatch('requestOpenView', { view: attachment });
+            } else if (typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)) {
+                // Images do not play in the media player
+                return;
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }

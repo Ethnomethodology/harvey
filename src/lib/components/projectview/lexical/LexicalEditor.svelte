@@ -417,6 +417,7 @@
                 });
 
                 dispatch('attachmentadded');
+                triggerRefresh();
             }
         }
     } catch (error) {
@@ -548,6 +549,7 @@
 
   import { get } from 'svelte/store';
   import { project } from '$lib/stores/projectStore.js';
+  import { triggerRefresh } from '$lib/stores/refresherStore.js';
   import { invoke } from '@tauri-apps/api/core';
 
   const dispatch = createEventDispatcher();
@@ -773,7 +775,7 @@
 
             editor.update(() => {
                 const selection = _getSelection();
-                if (selection.isCollapsed()) {
+                if (selection && _isRangeSelection(selection) && selection.isCollapsed()) {
                     const node = selection.anchor.getNode();
                     const parent = node.getParent();
                     if (_isExtendedTextNode(node) && node.getHighlightId()) {
