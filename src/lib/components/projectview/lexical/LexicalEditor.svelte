@@ -679,7 +679,7 @@
             let clickedCell = null;
 
             try {
-                editor.getEditorState().read(() => {
+                editor.read(() => {
                   const domNode = event.target;
                   const targetNode = _getNearestNodeFromDOMNode(domNode);
                   if (targetNode) {
