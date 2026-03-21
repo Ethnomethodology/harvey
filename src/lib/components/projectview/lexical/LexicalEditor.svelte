@@ -42,7 +42,7 @@
   } from '@lexical/code';
   import {
     ListNode, ListItemNode, $isListNode as _isListNode, $isListItemNode as _isListItemNode,
-    INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND,
+    INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, INSERT_CHECK_LIST_COMMAND,
     REMOVE_LIST_COMMAND, registerList
   } from '@lexical/list';
   import {
@@ -94,7 +94,7 @@
     Undo2, Redo2, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, Plus,
     ChevronDown, AlignLeft, AlignCenter, AlignRight, AlignJustify,
     Outdent, Indent, PaintBucket, Eraser, Search,
-    List, ListOrdered, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
+    List, ListOrdered, ListChecks, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
     Highlighter, Baseline, X, ChevronUp, CheckSquare,
     Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
   } from '@lucide/svelte';
@@ -355,6 +355,7 @@
     { value: 'h3',        label: 'Heading 3',     shortcut: `${modLabel}+${optLabel}+3` },
     { value: 'ul',        label: 'Bullet List',   shortcut: `${modLabel}+${optLabel}+4` },
     { value: 'ol',        label: 'Numbered List', shortcut: `${modLabel}+${optLabel}+5` },
+    { value: 'check',     label: 'Check List',    shortcut: '' },
     { value: 'quote',     label: 'Quote',         shortcut: `${modLabel}+${optLabel}+Q` },
     { value: 'code',      label: 'Code Block',    shortcut: `${modLabel}+${optLabel}+C` }
   ];
@@ -365,7 +366,7 @@
     { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
   ];
 
-  const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: CheckSquare, quote: QuoteIcon, code: CodeIcon };
+  const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: ListChecks, quote: QuoteIcon, code: CodeIcon };
 
   const fontOptions = [
     { label: 'Inter', value: 'Inter' },
@@ -642,19 +643,51 @@
             if (event.button !== 0 || !editor || !editor.isEditable()) return false;
             let linkNode = null;
             let clickedCell = null;
+            let listItemNode = null;
+
+            // Check if user clicked on the list-item checkbox specifically
+            const isCheckboxClick = event.target.tagName === 'LI' && event.target.classList.contains('list-item-checkbox');
+            let isInsideCheckboxRect = false;
+
+            if (isCheckboxClick) {
+                // Determine if click was inside the left padding area (where the checkbox pseudo-element usually is)
+                const rect = event.target.getBoundingClientRect();
+                const clickX = event.clientX;
+                const paddingLeft = parseFloat(window.getComputedStyle(event.target).paddingLeft) || 0;
+
+                // If the click is on the left side (within the padding area roughly), it's likely a checkbox toggle click
+                if (clickX >= rect.left && clickX <= rect.left + paddingLeft + 10) {
+                    isInsideCheckboxRect = true;
+                }
+            }
+
             try {
-                editor.read(() => {
+                editor.update(() => {
                   const domNode = event.target;
                   const targetNode = _getNearestNodeFromDOMNode(domNode);
                   if (targetNode) {
                       linkNode = _getNearestNodeOfType(targetNode, LinkNode);
                       clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
+                      listItemNode = _findMatchingParent(targetNode, _isListItemNode) || (_isListItemNode(targetNode) ? targetNode : null);
+
+                      if (isCheckboxClick && isInsideCheckboxRect && listItemNode) {
+                          // Ensure the list item belongs to a checklist
+                          const parentList = listItemNode.getParent();
+                          if (_isListNode(parentList) && parentList.getListType() === 'check') {
+                              listItemNode.toggleChecked();
+                          }
+                      }
                   }
                 });
-            } catch (readError) {
-                console.error("Error reading editor state during CLICK command:", readError);
+            } catch (error) {
+                console.error("Error reading/updating editor state during CLICK command:", error);
                 return false;
             }
+
+            if (isCheckboxClick && isInsideCheckboxRect) {
+                return true;
+            }
+
             if (linkNode) {
               console.log("Clicked on link node:", linkNode.getURL());
               currentModalUrl = linkNode.getURL();
@@ -1278,12 +1311,20 @@
             if (_isHeadingNode(element)) { blockType = element.getTag(); }
             else if (_isListItemNode(element)) {
                 const parentList = _findMatchingParent(element, _isListNode);
-                blockType = parentList ? parentList.getListType() : 'paragraph';
+                if (parentList) {
+                    const listType = parentList.getListType();
+                    blockType = listType === 'bullet' ? 'ul' : listType === 'number' ? 'ol' : listType === 'check' ? 'check' : 'paragraph';
+                } else {
+                    blockType = 'paragraph';
+                }
             }
             else if (_isTableCellNode(element)) {
                 const firstChild = element.getFirstChild();
                 if (_isHeadingNode(firstChild)) { blockType = firstChild.getTag(); }
-                else if (_isListNode(firstChild)) { blockType = firstChild.getListType(); }
+                else if (_isListNode(firstChild)) {
+                    const listType = firstChild.getListType();
+                    blockType = listType === 'bullet' ? 'ul' : listType === 'number' ? 'ol' : listType === 'check' ? 'check' : 'paragraph';
+                }
                 else if (_isQuoteNode(firstChild)) { blockType = 'quote'; }
                 else if (_isCodeNode(firstChild)) { blockType = 'code'; }
                 else { blockType = 'paragraph'; }
@@ -1637,6 +1678,7 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       });
     } else if (type === 'ul') { editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined); }
       else if (type === 'ol') { editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined); }
+      else if (type === 'check') { editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined); }
   }
 
   function clearFormatting() {
@@ -2707,7 +2749,7 @@ $: if (editor && activeLayout) {
             title="Block Type"
             disabled={!editable}
           >
-            {#if blockType === 'h1'}<Heading1 size={14} />{:else if blockType === 'h2'}<Heading2 size={14} />{:else if blockType === 'h3'}<Heading3 size={14} />{:else if blockType === 'ul'}<List size={14} />{:else if blockType === 'ol'}<ListOrdered size={14} />{:else if blockType === 'check'}<CheckSquare size={14} />{:else if blockType === 'quote'}<QuoteIcon size={14} />{:else if blockType === 'code'}<CodeIcon size={14} />{:else}<Type size={14} />{/if}
+            {#if blockType === 'h1'}<Heading1 size={14} />{:else if blockType === 'h2'}<Heading2 size={14} />{:else if blockType === 'h3'}<Heading3 size={14} />{:else if blockType === 'ul'}<List size={14} />{:else if blockType === 'ol'}<ListOrdered size={14} />{:else if blockType === 'check'}<ListChecks size={14} />{:else if blockType === 'quote'}<QuoteIcon size={14} />{:else if blockType === 'code'}<CodeIcon size={14} />{:else}<Type size={14} />{/if}
             <ChevronDown size={12} class="ml-0.5" />
           </button>
           {#if isBlockDropdownOpen}
@@ -3232,6 +3274,49 @@ $: if (editor && activeLayout) {
 
   html.dark .toolbar button.mini-toolbar-button.active {
     @apply bg-blue-500 text-white;
+  }
+
+  /* Checklist item styles */
+  :global(.lexical-content ul.list-none > li.list-item-checkbox) {
+      padding-left: 24px;
+      list-style-type: none;
+      position: relative;
+  }
+
+  :global(.lexical-content ul.list-none > li.list-item-checkbox::before) {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background-color: transparent;
+      cursor: pointer;
+  }
+
+  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]::before) {
+      background-color: #3b82f6; /* Tailwind blue-500 */
+      border-color: #3b82f6;
+  }
+
+  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]::after) {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 6px;
+      width: 5px;
+      height: 10px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      pointer-events: none;
+  }
+
+  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]) {
+      text-decoration: line-through;
+      color: #888;
   }
 
   .lexical-content {
