@@ -750,6 +750,63 @@
           },
           COMMAND_PRIORITY_HIGH
         ),
+        // Exit list on double Enter (pressing Enter on an empty list item)
+        editor.registerCommand(
+          KEY_ENTER_COMMAND,
+          (event) => {
+            if (!editor || !editor.isEditable()) return false;
+            let isEmptyListItem = false;
+            let listItemNode = null;
+            let listNode = null;
+            try {
+              editor.getEditorState().read(() => {
+                const selection = _getSelection();
+                if (!_isRangeSelection(selection) || !selection.isCollapsed()) return;
+                const anchorNode = selection.anchor.getNode();
+                const li = _findMatchingParent(anchorNode, _isListItemNode);
+                if (!li) return;
+                const parent = li.getParent();
+                if (!_isListNode(parent)) return;
+                // Empty if the list item's text content is blank
+                const text = li.getTextContent();
+                if (text === '') {
+                  isEmptyListItem = true;
+                  listItemNode = li;
+                  listNode = parent;
+                }
+              });
+            } catch (e) {
+              console.error('Error reading state during list Enter check:', e);
+              return false;
+            }
+            if (isEmptyListItem) {
+              event.preventDefault();
+              editor.update(() => {
+                const li = listItemNode;
+                const list = listNode;
+                // If it's the only item, replace the whole list with a paragraph
+                const siblings = list.getChildren();
+                const paragraph = _createParagraphNode();
+                if (siblings.length === 1) {
+                  list.replace(paragraph);
+                } else {
+                  // Otherwise remove just this item and insert a paragraph after the list
+                  const nextSibling = list.getNextSibling();
+                  li.remove();
+                  if (nextSibling) {
+                    nextSibling.insertBefore(paragraph);
+                  } else {
+                    list.insertAfter(paragraph);
+                  }
+                }
+                paragraph.select();
+              });
+              return true;
+            }
+            return false;
+          },
+          COMMAND_PRIORITY_NORMAL
+        ),
         editor.registerCommand(
             KEY_ENTER_COMMAND,
             (event) => {
