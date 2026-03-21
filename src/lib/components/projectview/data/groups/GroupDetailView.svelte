@@ -297,6 +297,26 @@
         }
     }
 
+    async function handleGroupDeleted(event) {
+        const deletedGroupId = event.detail;
+        const currentProjectId = $projectStore.id;
+        console.log('[GroupDetailView] Group deleted:', deletedGroupId);
+        isEditGroupModalOpen = false;
+
+        // If the deleted group was the one we're viewing, clear the selection
+        if (groupData && groupData.id === deletedGroupId) {
+            setSelectedGroup(null);
+            groupData = null;
+        }
+
+        // Refresh the sidebar
+        if (currentProjectId) {
+            await updateProjectGroupsList(currentProjectId);
+        }
+
+        updateProjectStoreState({ statusMessage: "Group deleted successfully." });
+    }
+
     function handleFileContextMenu(event, file) {
       event.preventDefault();
       event.stopPropagation();
@@ -694,28 +714,51 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        class="group relative flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                         role="button"
                                         tabindex="0"
-                                        title={file.name}
                                     >
-                                        <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                        <!-- Preview Area -->
+                                        <div class="aspect-square w-full flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-1">
                                             {#if file.file_type === 'image' && file.full_path}
-                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
+                                                <img 
+                                                    src={convertFileSrc(file.full_path)} 
+                                                    alt={file.name} 
+                                                    class="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                                                    loading="lazy"
+                                                />
+                                            {:else if file.file_type === 'video' && file.full_path}
+                                                <video
+                                                    src={convertFileSrc(file.full_path) + '#t=0.1'}
+                                                    preload="metadata"
+                                                    muted
+                                                    playsinline
+                                                    class="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                                                ></video>
                                             {:else}
-                                                <svelte:component this={category.icon} class="w-12 h-12" />
+                                                <div class="transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                    <svelte:component this={category.icon} class="w-12 h-12" />
+                                                </div>
                                             {/if}
                                         </div>
-                                        <p class="text-sm text-center text-gray-700 dark:text-gray-400 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
+
+                                        <!-- Filename Area -->
+                                        <div class="p-2 border-t border-gray-100 dark:border-gray-700/50 bg-white dark:bg-gray-800">
+                                            <p class="text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate text-center" title={file.name}>
+                                                {file.name}
+                                            </p>
+                                        </div>
+
+                                        <!-- Actions (More options) -->
                                         <button
                                             on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300/80 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-400 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            class="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10"
                                             title="More options for {file.name}"
                                         >
-                                            <MoreHorizontal class="w-4 h-4" />
+                                            <MoreHorizontal class="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 {/each}
@@ -823,6 +866,7 @@
     bind:showModal={isEditGroupModalOpen}
     groupData={groupData}
     on:groupUpdated={handleGroupDetailsUpdated}
+    on:groupDeleted={handleGroupDeleted}
     on:close={() => isEditGroupModalOpen = false}
 />
 
@@ -888,11 +932,5 @@
     /* Ensure grid items don't overflow their container excessively if names are too long */
     .grid div > p {
         max-width: 100%; /* Or specific width like '8rem' or '120px' */
-    }
-    .thumbnail-item {
-        position: relative; /* For absolute positioning of the context menu button */
-    }
-     .thumbnail-item:hover .opacity-0.group-hover\:opacity-100 {
-        opacity: 1;
     }
 </style>

@@ -1,9 +1,9 @@
 <script>
     import { createEventDispatcher, onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
-    import { message } from '@tauri-apps/plugin-dialog';
+    import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { PencilLine } from '@lucide/svelte';
+    import { PencilLine, Trash2 } from '@lucide/svelte';
 
     export let showModal = false;
     export let groupData = null; // Expected: { id, project_id, name, description }
@@ -67,6 +67,34 @@
         }
     }
 
+    async function handleDelete() {
+        if (!groupData || !groupData.id || !groupData.project_id) return;
+
+        const confirmed = await confirm(
+            `Are you sure you want to delete the group "${groupData.name}"? This action cannot be undone.`,
+            { title: 'Confirm Delete Group', type: 'warning' }
+        );
+
+        if (!confirmed) return;
+
+        isLoading = true;
+        errorMessage = '';
+
+        try {
+            await invoke('delete_project_group', {
+                projectId: groupData.project_id,
+                groupId: groupData.id
+            });
+            dispatch('groupDeleted', groupData.id);
+            closeModal();
+        } catch (err) {
+            console.error("Error deleting group:", err);
+            errorMessage = typeof err === 'string' ? err : "Failed to delete group.";
+        } finally {
+            isLoading = false;
+        }
+    }
+
     function closeModal() {
         // Fields are reset by the $: block when showModal becomes false if groupData is also cleared by parent,
         // or when new groupData is passed upon reopening.
@@ -124,6 +152,19 @@
     </div>
 
     <svelte:fragment slot="footer">
+        <div class="flex-grow">
+            <Button
+                color="red"
+                outline
+                on:click={handleDelete}
+                disabled={isLoading}
+                title="Delete this group"
+                class="gap-2"
+            >
+                <Trash2 class="w-4 h-4" />
+                Delete Group
+            </Button>
+        </div>
         <Button
             color="alternative"
             on:click={closeModal}
