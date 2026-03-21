@@ -14,10 +14,11 @@
     KEY_ENTER_COMMAND,
     RootNode, ParagraphNode, TextNode, LineBreakNode,
     $getNearestNodeFromDOMNode as _getNearestNodeFromDOMNode,
-    $insertNodes as _insertNodes,
     KEY_TAB_COMMAND,
     $normalizeSelection__EXPERIMENTAL as _normalizeSelection,
-    createCommand
+    createCommand,
+    $isNodeSelection as _isNodeSelection,
+    $createNodeSelection as _createNodeSelection
   } from 'lexical';
 
   import {
@@ -81,7 +82,7 @@
   } from '$lib/nodes/ExtendedTextNode.js';
 
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
-  import { ImageNode, $createImageNode as _createImageNode } from '$lib/nodes/ImageNode.js';
+  import { ImageNode, $createImageNode as _createImageNode, $isImageNode as _isImageNode } from '$lib/nodes/ImageNode.js';
 
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
@@ -97,7 +98,8 @@
     Outdent, Indent, PaintBucket, Eraser, Search,
     List, ListOrdered, ListChecks, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
     Highlighter, Baseline, X, ChevronUp, CheckSquare,
-    Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
+    Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play,
+    CaseSensitive, Subscript as SubscriptIcon, Superscript as SuperscriptIcon
   } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
@@ -169,6 +171,9 @@
   let isInsertDropdownOpen = false;
   let insertDropdownRef;
 
+  let isTextFormatDropdownOpen = false;
+  let textFormatDropdownRef;
+
   let showInsertTableModal = false;
 
   let showTableCellMenu = false;
@@ -186,6 +191,12 @@
   let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
 
   let previousDocumentHighlightsIds = new Set();
+  
+  let selectedImageKey = null;
+  let imageResizerRect = null;
+  let isResizingImage = false;
+  let imageResizeDirection = null; // 'nw', 'ne', 'sw', 'se'
+  let imageResizeStartParams = null; // { width, height, x, y }
 
   let isResizing = false;
   let resizeDirection = null;
@@ -245,7 +256,8 @@
       highlightDropdownRef,
       searchOptionsDropdownRef,
       fontDropdownRef,
-      fontSizeDropdownRef
+      fontSizeDropdownRef,
+      textFormatDropdownRef
     ];
 
     let clickedInside = false;
@@ -270,6 +282,86 @@
     showSearchOptionsDropdown = false;
     isFontDropdownOpen = false;
     isFontSizeDropdownOpen = false;
+    isTextFormatDropdownOpen = false;
+  }
+
+  function updateImageResizer() {
+    if (!selectedImageKey || !editor || !editorWrapper) {
+      imageResizerRect = null;
+      return;
+    }
+    const domElement = editor.getElementByKey(selectedImageKey);
+    if (domElement) {
+        const img = domElement.querySelector('img');
+        if (img) {
+             const rect = img.getBoundingClientRect();
+             const wrapperRect = editorWrapper.getBoundingClientRect();
+             imageResizerRect = {
+                 top: rect.top - wrapperRect.top + editorWrapper.scrollTop,
+                 left: rect.left - wrapperRect.left + editorWrapper.scrollLeft,
+                 width: rect.width,
+                 height: rect.height
+             };
+             return;
+        }
+    }
+    imageResizerRect = null;
+  }
+
+  function handleImageResizeStart(event, direction) {
+    if (!editable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    isResizingImage = true;
+    imageResizeDirection = direction;
+    imageResizeStartParams = {
+        width: imageResizerRect.width,
+        height: imageResizerRect.height,
+        x: event.clientX,
+        y: event.clientY,
+        ratio: imageResizerRect.width / imageResizerRect.height
+    };
+    window.addEventListener('pointermove', handleImageResizeMove);
+    window.addEventListener('pointerup', handleImageResizeEnd);
+  }
+
+  function handleImageResizeMove(event) {
+    if (!isResizingImage || !imageResizeStartParams) return;
+    event.preventDefault();
+    
+    const deltaX = event.clientX - imageResizeStartParams.x;
+    let newWidth = imageResizeStartParams.width;
+    
+    if (imageResizeDirection === 'se' || imageResizeDirection === 'ne') {
+        newWidth += deltaX;
+    } else if (imageResizeDirection === 'sw' || imageResizeDirection === 'nw') {
+        newWidth -= deltaX;
+    }
+    
+    newWidth = Math.max(50, newWidth);
+    const newHeight = newWidth / imageResizeStartParams.ratio;
+    
+    imageResizerRect = {
+        ...imageResizerRect,
+        width: newWidth,
+        height: newHeight
+    };
+  }
+
+  function handleImageResizeEnd(event) {
+    if (!isResizingImage) return;
+    isResizingImage = false;
+    window.removeEventListener('pointermove', handleImageResizeMove);
+    window.removeEventListener('pointerup', handleImageResizeEnd);
+    
+    if (editor && selectedImageKey && imageResizerRect) {
+        editor.update(() => {
+            const node = _getNodeByKey(selectedImageKey);
+            if (_isImageNode(node)) {
+                node.setWidthAndHeight(Math.round(imageResizerRect.width), Math.round(imageResizerRect.height));
+            }
+        });
+    }
   }
 
   function toggleBlockDropdown() {
@@ -289,6 +381,43 @@
     const nextState = !isInsertDropdownOpen;
     closeAllDropdowns();
     isInsertDropdownOpen = nextState;
+  }
+
+  function toggleTextFormatDropdown() {
+    if (!editable) return;
+    const nextState = !isTextFormatDropdownOpen;
+    closeAllDropdowns();
+    isTextFormatDropdownOpen = nextState;
+  }
+
+  function applyTextFormat(formatType) {
+    if (!editor || !isReady || !editor.isEditable()) return;
+    
+    if (['strikethrough', 'subscript', 'superscript'].includes(formatType)) {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, formatType);
+    } else {
+      editor.update(() => {
+        const selection = _getSelection();
+        if (_isRangeSelection(selection)) {
+          const nodes = selection.extract();
+          nodes.forEach(node => {
+            if (_isTextNode(node)) {
+              let text = node.getTextContent();
+              if (formatType === 'uppercase') text = text.toUpperCase();
+              else if (formatType === 'lowercase') text = text.toLowerCase();
+              else if (formatType === 'capitalize') {
+                text = text.replace(/\b\w/g, c => c.toUpperCase());
+              }
+              else if (formatType === 'sentencecase') {
+                text = text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, c => c.toUpperCase());
+              }
+              node.setTextContent(text);
+            }
+          });
+        }
+      });
+    }
+    isTextFormatDropdownOpen = false;
   }
 
   function openInsertTableDialog() {
@@ -697,7 +826,23 @@
         editor.registerUpdateListener(({ editorState }) => {
             if (isReady) {
                 try {
-                    editorState.read(updateToolbarState);
+                    editorState.read(() => {
+                        updateToolbarState();
+                        const selection = _getSelection();
+                        let newSelectedImageKey = null;
+                        if (_isNodeSelection(selection)) {
+                            const nodes = selection.getNodes();
+                            if (nodes.length === 1 && _isImageNode(nodes[0])) {
+                                newSelectedImageKey = nodes[0].getKey();
+                            }
+                        }
+                        if (newSelectedImageKey !== selectedImageKey) {
+                            selectedImageKey = newSelectedImageKey;
+                            updateImageResizer();
+                        } else if (selectedImageKey) {
+                            updateImageResizer();
+                        }
+                    });
                 } catch (readError) {
                     console.error("Error reading editor state in update listener:", readError);
                 }
@@ -752,6 +897,7 @@
             if (event.button !== 0 || !editor || !editor.isEditable()) return false;
             let linkNode = null;
             let clickedCell = null;
+            let clickedImageKey = null;
 
             try {
                 editor.read(() => {
@@ -760,11 +906,22 @@
                   if (targetNode) {
                       linkNode = _getNearestNodeOfType(targetNode, LinkNode);
                       clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
+                      if (_isImageNode(targetNode)) {
+                          clickedImageKey = targetNode.getKey();
+                      }
                   }
                 });
             } catch (readError) {
                 console.error("Error reading editor state during CLICK command:", readError);
                 return false;
+            }
+            if (clickedImageKey) {
+                editor.update(() => {
+                    const nodeSelection = _createNodeSelection();
+                    nodeSelection.add(clickedImageKey);
+                    _setSelection(nodeSelection);
+                });
+                return true;
             }
             if (linkNode) {
               console.log("Clicked on link node:", linkNode.getURL());
@@ -3007,7 +3164,41 @@ $: if (editor && activeLayout) {
         <button class="mini-toolbar-button underline" on:click={() => formatText('underline')} class:active={isUnderline} title="Underline ({modLabel}+U)" disabled={!editable}><UnderlineIcon size={14} /></button>
       {/if}
       {#if toolbarConfig.strikethrough}
-        <button class="mini-toolbar-button line-through" on:click={() => formatText('strikethrough')} class:active={isStrikethrough} title="Strikethrough" disabled={!editable}><StrikethroughIcon size={14} /></button>
+        <div class="relative" bind:this={textFormatDropdownRef}>
+          <button
+            class="mini-toolbar-button flex items-center"
+            on:click={toggleTextFormatDropdown}
+            title="Text Formatting"
+            disabled={!editable}
+            class:active={isStrikethrough || isTextFormatDropdownOpen}
+          >
+            <CaseSensitive size={15} strokeWidth={1.5} />
+            <ChevronDown size={12} strokeWidth={1.5} class="ml-1" />
+          </button>
+          {#if isTextFormatDropdownOpen}
+            <div class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col">
+              <div class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('uppercase')} role="menuitem" tabindex="-1">Uppercase</div>
+              <div class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('lowercase')} role="menuitem" tabindex="-1">Lowercase</div>
+              <div class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('sentencecase')} role="menuitem" tabindex="-1">Sentencecase</div>
+              <div class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('capitalize')} role="menuitem" tabindex="-1">Capitalize</div>
+              
+              <div class="w-full h-px bg-gray-200 dark:bg-gray-600 my-1"></div>
+              
+              <div class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('strikethrough')} role="menuitem" tabindex="-1">
+                 <StrikethroughIcon size={14} />
+                 <span>Strikethrough</span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('subscript')} role="menuitem" tabindex="-1">
+                 <SubscriptIcon size={14} />
+                 <span>Subscript</span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm" on:click={() => applyTextFormat('superscript')} role="menuitem" tabindex="-1">
+                 <SuperscriptIcon size={14} />
+                 <span>Superscript</span>
+              </div>
+            </div>
+          {/if}
+        </div>
       {/if}
       {#if toolbarConfig.insertMenu}
         <div class="separator"></div>
@@ -3267,6 +3458,18 @@ $: if (editor && activeLayout) {
     ></div>
 
     <div class="resizer-line" style={resizerLineStyle}></div>
+    
+    {#if selectedImageKey && imageResizerRect}
+      <div 
+        class="absolute border-2 border-blue-500 box-border pointer-events-none z-[100]"
+        style="top: {imageResizerRect.top}px; left: {imageResizerRect.left}px; width: {imageResizerRect.width}px; height: {imageResizerRect.height}px;"
+      >
+        <div class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nwse-resize pointer-events-auto shadow-sm" style="top: -6px; left: -6px;" on:pointerdown={(e) => handleImageResizeStart(e, 'nw')}></div>
+        <div class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nesw-resize pointer-events-auto shadow-sm" style="top: -6px; right: -6px;" on:pointerdown={(e) => handleImageResizeStart(e, 'ne')}></div>
+        <div class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nesw-resize pointer-events-auto shadow-sm" style="bottom: -6px; left: -6px;" on:pointerdown={(e) => handleImageResizeStart(e, 'sw')}></div>
+        <div class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nwse-resize pointer-events-auto shadow-sm" style="bottom: -6px; right: -6px;" on:pointerdown={(e) => handleImageResizeStart(e, 'se')}></div>
+      </div>
+    {/if}
 
     {#if showPlayButton}
       <button
