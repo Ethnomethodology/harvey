@@ -253,20 +253,26 @@
     }
 
     if (!clickedInside) {
-      isBlockDropdownOpen = false;
-      isInsertDropdownOpen = false;
-      isAlignDropdownOpen = false;
-      isColorDropdownOpen = false;
-      isHighlightDropdownOpen = false;
-      showSearchOptionsDropdown = false;
-      isFontDropdownOpen = false;
-      isFontSizeDropdownOpen = false;
+      closeAllDropdowns();
     }
+  }
+
+  function closeAllDropdowns() {
+    isBlockDropdownOpen = false;
+    isInsertDropdownOpen = false;
+    isAlignDropdownOpen = false;
+    isColorDropdownOpen = false;
+    isHighlightDropdownOpen = false;
+    showSearchOptionsDropdown = false;
+    isFontDropdownOpen = false;
+    isFontSizeDropdownOpen = false;
   }
 
   function toggleBlockDropdown() {
     if (!editable) return;
-    isBlockDropdownOpen = !isBlockDropdownOpen;
+    const nextState = !isBlockDropdownOpen;
+    closeAllDropdowns();
+    isBlockDropdownOpen = nextState;
   }
 
   function selectBlockType(type) {
@@ -275,8 +281,10 @@
   }
 
   function toggleInsertDropdown() {
-      if (!editable) return;
-      isInsertDropdownOpen = !isInsertDropdownOpen;
+    if (!editable) return;
+    const nextState = !isInsertDropdownOpen;
+    closeAllDropdowns();
+    isInsertDropdownOpen = nextState;
   }
 
   function openInsertTableDialog() {
@@ -392,7 +400,9 @@
   let alignmentDropdownRef;
   function toggleAlignDropdown() {
     if (!editable) return;
-    isAlignDropdownOpen = !isAlignDropdownOpen;
+    const nextState = !isAlignDropdownOpen;
+    closeAllDropdowns();
+    isAlignDropdownOpen = nextState;
   }
 
   let selectedFontFamily = 'Inter';
@@ -401,7 +411,9 @@
 
   function toggleFontDropdown() {
     if (!editable) return;
-    isFontDropdownOpen = !isFontDropdownOpen;
+    const nextState = !isFontDropdownOpen;
+    closeAllDropdowns();
+    isFontDropdownOpen = nextState;
   }
 
   function applyFontFamily(fontFamily) {
@@ -416,7 +428,9 @@
 
   function toggleFontSizeDropdown() {
     if (!editable) return;
-    isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
+    const nextState = !isFontSizeDropdownOpen;
+    closeAllDropdowns();
+    isFontSizeDropdownOpen = nextState;
   }
 
   function applyFontSize(fontSize) {
@@ -458,14 +472,18 @@
   let highlightDropdownRef;
   function toggleHighlightDropdown() {
     if (!editable) return;
-    isHighlightDropdownOpen = !isHighlightDropdownOpen;
+    const nextState = !isHighlightDropdownOpen;
+    closeAllDropdowns();
+    isHighlightDropdownOpen = nextState;
   }
 
   let isColorDropdownOpen = false;
   let colorDropdownRef;
   function toggleColorDropdown() {
     if (!editable) return;
-    isColorDropdownOpen = !isColorDropdownOpen;
+    const nextState = !isColorDropdownOpen;
+    closeAllDropdowns();
+    isColorDropdownOpen = nextState;
   }
 
   import { get } from 'svelte/store';
@@ -1637,6 +1655,7 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
 
   async function toggleLink() {
       if (!editor || !editable) return;
+      closeAllDropdowns();
       closeTableCellMenu(false);
       currentModalUrl = ''; isEditingLink = false;
       editor.focus(); await tick();
@@ -2349,7 +2368,9 @@ function executeSearch(termToSearch, options = {}) {
 }
 
 function toggleSearchOptionsDropdown() {
-  showSearchOptionsDropdown = !showSearchOptionsDropdown;
+  const nextState = !showSearchOptionsDropdown;
+  closeAllDropdowns();
+  showSearchOptionsDropdown = nextState;
 }
 
 function openFindReplaceModal() {
