@@ -387,10 +387,16 @@
         if (selected) {
             const projectStoreState = get(project);
 
+            let relPath = documentPath;
+            if (documentPath.startsWith(projectStoreState.baseDirectory)) {
+                relPath = documentPath.substring(projectStoreState.baseDirectory.length);
+                relPath = relPath.replace(/\\/g, '/').replace(/^\//, '');
+            }
+
             // Upload to attachments directory
             const uploadedPath = await invoke('upload_attachment', {
                 projectXmlPathStr: projectStoreState.xmlPath,
-                assetRelativePath: documentPath,
+                assetRelativePath: relPath,
                 sourceFilePathStr: selected
             });
 
@@ -2384,10 +2390,15 @@ $: handleDocumentHighlightsChange(documentHighlights);
                   let dirPath = parts.join(separator);
                   if (dirPath && !dirPath.endsWith(separator)) dirPath += separator;
 
-                  let baseDir = $project.baseDirectory;
-                  if (baseDir && !baseDir.endsWith(separator)) baseDir += separator;
-
-                  const absDirPath = `${baseDir}${dirPath}attachments${separator}`;
+                  let absDirPath;
+                  // If documentPath is already absolute, use it directly. Otherwise, prepend baseDir.
+                  if (documentPath.startsWith($project.baseDirectory)) {
+                      absDirPath = `${dirPath}attachments${separator}`;
+                  } else {
+                      let baseDir = $project.baseDirectory;
+                      if (baseDir && !baseDir.endsWith(separator)) baseDir += separator;
+                      absDirPath = `${baseDir}${dirPath}attachments${separator}`;
+                  }
 
                   for (const img of images) {
                       const filename = img.getAttribute('data-filename');
