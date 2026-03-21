@@ -6,6 +6,7 @@
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
+    import { triggerRefresh } from '$lib/stores/refresherStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -321,8 +322,10 @@
                     notificationStore.add('View saved successfully.', 'success');
                 }
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config });
+                triggerRefresh();
             } else {
                 dispatch('viewSaved', { viewName, viewType: selectedViewType, config, isAutoSave: true });
+                triggerRefresh();
             }
             await loadExistingViews();
         } catch (error) {
@@ -360,6 +363,7 @@
             isEditingExisting = false;
             await loadExistingViews();
             dispatch('viewDeleted', { viewName: targetName });
+            triggerRefresh();
         } catch (error) {
             console.error('Failed to delete view:', error);
             notificationStore.add('Failed to delete view.', 'error');

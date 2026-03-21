@@ -1,9 +1,10 @@
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
-    import { project } from '$lib/stores/projectStore.js';
+    import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
+    import { triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
     import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from 'lucide-svelte';
@@ -171,6 +172,7 @@
             }
             dispatch('viewSaved');
             dispatch('requestDeleteView', { viewName: view.view_name });
+            triggerRefresh();
         } catch (error) {
             console.error('Failed to delete view via attachments panel:', error);
             notificationStore.add('Failed to delete view.', 'error');
