@@ -507,14 +507,16 @@
                             </div>
                         {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-red-500 dark:text-red-400 p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded" title="Delete Image" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
-                                    <Trash2 class="w-4 h-4" />
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Image" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
+                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
                                 </button>
                             </div>
                         {:else}
-                            <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(originalIndex)}>
-                                <PlayCircle class="w-4 h-4" />
-                            </button>
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Audio" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
+                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
+                                </button>
+                            </div>
                         {/if}
                     </li>
                 {/each}

@@ -2819,7 +2819,19 @@ pub async fn stop_live_transcription(
                             .and_then(|json| serde_json::from_str(json).ok())
                             .unwrap_or_else(Vec::new);
 
-                        let attachments_json_string = json!(audio_files).to_string();
+                        // Load existing attachments
+                        let mut existing_attachments: Vec<String> = custom_fields.iter()
+                            .find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments"))
+                            .and_then(|f| f.get("value").and_then(|v| v.as_str()))
+                            .and_then(|v| serde_json::from_str(v).ok())
+                            .unwrap_or_else(Vec::new);
+
+                        // Append new audio files to existing attachments
+                        existing_attachments.extend(audio_files.clone());
+                        existing_attachments.sort();
+                        existing_attachments.dedup();
+
+                        let attachments_json_string = json!(existing_attachments).to_string();
 
                         if let Some(existing_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
                             if let Some(obj) = existing_field.as_object_mut() {
