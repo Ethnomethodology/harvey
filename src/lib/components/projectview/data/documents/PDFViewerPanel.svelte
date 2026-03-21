@@ -7,7 +7,7 @@
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2 } from 'lucide-svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2 } from '@lucide/svelte';
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();

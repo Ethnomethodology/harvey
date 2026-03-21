@@ -17,7 +17,7 @@
         Link2,
         TextInitial,
         Star
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
     import ProgressIcon from './icons/ProgressIcon.svelte';
 
     export let colSchema = {};

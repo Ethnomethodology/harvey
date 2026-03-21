@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
 	import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
-	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, AudioLines, Rows2, ChevronDown } from 'lucide-svelte';
+	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, AudioLines, Rows2, ChevronDown } from '@lucide/svelte';
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';

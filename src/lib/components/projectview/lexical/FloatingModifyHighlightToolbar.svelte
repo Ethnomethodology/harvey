@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/lexical/FloatingModifyHighlightToolbar.svelte -->
 <script>
-  import { Trash2 } from 'lucide-svelte';
+  import { Trash2 } from '@lucide/svelte';
   export let editor;
   export let showToolbar;
   export let toolbarPosition;

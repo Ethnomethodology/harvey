@@ -3,7 +3,7 @@
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { project } from '$lib/stores/projectStore.js';
     import { createEventDispatcher } from 'svelte';
-    import { Sun, Moon, Monitor } from 'lucide-svelte';
+    import { Sun, Moon, Monitor } from '@lucide/svelte';
     import { Button } from 'flowbite-svelte';
 
     const dispatch = createEventDispatcher();

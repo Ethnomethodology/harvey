@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
     import { Button, Select, Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List, ChevronDown } from 'lucide-svelte';
+    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List, ChevronDown } from '@lucide/svelte';
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';

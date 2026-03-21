@@ -14,7 +14,7 @@
     	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
     	import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
     	import FindReplaceModal from '../modals/FindReplaceModal.svelte';
-        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X, ChevronDown } from 'lucide-svelte';
+        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X, ChevronDown } from '@lucide/svelte';
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;

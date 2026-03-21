@@ -2,7 +2,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { Modal, Button, Checkbox } from 'flowbite-svelte';
-    import { Sheet } from 'lucide-svelte';
+    import { Sheet } from '@lucide/svelte';
 
     export let showModal = false;
     export let sheets = [];

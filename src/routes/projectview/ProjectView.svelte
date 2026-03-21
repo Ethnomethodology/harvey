@@ -89,7 +89,7 @@
         MessageSquareText,
         Sheet,
         Image as ImageIcon,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import DataTopBar from "$lib/components/projectview/data/DataTopBar.svelte";
     import TranscriptionsTopBar from "$lib/components/projectview/transcriptions/TopBar.svelte";
     import SimpleTopBar from "$lib/components/projectview/shared/SimpleTopBar.svelte";

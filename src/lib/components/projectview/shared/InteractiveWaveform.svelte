@@ -4,7 +4,7 @@
 	import { project } from '$lib/stores/projectStore.js';
 	import { transcriptStore, updatePlayerTime } from '$lib/stores/transcriptStore.js';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { ZoomIn, ZoomOut } from 'lucide-svelte';
+	import { ZoomIn, ZoomOut } from '@lucide/svelte';
 
 	export let isTrimming = false;
 	export let trimStartTime = 0;

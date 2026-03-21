@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
-    import { MessageSquare, Code, Check, Square, Circle, Info } from 'lucide-svelte';
+    import { MessageSquare, Code, Check, Square, Circle, Info } from '@lucide/svelte';
 
     const dispatch = createEventDispatcher();
 

@@ -4,7 +4,7 @@
 
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { Plus, Trash2, X, Sheet } from 'lucide-svelte';
+    import { Plus, Trash2, X, Sheet } from '@lucide/svelte';
     import { 
         Input, 
         Label, 

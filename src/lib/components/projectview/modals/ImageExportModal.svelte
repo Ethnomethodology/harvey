@@ -12,7 +12,7 @@
         Helper,
         Checkbox
     } from 'flowbite-svelte';
-    import { Share, FolderOpen, X, Image } from 'lucide-svelte';
+    import { Share, FolderOpen, X, Image } from '@lucide/svelte';
 
     export let showModal = false;
     export let defaultFileName = 'export.png';

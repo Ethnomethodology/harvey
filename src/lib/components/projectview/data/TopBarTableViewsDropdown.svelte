@@ -4,7 +4,7 @@
     import { refresher } from '$lib/stores/refresherStore.js';
     import { get } from 'svelte/store';
     import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { ChevronDown, ChevronRight, Sheet, Table2, LayoutGrid, FolderClosed, FileText } from 'lucide-svelte';
+    import { ChevronDown, ChevronRight, Sheet, Table2, LayoutGrid, FolderClosed, FileText } from '@lucide/svelte';
     import { createEventDispatcher, onMount } from 'svelte';
 
     const dispatch = createEventDispatcher();

@@ -11,7 +11,7 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
-    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from 'lucide-svelte';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 

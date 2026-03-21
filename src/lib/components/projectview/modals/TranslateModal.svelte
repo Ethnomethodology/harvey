@@ -10,7 +10,7 @@
         AlertTriangle, 
         Languages, 
         X 
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';

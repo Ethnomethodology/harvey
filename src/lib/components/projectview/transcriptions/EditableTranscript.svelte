@@ -17,7 +17,7 @@
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
     import { LinkNode } from '@lexical/link';
     import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
-    import { SquarePen, Save, ChevronUp, ChevronDown } from 'lucide-svelte';
+    import { SquarePen, Save, ChevronUp, ChevronDown } from '@lucide/svelte';
 
 
     /* --- Keyboard Shortcut --- */

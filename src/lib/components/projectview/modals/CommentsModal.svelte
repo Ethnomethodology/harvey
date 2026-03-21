@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
     import { v4 as uuidv4 } from 'uuid';
-    import { X, MoreVertical, MessageCircle, Reply, Pencil, Trash2, Clock } from 'lucide-svelte';
+    import { X, MoreVertical, MessageCircle, Reply, Pencil, Trash2, Clock } from '@lucide/svelte';
     import { 
         Modal, 
         Button, 

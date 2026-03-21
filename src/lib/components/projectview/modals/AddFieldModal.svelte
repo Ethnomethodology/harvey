@@ -13,7 +13,7 @@
     Helper, 
     Alert
   } from 'flowbite-svelte';
-  import { ChevronsLeftRightEllipsis, X, AlertTriangle, Info, Database, PlusSquare, Crosshair } from 'lucide-svelte';
+  import { ChevronsLeftRightEllipsis, X, AlertTriangle, Info, Database, PlusSquare, Crosshair } from '@lucide/svelte';
 
   export let showModal = false;
   export let currentItemType = ''; // e.g., "doc", "image", "project"

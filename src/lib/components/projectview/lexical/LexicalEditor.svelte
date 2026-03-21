@@ -97,7 +97,7 @@
     List, ListOrdered, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
     Highlighter, Baseline, X, ChevronUp, CheckSquare,
     Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
-  } from 'lucide-svelte';
+  } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
   export let placeholder = 'Enter text...';

@@ -2,7 +2,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
     import { Modal, Button } from 'flowbite-svelte';
-    import { AlertTriangle } from 'lucide-svelte';
+    import { AlertTriangle } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let itemName = 'the current item';

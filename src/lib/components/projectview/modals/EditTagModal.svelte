@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { Tag, Trash2 } from 'lucide-svelte';
+    import { Tag, Trash2 } from '@lucide/svelte';
 
     export let showModal = false;
     export let tag = null;

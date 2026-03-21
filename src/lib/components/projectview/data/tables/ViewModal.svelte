@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper, Accordion, AccordionItem, Range, Checkbox, MultiSelect } from 'flowbite-svelte';
-    import { Table2, LayoutGrid, Database, Palette, Plus, FolderOpen, Trash2, X, Filter } from 'lucide-svelte';
+    import { Table2, LayoutGrid, Database, Palette, Plus, FolderOpen, Trash2, X, Filter } from '@lucide/svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
@@ -34,7 +34,7 @@
         return relative.replace(/\\/g, '/').replace(/^\//, '');
     })();
 
-    import { FileText } from 'lucide-svelte';
+    import { FileText } from '@lucide/svelte';
 
     const viewTypes = [
         { value: 'partial', name: 'Partial Table View', description: 'Select specific columns and apply filters', icon: 'Table2' },

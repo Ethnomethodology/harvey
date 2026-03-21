@@ -2,7 +2,7 @@
 <script>
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { ExternalLink, Link as LinkIcon, Trash2 } from 'lucide-svelte';
+  import { ExternalLink, Link as LinkIcon, Trash2 } from '@lucide/svelte';
   import { 
     Modal, 
     Button, 

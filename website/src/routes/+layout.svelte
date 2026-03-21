@@ -2,7 +2,7 @@
     import "../app.css";
     import { base } from '$app/paths';
     import { page } from '$app/stores';
-    import { Github, Menu, X } from 'lucide-svelte';
+    import { Github, Menu, X } from '@lucide/svelte';
 
     let isMenuOpen = false;
 

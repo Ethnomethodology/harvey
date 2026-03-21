@@ -3,7 +3,7 @@
   import { createEventDispatcher } from 'svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
   import { Modal, Button } from 'flowbite-svelte';
-  import { Settings } from 'lucide-svelte';
+  import { Settings } from '@lucide/svelte';
 
   export let showModal = false;
 

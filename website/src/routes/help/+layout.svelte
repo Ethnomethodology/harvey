@@ -2,7 +2,7 @@
     import { page } from '$app/stores';
     import { base } from '$app/paths';
     import { onMount } from 'svelte';
-    import { Book, Cog, Database, Mic, Tag, Edit, Languages, MessageSquare, Search, X } from 'lucide-svelte';
+    import { Book, Cog, Database, Mic, Tag, Edit, Languages, MessageSquare, Search, X } from '@lucide/svelte';
 
     // Sidebar navigation structure (must match desktop app order)
     const sidebarTabs = [

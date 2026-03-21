@@ -18,7 +18,7 @@
         PencilLine,
         Plus,
         Minus
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';

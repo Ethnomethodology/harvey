@@ -17,7 +17,7 @@ import { Modal } from 'flowbite-svelte';
         TableBodyCell,
         Alert
     } from 'flowbite-svelte';
-    import { Info } from 'lucide-svelte';
+    import { Info } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let previewData = { fields: [], headers: [], data: [] };

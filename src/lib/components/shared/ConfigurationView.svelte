@@ -14,7 +14,7 @@
 		moveModelsAndUpdateLocation
 	} from '$lib/services/configureActions';
 	import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
-	import { FolderOpen, Settings2, MonitorCog, MessageSquareText, Users, Languages, SlidersHorizontal, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-svelte';
+	import { FolderOpen, Settings2, MonitorCog, MessageSquareText, Users, Languages, SlidersHorizontal, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';

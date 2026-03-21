@@ -13,7 +13,7 @@
         Checkbox,
         Alert
     } from 'flowbite-svelte';
-    import { Mic, Settings2, AlertTriangle, Info } from 'lucide-svelte';
+    import { Mic, Settings2, AlertTriangle, Info } from '@lucide/svelte';
 
     export let showModal = false;
 

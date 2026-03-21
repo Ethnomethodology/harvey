@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
-    import { CheckCircle, AlertTriangle, MessageSquareText, Users, Languages } from 'lucide-svelte';
+    import { CheckCircle, AlertTriangle, MessageSquareText, Users, Languages } from '@lucide/svelte';
 
     export let isBusy = false;
 

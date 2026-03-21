@@ -1,7 +1,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
     import { Modal, Button } from 'flowbite-svelte';
-    import { RefreshCw } from 'lucide-svelte';
+    import { RefreshCw } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let fileName = 'the selected file';

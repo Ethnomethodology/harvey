@@ -18,7 +18,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
-    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from 'lucide-svelte';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from '@lucide/svelte';
 
 
     const dispatch = createEventDispatcher();

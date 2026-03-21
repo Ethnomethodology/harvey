@@ -7,7 +7,7 @@
     import { triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from 'lucide-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;

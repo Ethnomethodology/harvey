@@ -6,7 +6,7 @@ order: 4
 ---
 
 <script>
-    import { CirclePlus } from 'lucide-svelte';
+    import { CirclePlus } from '@lucide/svelte';
 </script>
 
 1.  **Initial Configuration**

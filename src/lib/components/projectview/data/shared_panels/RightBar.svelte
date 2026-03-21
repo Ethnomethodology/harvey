@@ -3,7 +3,7 @@
     import { createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { FileCode, Bookmark, Paperclip } from 'lucide-svelte';
+    import { FileCode, Bookmark, Paperclip } from '@lucide/svelte';
 
     export let itemType = null;
 

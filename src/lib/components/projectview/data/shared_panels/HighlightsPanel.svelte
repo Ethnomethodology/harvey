@@ -10,7 +10,7 @@
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
-    import { Tags, MessageCircle, MoreVertical, Trash2 } from 'lucide-svelte';
+    import { Tags, MessageCircle, MoreVertical, Trash2 } from '@lucide/svelte';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
 
     export let itemPath = null;

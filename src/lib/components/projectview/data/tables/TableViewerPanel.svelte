@@ -48,7 +48,7 @@
         PieChart,
         ChartBar,
         Table2
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
     import { mount, createEventDispatcher } from 'svelte';
     import { openUrl } from '@tauri-apps/plugin-opener';
     import { invoke } from '@tauri-apps/api/core';

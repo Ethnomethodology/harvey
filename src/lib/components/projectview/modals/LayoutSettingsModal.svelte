@@ -10,7 +10,7 @@
         Select, 
         Helper
     } from 'flowbite-svelte';
-    import { LayoutDashboard, X, Waves } from 'lucide-svelte';
+    import { LayoutDashboard, X, Waves } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX

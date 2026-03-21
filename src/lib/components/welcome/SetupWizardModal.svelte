@@ -24,7 +24,7 @@
         Key,
         Lock,
         Info
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
     import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
     import { 
         availableWhisperCppModels, 

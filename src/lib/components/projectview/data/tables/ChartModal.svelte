@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Modal, Button, Tabs, TabItem, Label, Select, Input, Textarea, Toggle, Helper, Accordion, AccordionItem, Range, Checkbox } from 'flowbite-svelte';
-    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen, Database, Palette, Type } from 'lucide-svelte';
+    import { PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Download, Save, Image as ImageIcon, ImagePlus, Share, Trash2, X, Plus, FolderOpen, Database, Palette, Type } from '@lucide/svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
