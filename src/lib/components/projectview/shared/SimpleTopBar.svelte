@@ -33,7 +33,7 @@
   <div class="flex items-center space-x-1.5 min-w-0">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <Button
-                size="xs"
+                size="sm"
                 color="alternative"
                 pill={true}
                 class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-700"
@@ -47,7 +47,7 @@
             </Button>
         </div>
 
-      <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
+      <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
   </div>
 
   <div class="flex items-center space-x-2 flex-shrink-0">

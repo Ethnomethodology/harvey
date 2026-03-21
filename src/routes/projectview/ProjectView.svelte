@@ -2246,7 +2246,7 @@
     {#if importMenuVisible}
         <div
             id="import-context-menu-div"
-            class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-[140px]"
+            class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-sm min-w-[140px]"
             style="left: {importMenuX}px; top: {importMenuY}px;"
             on:click|stopPropagation
             role="menu"
