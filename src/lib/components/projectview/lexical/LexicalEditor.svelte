@@ -762,6 +762,10 @@
         return;
     }
 
+    const isDocument = enableTableCellResize || documentPath?.toLowerCase().includes('/documents/') || documentPath?.toLowerCase().includes('\\documents\\');
+    const EFFECTIVE_MIN_WIDTH = isDocument ? 10 : 50;
+    console.log(`[LexicalEditor ${instanceId}] isDocument:`, isDocument, "EFFECTIVE_MIN_WIDTH:", EFFECTIVE_MIN_WIDTH, "path:", documentPath);
+
     editor = createEditor({
       namespace: `SvelteLexicalEditor-${instanceId}`,
       nodes: editorNodes,
@@ -779,8 +783,8 @@
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
-        table: 'editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed',
-        tableCell: 'editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[50px] relative',
+        table: `editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 ${isDocument ? '' : 'table-fixed'}`,
+        tableCell: `editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[${isDocument ? '10px' : '50px'}] relative`,
         tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
@@ -2458,6 +2462,8 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       const zoom = calculateZoomLevel(editorContainer);
       const diffX = (event.clientX - resizeStartPos.x) / zoom;
       const diffY = (event.clientY - resizeStartPos.y) / zoom;
+
+      const scrollPos = editorWrapper ? editorWrapper.scrollTop : 0;
       editor.update(() => {
           const cellNode = _getNodeByKey(resizeTargetCellKey);
           if (!_isTableCellNode(cellNode)) return;
@@ -2470,9 +2476,11 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
                   if (colIndex !== undefined) {
                       const colSpan = cellNode.getColSpan();
                       const targetColIndex = colIndex + colSpan - 1;
-
                       const currentWidths = tableNode.getColWidths()?.slice() || [];
                       let currentWidthVal = currentWidths[targetColIndex];
+
+                      const isDoc = enableTableCellResize || documentPath?.toLowerCase().includes('/documents/') || documentPath?.toLowerCase().includes('\\documents\\');
+                      const localMinWidth = isDoc ? 10 : 50;
 
                       // Handle string/percentage widths
                       if (typeof currentWidthVal === 'string') {
@@ -2485,27 +2493,34 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
                           }
                       }
 
-                      // Initialize if undefined or NaN
-                      if (currentWidthVal === undefined || isNaN(currentWidthVal)) {
-                          if (cellNode.getColSpan() === 1) {
-                              const domElement = editor.getElementByKey(cellNode.getKey());
-                              if (domElement) {
-                                  const rect = domElement.getBoundingClientRect();
-                                  currentWidthVal = rect.width / zoom;
-                              }
-                          }
-                          if (currentWidthVal === undefined || isNaN(currentWidthVal)) {
-                              currentWidthVal = MIN_WIDTH;
-                          }
-                      }
-                      
-                      // Ensure previous columns have valid widths too (convert % to px if needed) to avoid mixing types causing layout issues?
-                      // Ideally yes, but let's just ensure they exist.
-                      for (let i = 0; i < targetColIndex; i++) {
-                          if (currentWidths[i] === undefined) currentWidths[i] = MIN_WIDTH;
+                      // Ensure ALL columns have valid widths from DOM if missing to avoid abrupt layout shifts
+                      const colCount = tableMap.columns;
+                      while (currentWidths.length < colCount) {
+                          currentWidths.push(undefined);
                       }
 
-                      const newWidth = Math.max(MIN_WIDTH, currentWidthVal + diffX);
+                      for (let i = 0; i < colCount; i++) {
+                          if (currentWidths[i] === undefined || isNaN(currentWidths[i])) {
+                              // Find any cell in this column to get its width
+                              const cellInfo = tableMap.grid.find(row => row[i] && row[i].node);
+                              if (cellInfo) {
+                                  const cellNode = cellInfo[i].node;
+                                  const domElement = editor.getElementByKey(cellNode.getKey());
+                                  if (domElement) {
+                                      currentWidths[i] = domElement.getBoundingClientRect().width / zoom;
+                                  } else {
+                                      currentWidths[i] = localMinWidth;
+                                  }
+                              } else {
+                                  currentWidths[i] = localMinWidth;
+                              }
+                          }
+                      }
+
+                      // Re-fetch currentWidthVal after full initialization
+                      currentWidthVal = currentWidths[targetColIndex];
+
+                      const newWidth = Math.max(localMinWidth, currentWidthVal + diffX);
                       currentWidths[targetColIndex] = newWidth;
                       tableNode.setColWidths(currentWidths);
                   }
@@ -2532,6 +2547,13 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
               console.error("Error during table resize update:", e);
           }
       }, { tag: 'skip-scroll' });
+
+      if (editorWrapper) {
+          tick().then(() => {
+              editorWrapper.scrollTop = scrollPos;
+          });
+      }
+
       isResizing = false;
       resizeDirection = null;
       resizeTargetCellKey = null;
@@ -3717,7 +3739,7 @@ $: if (editor && activeLayout) {
   .editor-table-cell {
       border: 1px solid #ccc;
       padding: 8px;
-      min-width: 50px; /* Ensure cells have a minimum width */
+      /* min-width is managed via theme to allow per-document flexibility */
       position: relative; /* Needed for resizer positioning */
   }
 

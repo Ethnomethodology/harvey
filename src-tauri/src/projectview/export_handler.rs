@@ -242,15 +242,17 @@ fn append_node_html(node: &Value, html: &mut String) {
             }
             "table" => {
                  if let Some(col_widths) = node.get("colWidths").and_then(|cw| cw.as_array()) {
-                    html.push_str("<table border=\"1\"><colgroup>");
-                    for cw in col_widths {
-                        if let Some(width) = cw.as_f64() {
-                            html.push_str(&format!("<col style=\"width: {}px;\" />", width));
-                        }
+                    let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
+                    let total_width: f64 = widths.iter().sum();
+                    
+                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse;\"><colgroup>");
+                    for w in widths {
+                        let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
+                        html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
                     }
                     html.push_str("</colgroup><tbody>");
                  } else {
-                    html.push_str("<table border=\"1\"><tbody>");
+                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse;\"><tbody>");
                  }
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
