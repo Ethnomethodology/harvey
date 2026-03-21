@@ -43,7 +43,7 @@
   import {
     ListNode, ListItemNode, $isListNode as _isListNode, $isListItemNode as _isListItemNode,
     INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, INSERT_CHECK_LIST_COMMAND,
-    REMOVE_LIST_COMMAND, registerList
+    REMOVE_LIST_COMMAND, registerList, registerCheckList
   } from '@lexical/list';
   import {
       TableNode, TableRowNode, TableCellNode,
@@ -747,6 +747,7 @@
         registerRichText(editor),
         registerHistory(editor, historyState, 300),
         registerList(editor),
+        registerCheckList(editor),
         editor.registerCommand(
           KEY_ENTER_COMMAND,
           (event) => {
