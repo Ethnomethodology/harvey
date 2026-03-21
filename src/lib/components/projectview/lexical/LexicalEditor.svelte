@@ -81,6 +81,7 @@
   } from '$lib/nodes/ExtendedTextNode.js';
 
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
+  import { ImageNode, $createImageNode as _createImageNode } from '$lib/nodes/ImageNode.js';
 
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
@@ -196,6 +197,8 @@
   let modifyToolbarPosition = { top: 0, left: 0 };
   let clickedNodeKey = null;
 
+  let editorUpdateTracker = 0; // Added reactive statement to track editor updates and re-trigger image resolution
+
   let hoveredRowKey = null;
   let playButtonPosition = { top: 0, left: 0 };
   let showPlayButton = false;
@@ -211,7 +214,8 @@
     ListNode, ListItemNode,
     LinkNode,
     TableNode, TableRowNode, TableCellNode,
-    HorizontalRuleNode
+    HorizontalRuleNode,
+    ImageNode
   ];
 
   function handleShortcut(event) {
@@ -360,11 +364,60 @@
     { value: 'code',      label: 'Code Block',    shortcut: `${modLabel}+${optLabel}+C` }
   ];
 
+  import { Image as ImageIcon } from '@lucide/svelte';
+
   const insertOptions = [
     { value: 'table', label: 'Table', action: openInsertTableDialog, iconComponent: TableIcon },
     { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, iconComponent: Minus },
     { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
+    { value: 'image', label: 'Image', action: insertImage, iconComponent: ImageIcon },
   ];
+
+  async function insertImage() {
+    if (!editor || !editable || !documentPath) return;
+    isInsertDropdownOpen = false;
+
+    try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const selected = await open({
+            multiple: false,
+            filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }]
+        });
+
+        if (selected) {
+            const projectStoreState = get(project);
+
+            // Upload to attachments directory
+            const uploadedPath = await invoke('upload_attachment', {
+                projectXmlPathStr: projectStoreState.xmlPath,
+                assetRelativePath: documentPath,
+                sourceFilePathStr: selected
+            });
+
+            if (uploadedPath) {
+                const filename = selected.split(/[\\/]/).pop();
+
+                editor.update(() => {
+                    const imageNode = _createImageNode(filename, filename);
+                    const selection = _getSelection();
+                    if (_isRangeSelection(selection)) {
+                        selection.insertNodes([imageNode]);
+                    } else {
+                        const root = _getRoot();
+                        const p = _createParagraphNode();
+                        p.append(imageNode);
+                        root.append(p);
+                    }
+                });
+
+                dispatch('attachmentadded');
+            }
+        }
+    } catch (error) {
+        console.error('Error inserting image:', error);
+        notificationStore.add(`Failed to insert image: ${error}`, 'error');
+    }
+  }
 
   const blockTypeIcons = { paragraph: Type, h1: Heading1, h2: Heading2, h3: Heading3, ul: List, ol: ListOrdered, check: ListChecks, quote: QuoteIcon, code: CodeIcon };
 
@@ -1002,6 +1055,13 @@
             },
             COMMAND_PRIORITY_EDITOR
         )
+    );
+
+    unregisterListeners = mergeRegister(
+        unregisterListeners,
+        editor.registerUpdateListener(() => {
+            editorUpdateTracker++;
+        })
     );
 
     // Now set the initial state, which will trigger the listener we just registered
@@ -2304,6 +2364,44 @@ function handleDocumentHighlightsChange(highlights) {
 }
 
 $: handleDocumentHighlightsChange(documentHighlights);
+
+  // Effect to resolve and inject absolute src for ImageNodes based on their relative filenames
+  // We place it down here where reactive statements are collected
+  let resolveImagesTimeout;
+  $: if (editor && areNodesReady && documentPath && $project.baseDirectory && editorUpdateTracker >= 0) {
+      // Trigger evaluation when these change, but also need to hook into editor updates
+      clearTimeout(resolveImagesTimeout);
+      resolveImagesTimeout = setTimeout(async () => {
+          if (!editorContainer) return;
+          try {
+              const { convertFileSrc } = await import('@tauri-apps/api/core');
+              const images = editorContainer.querySelectorAll('img[data-filename]:not([src])');
+
+              if (images.length > 0) {
+                  const separator = documentPath.includes('\\') ? '\\' : '/';
+                  const parts = documentPath.split(separator);
+                  parts.pop(); // Remove the JSON filename
+                  let dirPath = parts.join(separator);
+                  if (dirPath && !dirPath.endsWith(separator)) dirPath += separator;
+
+                  let baseDir = $project.baseDirectory;
+                  if (baseDir && !baseDir.endsWith(separator)) baseDir += separator;
+
+                  const absDirPath = `${baseDir}${dirPath}attachments${separator}`;
+
+                  for (const img of images) {
+                      const filename = img.getAttribute('data-filename');
+                      if (filename) {
+                          const fullPath = `${absDirPath}${filename}`;
+                          img.src = convertFileSrc(fullPath);
+                      }
+                  }
+              }
+          } catch(e) {
+              console.error("[LexicalEditor] Error resolving image sources", e);
+          }
+      }, 300);
+  }
 
 function updateSearchHighlights() {
   if (typeof CSS === 'undefined' || !CSS.highlights) {

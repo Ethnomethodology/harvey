@@ -7,7 +7,7 @@
     import { triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from '@lucide/svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -221,7 +221,7 @@
             const selected = await open({
                 multiple: true,
                 filters: [
-                    { name: 'Audio/Video Files', extensions: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm'] }
+                    { name: 'Media/Attachments', extensions: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }
                 ]
             });
 
@@ -444,6 +444,8 @@
                                 {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                             {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
                                 <FileText class="w-4 h-4 text-gray-400 shrink-0" />
+                            {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
+                                <ImageIcon class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else}
                                 <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
@@ -495,6 +497,12 @@
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
+                                <button class="text-red-500 dark:text-red-400 p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded" title="Delete Image" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
+                                    <Trash2 class="w-4 h-4" />
+                                </button>
                             </div>
                         {:else}
                             <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(originalIndex)}>
