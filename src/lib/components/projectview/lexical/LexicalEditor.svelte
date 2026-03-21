@@ -375,6 +375,17 @@
 
   async function insertImage() {
     if (!editor || !editable || !documentPath) return;
+
+    // Save the current selection BEFORE the dropdown closes and the file picker opens,
+    // which steals focus and resets the selection to null or root.
+    let savedImageSelection = null;
+    editor.getEditorState().read(() => {
+        const selection = _getSelection();
+        if (selection) {
+            savedImageSelection = selection.clone();
+        }
+    });
+
     isInsertDropdownOpen = false;
 
     try {
@@ -404,6 +415,9 @@
                 const filename = selected.split(/[\\/]/).pop();
 
                 editor.update(() => {
+                    if (savedImageSelection) {
+                        _setSelection(savedImageSelection.clone());
+                    }
                     const imageNode = _createImageNode(filename, filename);
                     const selection = _getSelection();
                     if (_isRangeSelection(selection)) {
