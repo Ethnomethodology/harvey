@@ -60,7 +60,8 @@
                 <li><a href="https://annotorious.github.io/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Annotorious</a></li>
                 <li><a href="http://tabulator.info/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Tabulator</a></li>
                 <li><a href="https://tailwindcss.com/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Tailwind CSS</a></li>
-                <li><a href="https://lucide.dev/icons/lucide-svelte/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Lucide Svelte</a></li>
+                <li><a href="https://flowbite-svelte.com/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Flowbite Svelte</a></li>
+                <li><a href="https://lucide.dev/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Lucide Icons</a></li>
             </ul>
         </section>
 
