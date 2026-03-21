@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
-    import { Button, Select } from 'flowbite-svelte';
-    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List } from 'lucide-svelte';
+    import { Button, Select, Dropdown, DropdownItem } from 'flowbite-svelte';
+    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List, ChevronDown } from 'lucide-svelte';
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
@@ -20,7 +20,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    // import Dropdown from '$lib/components/shared/Dropdown.svelte'; // Removed custom dropdown
     import TranslateDocumentModal from '../modals/TranslateDocumentModal.svelte';
     import DocumentExportModal from '../modals/DocumentExportModal.svelte';
     import TableExportModal from '../modals/TableExportModal.svelte';
@@ -519,7 +519,7 @@
   </script>
   
   <div
-    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-50"
+    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-[1000]"
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <!-- Drag Handle Background -->
@@ -527,11 +527,19 @@
 
     <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
         <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+            <Button
+                size="xs"
+                color="alternative"
+                pill={true}
+                class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-700"
+                on:click={(e) => dispatch('requestImport', e)}
+                title="Import"
+                aria-label="Import"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-            </button>
+            </Button>
         </div>
 
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
@@ -569,13 +577,22 @@
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <Dropdown
-                containerClasses="w-72"
-                options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
-                value={$project.activeTranscriptPathInDataTab}
-                on:change={(e) => switchTranscriptInDataTab(e.detail)}
-                placeholder="Select Transcript"
-            />
+            <div class="relative">
+                <Button id="transcript-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0">
+                    <span class="truncate">{ $displayedTranscripts.find(t => t.path === $project.activeTranscriptPathInDataTab)?.displayLabel || 'Select Transcript' }</span>
+                    <ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
+                </Button>
+                <Dropdown triggeredBy="#transcript-selection-btn" class="w-72 z-[1001] max-h-96 overflow-y-auto">
+                    {#each $displayedTranscripts as t}
+                        <DropdownItem
+                            class="text-xs flex items-center { $project.activeTranscriptPathInDataTab === t.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : '' }"
+                            on:click={() => switchTranscriptInDataTab(t.path)}
+                        >
+                            <span class="truncate">{t.displayLabel}</span>
+                        </DropdownItem>
+                    {/each}
+                </Dropdown>
+            </div>
             <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
@@ -677,36 +694,7 @@
   </div>
   
   <style lang="postcss">
-    .ui-button-icon-no-border {
-		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 disabled:hover:bg-transparent dark:disabled:hover:!bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-	}
-
-    .blinking-red-text {
-        animation: blink-text 1s infinite;
-    }
-
-    @keyframes blink-text {
-        0% { color: #f87171; }
-        50% { color: #ef4444; }
-        100% { color: #f87171; }
-    }
-
-
-
-    .ui-button-import {
-        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
-        @apply bg-transparent;
-        @apply text-gray-700 dark:text-white;
-        @apply border border-gray-300 dark:border-gray-700;
-        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
-        @apply hover:text-blue-500 dark:hover:text-blue-400;
-        @apply hover:border-blue-500 dark:hover:border-blue-500;
-        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-700 dark:disabled:hover:!bg-transparent;
-    }
-  
-    .hover-scale-effect {
-        /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */
+    :global(.hover-scale-effect) {
         will-change: transform;
         backface-visibility: hidden;
         transform: translateZ(0);
