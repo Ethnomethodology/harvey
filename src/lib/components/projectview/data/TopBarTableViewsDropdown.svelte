@@ -133,7 +133,7 @@
 </script>
 
 <div class="relative inline-block text-left">
-    <Button id="table-views-dropdown-btn" color="alternative" size="xs" class="min-w-[140px] max-w-[220px] justify-between px-3 !py-1.5 focus:ring-0 shadow-sm ml-2">
+    <Button id="table-views-dropdown-btn" color="alternative" size="xs" class="min-w-[140px] max-w-[220px] justify-between px-3 !py-1.5 focus:ring-0 shadow-sm ml-2" title="Select Table View">
         <div class="flex items-center min-w-0 mr-2">
             <svelte:component this={activeIcon} class="w-3.5 h-3.5 mr-2 text-gray-500 shrink-0" />
             <span class="truncate">{buttonLabel}</span>

@@ -578,7 +578,7 @@
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
             <div class="relative">
-                <Button id="transcript-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0">
+                <Button id="transcript-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0" title="Select Transcript">
                     <span class="truncate">{ $displayedTranscripts.find(t => t.path === $project.activeTranscriptPathInDataTab)?.displayLabel || 'Select Transcript' }</span>
                     <ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
                 </Button>

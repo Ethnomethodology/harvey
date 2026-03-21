@@ -345,7 +345,7 @@
 
 		<!-- Media Selection Dropdown -->
 		<div class="relative">
-			<Button id="media-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0" disabled={$project.isLoading || mediaFilesForDropdown.length === 0}>
+			<Button id="media-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0" disabled={$project.isLoading || mediaFilesForDropdown.length === 0} title="Select Media">
 				<span class="truncate">
 					{#if $project.isLoading}
 						Loading...

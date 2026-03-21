@@ -12,9 +12,9 @@
     import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
     	import { activeLayout } from '$lib/stores/layoutStore.js';
     	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-    	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+    	import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
     	import FindReplaceModal from '../modals/FindReplaceModal.svelte';
-        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X } from 'lucide-svelte';
+        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X, ChevronDown } from 'lucide-svelte';
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;
@@ -24,9 +24,9 @@
     let searchUiContainerElement;
     let searchToggleButtonElement;
 
-    let showTranscriptDropdown = false;
-    let transcriptDropdownButtonRef;
-    let transcriptDropdownMenuRef;
+    let transcriptDropdownOpen = false;
+    let secondaryTranscriptDropdownOpen = false;
+    let moreOptionsDropdownOpen = false;
 
     let refreshKey = 0; // Key to force re-evaluation of transcript list
     let unlistenJobComplete = null; // To store the unlisten function
@@ -44,12 +44,6 @@
 	}
 
     // Function to close dropdown when clicking outside
-    function handleClickOutsideTranscriptDropdown(event) {
-        if (showTranscriptDropdown && transcriptDropdownMenuRef && !transcriptDropdownMenuRef.contains(event.target) && transcriptDropdownButtonRef && !transcriptDropdownButtonRef.contains(event.target)) {
-            showTranscriptDropdown = false;
-        }
-    }
-
     function handleClickOutsideSearch(event) {
         if (showSearchBox) {
             const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
@@ -63,7 +57,6 @@
     }
 
     onMount(async () => {
-        document.addEventListener('click', handleClickOutsideTranscriptDropdown, true);
         document.addEventListener('click', handleClickOutsideSearch, true);
 
         unlistenJobComplete = await listen('custom_transcription_job_completed', (event) => {
@@ -83,7 +76,6 @@
     });
 
     onDestroy(() => {
-        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
         document.removeEventListener('click', handleClickOutsideSearch, true);
         if (unlistenJobComplete) {
             unlistenJobComplete();
@@ -534,7 +526,6 @@
     }
 
     function openFindReplaceModal() {
-        showExportMenu = false;
         showFindReplaceModal = true;
         // Search term is already in 'searchTerm' due to binding and executeSearch updates
     }
@@ -765,7 +756,6 @@
 
     onDestroy(() => {
         cancelAnimation();
-        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
     });
 
     function handleScroll() {
@@ -997,8 +987,6 @@
         }
     }
 
-	let showExportMenu = false;
-
     // --- Layout specific visibility ---
     let showSegmentNumberCol, showTimestampCol, showSpeakerCol, showTextCol;
 
@@ -1035,24 +1023,29 @@
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
             <!-- Transcript Dropdown using custom component -->
             {#if $transcriptStore.selectedMediaFile}
-				<Dropdown
-					containerClasses="max-w-[150px] sm:max-w-[200px] md:max-w-[250px]"
-					options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
-					value={$transcriptStore.activeTranscript?.path || ''}
-					on:change={(e) => switchTranscript(e.detail)}
-					placeholder="No Transcripts"
-					disabled={$displayedTranscripts.length === 0}
-				/>
-				{#if $transcriptStore.isDualModeActive}
-				<Dropdown
-					containerClasses="max-w-[150px] sm:max-w-[200px] md:max-w-[250px] ml-2"
-					options={$secondaryDisplayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
-					value={$transcriptStore.secondaryTranscriptPath || ''}
-					on:change={(e) => setSecondaryTranscript(e.detail)}
-					placeholder="Select Transcript"
-					disabled={$secondaryDisplayedTranscripts.length === 0}
-				/>
-				{/if}
+                <div class="flex items-center">
+                    <Button id="primary-transcript-btn" color="alternative" size="xs" class="max-w-[150px] sm:max-w-[200px] md:max-w-[250px] flex justify-between items-center px-3 py-1.5 !font-normal" title="Select Primary Transcript">
+                        <span class="truncate">{$displayedTranscripts.find(t => t.path === ($transcriptStore.activeTranscript?.path || ''))?.displayLabel || 'No Transcripts'}</span>
+                        <ChevronDown class="w-3 h-3 ml-2 opacity-50" />
+                    </Button>
+                    <Dropdown bind:open={transcriptDropdownOpen} triggeredBy="#primary-transcript-btn" class="w-64 overflow-y-auto max-h-60 z-[1010]">
+                        {#each $displayedTranscripts as t}
+                            <DropdownItem class="text-xs {($transcriptStore.activeTranscript?.path || '') === t.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => { switchTranscript(t.path); transcriptDropdownOpen = false; }}>{t.displayLabel}</DropdownItem>
+                        {/each}
+                    </Dropdown>
+
+                    {#if $transcriptStore.isDualModeActive}
+                        <Button id="secondary-transcript-btn" color="alternative" size="xs" class="max-w-[150px] sm:max-w-[200px] md:max-w-[250px] ml-2 flex justify-between items-center px-3 py-1.5 !font-normal" title="Select Secondary Transcript">
+                            <span class="truncate">{$secondaryDisplayedTranscripts.find(t => t.path === ($transcriptStore.secondaryTranscriptPath || ''))?.displayLabel || 'Select Transcript'}</span>
+                            <ChevronDown class="w-3 h-3 ml-2 opacity-50" />
+                        </Button>
+                        <Dropdown bind:open={secondaryTranscriptDropdownOpen} triggeredBy="#secondary-transcript-btn" class="w-64 overflow-y-auto max-h-60 z-[1010]">
+                            {#each $secondaryDisplayedTranscripts as t}
+                                <DropdownItem class="text-xs {($transcriptStore.secondaryTranscriptPath || '') === t.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => { setSecondaryTranscript(t.path); secondaryTranscriptDropdownOpen = false; }}>{t.displayLabel}</DropdownItem>
+                            {/each}
+                        </Dropdown>
+                    {/if}
+                </div>
             {:else}
                 <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-600 italic">No Media Selected</span>
             {/if}
@@ -1088,43 +1081,15 @@
             {/if}
             {#if allSegmentsData.length > 0}
               <div class="relative inline-block ml-2">
-                <button
-                  on:click={() => showExportMenu = !showExportMenu}
-                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center"
-                  title="More options"
-                  aria-label="More options"
-                >
-                  <MoreVertical class="w-5 h-5" />
-                </button>
-                {#if showExportMenu}
-                  <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
-                  <div class="absolute right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
-                    <button
-                      on:click={openFindReplaceModal}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
-                    >
-                      Find & Replace
-                    </button>
-                    <button
-                      on:click={() => { showExportMenu = false; dispatch('requestmanualsettings'); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
-                    >
-                      Manual Transcription Settings
-                    </button>
-                    <button
-                      on:click={() => { showExportMenu = false; handleAddToTranscriptsClick(); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
-                    >
-                      Save in Transcripts
-                    </button>
-                    <button
-                      on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
-                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
-                    >
-                      Save in Documents
-                    </button>
-                  </div>
-                {/if}
+                <Button id="more-options-btn" color="alternative" size="xs" class="px-1.5 py-1.5 !font-normal border-none" title="More Options">
+                    <MoreVertical class="w-5 h-5" />
+                </Button>
+                <Dropdown bind:open={moreOptionsDropdownOpen} triggeredBy="#more-options-btn" class="w-max z-[1010]">
+                    <DropdownItem class="text-xs border-b border-gray-100 dark:border-gray-700" on:click={() => { openFindReplaceModal(); moreOptionsDropdownOpen = false; }}>Find & Replace</DropdownItem>
+                    <DropdownItem class="text-xs border-b border-gray-100 dark:border-gray-700" on:click={() => { dispatch('requestmanualsettings'); moreOptionsDropdownOpen = false; }}>Manual Transcription Settings</DropdownItem>
+                    <DropdownItem class="text-xs border-b border-gray-100 dark:border-gray-700" on:click={() => { handleAddToTranscriptsClick(); moreOptionsDropdownOpen = false; }}>Save in Transcripts</DropdownItem>
+                    <DropdownItem class="text-xs" on:click={() => { handleAddToDocumentsClick(); moreOptionsDropdownOpen = false; }}>Save in Documents</DropdownItem>
+                </Dropdown>
               </div>
             {/if}
 
@@ -1295,7 +1260,7 @@
                         </div>
                         {/if}
                         {#if showTextCol}
-                        <div class="min-w-0 preview-content-area text-sm py-1 flex-1" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                        <div class="min-w-0 preview-content-area py-1 flex-1" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
                             {#if seg.isJsonContent}
                                 <div class="speech-rich-text">{@html seg.html}</div>
                             {:else}
@@ -1385,63 +1350,41 @@
 
 <style lang="postcss">
 	.btn-icon { @apply p-1 rounded focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-900 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
-	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
-    .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-gray-700; }
-	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }
-	
-	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
-	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
-	.secondary-segment { @apply bg-gray-50/50 dark:bg-gray-800/30 border-l-4 border-l-gray-300 dark:border-l-gray-600; }
-	.secondary-segment.segment-active { @apply border-l-blue-500 dark:border-l-blue-400; }
-	.preview-interaction-disabled { @apply cursor-default opacity-80; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-900 rounded-lg; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900; }
-	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-600; }
-	div[class*='overflow-y-auto'] { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-gutter: stable; }
-	:root { --scrollbar-thumb: rgba(160, 174, 192, 1); --scrollbar-track: rgba(243, 244, 246, 1); }
-	html.dark { --scrollbar-thumb: rgba(107, 114, 128, 1); --scrollbar-track: rgba(31, 41, 55, 1); }
-	.preview-editor-wrapper :global(.lexical-editor-root) { @apply border-none shadow-none rounded-none m-0 p-0 outline-none; background-color: transparent !important; box-shadow: none !important; border: none !important; }
-	.preview-editor-wrapper :global(.lexical-wrapper) { @apply p-0 overflow-visible; }
-	.preview-editor-wrapper :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-200 pt-px; min-height: unset !important; outline: none !important; caret-color: transparent !important; padding: 0 !important; margin: 0 !important; background-color: transparent !important; overflow-wrap: break-word; word-break: break-word; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
-    .preview-editor-wrapper :global(.lexical-content[contenteditable="false"]) { caret-color: transparent !important; }
-	.preview-editor-wrapper :global(.lexical-content p) { @apply mt-0 mb-0; overflow-wrap: break-word; word-break: break-word; }
-	.segment-active .preview-editor-wrapper :global(.lexical-editor-root), .segment-active .preview-editor-wrapper :global(.lexical-content) { background-color: transparent !important; }
-	.speech-plain-text {
-        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px; /* Changed to pre-wrap */
+    .speech-plain-text {
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px;
         padding: 0; margin: 0;
         overflow-wrap: break-word;
         word-break: normal;
         font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
     }
-	.speech-plain-text .italic { @apply not-italic; }
-	.speech-rich-text {
-        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px; /* Changed to pre-wrap */
+    .speech-rich-text {
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-200 pt-px;
         padding: 0; margin: 0;
         overflow-wrap: break-word;
         word-break: normal;
         font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
     }
     .preview-content-area {
-        overflow-wrap: break-word; /* Changed from anywhere */
-        word-break: normal;       /* Changed from break-all */
+        overflow-wrap: break-word;
+        word-break: normal;
     }
-	.insert-button-wrapper { position: relative; height: 0px; top: -0.75rem; z-index: 10; opacity: 0.3; transition: opacity 0.15s ease-in-out; }
-    .insert-button-wrapper:first-of-type { margin-top: 0.75rem; }
-    .insert-button-wrapper:last-of-type { margin-bottom: 0.75rem; }
-    .overflow-y-auto:hover .insert-button-wrapper, .segment-block:hover + .insert-button-wrapper { opacity: 1; }
-    .insert-button-wrapper button > :global(svg) { width: 1rem; height: 1rem; }
 
-    .btn-switch-active {
-        @apply bg-blue-500 text-white shadow-sm;
-    }
-    .dark .btn-switch-active {
-        @apply bg-blue-600 text-white;
-    }
-    	.btn-switch-inactive {
-            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700;
-        }
-    
+	/* Segment interactivity and states */
+	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }
+	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
+	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
+	.secondary-segment { @apply bg-gray-50/50 dark:bg-gray-800/30 border-l-4 border-l-gray-300 dark:border-l-gray-600; }
+	.secondary-segment.segment-active { @apply border-l-blue-500 dark:border-l-blue-400; }
+	.preview-interaction-disabled { @apply cursor-default opacity-80; }
+
+	/* Custom scrollbar styles */
+	div[class*='overflow-y-auto']::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-900 rounded-lg; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-700 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-900; }
+	div[class*='overflow-y-auto']::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-600; }
+	div[class*='overflow-y-auto'] { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-gutter: stable; }
+	:root { --scrollbar-thumb: rgba(160, 174, 192, 1); --scrollbar-track: rgba(243, 244, 246, 1); }
+	
     	:global(.dark .speech-rich-text) {
     		color: white;
     	}
