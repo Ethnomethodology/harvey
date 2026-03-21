@@ -790,11 +790,14 @@
                     </div>
                 {/each}
 
-                <!-- Ungrouped Tags -->
-                <div class="mt-4">
-                    {#if groups.length > 0}
-                        <h3 class="text-xs font-semibold text-gray-500 mb-2 uppercase px-2">Ungrouped Tags</h3>
-                    {/if}
+                {#if groups.length === 0}
+                    <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag group found.</p>
+                {/if}
+
+                <!-- Ungrouped Tags — always visible -->
+                <div class="mt-2">
+                    <hr class="border-gray-200 dark:border-gray-700 mb-2" />
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase px-2 tracking-wide">Ungrouped Tags</h3>
                     <div
                         class="min-h-[50px] p-2 rounded"
                         use:dndzone={{items: ungroupedTags, flipDurationMs}}
