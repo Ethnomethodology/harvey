@@ -2782,7 +2782,7 @@ $: if (editor && activeLayout) {
                 role="menuitem"
                 tabindex="-1"
               >
-                {@html option.icon}
+                <svelte:component this={option.iconComponent} size={14} />
                 <span>{option.label}</span>
               </div>
               {/each}
