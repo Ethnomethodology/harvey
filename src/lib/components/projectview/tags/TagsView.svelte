@@ -749,6 +749,10 @@
             <!-- List Content -->
             <div class="flex-1 overflow-y-auto p-2">
                 <!-- Groups -->
+                <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase px-2 tracking-wide">Tag Groups</h3>
+                {#if groups.length === 0}
+                    <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag group found.</p>
+                {/if}
                 {#each groups as group (group.id)}
                     <div class="mb-2 rounded border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                         <!-- Group Header -->
@@ -790,14 +794,13 @@
                     </div>
                 {/each}
 
-                {#if groups.length === 0}
-                    <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag group found.</p>
-                {/if}
-
                 <!-- Ungrouped Tags — always visible -->
                 <div class="mt-2">
                     <hr class="border-gray-200 dark:border-gray-700 mb-2" />
                     <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase px-2 tracking-wide">Ungrouped Tags</h3>
+                    {#if ungroupedTags.length === 0}
+                        <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag found.</p>
+                    {/if}
                     <div
                         class="min-h-[50px] p-2 rounded"
                         use:dndzone={{items: ungroupedTags, flipDurationMs}}
@@ -824,12 +827,13 @@
         {/if}
 
         <!-- Middle Panel -->
-        <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-gray-950">
+        <div class="h-full flex flex-col overflow-y-auto p-4 gap-4 flex-1 bg-white dark:bg-gray-950 min-h-0">
             {#if $selectedTag || $selectedTagGroup}
                 {#if isLoading}
                     <p class="dark:text-gray-200">Loading information...</p>
                 {:else if $tagInfo}
-                    <div class="h-[20%] flex flex-col">
+                    <!-- Tag / Group info -->
+                    <div class="flex-shrink-0">
                         <div class="flex items-center space-x-2">
                             <h2 class="text-xl font-bold dark:text-white">{$tagInfo.name}</h2>
                             {#if $selectedTag}
@@ -851,12 +855,13 @@
                         </div>
                     </div>
 
-                    <div class="h-[75%] flex flex-col">
+                    <!-- Highlights table — flex-1 so it fills remaining space, min-h-0 to allow shrinking -->
+                    <div class="flex flex-col flex-1 min-h-0">
                         <div class="flex justify-between items-center mb-2 flex-shrink-0">
                             <h3 class="text-lg font-semibold dark:text-white">Highlights ({$tagInfo.highlight_count})</h3>
-                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" autocomplete="off" autocorrect="off">
+                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" autocomplete="off">
                         </div>
-                        <div class="flex-grow relative border border-gray-300 dark:border-gray-700 rounded-md">
+                        <div class="flex-grow relative border border-gray-300 dark:border-gray-700 rounded-md min-h-0">
                             <div class="w-full h-full" bind:this={tableContainer}></div>
                         </div>
                     </div>
