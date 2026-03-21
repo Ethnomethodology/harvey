@@ -546,9 +546,10 @@
 
 </script>
 
-<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-gray-900 rounded-md shadow-sm editable-transcript-controls"
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 bg-white dark:bg-gray-900 rounded-md shadow-sm editable-transcript-controls"
      class:read-mode="{!editEnabled}"
-     class:edit-mode="{editEnabled}">
+     class:edit-mode="{editEnabled}"
+     style="font-size: 12pt;">
     {#if !isEditorVisible}
         {#if segments.length === 0} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> No transcript loaded or transcript is empty. </div>
         {:else} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> Select a segment to start editing. </div> {/if}
@@ -581,13 +582,13 @@
                             <div class="flex items-center gap-x-2 flex-shrink-0 mb-2">
                                 <!-- Segment Number -->
                                 <div class='flex-shrink-0 text-left py-1 min-w-[2rem]'>
-                                    <span class='text-sm text-gray-500' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                                    <span class='text-gray-500' title="{String(currentIndex + 1)}" style="font-size: 12pt;">{String(currentIndex + 1)}</span>
                                 </div>
                                 <!-- Timestamps -->
                                 <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1'>
-                                    <input id='startTimeInput' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
+                                    <input id='startTimeInput' class='input-field w-[12ch] p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
                                     <span class='text-gray-400 dark:text-white'>–</span>
-                                    <input id='endTimeInput' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
+                                    <input id='endTimeInput' class='input-field w-[12ch] p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' autocomplete="off" autocorrect="off" />
                                 </div>
                                 <!-- Speaker -->
                                 <div class='relative flex-grow max-w-[10rem]'>
@@ -598,6 +599,7 @@
                                         disabled={!editEnabled}
                                         placeholder="Select Speaker"
                                         containerClasses="w-full"
+                                        style="font-size: 12pt;"
                                     />
                                 </div>
                             </div>
@@ -640,6 +642,7 @@
 <style lang="postcss">
 	.input-field {
 		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-gray-400;
+        font-size: 12pt;
 	}
 	.input-field:not(:disabled) {
 		@apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded;
