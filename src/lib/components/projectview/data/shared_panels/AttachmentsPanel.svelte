@@ -4,7 +4,7 @@
     import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
-    import { triggerRefresh } from '$lib/stores/refresherStore.js';
+    import { refresher, triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
     import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
@@ -209,6 +209,7 @@
             });
             notificationStore.add('Document deleted.', 'success');
             await loadAttachments(previousProcessedItemPath);
+            dispatch('attachmentdeleted', { path: documentPath });
         } catch (error) {
             console.error('Failed to delete document:', error);
             notificationStore.add(`Failed to delete document: ${error}`, 'error');
@@ -317,6 +318,8 @@
     }
 
     $: {
+        // Tie to $refresher so that triggerRefresh() across the app reloads attachments too.
+        $refresher;
         (async () => {
             const currentProjectStoreState = get(project);
             const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table';
@@ -324,7 +327,8 @@
                 const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
-                if (newDerivedRelativePath && (newDerivedRelativePath !== previousProcessedItemPath || refreshKey)) {
+                // Also reload if refreshKey changes OR $refresher increments, but we handle the initial load as well
+                if (newDerivedRelativePath) {
                     await loadAttachments(newDerivedRelativePath);
                 } else if (!newDerivedRelativePath) {
                     attachments = [];

@@ -158,6 +158,15 @@
 
     let attachmentsPanelRef;
 
+    let documentViewRef;
+
+    function handleAttachmentDeleted(event) {
+        const { path } = event.detail;
+        if (activeViewType === 'documents' && documentViewRef && typeof documentViewRef.handleDeletedAttachment === 'function') {
+            documentViewRef.handleDeletedAttachment(path);
+        }
+    }
+
     function handleRequestViewChange(event) {
         if (event.type === 'reset_base') {
             if (attachmentsPanelRef && typeof attachmentsPanelRef.resetSelection === 'function') {
@@ -406,7 +415,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} />
+                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} on:attachmentdeleted={handleAttachmentDeleted} />
                 {/if}
             </div>
         {/if}

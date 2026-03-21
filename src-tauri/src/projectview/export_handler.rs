@@ -240,6 +240,38 @@ fn append_node_html(node: &Value, html: &mut String) {
                  }
                  html.push_str("</a>");
             }
+            "table" => {
+                 html.push_str("<table border=\"1\"><tbody>");
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        append_node_html(child, html);
+                    }
+                 }
+                 html.push_str("</tbody></table>");
+            }
+            "tablerow" => {
+                 html.push_str("<tr>");
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        append_node_html(child, html);
+                    }
+                 }
+                 html.push_str("</tr>");
+            }
+            "tablecell" => {
+                 html.push_str("<td>");
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        append_node_html(child, html);
+                    }
+                 }
+                 html.push_str("</td>");
+            }
+            "image" => {
+                 let filename = node.get("filename").and_then(|f| f.as_str()).unwrap_or("image.png");
+                 let alt = node.get("altText").and_then(|a| a.as_str()).unwrap_or("Image");
+                 html.push_str(&format!("<img src=\"attachments/{}\" alt=\"{}\" />", encode_text(filename), encode_text(alt)));
+            }
             _ => {
                 warn!("Unknown lexical node type encountered in HTML export: {}", node_type);
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {

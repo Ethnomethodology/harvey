@@ -26,6 +26,19 @@ export class ImageNode extends DecoratorNode {
     };
   }
 
+  exportDOM(editor) {
+      const { element } = super.exportDOM(editor) || {};
+      const span = element || document.createElement('span');
+      // Set to match createDOM, so html string has the img tag with the file data
+      if (!element) {
+          const img = document.createElement('img');
+          img.setAttribute('data-filename', this.__filename);
+          img.setAttribute('alt', this.__altText);
+          span.appendChild(img);
+      }
+      return { element: span };
+  }
+
   constructor(filename, altText, key) {
     super(key);
     this.__filename = filename;

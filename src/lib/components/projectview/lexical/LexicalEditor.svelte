@@ -1121,6 +1121,27 @@
     };
   });
 
+  export function removeImageByPath(imagePath) {
+    if (!editor || !isReady || !editable) return;
+    const filename = imagePath.split(/[\\/]/).pop();
+    editor.update(() => {
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        while (nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            // Since $isImageNode wasn't aliased to _isImageNode locally, we just use getType()
+            if (currentNode.getType() === 'image' && currentNode.getFilename() === filename) {
+                currentNode.remove();
+            } else if (typeof currentNode.getChildren === 'function') {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
+        }
+    });
+  }
+
     export function updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps = false) {
     if (!editor || !isReady || !editable) return;
 

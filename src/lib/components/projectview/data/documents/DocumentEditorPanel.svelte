@@ -13,6 +13,12 @@
     } from '$lib/stores/projectStore.js';
     import { saveDocumentContent } from '$lib/services/projectService.js'; 
     import { invoke } from '@tauri-apps/api/core';
+
+    export function handleDeletedAttachment(path) {
+        if (editorRef && typeof editorRef.removeImageByPath === 'function') {
+            editorRef.removeImageByPath(path);
+        }
+    }
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { activeLayout } from '$lib/stores/layoutStore.js';

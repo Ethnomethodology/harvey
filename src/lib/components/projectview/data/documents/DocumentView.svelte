@@ -25,6 +25,13 @@
     let attachments = [];
     let mediaPlayerRef;
     let isVideoHidden = false;
+    let documentEditorPanelRef;
+
+    export function handleDeletedAttachment(path) {
+        if (documentEditorPanelRef && typeof documentEditorPanelRef.handleDeletedAttachment === 'function') {
+            documentEditorPanelRef.handleDeletedAttachment(path);
+        }
+    }
     let currentTime = 0;
     let isPlaying = false;
 
@@ -145,7 +152,7 @@
                         on:pdfhighlightevent={handlePdfHighlight}
                     />
                 {:else if isJsonDoc} <!-- Assuming .json documents are handled by DocumentEditorPanel -->
-                    <DocumentEditorPanel />
+                    <DocumentEditorPanel bind:this={documentEditorPanelRef} />
                 {:else} <!-- Fallback for other non-PDF, non-JSON document types -->
                     <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-600">
                         <span>Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span>
