@@ -88,6 +88,7 @@
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
+  import InsertImageModal from './InsertImageModal.svelte';
   import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
@@ -197,6 +198,9 @@
   let isResizingImage = false;
   let imageResizeDirection = null; // 'nw', 'ne', 'sw', 'se'
   let imageResizeStartParams = null; // { width, height, x, y }
+  
+  let showInsertImageModal = false;
+  let savedImageSelection = null;
 
   let isResizing = false;
   let resizeDirection = null;
@@ -505,67 +509,84 @@
   async function insertImage() {
     if (!editor || !editable || !documentPath) return;
 
-    // Save the current selection BEFORE the dropdown closes and the file picker opens,
-    // which steals focus and resets the selection to null or root.
-    let savedImageSelection = null;
     editor.getEditorState().read(() => {
         const selection = _getSelection();
         if (selection) {
             savedImageSelection = selection.clone();
+        } else {
+            savedImageSelection = null;
         }
     });
 
     isInsertDropdownOpen = false;
+    showInsertImageModal = true;
+  }
+  
+  function handleInsertImageAttached(event) {
+    const { path } = event.detail;
+    if (!path) return;
+    const filename = path.split(/[\\/]/).pop();
+    
+    editor.update(() => {
+        if (savedImageSelection) {
+            _setSelection(savedImageSelection.clone());
+        }
+        const imageNode = _createImageNode(filename, filename);
+        const selection = _getSelection();
+        if (_isRangeSelection(selection)) {
+            selection.insertNodes([imageNode]);
+        } else {
+            const root = _getRoot();
+            const p = _createParagraphNode();
+            p.append(imageNode);
+            root.append(p);
+        }
+    });
+  }
 
+  async function handleInsertImageExternal(event) {
+    const { path } = event.detail;
+    if (!path) return;
+    
     try {
-        const { open } = await import('@tauri-apps/plugin-dialog');
-        const selected = await open({
-            multiple: false,
-            filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }]
+        const projectStoreState = get(project);
+        let relPath = documentPath;
+        if (documentPath.startsWith(projectStoreState.baseDirectory)) {
+            relPath = documentPath.substring(projectStoreState.baseDirectory.length);
+            relPath = relPath.replace(/\\/g, '/').replace(/^\//, '');
+        }
+
+        const uploadedPath = await invoke('upload_attachment', {
+            projectXmlPathStr: projectStoreState.xmlPath,
+            assetRelativePath: relPath,
+            sourceFilePathStr: path
         });
 
-        if (selected) {
-            const projectStoreState = get(project);
+        if (uploadedPath) {
+            const filename = path.split(/[\\/]/).pop();
 
-            let relPath = documentPath;
-            if (documentPath.startsWith(projectStoreState.baseDirectory)) {
-                relPath = documentPath.substring(projectStoreState.baseDirectory.length);
-                relPath = relPath.replace(/\\/g, '/').replace(/^\//, '');
-            }
-
-            // Upload to attachments directory
-            const uploadedPath = await invoke('upload_attachment', {
-                projectXmlPathStr: projectStoreState.xmlPath,
-                assetRelativePath: relPath,
-                sourceFilePathStr: selected
+            editor.update(() => {
+                if (savedImageSelection) {
+                    _setSelection(savedImageSelection.clone());
+                }
+                const imageNode = _createImageNode(filename, filename);
+                const selection = _getSelection();
+                if (_isRangeSelection(selection)) {
+                    selection.insertNodes([imageNode]);
+                } else {
+                    const root = _getRoot();
+                    const p = _createParagraphNode();
+                    p.append(imageNode);
+                    root.append(p);
+                }
             });
 
-            if (uploadedPath) {
-                const filename = selected.split(/[\\/]/).pop();
-
-                editor.update(() => {
-                    if (savedImageSelection) {
-                        _setSelection(savedImageSelection.clone());
-                    }
-                    const imageNode = _createImageNode(filename, filename);
-                    const selection = _getSelection();
-                    if (_isRangeSelection(selection)) {
-                        selection.insertNodes([imageNode]);
-                    } else {
-                        const root = _getRoot();
-                        const p = _createParagraphNode();
-                        p.append(imageNode);
-                        root.append(p);
-                    }
-                });
-
-                dispatch('attachmentadded');
-                triggerRefresh();
-            }
+            dispatch('attachmentadded');
+            triggerRefresh(); 
         }
     } catch (error) {
-        console.error('Error inserting image:', error);
-        notificationStore.add(`Failed to insert image: ${error}`, 'error');
+        console.error('Error inserting external image:', error);
+        notificationStore.add(`Failed to insert global/local image: ${error}`, 'error');
     }
   }
 
@@ -3522,6 +3543,13 @@ $: if (editor && activeLayout) {
   bind:showModal={showInsertTableModal}
   on:confirm={handleInsertTableConfirm}
   on:close={() => showInsertTableModal = false}
+/>
+
+<InsertImageModal
+  bind:showModal={showInsertImageModal}
+  {documentPath}
+  on:insert_attached={handleInsertImageAttached}
+  on:insert_external={handleInsertImageExternal}
 />
 
 {#if enableFloatingToolbar}

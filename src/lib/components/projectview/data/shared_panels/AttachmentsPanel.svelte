@@ -7,7 +7,7 @@
     import { refresher, triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
+    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -454,7 +454,7 @@
                             {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
                                 <ImageIcon class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else}
-                                <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
+                                <Music class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
                             <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name) : attachment}>
                                 {getFileName(attachment)}
