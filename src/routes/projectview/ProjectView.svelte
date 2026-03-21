@@ -74,6 +74,8 @@
     let transcriptionsViewRef;
     let transcriptionsTopBarRef;
     let dataViewRef;
+    let activeSubItemPath = null;
+    let activeSubItemType = null;
     let tagsViewRef;
 	let selectedTab = 'data';
     let importMenuVisible = false;
@@ -1131,12 +1133,17 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 		{#if selectedTab === 'data'}
 			<DataTopBar
 				dataViewRef={dataViewRef}
+                getExportData={dataViewRef?.getExportData}
+                {activeSubItemPath}
+                {activeSubItemType}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => { showConfigurationModal = true; toggleTranslateModal(false); }}
-
+                on:requestOpenLexicalDocument={(e) => dataViewRef?.handleRequestOpenLexicalDocument(e)}
+                on:requestOpenView={(e) => dataViewRef?.handleRequestOpenView(e)}
+                on:requestClearSubItem={() => dataViewRef?.handleRequestClearSubItem()}
                 on:close={handleCloseProject}
 			/>
 		{:else if selectedTab === 'transcriptions'}
@@ -1202,6 +1209,8 @@ $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 				{:else if selectedTab === 'data'}
 					 <DataView
 						bind:this={dataViewRef}
+                        bind:activeSubItemPath
+                        bind:activeSubItemType
 						on:requestmediaselection={handleRequestMediaSelection}
 						on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
 						on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}

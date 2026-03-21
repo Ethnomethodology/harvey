@@ -33,8 +33,8 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
-    let activeSubItemPath = null; // Sub-item context for nested Lexical views
-    let activeSubItemType = null;
+    export let activeSubItemPath = null; // Sub-item context for nested Lexical views
+    export let activeSubItemType = null;
     export let tableViewRef;
     let imageViewRef;
     let documentViewRef;
@@ -86,7 +86,7 @@
         }
     }
 
-    function handleRequestOpenView(event) {
+    export function handleRequestOpenView(event) {
         const { view } = event.detail;
         console.log('[DataView] Received requestOpenView:', view);
 
@@ -121,6 +121,13 @@
         if (tableViewRef && typeof tableViewRef.handleDeletedView === 'function') {
             tableViewRef.handleDeletedView(viewName);
         }
+    }
+
+    export function handleRequestClearSubItem() {
+        console.log('[DataView] Received requestClearSubItem');
+        activeSubItemPath = null;
+        activeSubItemType = null;
+        activeItemTypeForInfoPanel = activeViewType; 
     }
 
     export function handleRequestOpenLexicalDocument(event) {
@@ -344,6 +351,7 @@
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-950 overflow-hidden">
+
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-64' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">

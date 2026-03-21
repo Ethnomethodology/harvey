@@ -25,10 +25,14 @@
     import DocumentExportModal from '../modals/DocumentExportModal.svelte';
     import TableExportModal from '../modals/TableExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
+    import TopBarTableViewsDropdown from './TopBarTableViewsDropdown.svelte';
     import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
-    export let dataViewRef = null;
+    export let dataViewRef = null; // Still keep it for potential external usage if any, but adding getExportData
+    export let getExportData = null;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     // Determine platform-specific modifier key name
     const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -591,6 +595,14 @@
             </Button>
         {/if}
         {#if isTable}
+            <TopBarTableViewsDropdown
+                tablePath={$project.selectedDocumentPath}
+                {activeSubItemPath}
+                {activeSubItemType}
+                on:requestOpenView
+                on:requestOpenLexicalDocument
+                on:requestClearSubItem
+            />
             <Button size="xs" color="alternative" class="space-x-0.5 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
@@ -741,7 +753,7 @@
 <TableExportModal
     bind:showModal={showTableExportModal}
     tablePath={isTable ? $project.selectedDocumentPath : null}
-    getExportData={dataViewRef?.getExportData}
+    getExportData={getExportData || dataViewRef?.getExportData}
     on:confirm={() => message('Table exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showTableExportModal = false}
 />
