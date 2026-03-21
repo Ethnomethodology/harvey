@@ -246,7 +246,7 @@
         currentTableMode = isGroupView ? 'group' : 'tag';
 
         let columns = [
-            { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell, formatterParams, onRendered) => {
+            { title: "File", field: "source.file_path", resizable: false, widthGrow: 2, formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
                 const filePath = highlight.source.file_path;
                 const fileName = filePath.split(/[\\/]/).pop();
@@ -255,11 +255,11 @@
                 const iconTextColor = (highlight.color && isDarkMode) ? '#111827' : 'currentColor';
 
                 const container = document.createElement("div");
-                container.className = "flex items-center space-x-2";
+                container.className = "flex items-start space-x-2";
                 container.title = filePath;
 
                 const iconContainer = document.createElement("div");
-                iconContainer.className = "w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square";
+                iconContainer.className = "w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square mt-0.5";
                 iconContainer.style.backgroundColor = highlight.color || 'transparent';
                 iconContainer.style.color = iconTextColor;
 
@@ -268,6 +268,7 @@
                 iconContainer.appendChild(iconSpan);
 
                 const textSpan = document.createElement("span");
+                textSpan.className = "whitespace-normal break-all text-sm";
                 textSpan.textContent = fileName;
 
                 container.appendChild(iconContainer);
@@ -275,7 +276,7 @@
 
                 return container;
             }},
-            { title: "Content", field: "text", widthGrow: 5, formatter: (cell) => {
+            { title: "Content", field: "text", resizable: false, widthGrow: 5, formatter: (cell) => {
                 const text = cell.getValue();
                 return `<div class=\"whitespace-normal word-break-break-word\">${text}</div>`;
             }},
@@ -283,7 +284,7 @@
 
         if (isGroupView) {
             columns.push({
-                title: "Tag Name", field: "tags", widthGrow: 2, formatter: (cell) => {
+                title: "Tag Name", field: "tags", resizable: false, widthGrow: 2, formatter: (cell) => {
                     const allTagsOnHighlight = cell.getValue() || [];
                     if (!$selectedTagGroup) return '';
 
@@ -299,7 +300,28 @@
             });
         }
 
-        columns.push({ title: "Other Tags", field: "other_tags", widthGrow: 2, formatter: (cell) => {
+        columns.push({
+            title: "Comments", field: "comments", resizable: false, widthGrow: 3, formatter: (cell) => {
+                const comments = cell.getValue() || [];
+                if (comments.length === 0) return '';
+
+                const parentComments = comments.filter(c => !c.parentId);
+                const html = parentComments.map(parent => {
+                    const replies = comments.filter(r => r.parentId === parent.id);
+                    let content = `<div class=\"text-sm text-gray-800 dark:text-gray-200 mb-1\"><span class=\"font-semibold\">•</span> ${parent.text}</div>`;
+                    if (replies.length > 0) {
+                        content += replies.map(reply =>
+                            `<div class=\"text-xs text-gray-500 dark:text-gray-400 ml-4 mb-0.5 whitespace-normal pr-1\"><span class=\"font-semibold\">↳</span> ${reply.text}</div>`
+                        ).join('');
+                    }
+                    return `<div class=\"mb-2 last:mb-0\">${content}</div>`;
+                }).join('');
+
+                return `<div class=\"flex flex-col py-1 overflow-visible\">${html}</div>`;
+            }
+        });
+
+        columns.push({ title: "Other Tags", field: "other_tags", resizable: false, widthGrow: 2, formatter: (cell) => {
             const tags = cell.getValue() || [];
             if (tags.length === 0) return '';
 
@@ -311,7 +333,7 @@
         }});
 
         columns.push({
-            title: "Actions", field: "comments", width: "10%", hozAlign: "center",
+            title: "Actions", field: "comments", resizable: false, width: "10%", hozAlign: "center",
             formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
                 const commentCount = (highlight.comments || []).length;
@@ -365,10 +387,12 @@
 
         tabulatorInstance = new Tabulator(tableContainer, {
             data: data,
+            index: "id",
             layout: "fitColumns",
             pagination: "local",
             paginationSize: 10,
             paginationAddRow: "table",
+            resizableColumns: false,
             initialFilter: [
                 {field:"text", type:"like", value:$tagSearchQuery}
             ],
@@ -491,12 +515,14 @@
             }
             selectedHighlight = { ...highlight };
 
+            // Sync processedHighlights so replaceData always has the latest comments
+            processedHighlights = processedHighlights.map(h =>
+                h.id === highlightId ? { ...h, comments: selectedHighlight.comments } : h
+            );
+
             // Update Tabulator instance row data
             if (tabulatorInstance) {
-                const row = tabulatorInstance.getRow(highlightId);
-                if (row) {
-                    row.update({ comments: selectedHighlight.comments });
-                }
+                tabulatorInstance.replaceData(processedHighlights);
             }
         } catch (error) {
             console.error(`Failed to ${action} comment:`, error);
@@ -939,6 +965,10 @@
 }
 :global(html.dark .tabulator-cell.highlighted-cell) {
     color: #111827 !important;
+}
+
+:global(.tabulator-col-resize-handle) {
+    display: none !important;
 }
 
 .flex-grow > div[bind\:this={tableContainer}] {
