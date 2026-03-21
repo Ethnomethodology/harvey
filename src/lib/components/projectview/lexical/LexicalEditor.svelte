@@ -574,8 +574,42 @@
 
     editorContainer.addEventListener('click', (e) => {
         const anchor = e.target.closest('a');
-        if (anchor) { e.preventDefault(); }
-    }, true);
+        if (anchor) { e.preventDefault(); return; }
+
+        // Handle custom checklist clicks natively before Lexical gets it
+        if (!editable || !editor) return;
+        const closestLi = e.target.closest('li.list-item-checkbox');
+        if (closestLi) {
+            const rect = closestLi.getBoundingClientRect();
+            const clickX = e.clientX;
+            const clickY = e.clientY;
+
+            // Checkbox pseudo-element bounding box (with padding)
+            const checkboxLeft = rect.left;
+            const checkboxRight = rect.left + 24;
+            const checkboxTop = rect.top;
+            const checkboxBottom = rect.top + 24;
+
+            if (clickX >= checkboxLeft && clickX <= checkboxRight && clickY >= checkboxTop && clickY <= checkboxBottom) {
+                // We are inside the checkbox pseudo-element!
+                e.stopPropagation();
+                e.preventDefault();
+
+                // Now safely update the editor state
+                editor.update(() => {
+                    const liNode = _getNearestNodeFromDOMNode(closestLi);
+                    const nodeToToggle = _isListItemNode(liNode) ? liNode : _findMatchingParent(liNode, _isListItemNode);
+
+                    if (nodeToToggle) {
+                        const parentList = nodeToToggle.getParent();
+                        if (_isListNode(parentList) && parentList.getListType() === 'check') {
+                            nodeToToggle.toggleChecked();
+                        }
+                    }
+                });
+            }
+        }
+    }, true); // Use capture phase so we get it before bubbling
 
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
     editorWrapper.addEventListener('pointermove', handlePointerHover);
@@ -644,59 +678,19 @@
             let linkNode = null;
             let clickedCell = null;
 
-            // Identify if the click was within a list item's "checkbox area"
-            let isInsideCheckboxRect = false;
-            let targetDOMNode = event.target;
-            const closestLi = targetDOMNode.closest('li.list-item-checkbox');
-
-            if (closestLi) {
-                const rect = closestLi.getBoundingClientRect();
-                const clickX = event.clientX;
-                const clickY = event.clientY;
-
-                // Checkbox pseudo-element bounding box (with some padding for easier clicks)
-                const checkboxLeft = rect.left;
-                const checkboxRight = rect.left + 24;
-                const checkboxTop = rect.top;
-                const checkboxBottom = rect.top + 24;
-
-                if (clickX >= checkboxLeft && clickX <= checkboxRight && clickY >= checkboxTop && clickY <= checkboxBottom) {
-                    isInsideCheckboxRect = true;
-                }
-            }
-
             try {
-                // Determine if we need to update state (for checkboxes) or just read state (for links/tables)
-                if (isInsideCheckboxRect && closestLi) {
-                    editor.update(() => {
-                        const liNode = _getNearestNodeFromDOMNode(closestLi);
-                        const nodeToToggle = _isListItemNode(liNode) ? liNode : _findMatchingParent(liNode, _isListItemNode);
-
-                        if (nodeToToggle) {
-                            const parentList = nodeToToggle.getParent();
-                            if (_isListNode(parentList) && parentList.getListType() === 'check') {
-                                // Stop event propagation so native handler (if any) doesn't double-toggle
-                                event.stopPropagation();
-                                event.preventDefault();
-                                nodeToToggle.toggleChecked();
-                            }
-                        }
-                    });
-                    return true; // We handled the checkbox toggle, stop command propagation
-                } else {
-                    editor.getEditorState().read(() => {
-                        const targetNode = _getNearestNodeFromDOMNode(targetDOMNode);
-                        if (targetNode) {
-                            linkNode = _getNearestNodeOfType(targetNode, LinkNode);
-                            clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error("Error reading/updating editor state during CLICK command:", error);
+                editor.getEditorState().read(() => {
+                  const domNode = event.target;
+                  const targetNode = _getNearestNodeFromDOMNode(domNode);
+                  if (targetNode) {
+                      linkNode = _getNearestNodeOfType(targetNode, LinkNode);
+                      clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
+                  }
+                });
+            } catch (readError) {
+                console.error("Error reading editor state during CLICK command:", readError);
                 return false;
             }
-
             if (linkNode) {
               console.log("Clicked on link node:", linkNode.getURL());
               currentModalUrl = linkNode.getURL();
