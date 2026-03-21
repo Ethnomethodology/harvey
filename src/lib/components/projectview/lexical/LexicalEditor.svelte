@@ -645,36 +645,47 @@
             let clickedCell = null;
             let listItemNode = null;
 
-            // Check if user clicked on the list-item checkbox specifically
-            const isCheckboxClick = event.target.tagName === 'LI' && event.target.classList.contains('list-item-checkbox');
+            // Identify if the click was within a list item's "checkbox area"
             let isInsideCheckboxRect = false;
+            let targetDOMNode = event.target;
 
-            if (isCheckboxClick) {
-                // Determine if click was inside the left padding area (where the checkbox pseudo-element usually is)
-                const rect = event.target.getBoundingClientRect();
+            // Sometimes the click lands on a child of LI, or the LI itself.
+            // Find the closest LI that is a checklist item
+            const closestLi = targetDOMNode.closest('li.list-item-checkbox');
+
+            if (closestLi) {
+                const rect = closestLi.getBoundingClientRect();
                 const clickX = event.clientX;
-                const paddingLeft = parseFloat(window.getComputedStyle(event.target).paddingLeft) || 0;
+                const clickY = event.clientY;
 
-                // If the click is on the left side (within the padding area roughly), it's likely a checkbox toggle click
-                if (clickX >= rect.left && clickX <= rect.left + paddingLeft + 10) {
+                // We styled the checkbox pseudo-element at left: 2px, top: 4px, width: 16px, height: 16px.
+                // We'll give it a generous hit area for the click.
+                const checkboxLeft = rect.left;
+                const checkboxRight = rect.left + 24; // 24px is the padding-left
+                const checkboxTop = rect.top;
+                const checkboxBottom = rect.top + 24;
+
+                if (clickX >= checkboxLeft && clickX <= checkboxRight && clickY >= checkboxTop && clickY <= checkboxBottom) {
                     isInsideCheckboxRect = true;
                 }
             }
 
             try {
                 editor.update(() => {
-                  const domNode = event.target;
-                  const targetNode = _getNearestNodeFromDOMNode(domNode);
+                  const targetNode = _getNearestNodeFromDOMNode(targetDOMNode);
                   if (targetNode) {
                       linkNode = _getNearestNodeOfType(targetNode, LinkNode);
                       clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
-                      listItemNode = _findMatchingParent(targetNode, _isListItemNode) || (_isListItemNode(targetNode) ? targetNode : null);
 
-                      if (isCheckboxClick && isInsideCheckboxRect && listItemNode) {
-                          // Ensure the list item belongs to a checklist
-                          const parentList = listItemNode.getParent();
-                          if (_isListNode(parentList) && parentList.getListType() === 'check') {
-                              listItemNode.toggleChecked();
+                      if (isInsideCheckboxRect && closestLi) {
+                          const liNode = _getNearestNodeFromDOMNode(closestLi);
+                          const nodeToToggle = _isListItemNode(liNode) ? liNode : _findMatchingParent(liNode, _isListItemNode);
+
+                          if (nodeToToggle) {
+                              const parentList = nodeToToggle.getParent();
+                              if (_isListNode(parentList) && parentList.getListType() === 'check') {
+                                  nodeToToggle.toggleChecked();
+                              }
                           }
                       }
                   }
@@ -684,8 +695,8 @@
                 return false;
             }
 
-            if (isCheckboxClick && isInsideCheckboxRect) {
-                return true;
+            if (isInsideCheckboxRect) {
+                return true; // Stop propagation, handled checkbox click
             }
 
             if (linkNode) {
@@ -3110,7 +3121,10 @@ $: if (editor && activeLayout) {
         contenteditable={editable ? 'true' : 'false'}
         role="textbox"
         aria-multiline="true"
-        spellcheck="true"
+        spellcheck={['ul', 'ol', 'check'].includes(blockType) ? "false" : "true"}
+        autocomplete={['ul', 'ol', 'check'].includes(blockType) ? "off" : "on"}
+        autocorrect={['ul', 'ol', 'check'].includes(blockType) ? "off" : "on"}
+        autocapitalize={['ul', 'ol', 'check'].includes(blockType) ? "off" : "on"}
         data-placeholder={placeholder}
     ></div>
 
