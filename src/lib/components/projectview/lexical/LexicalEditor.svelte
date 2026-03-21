@@ -643,14 +643,10 @@
             if (event.button !== 0 || !editor || !editor.isEditable()) return false;
             let linkNode = null;
             let clickedCell = null;
-            let listItemNode = null;
 
             // Identify if the click was within a list item's "checkbox area"
             let isInsideCheckboxRect = false;
             let targetDOMNode = event.target;
-
-            // Sometimes the click lands on a child of LI, or the LI itself.
-            // Find the closest LI that is a checklist item
             const closestLi = targetDOMNode.closest('li.list-item-checkbox');
 
             if (closestLi) {
@@ -658,10 +654,9 @@
                 const clickX = event.clientX;
                 const clickY = event.clientY;
 
-                // We styled the checkbox pseudo-element at left: 2px, top: 4px, width: 16px, height: 16px.
-                // We'll give it a generous hit area for the click.
+                // Checkbox pseudo-element bounding box (with some padding for easier clicks)
                 const checkboxLeft = rect.left;
-                const checkboxRight = rect.left + 24; // 24px is the padding-left
+                const checkboxRight = rect.left + 24;
                 const checkboxTop = rect.top;
                 const checkboxBottom = rect.top + 24;
 
@@ -671,32 +666,35 @@
             }
 
             try {
-                editor.update(() => {
-                  const targetNode = _getNearestNodeFromDOMNode(targetDOMNode);
-                  if (targetNode) {
-                      linkNode = _getNearestNodeOfType(targetNode, LinkNode);
-                      clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
+                // Determine if we need to update state (for checkboxes) or just read state (for links/tables)
+                if (isInsideCheckboxRect && closestLi) {
+                    editor.update(() => {
+                        const liNode = _getNearestNodeFromDOMNode(closestLi);
+                        const nodeToToggle = _isListItemNode(liNode) ? liNode : _findMatchingParent(liNode, _isListItemNode);
 
-                      if (isInsideCheckboxRect && closestLi) {
-                          const liNode = _getNearestNodeFromDOMNode(closestLi);
-                          const nodeToToggle = _isListItemNode(liNode) ? liNode : _findMatchingParent(liNode, _isListItemNode);
-
-                          if (nodeToToggle) {
-                              const parentList = nodeToToggle.getParent();
-                              if (_isListNode(parentList) && parentList.getListType() === 'check') {
-                                  nodeToToggle.toggleChecked();
-                              }
-                          }
-                      }
-                  }
-                });
+                        if (nodeToToggle) {
+                            const parentList = nodeToToggle.getParent();
+                            if (_isListNode(parentList) && parentList.getListType() === 'check') {
+                                // Stop event propagation so native handler (if any) doesn't double-toggle
+                                event.stopPropagation();
+                                event.preventDefault();
+                                nodeToToggle.toggleChecked();
+                            }
+                        }
+                    });
+                    return true; // We handled the checkbox toggle, stop command propagation
+                } else {
+                    editor.getEditorState().read(() => {
+                        const targetNode = _getNearestNodeFromDOMNode(targetDOMNode);
+                        if (targetNode) {
+                            linkNode = _getNearestNodeOfType(targetNode, LinkNode);
+                            clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
+                        }
+                    });
+                }
             } catch (error) {
                 console.error("Error reading/updating editor state during CLICK command:", error);
                 return false;
-            }
-
-            if (isInsideCheckboxRect) {
-                return true; // Stop propagation, handled checkbox click
             }
 
             if (linkNode) {
