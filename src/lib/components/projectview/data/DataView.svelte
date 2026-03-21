@@ -158,8 +158,6 @@
 
     let attachmentsPanelRef;
 
-    let documentViewRef;
-
     function handleAttachmentDeleted(event) {
         const { path } = event.detail;
         if (activeViewType === 'documents' && documentViewRef && typeof documentViewRef.handleDeletedAttachment === 'function') {
