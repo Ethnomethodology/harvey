@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/ManualSettingsModal.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { X, Settings2, Plus, Minus } from 'lucide-svelte';
+	import { X, Settings2, Plus, Minus } from '@lucide/svelte';
     import { 
         Modal,
         Button, 

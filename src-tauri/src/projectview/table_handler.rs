@@ -35,6 +35,7 @@ pub async fn import_table_file(
     source_path_str: String,
     project_xml_path_str: String,
     sheet_name_opt: Option<String>,
+    append_sheet_name: Option<bool>,
 ) -> Result<Value, CommandError> {
     info!("[import_table_file] Importing table from: {}, Project XML Path: {}", source_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_path_str);
@@ -95,7 +96,9 @@ pub async fn import_table_file(
         return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
-    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() {
+    let should_append_sheet = append_sheet_name.unwrap_or(true);
+
+    let stem_base = if original_source_extension == "xlsx" && sheet_name_opt.is_some() && should_append_sheet {
         let original_stem = Path::new(&original_source_filename_with_ext).file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let combined = format!("{}_{}", original_stem, sheet_name_opt.as_ref().unwrap());
         truncate_filename_stem(&format!("{}.csv", combined), MAX_FILENAME_STEM_LENGTH)
@@ -479,6 +482,7 @@ fn to_json_response(headers: Vec<String>, records: Vec<Value>) -> Result<Value, 
 fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(has_headers)
+        .flexible(true) // Allows records to have different lengths than the header (like Excel handles trailing commas)
         .from_path(path)
         .map_err(|e| CommandError::from(format!("Failed to open CSV '{}': {}", path.display(), e)))?;
 
@@ -489,7 +493,7 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
             .map(|h| h.to_string())
             .collect::<Vec<String>>()
     } else {
-        let mut temp_rdr = csv::ReaderBuilder::new().has_headers(false).from_path(path)?;
+        let mut temp_rdr = csv::ReaderBuilder::new().has_headers(false).flexible(true).from_path(path)?;
         let first_record = temp_rdr.records().next().transpose()?.unwrap_or_default();
         let num_columns = first_record.len();
         (0..num_columns).map(|i| {
@@ -518,9 +522,14 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
         for (i, header) in headers.iter().enumerate() {
             let value_str = record.get(i).unwrap_or("").trim();
             let value_json = if let Ok(num) = value_str.parse::<f64>() {
-                json!(num)
+                // Serde JSON cannot serialize NaN or Infinity. If a CSV has "NaN", "Inf", etc. we must store it as a string or null.
+                if num.is_finite() {
+                    json!(num)
+                } else {
+                    json!(value_str)
+                }
             } else if let Ok(b) = value_str.parse::<bool>() {
-                    json!(b)
+                json!(b)
             } else {
                 json!(value_str)
             };

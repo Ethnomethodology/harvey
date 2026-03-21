@@ -9,7 +9,7 @@
         Button, 
         Checkbox
     } from 'flowbite-svelte';
-    import { Users, Plus, Trash2, Minus, UserPlus } from 'lucide-svelte';
+    import { Users, Plus, Trash2, Minus, UserPlus } from '@lucide/svelte';
 
 	// Props
 	export let showModal = false;

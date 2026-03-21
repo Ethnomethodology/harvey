@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/data/DataView.svelte -->
 <script>
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount, createEventDispatcher, tick } from 'svelte';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import DataTopBar from './DataTopBar.svelte';
 	import DataLeftPanel from './DataLeftPanel.svelte';
@@ -33,6 +33,8 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
+    export let activeSubItemPath = null; // Sub-item context for nested Lexical views
+    export let activeSubItemType = null;
     export let tableViewRef;
     let imageViewRef;
     let documentViewRef;
@@ -70,6 +72,105 @@
                 console.warn("[DataView] importedTranscriptViewRef.playMedia is not a function");
             }
         }
+    }
+
+    function handleRequestOpenChart(event) {
+        const { chart } = event.detail;
+        console.log('[DataView] Received requestOpenChart:', chart);
+        if (activeViewType === 'tables' && tableViewRef) {
+            if (typeof tableViewRef.openChart === 'function') {
+                tableViewRef.openChart(chart);
+            } else {
+                console.warn("[DataView] tableViewRef.openChart is not a function");
+            }
+        }
+    }
+
+    export function handleRequestOpenView(event) {
+        const { view } = event.detail;
+        console.log('[DataView] Received requestOpenView:', view);
+
+        if (tableViewRef && typeof tableViewRef.openView === 'function') {
+            try {
+                tableViewRef.openView(view);
+            } catch (err) {
+                console.error('[DataView] Error opening view in table view:', err);
+            }
+        } else {
+            console.warn('[DataView] tableViewRef or openView method not available yet.');
+        }
+    }
+
+    function handleRequestConfigureView(event) {
+        const { view } = event.detail;
+        console.log('[DataView] Received requestConfigureView:', view);
+
+        if (tableViewRef && typeof tableViewRef.configureView === 'function') {
+            try {
+                tableViewRef.configureView(view);
+            } catch (err) {
+                console.error('[DataView] Error configuring view in table view:', err);
+            }
+        } else {
+            console.warn('[DataView] tableViewRef or configureView method not available yet.');
+        }
+    }
+
+    function handleRequestDeleteView(event) {
+        const { viewName } = event.detail;
+        if (tableViewRef && typeof tableViewRef.handleDeletedView === 'function') {
+            tableViewRef.handleDeletedView(viewName);
+        }
+    }
+
+    export function handleRequestClearSubItem() {
+        console.log('[DataView] Received requestClearSubItem');
+        activeSubItemPath = null;
+        activeSubItemType = null;
+        activeItemTypeForInfoPanel = activeViewType; 
+    }
+
+    export function handleRequestOpenLexicalDocument(event) {
+        const { docPath } = event.detail;
+        console.log('[DataView] Received requestOpenLexicalDocument:', docPath);
+
+        let retries = 0;
+        const tryOpen = () => {
+            if (activeViewType === 'tables' && tableViewRef && typeof tableViewRef.openLexicalDocument === 'function') {
+                try {
+                    const success = tableViewRef.openLexicalDocument(docPath);
+                    if (success !== false) return;
+                } catch (err) {
+                    console.error('[DataView] Error opening lexical document in table view:', err);
+                    return;
+                }
+            }
+            
+            retries++;
+            if (retries < 20) {
+                setTimeout(tryOpen, 100);
+            } else {
+                console.warn('[DataView] tableViewRef or openLexicalDocument method failed to become available after 2s.');
+            }
+        };
+        tryOpen();
+    }
+
+    let attachmentsPanelRef;
+
+    function handleRequestViewChange(event) {
+        if (event.type === 'reset_base') {
+            if (attachmentsPanelRef && typeof attachmentsPanelRef.resetSelection === 'function') {
+                attachmentsPanelRef.resetSelection();
+            }
+            return;
+        } else if (event.type === 'view_changed' || event.type === 'chart_opened') {
+            if (attachmentsPanelRef && typeof attachmentsPanelRef.setSelectionByObject === 'function') {
+                attachmentsPanelRef.setSelectionByObject(event.item);
+            }
+            return;
+        }
+        handleViewChangeRequest(event);
     }
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
@@ -127,20 +228,27 @@
              console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
 
-        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
+        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && itemTypeForInfo !== 'table' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
             panelStateStore.setActiveInfoPanelTab('metadata');
         }
     });
 
     async function handleViewChangeRequest(eventDetailFromDispatch) {
+        if (eventDetailFromDispatch?.type === 'refresh_metadata') {
+            infoPanelRefreshKey++;
+            highlightsPanelRefreshKey++;
+            return;
+        }
         const pathForView = eventDetailFromDispatch?.itemPath || eventDetailFromDispatch?.loadNotePath;
         const typeForView = eventDetailFromDispatch?.viewType;
         const hasHeadersForView = eventDetailFromDispatch?.hasHeaders;
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
+        const attachmentToOpen = eventDetailFromDispatch?.attachmentToOpen;
+
         // If the requested path and type are already active, do nothing.
-        if (pathForView === activeItemPath && typeForView === activeViewType) {
+        if (pathForView === activeItemPath && typeForView === activeViewType && !attachmentToOpen) {
             console.debug(`[DataView] Requested view change to already active item. Path: ${pathForView}, Type: ${typeForView}. Aborting redundant action.`);
             return;
         }
@@ -191,6 +299,16 @@
             activeItemTypeForInfoPanel = null;
         }
         console.debug(`[DataView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
+
+        if (attachmentToOpen) {
+            // Wait for Svelte to fully destroy old components and mount new ones based on activeItemPath change
+            await tick();
+            
+            // Open the attachments panel
+            panelStateStore.setActiveInfoPanelTab('attachments');
+
+            handleRequestOpenLexicalDocument({ detail: { docPath: attachmentToOpen } });
+        }
     }
 
     function handleRightBarTabChange(event) {
@@ -233,6 +351,7 @@
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-950 overflow-hidden">
+
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-64' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
@@ -254,7 +373,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} on:requestviewchange={(event) => handleViewChangeRequest(event.detail)} />                 {:else if activeViewType === 'images'}
+                    <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} bind:activeSubItemPath bind:activeSubItemType on:requestviewchange={(event) => handleRequestViewChange(event.detail)} />                 {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />
@@ -285,9 +404,9 @@
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
-                    <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
+                    <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} />
+                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} />
                 {/if}
             </div>
         {/if}

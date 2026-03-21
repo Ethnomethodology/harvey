@@ -1,6 +1,6 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowRight, WifiOff, Code, Lock, Download, Github, ChevronLeft, ChevronRight } from 'lucide-svelte';
+    import { ArrowRight, WifiOff, Code, Lock, Download, Github, ChevronLeft, ChevronRight } from '@lucide/svelte';
     import { onMount, onDestroy } from 'svelte';
 
     let activeTab = 'windows';

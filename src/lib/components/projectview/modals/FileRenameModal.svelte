@@ -2,7 +2,7 @@
 <script>
 	import { createEventDispatcher, onMount, tick } from 'svelte';
 	import { Modal, Label, Input, Button, Helper } from 'flowbite-svelte';
-	import { PencilLine } from 'lucide-svelte';
+	import { PencilLine } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let currentName = '';

@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/FindReplaceModal.svelte -->
 <script>
   import { createEventDispatcher, onMount, tick, onDestroy } from 'svelte';
-  import { CaseSensitive, Regex, WholeWord, X, Search, Replace, ReplaceAll, ChevronDown, ChevronUp } from 'lucide-svelte';
+  import { CaseSensitive, Regex, WholeWord, X, Search, Replace, ReplaceAll, ChevronDown, ChevronUp } from '@lucide/svelte';
   import { 
     Button, 
     Label, 

@@ -2,7 +2,7 @@
 <!-- src/lib/components/projectview/lexical/FloatingHighlightToolbar.svelte -->
 <script>
   import { onMount } from 'svelte';
-  import { Ban } from 'lucide-svelte';
+  import { Ban } from '@lucide/svelte';
 
   export let editor;
   export let showToolbar;

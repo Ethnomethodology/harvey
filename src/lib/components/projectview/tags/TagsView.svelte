@@ -3,7 +3,7 @@
     import { onMount, afterUpdate, onDestroy, createEventDispatcher } from 'svelte';
     import { slide } from 'svelte/transition';
     import { invoke } from '@tauri-apps/api/core';
-    import { confirm } from '@tauri-apps/plugin-dialog';
+    import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { dndzone } from 'svelte-dnd-action';
     import { project } from '$lib/stores/projectStore.js';
@@ -17,7 +17,7 @@
         addTag
     } from '$lib/stores/tagStore.js';
     import { refresher } from '$lib/stores/refresherStore.js';
-    import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { manageCommentInHighlightLocal, removeTagFromHighlightLocal } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
@@ -27,7 +27,7 @@
     import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { get } from 'svelte/store';
-    import { MoreVertical, SquarePen, View, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from 'lucide-svelte';
+    import { MoreVertical, SquarePen, View, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from '@lucide/svelte';
 
     let unsubscribePanelState;
     let unsubscribeRefresher;
@@ -217,7 +217,7 @@
                     // Just update data
                     tabulatorInstance.replaceData(processedHighlights)
                         .then(() => {
-                            if (tabulatorInstance) {
+                            if (tabulatorInstance && tableContainer && tableContainer.offsetWidth > 0) {
                                 tabulatorInstance.redraw();
                             }
                         })
@@ -246,7 +246,7 @@
         currentTableMode = isGroupView ? 'group' : 'tag';
 
         let columns = [
-            { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell, formatterParams, onRendered) => {
+            { title: "File", field: "source.file_path", resizable: false, widthGrow: 2, formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
                 const filePath = highlight.source.file_path;
                 const fileName = filePath.split(/[\\/]/).pop();
@@ -255,11 +255,11 @@
                 const iconTextColor = (highlight.color && isDarkMode) ? '#111827' : 'currentColor';
 
                 const container = document.createElement("div");
-                container.className = "flex items-center space-x-2";
+                container.className = "flex items-start space-x-2";
                 container.title = filePath;
 
                 const iconContainer = document.createElement("div");
-                iconContainer.className = "w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square";
+                iconContainer.className = "w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square mt-0.5";
                 iconContainer.style.backgroundColor = highlight.color || 'transparent';
                 iconContainer.style.color = iconTextColor;
 
@@ -268,6 +268,7 @@
                 iconContainer.appendChild(iconSpan);
 
                 const textSpan = document.createElement("span");
+                textSpan.className = "whitespace-normal break-all text-sm";
                 textSpan.textContent = fileName;
 
                 container.appendChild(iconContainer);
@@ -275,7 +276,7 @@
 
                 return container;
             }},
-            { title: "Content", field: "text", widthGrow: 5, formatter: (cell) => {
+            { title: "Content", field: "text", resizable: false, widthGrow: 5, formatter: (cell) => {
                 const text = cell.getValue();
                 return `<div class=\"whitespace-normal word-break-break-word\">${text}</div>`;
             }},
@@ -283,7 +284,7 @@
 
         if (isGroupView) {
             columns.push({
-                title: "Tag Name", field: "tags", widthGrow: 2, formatter: (cell) => {
+                title: "Tag Name", field: "tags", resizable: false, widthGrow: 2, formatter: (cell) => {
                     const allTagsOnHighlight = cell.getValue() || [];
                     if (!$selectedTagGroup) return '';
 
@@ -299,7 +300,28 @@
             });
         }
 
-        columns.push({ title: "Other Tags", field: "other_tags", widthGrow: 2, formatter: (cell) => {
+        columns.push({
+            title: "Comments", field: "comments", resizable: false, widthGrow: 3, formatter: (cell) => {
+                const comments = cell.getValue() || [];
+                if (comments.length === 0) return '';
+
+                const parentComments = comments.filter(c => !c.parentId);
+                const html = parentComments.map(parent => {
+                    const replies = comments.filter(r => r.parentId === parent.id);
+                    let content = `<div class=\"text-sm text-gray-800 dark:text-gray-200 mb-1\"><span class=\"font-semibold\">•</span> ${parent.text}</div>`;
+                    if (replies.length > 0) {
+                        content += replies.map(reply =>
+                            `<div class=\"text-xs text-gray-500 dark:text-gray-400 ml-4 mb-0.5 whitespace-normal pr-1\"><span class=\"font-semibold\">↳</span> ${reply.text}</div>`
+                        ).join('');
+                    }
+                    return `<div class=\"mb-2 last:mb-0\">${content}</div>`;
+                }).join('');
+
+                return `<div class=\"flex flex-col py-1 overflow-visible\">${html}</div>`;
+            }
+        });
+
+        columns.push({ title: "Other Tags", field: "other_tags", resizable: false, widthGrow: 2, formatter: (cell) => {
             const tags = cell.getValue() || [];
             if (tags.length === 0) return '';
 
@@ -311,10 +333,10 @@
         }});
 
         columns.push({
-            title: "Actions", width: "10%", hozAlign: "center",
+            title: "Actions", field: "comments", resizable: false, width: "10%", hozAlign: "center",
             formatter: (cell, formatterParams, onRendered) => {
                 const highlight = cell.getRow().getData();
-                const commentCount = highlight.comments.length;
+                const commentCount = (highlight.comments || []).length;
 
                 const container = document.createElement("div");
                 container.className = "flex items-center justify-center gap-4";
@@ -365,10 +387,12 @@
 
         tabulatorInstance = new Tabulator(tableContainer, {
             data: data,
+            index: "id",
             layout: "fitColumns",
             pagination: "local",
             paginationSize: 10,
             paginationAddRow: "table",
+            resizableColumns: false,
             initialFilter: [
                 {field:"text", type:"like", value:$tagSearchQuery}
             ],
@@ -453,38 +477,56 @@
     }
 
     async function handleCommentAction(event) {
-        const { type, highlightId, comment, commentId, text } = event.detail;
+        const { type, detail } = event;
+        const { highlightId, commentId, newText, comment } = detail;
         const highlight = selectedHighlight;
         if (!highlight) return;
 
-        try {
-            if (type === 'add') {
-                await addCommentToHighlight(highlightId, comment, highlight.source.file_type);
-            } else if (type === 'update') {
-                await updateComment(highlightId, commentId, text, highlight.source.file_type);
-            } else if (type === 'delete') {
-                await deleteComment(highlightId, commentId, highlight.source.file_type);
-            }
+        // Map event types to backend action names
+        const actionMap = {
+            'addcomment': 'add',
+            'editcomment': 'update',
+            'deletecomment': 'delete'
+        };
+        const action = actionMap[type] || 'add';
 
-            // Update local selectedHighlight to reflect changes in CommentsPanel
-            // We need to find the updated highlight in our processedHighlights
-            // Or just update the local object's comments array.
-            // But projectStore functions update the store, so we should ideally reactive-ly get it.
-            // For immediate UI update in the modal:
+        try {
+            await invoke('manage_highlight_comment', {
+                projectId: get(project).id,
+                highlightId: highlightId,
+                action: action,
+                commentId: commentId,
+                comment: comment,
+                text: newText,
+                filePath: highlight.source.file_path,
+                docType: highlight.source.file_type
+            });
+
+            // Update local Svelte store if the file is currently open
+            manageCommentInHighlightLocal(highlightId, action, comment, commentId, newText, highlight.source.file_type, highlight.source.file_path);
+
+            // Update local selectedHighlight to reflect changes in CommentsPanel immediately
+            if (action === 'add') {
+                highlight.comments = [...(highlight.comments || []), comment];
+            } else if (action === 'delete') {
+                highlight.comments = (highlight.comments || []).filter(c => c.id !== commentId && c.parentId !== commentId);
+            } else if (action === 'update') {
+                highlight.comments = (highlight.comments || []).map(c => c.id === commentId ? { ...c, text: newText } : c);
+            }
+            selectedHighlight = { ...highlight };
+
+            // Sync processedHighlights so replaceData always has the latest comments
+            processedHighlights = processedHighlights.map(h =>
+                h.id === highlightId ? { ...h, comments: selectedHighlight.comments } : h
+            );
+
+            // Update Tabulator instance row data
             if (tabulatorInstance) {
-                // Find the row in Tabulator and refresh it
-                const row = tabulatorInstance.getRow(highlightId);
-                if (row) {
-                    const rowData = row.getData();
-                    // Sync the comments
-                    // This is a bit manual because projectStore doesn't return the new array
-                    // and we are working with a copy in Tabulator.
-                    // But processedHighlights will update via reactivity ($tagInfo).
-                    // Let's rely on the store subscription if possible.
-                }
+                tabulatorInstance.replaceData(processedHighlights);
             }
         } catch (error) {
-            console.error(`Failed to ${type} comment:`, error);
+            console.error(`Failed to ${action} comment:`, error);
+            await message(`Failed to ${action} comment: ${error}`, { title: 'Error', kind: 'error' });
         }
     }
 
@@ -570,17 +612,59 @@
     let currentEditingGroup = null;
 
     // --- Action Handlers ---
-    function handleInspect(highlight) {
+    async function handleInspect(highlight) {
         if (!highlight || !highlight.source) return;
+
+        project.update(p => ({
+            ...p,
+            requestedHighlightId: highlight.id
+        }));
+
+        let loadNotePath = highlight.source.file_path;
+        let viewType = highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' :
+                       highlight.source.file_type === 'csv' ? 'table' :
+                       highlight.source.file_type === 'image' ? 'image' :
+                       highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document';
+        let attachmentToOpen = null;
+        let originalDocType = highlight.source.file_type;
+        
+        const isAttachment = originalDocType === 'document-attachment' || originalDocType === 'transcript-attachment' || highlight.source.file_path.includes('/attachments/');
+
+        if (isAttachment) {
+            try {
+                // Fetch the base asset that owns this attachment
+                const baseAssetPath = await invoke('get_base_asset_for_attachment', {
+                    projectXmlPathStr: $project.xmlPath,
+                    attachmentRelativePath: highlight.source.file_path
+                });
+                
+                if (baseAssetPath) {
+                    loadNotePath = baseAssetPath;
+                    attachmentToOpen = highlight.source.file_path;
+                    
+                    if (baseAssetPath.endsWith('.csv') || baseAssetPath.endsWith('.xlsx')) {
+                        viewType = 'table';
+                    } else if (baseAssetPath.includes('harvey_files/Documents/')) {
+                        viewType = 'document';
+                    } else if (baseAssetPath.includes('harvey_files/Transcripts/')) {
+                        viewType = 'transcript';
+                    } else if (baseAssetPath.includes('harvey_files/Media/')) {
+                        viewType = 'media';
+                    }
+                } else {
+                    console.warn("Base asset not found for attachment:", highlight.source.file_path);
+                }
+            } catch (e) {
+                console.error("Failed to find base asset for attachment:", e);
+            }
+        }
+
         dispatch('requestviewchange', {
             tabName: 'data',
-            loadNotePath: highlight.source.file_path,
-            highlightId: highlight.id,
-            viewType: highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' : 
-                      highlight.source.file_type === 'csv' ? 'table' :
-                      highlight.source.file_type === 'image' ? 'image' : 
-                      highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document',
-            originalDocType: highlight.source.file_type
+            loadNotePath,
+            viewType,
+            originalDocType,
+            attachmentToOpen
         });
     }
 
@@ -590,13 +674,36 @@
     }
 
     async function handleUntag(highlight) {
-        // TODO: Implement untagging functionality.
-        // This requires removing the tag from the specific annotation in the backend or updating the document.
-        // For now, we'll log it and maybe show a message.
-        console.warn('Untagging from Tags view is not yet fully implemented.', highlight);
-        const doUntag = await confirm('Untagging from this view is not yet supported. Please inspect the file to remove the tag.', { title: 'Not Implemented', kind: 'info' });
-        if (doUntag) {
-             handleInspect(highlight);
+        if (!highlight || !highlight.source || !$selectedTag) return;
+
+        const tagName = $selectedTag.name;
+        const confirmUntag = await confirm(`Are you sure you want to remove the tag "${tagName}" from this highlight?`, { title: 'Confirm Untag', kind: 'warning' });
+
+        if (!confirmUntag) return;
+
+        try {
+            await invoke('remove_tag_from_highlight', {
+                projectId: get(project).id,
+                highlightId: highlight.id,
+                tagToRemove: tagName,
+                filePath: highlight.source.file_path,
+                docType: highlight.source.file_type
+            });
+
+            // Also update local store if the file is currently loaded
+            removeTagFromHighlightLocal(highlight.id, tagName, highlight.source.file_type, highlight.source.file_path);
+
+            // Update Tabulator instance if available
+            if (tabulatorInstance) {
+                tabulatorInstance.deleteRow(highlight.id);
+                // Also update the tag's highlight count
+                if (currentTableMode === 'tag') {
+                    $selectedTag.highlight_count = Math.max(0, ($selectedTag.highlight_count || 1) - 1);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to remove tag from highlight:', error);
+            await message(`Failed to untag: ${error}`, { title: 'Error', kind: 'error' });
         }
     }
 
@@ -642,6 +749,10 @@
             <!-- List Content -->
             <div class="flex-1 overflow-y-auto p-2">
                 <!-- Groups -->
+                <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase px-2 tracking-wide">Tag Groups</h3>
+                {#if groups.length === 0}
+                    <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag group found.</p>
+                {/if}
                 {#each groups as group (group.id)}
                     <div class="mb-2 rounded border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                         <!-- Group Header -->
@@ -683,10 +794,12 @@
                     </div>
                 {/each}
 
-                <!-- Ungrouped Tags -->
-                <div class="mt-4">
-                    {#if groups.length > 0}
-                        <h3 class="text-xs font-semibold text-gray-500 mb-2 uppercase px-2">Ungrouped Tags</h3>
+                <!-- Ungrouped Tags — always visible -->
+                <div class="mt-2">
+                    <hr class="border-gray-200 dark:border-gray-700 mb-2" />
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase px-2 tracking-wide">Ungrouped Tags</h3>
+                    {#if ungroupedTags.length === 0}
+                        <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2 py-1">No tag found.</p>
                     {/if}
                     <div
                         class="min-h-[50px] p-2 rounded"
@@ -714,12 +827,13 @@
         {/if}
 
         <!-- Middle Panel -->
-        <div class="h-full flex flex-col p-4 gap-4 flex-1 bg-white dark:bg-gray-950">
+        <div class="h-full flex flex-col overflow-y-auto p-4 gap-4 flex-1 bg-white dark:bg-gray-950 min-h-0">
             {#if $selectedTag || $selectedTagGroup}
                 {#if isLoading}
                     <p class="dark:text-gray-200">Loading information...</p>
                 {:else if $tagInfo}
-                    <div class="h-[20%] flex flex-col">
+                    <!-- Tag / Group info -->
+                    <div class="flex-shrink-0">
                         <div class="flex items-center space-x-2">
                             <h2 class="text-xl font-bold dark:text-white">{$tagInfo.name}</h2>
                             {#if $selectedTag}
@@ -741,12 +855,13 @@
                         </div>
                     </div>
 
-                    <div class="h-[75%] flex flex-col">
+                    <!-- Highlights table — flex-1 so it fills remaining space, min-h-0 to allow shrinking -->
+                    <div class="flex flex-col flex-1 min-h-0">
                         <div class="flex justify-between items-center mb-2 flex-shrink-0">
                             <h3 class="text-lg font-semibold dark:text-white">Highlights ({$tagInfo.highlight_count})</h3>
-                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" autocomplete="off" autocorrect="off">
+                            <input type="text" placeholder="Search content..." bind:value={$tagSearchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" autocomplete="off">
                         </div>
-                        <div class="flex-grow relative border border-gray-300 dark:border-gray-700 rounded-md">
+                        <div class="flex-grow relative border border-gray-300 dark:border-gray-700 rounded-md min-h-0">
                             <div class="w-full h-full" bind:this={tableContainer}></div>
                         </div>
                     </div>
@@ -795,9 +910,9 @@
 
     <!-- Right Panel: Highlight content (Now a floating panel) -->
     {#if isCommentsPanelOpen}
-        <div class="fixed inset-0 bg-black bg-opacity-50 z-30" on:click={() => isCommentsPanelOpen = false}></div>
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-[10000]" on:click={() => isCommentsPanelOpen = false}></div>
         <div
-            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40 rounded-lg"
+            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-xl z-[10001] rounded-xl"
             transition:slide={{ duration: 300, axis: 'x' }}
         >
             {#if selectedHighlight}
@@ -858,6 +973,10 @@
 }
 :global(html.dark .tabulator-cell.highlighted-cell) {
     color: #111827 !important;
+}
+
+:global(.tabulator-col-resize-handle) {
+    display: none !important;
 }
 
 .flex-grow > div[bind\:this={tableContainer}] {

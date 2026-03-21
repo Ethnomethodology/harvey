@@ -380,10 +380,21 @@ pub fn run() {
             projectview::metadata_commands::update_asset_metadata_command,
             projectview::metadata_commands::get_project_assets_for_link_command,
             projectview::attachment_commands::upload_attachment,
+            projectview::attachment_commands::delete_attachment_command,
+            projectview::attachment_commands::get_base_asset_for_attachment,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
             projectview::metadata_commands::get_all_custom_field_definitions_command,
             projectview::metadata_commands::delete_custom_field_definition_command, // Added this line
+
+            // --- Chart Commands ---
+            projectview::chart_commands::save_chart_config_command,
+            projectview::chart_commands::load_chart_configs_command,
+            projectview::chart_commands::delete_chart_config_command,
+            projectview::view_commands::save_table_view_command,
+            projectview::view_commands::load_table_views_command,
+            projectview::view_commands::delete_table_view_command,
+            projectview::view_commands::generate_survey_documents_command,
 
             // --- Tag Handler Commands ---
             projectview::tag_handler::add_tag,
@@ -394,6 +405,7 @@ pub fn run() {
             projectview::tag_handler::remove_tag_globally,
             projectview::tag_handler::rename_tag_in_highlights,
             projectview::tag_handler::remove_tag_from_highlight,
+            projectview::tag_handler::manage_highlight_comment,
             projectview::tag_handler::create_tag_group,
             projectview::tag_handler::get_tag_groups,
             projectview::tag_handler::update_tag_group,

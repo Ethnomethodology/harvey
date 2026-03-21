@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/AdditionalParametersModal.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { X, SlidersHorizontal } from 'lucide-svelte';
+	import { X, SlidersHorizontal } from '@lucide/svelte';
     import { 
 		Modal,
         Button, 

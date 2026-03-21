@@ -3,7 +3,7 @@
     import { createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { FileCode, Bookmark, Paperclip } from 'lucide-svelte';
+    import { FileCode, Bookmark, Paperclip } from '@lucide/svelte';
 
     export let itemType = null;
 
@@ -53,7 +53,7 @@
         <Bookmark class="w-5 h-5" />
     </button>
 
-    {#if itemType === 'doc' || itemType === 'imported_transcript'}
+    {#if itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table'}
         <button
             on:click={() => handleTabClick('attachments')}
             class="p-1 focus:outline-none transition-colors flex items-center justify-center"

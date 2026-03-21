@@ -24,7 +24,7 @@
         AlertCircle,
         Calendar,
         Star
-    } from 'lucide-svelte';
+    } from '@lucide/svelte';
     import ProgressIcon from '$lib/components/projectview/data/tables/icons/ProgressIcon.svelte';
     import { 
 		Modal,

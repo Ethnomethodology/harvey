@@ -15,10 +15,9 @@ import { Modal } from 'flowbite-svelte';
         TableBody, 
         TableBodyRow, 
         TableBodyCell,
-        Radio,
         Alert
     } from 'flowbite-svelte';
-    import { Info } from 'lucide-svelte';
+    import { Info } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let previewData = { fields: [], headers: [], data: [] };
@@ -131,6 +130,8 @@ import { Modal } from 'flowbite-svelte';
         } else {
             delete fields[index].currency;
         }
+        // Force Svelte to re-render the row immediately to fix the dropdown items
+        fields = [...fields];
 	}
 
 	function handleSubTypeChange(index) {
@@ -257,17 +258,29 @@ import { Modal } from 'flowbite-svelte';
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <!-- Option 1: Yes -->
                 <div class="p-4 border rounded-xl cursor-pointer transition-all {hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = true}>
-                    <Radio bind:group={hasHeaders} value={true} name="headers-radio">
-                        <span class="font-bold">Yes, the first row is the header.</span>
-                        <p class="text-xs text-gray-500 mt-1">Use values from the first row as field names.</p>
-                    </Radio>
+                    <div class="flex">
+                        <div class="flex items-center h-5">
+                            <input id="headers-yes" type="radio" bind:group={hasHeaders} value={true} class="w-4 h-4 text-neutral-primary border-default-medium bg-neutral-secondary-medium rounded-full checked:border-brand focus:ring-2 focus:outline-none focus:ring-brand-subtle border border-default appearance-none">
+                        </div>
+                        <div class="ms-2 text-sm select-none">
+                            <label for="headers-yes" class="font-medium text-heading mb-1">Yes, the first row is the header.</label>
+                            <p class="text-xs font-normal text-body">Use values from the first row as field names.</p>
+                        </div>
+                    </div>
                 </div>
+                <!-- Option 2: No -->
                 <div class="p-4 border rounded-xl cursor-pointer transition-all {!hasHeaders ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'}" on:click={() => hasHeaders = false}>
-                    <Radio bind:group={hasHeaders} value={false} name="headers-radio">
-                        <span class="font-bold">No, treat the first row as data.</span>
-                        <p class="text-xs text-gray-500 mt-1">Generate generic field names (Field 1, Field 2, etc.).</p>
-                    </Radio>
+                    <div class="flex">
+                        <div class="flex items-center h-5">
+                            <input id="headers-no" type="radio" bind:group={hasHeaders} value={false} class="w-4 h-4 text-neutral-primary border-default-medium bg-neutral-secondary-medium rounded-full checked:border-brand focus:ring-2 focus:outline-none focus:ring-brand-subtle border border-default appearance-none">
+                        </div>
+                        <div class="ms-2 text-sm select-none">
+                            <label for="headers-no" class="font-medium text-heading mb-1">No, treat the first row as data.</label>
+                            <p class="text-xs font-normal text-body">Generate generic field names (Field 1, Field 2, etc.).</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         {:else}
@@ -317,7 +330,7 @@ import { Modal } from 'flowbite-svelte';
                                             {/if}
                                         </div>
                                     {:else if field.type === 'DateTime'}
-                                        <Select size="sm" bind:value={field.format} items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} />
+                                        <Select size="sm" bind:value={field.format} items={(DATETIME_FORMATS[field.subType] || DATETIME_FORMATS['Date']).map(fmt => ({name: fmt, value: fmt}))} />
                                     {/if}
                                 </TableBodyCell>
                                 <TableBodyCell>

@@ -7,6 +7,8 @@
 
     export let itemPath = null; // Receives the full path from DataView
     export let hasHeaders = true;
+    export let activeSubItemPath = null;
+    export let activeSubItemType = null;
 
     const dispatch = createEventDispatcher();
 
@@ -23,6 +25,46 @@
             return await tableViewerPanelRef.getExportData();
         }
         return null;
+    }
+
+    export function openChart(chart) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openChart === 'function') {
+            tableViewerPanelRef.openChart(chart);
+        }
+    }
+
+    export function openView(view) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openView === 'function') {
+            tableViewerPanelRef.openView(view);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or openView is not available.');
+        }
+    }
+
+    export function configureView(view) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.configureView === 'function') {
+            tableViewerPanelRef.configureView(view);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or configureView is not available.');
+        }
+    }
+
+    export function handleDeletedView(viewName) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.handleDeletedView === 'function') {
+            tableViewerPanelRef.handleDeletedView(viewName);
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or handleDeletedView is not available.');
+        }
+    }
+
+    export function openLexicalDocument(docPath) {
+        if (tableViewerPanelRef && typeof tableViewerPanelRef.openLexicalDocument === 'function') {
+            tableViewerPanelRef.openLexicalDocument(docPath);
+            return true;
+        } else {
+            console.warn('[TableView] tableViewerPanelRef or openLexicalDocument method not available yet.');
+            return false;
+        }
     }
 
     onMount(() => {
@@ -43,6 +85,8 @@
                 bind:this={tableViewerPanelRef} 
                 tablePath={itemPath} 
                 hasHeaders={hasHeaders} 
+                bind:activeSubItemPath
+                bind:activeSubItemType
                 on:requestviewchange={forwardEvent}
             />
         {:else}

@@ -1,7 +1,7 @@
 <!-- src/lib/components/modals/HelpModal.svelte -->
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { Search, X, ChevronLeft, ChevronRight } from 'lucide-svelte';
+  import { Search, X, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import { Modal } from 'flowbite-svelte';
 
   export let showModal = false;

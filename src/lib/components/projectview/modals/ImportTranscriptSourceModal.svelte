@@ -2,7 +2,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { Modal, Button, Label, Helper, Alert } from 'flowbite-svelte';
-    import { FilePlus2, X, Info, FileText, CheckCircle2 } from 'lucide-svelte';
+    import { FilePlus2, X, Info, FileText, CheckCircle2 } from '@lucide/svelte';
 
     export let showModal = false;
 

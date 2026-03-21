@@ -14,7 +14,7 @@
     import { page } from '$app/stores';
     import { loadProjectDataAndUpdateStore, normalizePath } from '$lib/services/projectService.js';
     import { tick } from 'svelte';
-    import { Loader } from 'lucide-svelte'; // Import Loader component
+    import { Loader } from '@lucide/svelte'; // Import Loader component
   
     onMount(async () => {
       console.debug('[+layout.svelte] onMount started.'); // DEBUG

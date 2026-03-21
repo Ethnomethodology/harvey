@@ -4,6 +4,7 @@
   import { fly } from 'svelte/transition';
   import { invoke } from '@tauri-apps/api/core'; // Added
   import { listen } from '@tauri-apps/api/event'; // Added
+  import { getVersion } from '@tauri-apps/api/app';
   import {
     loadProjects,
     handleCreateProject,
@@ -32,6 +33,7 @@
 
   // Track active tab: "projects", "configure" or "about"
   let activeTab = "projects";
+  let appVersion = "";
 
   // --- State Setter Functions (Passed down to actions.js) ---
   const setRecentProjects = (projects) => { recentProjects = projects; };
@@ -59,6 +61,12 @@
     unlistenHelpCenter = await listen('menu:help:center', () => {
         showHelpModal = true;
     });
+    
+    try {
+        appVersion = await getVersion();
+    } catch (err) {
+        console.warn('Failed to get app version:', err);
+    }
 
     await loadProjects({ setRecentProjects, setIsLoading });
     document.addEventListener('click', handleClickOutside);
@@ -149,7 +157,7 @@
   <div class="w-1/4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-6 flex flex-col flex-shrink-0">
     <div class="w-fit mb-8">
       <h1 class="text-2xl font-bold mb-1 text-gray-800 dark:text-gray-100">Harvey</h1>
-      <p class="text-xs text-gray-500 dark:text-gray-400 relative left-[3px]">v0.1</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 relative left-[3px]">v{appVersion || '0.1'}</p>
     </div>
     <nav class="flex flex-col space-y-1">
       <a

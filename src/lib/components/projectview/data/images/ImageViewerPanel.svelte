@@ -9,7 +9,7 @@
     import OpenSeadragon from 'openseadragon';
     import { v4 as uuidv4 } from 'uuid';
     import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
-    import { Square, Circle, Hexagon, MessageCircle, MessageSquare, Type, HatGlasses } from 'lucide-svelte';
+    import { Square, Circle, Hexagon, MessageCircle, MessageSquare, Type, HatGlasses } from '@lucide/svelte';
 
     export let imagePath = '';
 

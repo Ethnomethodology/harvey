@@ -12,10 +12,12 @@
         Helper,
         Checkbox
     } from 'flowbite-svelte';
-    import { Share, FolderOpen, X, Image } from 'lucide-svelte';
+    import { Share, FolderOpen, X, Image } from '@lucide/svelte';
 
     export let showModal = false;
     export let defaultFileName = 'export.png';
+    export let exportTypeLabel = 'Image';
+    export let showAnnotations = true;
 
     const dispatch = createEventDispatcher();
 
@@ -24,7 +26,7 @@
     let exportFormat = 'png';
     let exportDirectory = '';
     let includeAnnotations = false;
-    let modalTitle = 'Export Image';
+    let modalTitle = `Export ${exportTypeLabel}`;
 
     const exportFormats = [
         { value: 'png', name: 'PNG (.png)', disabled: false },
@@ -61,7 +63,7 @@
             }
         }
 
-        modalTitle = `Export Image: ${exportFileName}.${exportFormat}`;
+        modalTitle = `Export ${exportTypeLabel}: ${exportFileName}.${exportFormat}`;
     }
 
     $: if (showModal) {
@@ -132,7 +134,7 @@
 	<div slot="header" class="flex items-center gap-2">
 		<Share class="w-5 h-5 text-gray-500" />
 		<h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate max-w-[250px]" title="{modalTitle}">
-			Export Image
+			{`Export ${exportTypeLabel}`}
 		</h3>
 	</div>
 
@@ -178,11 +180,13 @@
 		</div>
 
 		<!-- Include Annotations Checkbox -->
+		{#if showAnnotations}
 		<div class="pt-2">
 			<Checkbox bind:checked={includeAnnotations}>
 				Include Annotations
 			</Checkbox>
 		</div>
+		{/if}
 	</div>
 
 	<svelte:fragment slot="footer">

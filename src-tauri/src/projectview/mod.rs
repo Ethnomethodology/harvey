@@ -6,10 +6,14 @@ pub mod core_commands;
 pub mod transcription_commands;
 pub mod document_commands;
 pub mod metadata_commands;
+pub mod chart_handler;
+pub mod chart_commands;
 pub mod attachment_commands;
 pub mod document_handler;
 pub mod table_handler;
 pub mod image_handler;
+pub mod view_handler;
+pub mod view_commands;
 pub mod transcription_handler; // For imported transcripts
 pub mod pdf_annotation_handler; // ADDED
 pub mod translation_commands;

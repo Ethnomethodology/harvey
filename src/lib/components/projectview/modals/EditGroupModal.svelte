@@ -3,7 +3,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { PencilLine } from 'lucide-svelte';
+    import { PencilLine } from '@lucide/svelte';
 
     export let showModal = false;
     export let groupData = null; // Expected: { id, project_id, name, description }

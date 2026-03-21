@@ -12,7 +12,7 @@
         Badge,
         Alert
     } from 'flowbite-svelte';
-    import { AlertTriangle, Rows2, Info } from 'lucide-svelte';
+    import { AlertTriangle, Rows2, Info } from '@lucide/svelte';
 
     let primaryPath = '';
     let secondaryPath = '';

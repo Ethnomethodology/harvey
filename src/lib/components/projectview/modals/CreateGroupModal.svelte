@@ -3,7 +3,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { GalleryVerticalEnd } from 'lucide-svelte';
+    import { GalleryVerticalEnd } from '@lucide/svelte';
     import { updateProjectGroupsList } from '$lib/stores/projectStore.js';
 
     export let showModal = false;

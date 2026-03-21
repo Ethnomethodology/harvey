@@ -14,7 +14,7 @@
     import { basename } from '@tauri-apps/api/path';
     import { normalizePath } from '$lib/services/projectService.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { AlertTriangle, Split, X, FileText, SquareSplitHorizontal, SquareSplitVertical } from 'lucide-svelte';
+    import { AlertTriangle, Split, X, FileText, SquareSplitHorizontal, SquareSplitVertical } from '@lucide/svelte';
 
     const dispatch = createEventDispatcher();
 

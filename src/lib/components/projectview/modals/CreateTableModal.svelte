@@ -4,7 +4,7 @@
 
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
-    import { Plus, Trash2, X, Sheet } from 'lucide-svelte';
+    import { Plus, Trash2, X, Sheet } from '@lucide/svelte';
     import { 
         Input, 
         Label, 
@@ -236,7 +236,7 @@
                                     {/if}
                                 </div>
                             {:else if field.type === 'DateTime'}
-                                <Select size="sm" items={DATETIME_FORMATS[field.subType].map(fmt => ({name: fmt, value: fmt}))} bind:value={field.format} />
+                                <Select size="sm" items={(DATETIME_FORMATS[field.subType] || DATETIME_FORMATS['Date']).map(fmt => ({name: fmt, value: fmt}))} bind:value={field.format} />
                             {:else}
                                 <span class="text-xs text-gray-400 italic">None</span>
                             {/if}

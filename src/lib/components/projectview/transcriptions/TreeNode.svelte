@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TreeNode.svelte -->
 <script>
 	import { createEventDispatcher } from 'svelte';
-    import { FolderOpen, FolderClosed, MessageSquareText, Music, Film, CircleHelp, FileText } from 'lucide-svelte';
+    import { FolderOpen, FolderClosed, MessageSquareText, Music, Film, CircleHelp, FileText } from '@lucide/svelte';
 	// Use relative path for recursive import within the same directory (if this file is TreeNode.svelte)
 	// If TreeNode is imported elsewhere, this might need adjustment, but assuming it's self-recursive
 	import TreeNode from './TreeNode.svelte';

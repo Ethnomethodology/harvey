@@ -2,7 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { message } from '@tauri-apps/plugin-dialog';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { PencilLine } from 'lucide-svelte';
+    import { PencilLine } from '@lucide/svelte';
 
     export let showModal = false;
     export let groupData = { id: null, name: '', description: '' }; // Incoming group data

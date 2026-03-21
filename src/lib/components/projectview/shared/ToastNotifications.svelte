@@ -16,7 +16,7 @@
 
 {#if $notificationStore.length > 0}
   <div
-    class="fixed bottom-4 right-4 z-[200] w-full max-w-xs sm:max-w-sm space-y-3"
+    class="fixed bottom-4 right-4 z-[100005] w-full max-w-xs sm:max-w-sm space-y-3"
     aria-live="polite"
     aria-relevant="additions removals"
   >

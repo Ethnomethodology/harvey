@@ -308,7 +308,7 @@ export function markDocumentChangesDiscarded() { project.update(p => { if (p.sel
 export function clearDocumentEditorState() { project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, currentImageAnnotations: [], initialImageAnnotations: [], isImageAnnotationsDirty: false, currentTableHighlights: [], initialTableHighlights: [], isTableHighlightsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-export function setDocumentHighlights(highlights) {
+export function setDocumentHighlights(highlights, markDirty = true) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
         const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
@@ -325,12 +325,13 @@ export function setDocumentHighlights(highlights) {
             }
         });
 
-        const updatedState = { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
-
-        if (isMediaNoteActive) {
-            updatedState.isMediaNoteTranscriptDirty = true;
+        const updatedState = { ...p, currentDocumentHighlights: highlights };
+        if (markDirty) {
+            updatedState.isDocumentMetadataDirty = true;
+            if (isMediaNoteActive) {
+                updatedState.isMediaNoteTranscriptDirty = true;
+            }
         }
-
 
         return updatedState;
     });
@@ -410,6 +411,118 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
                     return c;
                 });
                 return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
+export function removeTagFromHighlightLocal(highlightId, tagName, docType, filePath) {
+    project.update(p => {
+        let highlights, key, dirtyFlag, pathKey;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'imported_transcript' || docType === 'transcript' || docType === 'audio_transcript' || docType === 'video_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+            pathKey = 'currentImportedTranscriptPath';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'table') {
+            highlights = p.currentTableHighlights;
+            key = 'currentTableHighlights';
+            dirtyFlag = 'isTableHighlightsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'selectedDocumentPath';
+        }
+
+        // Only update if the file currently loaded in the store matches the highlight's file
+        if (p[pathKey] !== filePath) {
+            return p;
+        }
+
+        if (!highlights || !Array.isArray(highlights)) return p;
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId && Array.isArray(h.tags)) {
+                return { ...h, tags: h.tags.filter(t => t !== tagName) };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
+export function manageCommentInHighlightLocal(highlightId, action, commentObj, commentId, text, docType, filePath) {
+    project.update(p => {
+        let highlights, key, dirtyFlag, pathKey;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'imported_transcript' || docType === 'transcript' || docType === 'audio_transcript' || docType === 'video_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+            pathKey = 'currentImportedTranscriptPath';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'table') {
+            highlights = p.currentTableHighlights;
+            key = 'currentTableHighlights';
+            dirtyFlag = 'isTableHighlightsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'selectedDocumentPath';
+        }
+
+        // Only update if the file currently loaded in the store matches the highlight's file
+        if (p[pathKey] !== filePath) {
+            return p;
+        }
+
+        if (!highlights || !Array.isArray(highlights)) return p;
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const currentComments = h.comments || [];
+                if (action === 'add') {
+                    return { ...h, comments: [...currentComments, commentObj] };
+                } else if (action === 'delete') {
+                    return { ...h, comments: currentComments.filter(c => c.id !== commentId && c.parentId !== commentId) };
+                } else if (action === 'update') {
+                    return {
+                        ...h, comments: currentComments.map(c => {
+                            if (c.id === commentId) {
+                                return { ...c, text };
+                            }
+                            return c;
+                        })
+                    };
+                }
             }
             return h;
         });
@@ -807,8 +920,13 @@ export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.er
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
 export function setImportedTranscriptHighlights(highlights, markDirty = true) {
     project.update(store => {
-        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
         const currentJson = JSON.stringify(highlights);
+
+        if (!markDirty) {
+            store.initialImportedTranscriptHighlights = JSON.parse(currentJson);
+        }
+
+        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
 
         store.currentImportedTranscriptHighlights = highlights;
         if (markDirty) {

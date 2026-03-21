@@ -1,7 +1,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { Modal, Label, Input, Textarea, Button } from 'flowbite-svelte';
-    import { Tag } from 'lucide-svelte';
+    import { Tag } from '@lucide/svelte';
 
     export let showModal = false;
 

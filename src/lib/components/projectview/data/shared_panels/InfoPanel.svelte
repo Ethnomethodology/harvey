@@ -12,7 +12,7 @@
     import MultiSelect from '$lib/components/projectview/shared/MultiSelect.svelte';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { SquarePen, XSquare, Trash2, PlusCircle } from 'lucide-svelte';
+    import { SquarePen, XSquare, Trash2, PlusCircle } from '@lucide/svelte';
     import { Input, Label, Textarea, Button } from 'flowbite-svelte';
 
     async function handleDeleteCustomField(fieldKey) {

@@ -18,6 +18,7 @@ use std::{
 use quick_xml;
 use chrono::Utc;
 use super::db_handler::{self, delete_annotations_from_db};
+use crate::projectview::chart_handler;
 use super::shared_types::GroupData; // Added for group commands
 use rusqlite::{Connection, params}; // Added for opening DB connection in commands
 use tauri::Emitter;
@@ -2071,6 +2072,20 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 warn!("[Backend Delete Table] Failed to delete table styles from DB for project_id {}, table {}: {}", project_id_for_db, item_path, e);
             } else {
                 info!("[Backend Delete Table] Deleted table styles from DB for project_id {}, table {}", project_id_for_db, item_path);
+            }
+
+            // Also delete any table schema configs associated with this table
+            if let Err(e) = db_handler::delete_table_schema(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Table] Failed to delete table schema configs from DB for project_id {}, table {}: {}", project_id_for_db, item_relative_path, e);
+            } else {
+                info!("[Backend Delete Table] Deleted table schema configs from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
+            }
+
+            // Also delete any chart configs associated with this table
+            if let Err(e) = chart_handler::delete_all_charts_for_table(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Table] Failed to delete chart configs from DB for project_id {}, table {}: {}", project_id_for_db, item_relative_path, e);
+            } else {
+                info!("[Backend Delete Table] Deleted chart configs from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);

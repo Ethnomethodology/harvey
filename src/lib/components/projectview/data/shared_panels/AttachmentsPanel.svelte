@@ -1,11 +1,13 @@
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
-    import { project } from '$lib/stores/projectStore.js';
+    import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
+    import { triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
-    import { FileAudio, PlayCircle, Plus } from 'lucide-svelte';
+    import { Dropdown, DropdownItem } from 'flowbite-svelte';
+    import { FileAudio, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -18,14 +20,195 @@
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
 
+    // We will group string attachments by their folder if they are inside attachments/something/
+    let groupedAttachments = { root: [], folders: {} };
+    let expandedFolders = {};
+
+    function processAttachmentsForGrouping(rawAttachments) {
+        let root = [];
+        let folders = {};
+
+        rawAttachments.forEach((attachment, originalIndex) => {
+            // Objects (charts, views) or files not matching the pattern go to root
+            if (typeof attachment !== 'string') {
+                // Ignore the "survey" view configuration object itself from rendering in the attachments list,
+                // as its generated documents are what we want to show.
+                if (attachment.view_type === 'survey') return;
+
+                root.push({ attachment, originalIndex });
+                return;
+            }
+
+            // We expect string paths. Let's see if it's inside a nested folder under attachments
+            // Example: "harvey_files/tables/xyz/attachments/survey_2026_participants/Participant_1.json"
+            const parts = attachment.split(/[\/\\]/);
+            const attachmentsIdx = parts.indexOf('attachments');
+
+            if (attachmentsIdx !== -1 && parts.length > attachmentsIdx + 2) {
+                // It's in a subfolder: attachments -> folder_name -> file_name
+                const folderName = parts[attachmentsIdx + 1];
+                if (!folders[folderName]) {
+                    folders[folderName] = [];
+                    expandedFolders[folderName] = expandedFolders[folderName] || false;
+                }
+                folders[folderName].push({ attachment, originalIndex });
+            } else {
+                root.push({ attachment, originalIndex });
+            }
+        });
+
+        groupedAttachments = { root, folders };
+    }
+
+    export function resetSelection() {
+        currentTrackIndex = -1;
+    }
+
+    export function setSelectionByObject(attachmentObj) {
+        if (!attachmentObj || !attachments) {
+            currentTrackIndex = -1;
+            return;
+        }
+
+        const targetName = attachmentObj.chart_name || attachmentObj.view_name;
+        const targetType = attachmentObj.chart_type || attachmentObj.view_type;
+
+        if (!targetName) return;
+
+        const idx = attachments.findIndex(a => {
+            if (typeof a !== 'object') return false;
+            const aName = a.chart_name || a.view_name;
+            const aType = a.chart_type || a.view_type;
+            return aName === targetName && aType === targetType;
+        });
+
+        if (idx !== -1) {
+            currentTrackIndex = idx;
+        } else {
+            currentTrackIndex = -1;
+        }
+    }
+
+    function toggleFolder(folderName) {
+        expandedFolders[folderName] = !expandedFolders[folderName];
+        expandedFolders = { ...expandedFolders };
+    }
+
     function getFileName(path) {
+        if (typeof path === 'object' && path.chart_name) return path.chart_name;
+        if (typeof path === 'object' && path.view_name) return path.view_name;
         return path.split(/[\/\\]/).pop() || path;
     }
 
     function playTrack(index) {
         if (index >= 0 && index < attachments.length) {
             currentTrackIndex = index;
-            dispatch('requestPlayMedia', { mediaPath: attachments[index] });
+            const attachment = attachments[index];
+            if (typeof attachment === 'object' && attachment.chart_name) {
+                dispatch('requestOpenChart', { chart: attachment });
+            } else if (typeof attachment === 'object' && attachment.view_name) {
+                dispatch('requestOpenView', { view: attachment });
+            } else {
+                dispatch('requestPlayMedia', { mediaPath: attachment });
+            }
+        }
+    }
+
+    async function handleDeleteChart(chart) {
+        if (!chart || !chart.chart_name) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete ${chart.chart_name}?`, { title: 'Delete Chart', type: 'warning' });
+        if (!confirmed) return;
+
+        const projectStoreState = get(project);
+
+        // Match logic of ChartModal by converting active active item path to relative if needed, but the backend stores the relative table path.
+        // We know we fetched these charts using `previousProcessedItemPath`.
+        try {
+            await invoke('delete_chart_config_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                chartName: chart.chart_name
+            });
+            notificationStore.add('Chart deleted.', 'success');
+            // Optimistic update
+            attachments = attachments.filter(a => a.chart_name !== chart.chart_name);
+            dispatch('chartSaved'); // Optionally trigger broader UI refresh if needed
+        } catch (error) {
+            console.error('Failed to delete chart via attachments panel:', error);
+            notificationStore.add('Failed to delete chart.', 'error');
+        }
+    }
+
+    async function handleDeleteView(view) {
+        if (!view || !view.view_name) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        let promptMessage = `Are you sure you want to delete view ${view.view_name}?`;
+        if (view.view_type === 'survey') {
+            promptMessage += `\n\nWARNING: Deleting this Survey Data Table view will also permanently delete ALL generated .json documents associated with it. This action cannot be undone.`;
+        }
+
+        const confirmed = await ask(promptMessage, { title: 'Delete View', type: 'warning' });
+        if (!confirmed) return;
+
+        const projectStoreState = get(project);
+
+        try {
+            await invoke('delete_table_view_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                viewName: view.view_name,
+                projectXmlPathStr: projectStoreState.xmlPath
+            });
+            notificationStore.add('View deleted.', 'success');
+
+            // If it was a survey view, we need to completely reload to clear out the deleted documents
+            if (view.view_type === 'survey') {
+                await loadAttachments(previousProcessedItemPath);
+            } else {
+                attachments = attachments.filter(a => a.view_name !== view.view_name);
+            }
+            dispatch('viewSaved');
+            dispatch('requestDeleteView', { viewName: view.view_name });
+            triggerRefresh();
+        } catch (error) {
+            console.error('Failed to delete view via attachments panel:', error);
+            notificationStore.add('Failed to delete view.', 'error');
+        }
+    }
+
+    async function handleDeleteDocument(documentPath) {
+        if (!documentPath) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to permanently delete this document?\n\nThis action cannot be undone.`, { title: 'Delete Document', type: 'warning' });
+        if (!confirmed) return;
+
+        const projectStoreState = get(project);
+        if (!projectStoreState.xmlPath || !previousProcessedItemPath) return;
+
+        try {
+            // Document paths in attachments list might be absolute (due to legacy behavior) or relative.
+            // The backend handles resolving this properly now in delete_attachment_command.
+            // But we try to pass a relative path if possible.
+            let attachmentRelPath = documentPath;
+            if (documentPath.startsWith(projectStoreState.baseDirectory)) {
+                attachmentRelPath = documentPath.substring(projectStoreState.baseDirectory.length);
+                attachmentRelPath = attachmentRelPath.replace(/\\/g, '/').replace(/^\//, '');
+            }
+
+            await invoke('delete_attachment_command', {
+                projectXmlPathStr: projectStoreState.xmlPath,
+                assetRelativePath: previousProcessedItemPath,
+                attachmentRelativePath: attachmentRelPath
+            });
+            notificationStore.add('Document deleted.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+        } catch (error) {
+            console.error('Failed to delete document:', error);
+            notificationStore.add(`Failed to delete document: ${error}`, 'error');
         }
     }
 
@@ -83,30 +266,57 @@
         }
 
         try {
-            const result = await invoke('get_asset_metadata_command', {
-                projectId: projectStoreState.id,
-                assetRelativePath: assetRelativePathToLoad
-            });
+            let loadedAttachments = [];
 
-            if (result && result.custom_fields_json) {
-                const customFields = JSON.parse(result.custom_fields_json);
-                const attachmentsField = customFields.find(f => f.key === 'attachments');
-                if (attachmentsField && attachmentsField.value) {
-                    attachments = JSON.parse(attachmentsField.value);
-                }
+            if (itemType === 'table') {
+                const charts = await invoke('load_chart_configs_command', {
+                    projectId: projectStoreState.id,
+                    tablePath: assetRelativePathToLoad
+                });
+                const views = await invoke('load_table_views_command', {
+                    projectId: projectStoreState.id,
+                    tablePath: assetRelativePathToLoad
+                });
+                loadedAttachments = [...charts, ...views];
             }
+
+            // Always attempt to load raw file attachments from asset_metadata for all types
+            try {
+                const result = await invoke('get_asset_metadata_command', {
+                    projectId: projectStoreState.id,
+                    assetRelativePath: assetRelativePathToLoad
+                });
+
+                if (result && result.custom_fields_json) {
+                    const customFields = JSON.parse(result.custom_fields_json);
+                    const attachmentsField = customFields.find(f => f.key === 'attachments');
+                    if (attachmentsField && attachmentsField.value) {
+                        const fileAttachments = JSON.parse(attachmentsField.value);
+                        loadedAttachments = [...loadedAttachments, ...fileAttachments];
+                    }
+                }
+            } catch (metaError) {
+                console.error(`[AttachmentsPanel] Could not load raw asset_metadata attachments:`, metaError);
+            }
+
+            attachments = loadedAttachments;
         } catch (error) {
             console.error(`[AttachmentsPanel] Error loading metadata for ${assetRelativePathToLoad}:`, error);
         } finally {
+            processAttachmentsForGrouping(attachments);
             isLoading = false;
             previousProcessedItemPath = assetRelativePathToLoad;
         }
     }
 
+    $: if (attachments) {
+        processAttachmentsForGrouping(attachments);
+    }
+
     $: {
         (async () => {
             const currentProjectStoreState = get(project);
-            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript';
+            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table';
             if (itemPath && isSupportedType && currentProjectStoreState?.baseDirectory) {
                 const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
@@ -130,7 +340,7 @@
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
     <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
         <span class="ml-1">Attachments</span>
-        {#if itemType !== 'doc'}
+        {#if itemType !== 'doc' && itemType !== 'table'}
             <button 
                 on:click={handleAddAttachment}
                 class="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-blue-600 dark:text-blue-400 flex items-center justify-center"
@@ -145,22 +355,152 @@
             <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">Loading...</p>
         {:else if attachments.length > 0}
             <ul class="divide-y divide-gray-200 dark:divide-gray-800">
-                {#each attachments as attachment, i (attachment)}
+                <!-- Render Folders First -->
+                {#each Object.keys(groupedAttachments.folders) as folderName}
+                    <li class="flex flex-col border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <div
+                            class="p-2 flex items-center justify-between group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            on:click={() => toggleFolder(folderName)}
+                        >
+                            <div class="flex items-center space-x-2 truncate">
+                                {#if expandedFolders[folderName]}
+                                    <FolderOpenIcon class="w-4 h-4 text-blue-500 shrink-0" />
+                                {:else}
+                                    <FolderClosed class="w-4 h-4 text-blue-500 shrink-0" />
+                                {/if}
+                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate" title={folderName}>
+                                    {folderName}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="text-xs text-gray-400 dark:text-gray-500 group-hover:hidden transition-opacity">{groupedAttachments.folders[folderName].length} items</span>
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                                    title="Delete Folder"
+                                    on:click|stopPropagation={() => {
+                                        // The view name is the folder name without the trailing "_participants" or "_questions"
+                                        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                                                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+                                        handleDeleteView({ view_name: viewName, view_type: 'survey' });
+                                    }}
+                                >
+                                    <Trash2 class="w-3.5 h-3.5 text-red-500" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {#if expandedFolders[folderName]}
+                            <ul class="pl-4 bg-gray-50/50 dark:bg-gray-900/50 pb-1">
+                                {#each groupedAttachments.folders[folderName] as { attachment, originalIndex } (attachment)}
+                                    <li
+                                        class="py-1.5 pr-2 pl-3 flex items-center justify-between group cursor-pointer border-l-2 border-transparent hover:border-blue-400"
+                                        class:bg-blue-100={currentTrackIndex === originalIndex}
+                                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                                        on:click={() => { playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}
+                                    >
+                                        <div class="flex items-center space-x-2 truncate">
+                                            <FileText class="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                            <span class="text-xs text-gray-700 dark:text-gray-300 truncate" title={getFileName(attachment)}>
+                                                {getFileName(attachment)}
+                                            </span>
+                                        </div>
+                                        <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center shrink-0">
+                                            <button class="text-gray-500 dark:text-gray-400 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Document Options" id="doc-options-folder-{originalIndex}" on:click|stopPropagation>
+                                                <MoreVertical class="w-3.5 h-3.5" />
+                                            </button>
+                                            <Dropdown triggeredBy="#doc-options-folder-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                                    <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                                </DropdownItem>
+                                                <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                                    <Trash2 class="w-4 h-4" /> Delete
+                                                </DropdownItem>
+                                            </Dropdown>
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </li>
+                {/each}
+
+                <!-- Render Root Items -->
+                {#each groupedAttachments.root as { attachment, originalIndex } (attachment)}
                     <li
                         class="p-2 flex items-center justify-between group cursor-pointer"
-                        class:bg-blue-100={currentTrackIndex === i}
-                        class:dark:bg-blue-800={currentTrackIndex === i}
-                        on:click={() => playTrack(i)}
+                        class:bg-blue-100={currentTrackIndex === originalIndex}
+                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                        on:click={() => playTrack(originalIndex)}
                     >
                         <div class="flex items-center space-x-3 truncate">
-                            <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
-                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={attachment}>
+                            {#if typeof attachment === 'object' && attachment.chart_name}
+                                {#if attachment.chart_type === 'bar'}<ChartBar class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'column'}<ChartColumn class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'line'}<LineChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'scatter'}<ScatterChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'pie'}<PieChart class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.chart_type === 'gantt'}<SquareChartGantt class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'object' && attachment.view_name}
+                                {#if attachment.view_type === 'partial'}<Table2 class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                                {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
+                                <FileText class="w-4 h-4 text-gray-400 shrink-0" />
+                            {:else}
+                                <FileAudio class="w-4 h-4 text-gray-400 shrink-0" />
+                            {/if}
+                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name) : attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
-                        <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(i)}>
-                            <PlayCircle class="w-4 h-4" />
-                        </button>
+                        {#if typeof attachment === 'object' && attachment.chart_name}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Chart Options" id="chart-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#chart-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenChart', { chart: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'object' && attachment.view_name}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="View Options" id="view-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#view-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenView', { view: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestConfigureView', { view: attachment }); }}>
+                                        <Settings class="w-4 h-4 text-gray-500" /> Configure
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Document Options" id="doc-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#doc-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else}
+                            <button class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center" title="Play" on:click|stopPropagation={() => playTrack(originalIndex)}>
+                                <PlayCircle class="w-4 h-4" />
+                            </button>
+                        {/if}
                     </li>
                 {/each}
             </ul>

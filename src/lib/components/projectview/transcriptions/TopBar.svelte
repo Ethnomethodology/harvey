@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
-	import { Button } from 'flowbite-svelte';
-	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, AudioLines, Rows2 } from 'lucide-svelte';
+	import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
+	import { MessageSquareText, Share, Languages, Users, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, AudioLines, Rows2, ChevronDown } from '@lucide/svelte';
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
@@ -26,7 +26,7 @@
 	import DualTranscriptModal from '../modals/DualTranscriptModal.svelte';
 	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	// import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import TranslateModal from '../modals/TranslateModal.svelte';
 
 	// --- Local state ---
@@ -321,29 +321,55 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800"
+	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-[1000]"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+            <Button
+                size="xs"
+                color="alternative"
+                pill={true}
+                class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-600"
+                on:click={(e) => dispatch('requestImport', e)}
+                title="Import"
+                aria-label="Import"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-            </button>
+            </Button>
         </div>
 
 
 		<!-- Media Selection Dropdown -->
-		<Dropdown
-			containerClasses="w-72"
-			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
-			bind:value={selectedMediaValue}
-			on:change={(e) => handleMediaSelectionChange(e.detail)}
-			placeholder={$project.isLoading ? 'Loading...' : (mediaFilesForDropdown.length === 0 ? 'No Media' : 'Select Media')}
-			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
-		/>
+		<div class="relative">
+			<Button id="media-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0" disabled={$project.isLoading || mediaFilesForDropdown.length === 0} title="Select Media">
+				<span class="truncate">
+					{#if $project.isLoading}
+						Loading...
+					{:else if mediaFilesForDropdown.length === 0}
+						No Media
+					{:else}
+						{ mediaFilesForDropdown.find(f => f.path === selectedMediaValue)?.name || 'Select Media' }
+					{/if}
+				</span>
+				<ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
+			</Button>
+			{#if mediaFilesForDropdown.length > 0}
+				<Dropdown triggeredBy="#media-selection-btn" class="w-72 z-[1001] max-h-96 overflow-y-auto">
+					{#each mediaFilesForDropdown as f}
+						<DropdownItem
+							class="text-xs flex items-center { selectedMediaValue === f.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : '' }"
+							on:click={() => handleMediaSelectionChange(f.path)}
+						>
+							<span class="truncate">{f.name}</span>
+						</DropdownItem>
+					{/each}
+				</Dropdown>
+			{/if}
+		</div>
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center ml-2">
@@ -485,63 +511,7 @@
 />
 
 <style lang="postcss">
-	/* Shared button style */
-	.ui-button-icon-no-border {
-		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:disabled:hover:!bg-transparent;
-	}
-	.ui-button-import {
-        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
-        @apply bg-transparent;
-        @apply text-gray-700 dark:text-white;
-        @apply border border-gray-300 dark:border-gray-600;
-        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
-        @apply hover:border-blue-500 dark:hover:border-blue-500;
-        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-        @apply dark:disabled:hover:!bg-transparent;
-    }
-	.ui-button-icon:disabled {
-		@apply opacity-50 cursor-not-allowed;
-	}
-	.ui-button-icon svg {
-		@apply w-4 h-4; /* Adjusted icon size */
-	}
-
-	/* Basic style for the new checkbox */
-	.ui-checkbox {
-		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
-	}
-
-	/* Ensure spinner icon gets correct color when disabled */
-	.ui-button-icon:disabled .animate-spin {
-		@apply text-gray-400 dark:text-gray-500; /* Adjusted disabled spinner color */
-	}
-
-	/* Override default dark background for TopBar */
-	.dark .dark\:bg-gray-800 {
-		 background-color: #1f2937 !important; /* Tailwind gray-800 */
-	}
-	/* Override default dark border for TopBar */
-	 .dark .dark\:border-gray-700 {
-		 border-color: #374151 !important; /* Tailwind gray-700 */
-	 }
-
-	/* Explicit width classes for select elements */
-	.w-40 { width: 10rem; } /* 160px */
-	.w-36 { width: 9rem;  } /* 144px */
-	.w-32 { width: 8rem;  } /* 128px */
-	.w-45 { width: 11.25rem; } /* approx */
-	.w-34 { width: 8.5rem; } /* approx */
-	.w-28 { width: 7rem; } /* approx */
-
-	/* Tailwind class used in SVG - ensure consistency */
-
-	/* Extra small text for speaker count badge */
-	.text-xxs {
-		font-size: 0.65rem; /* ~10.4px */
-		line-height: 0.8rem; /* ~12.8px */
-	}
-    .hover-scale-effect {
-        /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */
+    :global(.hover-scale-effect) {
         will-change: transform;
         backface-visibility: hidden;
         transform: translateZ(0);

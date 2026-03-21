@@ -97,7 +97,7 @@
     List, ListOrdered, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
     Highlighter, Baseline, X, ChevronUp, CheckSquare,
     Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play
-  } from 'lucide-svelte';
+  } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
   export let placeholder = 'Enter text...';
@@ -184,6 +184,8 @@
   let areHighlightsReady = false; // Track if highlights have been loaded from backend
   let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
 
+  let previousDocumentHighlightsIds = new Set();
+
   let isResizing = false;
   let resizeDirection = null;
   let resizeTargetCellKey = null;
@@ -251,20 +253,26 @@
     }
 
     if (!clickedInside) {
-      isBlockDropdownOpen = false;
-      isInsertDropdownOpen = false;
-      isAlignDropdownOpen = false;
-      isColorDropdownOpen = false;
-      isHighlightDropdownOpen = false;
-      showSearchOptionsDropdown = false;
-      isFontDropdownOpen = false;
-      isFontSizeDropdownOpen = false;
+      closeAllDropdowns();
     }
+  }
+
+  function closeAllDropdowns() {
+    isBlockDropdownOpen = false;
+    isInsertDropdownOpen = false;
+    isAlignDropdownOpen = false;
+    isColorDropdownOpen = false;
+    isHighlightDropdownOpen = false;
+    showSearchOptionsDropdown = false;
+    isFontDropdownOpen = false;
+    isFontSizeDropdownOpen = false;
   }
 
   function toggleBlockDropdown() {
     if (!editable) return;
-    isBlockDropdownOpen = !isBlockDropdownOpen;
+    const nextState = !isBlockDropdownOpen;
+    closeAllDropdowns();
+    isBlockDropdownOpen = nextState;
   }
 
   function selectBlockType(type) {
@@ -273,8 +281,10 @@
   }
 
   function toggleInsertDropdown() {
-      if (!editable) return;
-      isInsertDropdownOpen = !isInsertDropdownOpen;
+    if (!editable) return;
+    const nextState = !isInsertDropdownOpen;
+    closeAllDropdowns();
+    isInsertDropdownOpen = nextState;
   }
 
   function openInsertTableDialog() {
@@ -311,6 +321,7 @@
       });
       if (highlightsJson && editor) {
         const highlights = JSON.parse(highlightsJson);
+        previousDocumentHighlightsIds = new Set(highlights.map(h => h.id));
         editor.update(() => {
           for (const highlight of highlights) {
             const node = _getNodeByKey(highlight.nodeKey);
@@ -389,7 +400,9 @@
   let alignmentDropdownRef;
   function toggleAlignDropdown() {
     if (!editable) return;
-    isAlignDropdownOpen = !isAlignDropdownOpen;
+    const nextState = !isAlignDropdownOpen;
+    closeAllDropdowns();
+    isAlignDropdownOpen = nextState;
   }
 
   let selectedFontFamily = 'Inter';
@@ -398,7 +411,9 @@
 
   function toggleFontDropdown() {
     if (!editable) return;
-    isFontDropdownOpen = !isFontDropdownOpen;
+    const nextState = !isFontDropdownOpen;
+    closeAllDropdowns();
+    isFontDropdownOpen = nextState;
   }
 
   function applyFontFamily(fontFamily) {
@@ -413,7 +428,9 @@
 
   function toggleFontSizeDropdown() {
     if (!editable) return;
-    isFontSizeDropdownOpen = !isFontSizeDropdownOpen;
+    const nextState = !isFontSizeDropdownOpen;
+    closeAllDropdowns();
+    isFontSizeDropdownOpen = nextState;
   }
 
   function applyFontSize(fontSize) {
@@ -455,14 +472,18 @@
   let highlightDropdownRef;
   function toggleHighlightDropdown() {
     if (!editable) return;
-    isHighlightDropdownOpen = !isHighlightDropdownOpen;
+    const nextState = !isHighlightDropdownOpen;
+    closeAllDropdowns();
+    isHighlightDropdownOpen = nextState;
   }
 
   let isColorDropdownOpen = false;
   let colorDropdownRef;
   function toggleColorDropdown() {
     if (!editable) return;
-    isColorDropdownOpen = !isColorDropdownOpen;
+    const nextState = !isColorDropdownOpen;
+    closeAllDropdowns();
+    isColorDropdownOpen = nextState;
   }
 
   import { get } from 'svelte/store';
@@ -729,6 +750,63 @@
           },
           COMMAND_PRIORITY_HIGH
         ),
+        // Exit list on double Enter (pressing Enter on an empty list item)
+        editor.registerCommand(
+          KEY_ENTER_COMMAND,
+          (event) => {
+            if (!editor || !editor.isEditable()) return false;
+            let isEmptyListItem = false;
+            let listItemNode = null;
+            let listNode = null;
+            try {
+              editor.getEditorState().read(() => {
+                const selection = _getSelection();
+                if (!_isRangeSelection(selection) || !selection.isCollapsed()) return;
+                const anchorNode = selection.anchor.getNode();
+                const li = _findMatchingParent(anchorNode, _isListItemNode);
+                if (!li) return;
+                const parent = li.getParent();
+                if (!_isListNode(parent)) return;
+                // Empty if the list item's text content is blank
+                const text = li.getTextContent();
+                if (text === '') {
+                  isEmptyListItem = true;
+                  listItemNode = li;
+                  listNode = parent;
+                }
+              });
+            } catch (e) {
+              console.error('Error reading state during list Enter check:', e);
+              return false;
+            }
+            if (isEmptyListItem) {
+              event.preventDefault();
+              editor.update(() => {
+                const li = listItemNode;
+                const list = listNode;
+                // If it's the only item, replace the whole list with a paragraph
+                const siblings = list.getChildren();
+                const paragraph = _createParagraphNode();
+                if (siblings.length === 1) {
+                  list.replace(paragraph);
+                } else {
+                  // Otherwise remove just this item and insert a paragraph after the list
+                  const nextSibling = list.getNextSibling();
+                  li.remove();
+                  if (nextSibling) {
+                    nextSibling.insertBefore(paragraph);
+                  } else {
+                    list.insertAfter(paragraph);
+                  }
+                }
+                paragraph.select();
+              });
+              return true;
+            }
+            return false;
+          },
+          COMMAND_PRIORITY_NORMAL
+        ),
         editor.registerCommand(
             KEY_ENTER_COMMAND,
             (event) => {
@@ -786,9 +864,15 @@
                     } else {
                         _insertNodes([tableNode]);
                     }
-                    const newParagraph = _createParagraphNode();
-                    tableNode.insertAfter(newParagraph);
-                    newParagraph.selectStart();
+                    const pBefore = _createParagraphNode();
+                    pBefore.append(_createTextNode('\u00A0')); // Add a non-breaking space to ensure it's selectable? Or just leave empty?
+                    // Usually an empty paragraph is fine in Lexical as it often has a default <br> internally.
+                    // But let's check other usages. Line 810 uses empty paragraph.
+                    
+                    const pAfter = _createParagraphNode();
+                    tableNode.insertBefore(pBefore);
+                    tableNode.insertAfter(pAfter);
+                    pAfter.selectStart();
                 });
                 return true;
             },
@@ -1366,7 +1450,7 @@ function gatherAllHighlights() {
     if (allTextNodes.length === 0) return [];
 
     // Use latest highlights from store for metadata merging
-    const currentHighlights = get(project).currentDocumentHighlights || [];
+    const currentHighlights = documentHighlights || [];
     const existingHighlightsMap = new Map(currentHighlights.map(h => [h.id, h]));
 
     // 2. Group into blocks that are contiguous in the document flow
@@ -1443,43 +1527,52 @@ function gatherAllHighlights() {
 function updateAndSaveHighlights(highlights) {
     if (!editor || !documentPath) return;
 
+    previousDocumentHighlightsIds = new Set(highlights.map(h => h.id));
     dispatch('highlightschange', { highlights });
 }
 
-function scrollToHighlight(id) {
-    if (!id || !editor) return;
+function scrollToHighlight(id, currentEditor) {
+    if (!id || !currentEditor) return;
     
     let attempts = 0;
     const maxAttempts = 15; // Increased attempts
     
     const tryScroll = () => {
+        if (!currentEditor) return;
+
         // Recursive function to find node by highlight ID - MUST be called inside tryScroll to retry search
         const findNodeKey = () => {
             let foundKey = null;
-            editor.getEditorState().read(() => {
-                const root = _getRoot();
-                const nodesToVisit = [root];
-                while(nodesToVisit.length > 0) {
-                    const node = nodesToVisit.pop();
-                    if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
-                        foundKey = node.getKey();
-                        break;
-                    }
-                    if (node.getChildren) {
-                        const children = node.getChildren();
-                        for (let i = children.length - 1; i >= 0; i--) {
-                            nodesToVisit.push(children[i]);
+            try {
+                if (currentEditor && typeof currentEditor.getEditorState === 'function') {
+                    currentEditor.getEditorState().read(() => {
+                        const root = _getRoot();
+                        const nodesToVisit = [root];
+                        while(nodesToVisit.length > 0) {
+                            const node = nodesToVisit.pop();
+                            if (_isExtendedTextNode(node) && node.getHighlightId() === id) {
+                                foundKey = node.getKey();
+                                break;
+                            }
+                            if (node.getChildren) {
+                                const children = node.getChildren();
+                                for (let i = children.length - 1; i >= 0; i--) {
+                                    nodesToVisit.push(children[i]);
+                                }
+                            }
                         }
-                    }
+                    });
                 }
-            });
+            } catch (error) {
+                console.error("[LexicalEditor] Error in scrollToHighlight:", error);
+            }
             return foundKey;
         };
 
         const targetNodeKey = findNodeKey();
 
         if (targetNodeKey) {
-            const domElement = editor.getElementByKey(targetNodeKey);
+            const domElement = currentEditor.getElementByKey(targetNodeKey);
             if (domElement) {
                 console.log(`[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`);
                 domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1492,7 +1585,10 @@ function scrollToHighlight(id) {
                 }, 2000);
                 
                 // Success - clear the request
-                project.update(p => ({ ...p, requestedHighlightId: null }));
+                project.update(p => {
+                    if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
+                    return p;
+                });
                 return;
             }
         }
@@ -1503,7 +1599,10 @@ function scrollToHighlight(id) {
             setTimeout(tryScroll, 150); // Slightly longer delay between retries
         } else {
             console.warn(`[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`);
-            project.update(p => ({ ...p, requestedHighlightId: null }));
+            project.update(p => {
+                if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
+                return p;
+            });
         }
     };
     
@@ -1512,8 +1611,8 @@ function scrollToHighlight(id) {
 }
 
 // Trigger scroll when editor is ready AND highlights are loaded AND nodes are loaded AND there is a requested ID
-$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady) {
-    scrollToHighlight($project.requestedHighlightId);
+$: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNodesReady && editor) {
+    scrollToHighlight($project.requestedHighlightId, editor);
 }
 
   function handleBlockTypeChange(event) {
@@ -1619,6 +1718,7 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
 
   async function toggleLink() {
       if (!editor || !editable) return;
+      closeAllDropdowns();
       closeTableCellMenu(false);
       currentModalUrl = ''; isEditingLink = false;
       editor.focus(); await tick();
@@ -2116,6 +2216,49 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
       window.removeEventListener('pointerup', handlePointerUp);
   }
 
+function handleDocumentHighlightsChange(highlights) {
+    if (!editor || !areHighlightsReady || !areNodesReady) return;
+
+    const currentHighlightsIds = new Set(highlights.map(h => h.id));
+    let hasDeletions = false;
+    let deletedIds = new Set();
+
+    for (const id of previousDocumentHighlightsIds) {
+        if (!currentHighlightsIds.has(id)) {
+            hasDeletions = true;
+            deletedIds.add(id);
+        }
+    }
+
+    if (hasDeletions) {
+        editor.update(() => {
+            const root = _getRoot();
+            const nodesToVisit = [root];
+            while (nodesToVisit.length > 0) {
+                const currentNode = nodesToVisit.pop();
+                if (_isExtendedTextNode(currentNode)) {
+                    const id = currentNode.getHighlightId();
+                    if (id && deletedIds.has(id)) {
+                        currentNode.setStyle('');
+                        currentNode.setHighlightId(null);
+                    }
+                }
+                if (currentNode.getChildren) {
+                    const children = currentNode.getChildren();
+                    for (let i = children.length - 1; i >= 0; i--) {
+                        nodesToVisit.push(children[i]);
+                    }
+                }
+            }
+        });
+    }
+
+    // Update our reference
+    previousDocumentHighlightsIds = currentHighlightsIds;
+}
+
+$: handleDocumentHighlightsChange(documentHighlights);
+
 function updateSearchHighlights() {
   if (typeof CSS === 'undefined' || !CSS.highlights) {
     return;
@@ -2288,7 +2431,9 @@ function executeSearch(termToSearch, options = {}) {
 }
 
 function toggleSearchOptionsDropdown() {
-  showSearchOptionsDropdown = !showSearchOptionsDropdown;
+  const nextState = !showSearchOptionsDropdown;
+  closeAllDropdowns();
+  showSearchOptionsDropdown = nextState;
 }
 
 function openFindReplaceModal() {
@@ -2541,8 +2686,10 @@ $: if (editor && activeLayout) {
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
-  {#if editable}
+  {#if editable || $$slots.toolbar_prepend}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-[100]">
+      <slot name="toolbar_prepend"></slot>
+
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}><Undo2 size={14} /></button>
       {/if}
@@ -2692,7 +2839,7 @@ $: if (editor && activeLayout) {
                 role="menuitem"
                 tabindex="-1"
               >
-                {@html option.icon}
+                <svelte:component this={option.iconComponent} size={14} />
                 <span>{option.label}</span>
               </div>
               {/each}
@@ -3031,7 +3178,7 @@ $: if (editor && activeLayout) {
         while(nodesToVisit.length > 0) {
             const currentNode = nodesToVisit.pop();
             if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
-                currentNode.setStyle('background-color: transparent;');
+                currentNode.setStyle('');
                 currentNode.setHighlightId(null);
             }
             if (currentNode.getChildren) {

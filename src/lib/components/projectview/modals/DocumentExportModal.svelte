@@ -12,7 +12,7 @@
         Button, 
         Helper
     } from 'flowbite-svelte';
-    import { Share, FolderOpen, X } from 'lucide-svelte';
+    import { Share, FolderOpen, X } from '@lucide/svelte';
 
 	export let showModal = false;
 	export let documentPath = '';

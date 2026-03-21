@@ -131,12 +131,14 @@ export async function loadHighlightsForFile(filePath, itemType) {
         return;
     }
 
+    const lowerPath = filePath.toLowerCase();
+
     // Determine the correct loading function based on itemType
-    if (itemType === 'doc' && filePath.toLowerCase().endsWith('.pdf')) {
+    if (itemType === 'doc' && lowerPath.endsWith('.pdf')) {
         await loadPdfAnnotationsFromFile(filePath);
     } else if (itemType === 'images') {
         await loadImageAnnotations(filePath);
-    } else if (itemType === 'tables' || itemType === 'table') {
+    } else if (itemType === 'tables' || itemType === 'table' || lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
         await loadTableHighlights(filePath);
     } else if (itemType === 'imported_transcript') {
         // Assuming there's a function to load highlights for imported transcripts
@@ -916,7 +918,8 @@ export async function importTableSheet(sourceFilePath, projectXmlPath, sheetName
     const result = await invoke('import_table_file', {
         sourcePathStr: sourceFilePath,
         projectXmlPathStr: projectXmlPath,
-        sheetNameOpt: sheetName
+        sheetNameOpt: sheetName,
+        appendSheetName: true
     });
     if (result && result.table_path && result.preview_data) {
         return { ...result, filename: `${filename} (${sheetName})` };
@@ -982,7 +985,8 @@ export async function importTableFile(hasHeaders) {
         const result = await invoke('import_table_file', {
             sourcePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath,
-            sheetNameOpt: selectedSheets ? selectedSheets[0] : null
+            sheetNameOpt: selectedSheets ? selectedSheets[0] : null,
+            appendSheetName: false // For single-sheet imports directly from here, don't append the sheet name
         });
         console.log(`[ProjectService] Result from 'import_table_file':`, result);
 
@@ -1995,8 +1999,8 @@ export async function saveDocumentContent(filePath, jsonContent) {
 
     let mainContentSaveError = null;
     try {
-        const highlights_json = (projState.isDocumentMetadataDirty && projState.currentDocumentHighlights?.length > 0)
-            ? JSON.stringify(projState.currentDocumentHighlights)
+        const highlights_json = projState.isDocumentMetadataDirty
+            ? JSON.stringify(projState.currentDocumentHighlights || [])
             : null;
 
         await invoke('save_note_json', {
@@ -2015,7 +2019,7 @@ export async function saveDocumentContent(filePath, jsonContent) {
         }
 
         // Mark metadata (highlights) as saved
-        if (highlights_json) {
+        if (highlights_json !== null) {
             markDocumentMetadataAsSaved(projState.currentDocumentFileLevelMetadata);
         }
 
@@ -2101,8 +2105,8 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     try {
         let finalHighlightsJson = highlightsJson;
         if (finalHighlightsJson === null) {
-            finalHighlightsJson = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
-                ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+            finalHighlightsJson = projState.isImportedTranscriptMetadataDirty
+                ? JSON.stringify(projState.currentImportedTranscriptHighlights || [])
                 : null;
         }
 

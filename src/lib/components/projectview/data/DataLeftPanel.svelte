@@ -18,7 +18,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import CategoryTooltip from './CategoryTooltip.svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
-    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from 'lucide-svelte';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from '@lucide/svelte';
 
 
     const dispatch = createEventDispatcher();
@@ -496,7 +496,7 @@
         if (importedTablePathsToRevert.length > 0) {
             // Select the last imported table
             const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
-            handleItemSelect(lastImported, 'table');
+            handleItemClick({ path: lastImported, file_type: 'table' });
 
             const count = importedTablePathsToRevert.length;
             message(`${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`, { title: 'Import Success', type: 'info' });

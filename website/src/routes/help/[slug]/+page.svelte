@@ -1,6 +1,6 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowLeft, ArrowRight } from 'lucide-svelte';
+    import { ArrowLeft, ArrowRight } from '@lucide/svelte';
 
     export let data;
 

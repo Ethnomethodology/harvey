@@ -16,7 +16,7 @@
         Helper,
         Checkbox
     } from 'flowbite-svelte';
-    import { Share, FolderOpen, X } from 'lucide-svelte';
+    import { Share, FolderOpen, X } from '@lucide/svelte';
 
 	export let showModal = false;
 	// Prop to receive the path of the transcript being exported

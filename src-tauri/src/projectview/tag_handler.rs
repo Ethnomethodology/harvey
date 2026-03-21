@@ -405,6 +405,122 @@ pub fn remove_tag_globally(
 }
 
 #[tauri::command]
+pub fn manage_highlight_comment(
+    project_id: &str,
+    highlight_id: String,
+    action: String, // "add", "update", "delete"
+    comment_id: Option<String>,
+    comment: Option<serde_json::Value>,
+    text: Option<String>,
+    file_path: String,
+    doc_type: String,
+) -> Result<(), CommandError> {
+    info!(
+        "[Tags] Managing comment '{}' for highlight '{}' in file '{}' of type '{}'",
+        action, highlight_id, file_path, doc_type
+    );
+
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // Determine the table and column to update based on doc_type
+    let (table_name, json_column, path_column) = match doc_type.as_str() {
+        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "table" => ("table_styles", "styles", "table_path"),
+        _ => {
+            let err_msg = format!("Unsupported document type for comment management: {}", doc_type);
+            error!("[Tags] {}", err_msg);
+            return Err(CommandError::Message(err_msg));
+        }
+    };
+
+    // 1. Load the existing JSON blob
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {} FROM {} WHERE project_id = ?1 AND {} = ?2",
+        json_column, table_name, path_column
+    ))?;
+
+    let json_string_opt: Option<String> = stmt
+        .query_row(params![project_id, file_path], |row| row.get(0))
+        .optional()?;
+
+    if let Some(json_str) = json_string_opt {
+        // 2. Parse and modify the JSON
+        let mut highlights: Vec<serde_json::Value> = if doc_type == "table" {
+            serde_json::from_str(&json_str)
+                .or_else(|_| serde_json::from_str::<String>(&json_str).and_then(|s| serde_json::from_str(&s)))
+                .map_err(|e| CommandError::Message(format!("Failed to parse table styles JSON: {}", e)))?
+        } else {
+            serde_json::from_str(&json_str)
+                .map_err(|e| CommandError::Message(format!("Failed to parse JSON: {}", e)))?
+        };
+
+        let mut was_modified = false;
+        for highlight in highlights.iter_mut() {
+            if let Some(h_obj) = highlight.as_object_mut() {
+                if h_obj.get("id").and_then(|v| v.as_str()) == Some(&highlight_id) {
+                    let comments_arr = h_obj.entry("comments").or_insert_with(|| serde_json::json!([]));
+
+                    if let Some(arr) = comments_arr.as_array_mut() {
+                        if action == "add" {
+                            if let Some(new_comment) = comment.clone() {
+                                arr.push(new_comment);
+                                was_modified = true;
+                            }
+                        } else if action == "delete" {
+                            if let Some(c_id) = &comment_id {
+                                let initial_len = arr.len();
+                                arr.retain(|c| {
+                                    c.get("id").and_then(|v| v.as_str()) != Some(c_id) &&
+                                    c.get("parentId").and_then(|v| v.as_str()) != Some(c_id)
+                                });
+                                if arr.len() < initial_len {
+                                    was_modified = true;
+                                }
+                            }
+                        } else if action == "update" {
+                            if let (Some(c_id), Some(new_text)) = (&comment_id, &text) {
+                                for c in arr.iter_mut() {
+                                    if c.get("id").and_then(|v| v.as_str()) == Some(c_id) {
+                                        if let Some(c_obj) = c.as_object_mut() {
+                                            c_obj.insert("text".to_string(), serde_json::Value::String(new_text.clone()));
+                                            // also update editedAt if needed, but standard update is fine
+                                            was_modified = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 3. Save the modified JSON back to the DB
+        if was_modified {
+            let new_json_string = if doc_type == "table" {
+                let inner_json = serde_json::to_string(&highlights)?;
+                serde_json::to_string(&inner_json)?
+            } else {
+                serde_json::to_string(&highlights)?
+            };
+
+            conn.execute(
+                &format!(
+                    "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
+                    table_name, json_column, path_column
+                ),
+                params![new_json_string, project_id, file_path],
+            )?;
+            info!("[Tags] Successfully updated comments for file: {}", file_path);
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn rename_tag_in_highlights(
     project_id: &str,
     old_name: String,
@@ -479,7 +595,7 @@ pub fn remove_tag_from_highlight(
     // Determine the table and column to update based on doc_type
     let (table_name, json_column, path_column) = match doc_type.as_str() {
         // pdf_annotations stores highlights for multiple "types"
-        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
         "table" => ("table_styles", "styles", "table_path"),
         _ => {
             let err_msg = format!("Unsupported document type for tag removal: {}", doc_type);
