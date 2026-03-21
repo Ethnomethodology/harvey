@@ -33,7 +33,7 @@
   <div class="flex items-center space-x-1.5 min-w-0">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <Button
-                size="sm"
+                size="xs"
                 color="alternative"
                 pill={true}
                 class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-700"

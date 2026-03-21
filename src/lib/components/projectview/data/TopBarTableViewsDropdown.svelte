@@ -133,16 +133,16 @@
 </script>
 
 <div class="relative inline-block text-left">
-    <Button id="table-views-dropdown-btn" color="alternative" size="sm" class="min-w-[140px] max-w-[220px] justify-between px-3 !py-1.5 focus:ring-0 shadow-sm ml-2" title="Select Table View">
+    <Button id="table-views-dropdown-btn" color="alternative" size="xs" class="min-w-[140px] max-w-[220px] justify-between px-3 !py-1.5 focus:ring-0 shadow-sm ml-2" title="Select Table View">
         <div class="flex items-center min-w-0 mr-2">
-            <svelte:component this={activeIcon} class="w-4 h-4 mr-2 text-gray-500 shrink-0" />
+            <svelte:component this={activeIcon} class="w-3.5 h-3.5 mr-2 text-gray-500 shrink-0" />
             <span class="truncate">{buttonLabel}</span>
         </div>
-        <ChevronDown class="w-4 h-4 text-gray-500 shrink-0" />
+        <ChevronDown class="w-3.5 h-3.5 text-gray-500 shrink-0" />
     </Button>
     <Dropdown bind:open={dropdownOpen} triggeredBy="#table-views-dropdown-btn" class="w-60 z-[1001] max-h-96 overflow-y-auto">
-        <DropdownItem class="text-sm flex items-center {activeSubItemType === null || activeSubItemType === undefined ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={selectBaseTable}>
-            <Sheet class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+        <DropdownItem class="text-xs flex items-center {activeSubItemType === null || activeSubItemType === undefined ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={selectBaseTable}>
+            <Sheet class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
             <span>Base Table</span>
         </DropdownItem>
         {#if views.length > 0}
@@ -150,31 +150,31 @@
         {/if}
         {#each views as view, index}
             {#if view.isSurvey}
-                <DropdownItem id="survey-menu-item-{index}" class="text-sm flex items-center justify-between {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}">
+                <DropdownItem id="survey-menu-item-{index}" class="text-xs flex items-center justify-between {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}">
                     <div class="flex items-center min-w-0">
-                        <FolderClosed class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+                        <FolderClosed class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
                         <span class="truncate">{view.view_name}</span>
                     </div>
-                    <ChevronRight class="w-4 h-4 ml-2 text-gray-400 shrink-0" />
+                    <ChevronRight class="w-3.5 h-3.5 ml-2 text-gray-400 shrink-0" />
                 </DropdownItem>
                 <Dropdown placement="right-start" triggeredBy="#survey-menu-item-{index}" trigger="hover" class="w-60 z-[1002] max-h-80 overflow-y-auto shadow-xl border border-gray-200 dark:border-gray-700">
-                    <DropdownItem class="text-sm flex items-center font-bold border-b border-gray-200 dark:border-gray-600 {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectView(view)}>
-                        <FolderClosed class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+                    <DropdownItem class="text-xs flex items-center font-bold border-b border-gray-200 dark:border-gray-600 {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectView(view)}>
+                        <FolderClosed class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
                         <span class="truncate">{view.view_name} (Dataset)</span>
                     </DropdownItem>
                     {#each view.children as child}
-                        <DropdownItem class="text-sm flex items-center {activeSubItemType === 'doc' && activeSubItemPath === child.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectDocument(child.path)}>
-                            <FileText class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+                        <DropdownItem class="text-xs flex items-center {activeSubItemType === 'doc' && activeSubItemPath === child.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectDocument(child.path)}>
+                            <FileText class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
                             <span class="truncate">{child.name}</span>
                         </DropdownItem>
                     {/each}
                 </Dropdown>
             {:else}
-                <DropdownItem class="text-sm flex items-center {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectView(view)}>
+                <DropdownItem class="text-xs flex items-center {activeSubItemType === 'view' && activeSubItemPath?.view_name === view.view_name ? 'font-bold bg-blue-50 dark:bg-gray-700' : ''}" on:click={() => selectView(view)}>
                     {#if view.view_type === 'pivot'}
-                        <LayoutGrid class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+                        <LayoutGrid class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
                     {:else}
-                        <Table2 class="w-4 h-4 mr-2.5 text-gray-400 shrink-0" />
+                        <Table2 class="w-3.5 h-3.5 mr-2.5 text-gray-400 shrink-0" />
                     {/if}
                     <span class="truncate">{view.view_name}</span>
                 </DropdownItem>
