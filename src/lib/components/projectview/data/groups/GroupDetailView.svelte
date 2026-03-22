@@ -12,6 +12,7 @@
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
     import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
+    import DocumentThumbnail from './DocumentThumbnail.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
@@ -714,7 +715,7 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="group relative flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+                                        class="group relative flex flex-col cursor-pointer"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
@@ -722,12 +723,12 @@
                                         tabindex="0"
                                     >
                                         <!-- Preview Area -->
-                                        <div class="aspect-square w-full flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-1">
+                                        <div class="aspect-square w-full relative bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-2 transition-colors duration-200 group-hover:border-gray-300 dark:group-hover:border-gray-600">
                                             {#if file.file_type === 'image' && file.full_path}
                                                 <img 
                                                     src={convertFileSrc(file.full_path)} 
                                                     alt={file.name} 
-                                                    class="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                     loading="lazy"
                                                 />
                                             {:else if file.file_type === 'video' && file.full_path}
@@ -736,30 +737,30 @@
                                                     preload="metadata"
                                                     muted
                                                     playsinline
-                                                    class="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                 ></video>
+                                            {:else if (file.file_type === 'document' || file.file_type === 'imported_transcript' || file.file_type === 'transcript') && file.full_path && file.full_path.endsWith('.json')}
+                                                <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
                                             {:else}
-                                                <div class="transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
                                                     <svelte:component this={category.icon} class="w-12 h-12" />
                                                 </div>
                                             {/if}
+
+                                            <!-- Actions (More options) -->
+                                            <button
+                                                on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                                class="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10"
+                                                title="More options for {file.name}"
+                                            >
+                                                <MoreHorizontal class="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
 
                                         <!-- Filename Area -->
-                                        <div class="p-2 border-t border-gray-100 dark:border-gray-700/50 bg-white dark:bg-gray-800">
-                                            <p class="text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate text-center" title={file.name}>
-                                                {file.name}
-                                            </p>
-                                        </div>
-
-                                        <!-- Actions (More options) -->
-                                        <button
-                                            on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                            class="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10"
-                                            title="More options for {file.name}"
-                                        >
-                                            <MoreHorizontal class="w-3.5 h-3.5" />
-                                        </button>
+                                        <p class="text-[11px] font-medium text-gray-600 dark:text-gray-400 truncate text-center px-1 group-hover:text-gray-900 dark:group-hover:text-gray-200" title={file.name}>
+                                            {file.name}
+                                        </p>
                                     </div>
                                 {/each}
                             </div>
