@@ -139,7 +139,18 @@
     $: previewText = formatDate(dateValue, format, showTime, timeFormat);
 </script>
 
-<Modal bind:open={showModal} size="xs" autoclose={false} class="w-full" outsideclose={true}>
+<Modal 
+    bind:open={showModal} 
+    size="xs" 
+    autoclose={false} 
+    outsideclose={true}
+    class="w-full"
+    backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+    dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+>
     <div slot="header" class="flex items-center gap-2">
         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
             <CalendarDays class="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -260,16 +271,16 @@
     </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex w-full items-center justify-between gap-2">
-            {#if isEditing}
-                <Button color="red" variant="outline" class="px-3" on:click={() => { showModal = false; dispatch('delete'); }} title="Delete Date Node">
-                    <Trash2 size={16} class="mr-2" /> Delete
-                </Button>
-            {/if}
-            <Button color="alternative" class="flex-1" on:click={() => { showModal = false; dispatch('cancel'); }}>
-                <X size={16} class="mr-2" /> Cancel
+        {#if isEditing}
+            <Button color="red" outline class="px-3" on:click={() => { showModal = false; dispatch('delete'); }} title="Delete Date Node">
+                <Trash2 size={16} class="mr-2" /> Delete
             </Button>
-            <Button color="blue" class="flex-1 shadow-lg shadow-blue-500/20" on:click={handleConfirm}>
+        {/if}
+        <div class="flex space-x-3">
+            <Button color="alternative" on:click={() => { showModal = false; dispatch('cancel'); }}>
+                Cancel
+            </Button>
+            <Button color="blue" on:click={handleConfirm}>
                 Confirm
             </Button>
         </div>
