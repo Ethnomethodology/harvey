@@ -141,8 +141,7 @@ fn append_node_html(node: &Value, html: &mut String) {
             }
             "quote" => {
                 let tag = node.get("tag").and_then(|t| t.as_str()).unwrap_or("blockquote");
-                let style_attr = " style=\"border-left: 2px solid #ccc; padding-left: 10px; margin-left: 20px; color: #555; font-style: italic;\"";
-                html.push_str(&format!("<{}{}>", tag, style_attr));
+                html.push_str(&format!("<{}>", tag));
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                    for child in children {
                        append_node_html(child, html);

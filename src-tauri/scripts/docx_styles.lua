@@ -420,37 +420,40 @@ function CodeBlock(el)
     -- Prefix and suffix newlines to ensure block separation in XML
     local result_xml = "\n"
 
-    -- Start table
-    result_xml = result_xml .. '<w:tbl>' ..
-      '<w:tblPr>' ..
-        '<w:tblStyle w:val="TableGrid"/>' ..
-        '<w:tblW w:w="5000" w:type="pct"/>' ..
-        '<w:tblBorders>' ..
-          '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
-          '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
-          '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
-          '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
-        '</w:tblBorders>' ..
-        '<w:tblCellMar>' ..
-          '<w:top w:w="100" w:type="dxa"/>' ..
-          '<w:left w:w="100" w:type="dxa"/>' ..
-          '<w:bottom w:w="100" w:type="dxa"/>' ..
-          '<w:right w:w="100" w:type="dxa"/>' ..
-        '</w:tblCellMar>' ..
-      '</w:tblPr>' ..
-      '<w:tblGrid><w:gridCol w:w="8000"/></w:tblGrid>' ..
-      '<w:tr>' ..
-      '<w:tc>' ..
-        '<w:tcPr>' ..
-          '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
-        '</w:tcPr>'
+    local num_lines = #lines
 
-    for _, line in ipairs(lines) do
+    for i, line in ipairs(lines) do
         local safe_line = escape_xml(line)
+
+        -- Determine paragraph borders based on line position
+        -- This connects them into a single cohesive box visually in Word.
+        local top_border = ""
+        local bottom_border = ""
+
+        if i == 1 then
+            top_border = '<w:top w:val="single" w:sz="4" w:space="5" w:color="auto"/>'
+        end
+        if i == num_lines then
+            bottom_border = '<w:bottom w:val="single" w:sz="4" w:space="5" w:color="auto"/>'
+        end
+
+        local borders_xml = string.format(
+            '<w:pBdr>' ..
+              '%s' ..
+              '<w:left w:val="single" w:sz="4" w:space="5" w:color="auto"/>' ..
+              '%s' ..
+              '<w:right w:val="single" w:sz="4" w:space="5" w:color="auto"/>' ..
+            '</w:pBdr>',
+            top_border, bottom_border
+        )
+
         local p = string.format(
             '<w:p>' ..
               '<w:pPr>' ..
                 '<w:pStyle w:val="NoSpacing"/>' ..
+                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
+                '%s' ..
+                '<w:ind w:left="120" w:right="120"/>' ..
                 '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
@@ -462,13 +465,12 @@ function CodeBlock(el)
                 '<w:t xml:space="preserve">%s</w:t>' ..
               '</w:r>' ..
             '</w:p>',
-            safe_line
+            borders_xml, safe_line
         )
         result_xml = result_xml .. p
     end
 
-    -- End table
-    result_xml = result_xml .. '</w:tc></w:tr></w:tbl><w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>\n'
+    result_xml = result_xml .. '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>\n'
 
     return pandoc.RawBlock('openxml', result_xml)
 end
@@ -489,11 +491,6 @@ function BlockQuote(el)
                 '<w:p>' ..
                   '<w:pPr>' ..
                     '<w:pStyle w:val="Quote"/>' ..
-                    '<w:pBdr>' ..
-                      '<w:left w:val="single" w:sz="12" w:space="15" w:color="CCCCCC"/>' ..
-                    '</w:pBdr>' ..
-                    '<w:ind w:left="360"/>' ..
-                    '<w:spacing w:after="120"/>' ..
                   '</w:pPr>' ..
                   '%s' ..
                 '</w:p>',
