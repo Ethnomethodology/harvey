@@ -98,29 +98,67 @@
 
     // Datepicker integration
     function flowbiteDatepicker(node) {
-        let picker = new Datepicker(node, {
-            autohide: true,
-            format: 'yyyy-mm-dd',
-            todayBtn: true,
-            clearBtn: false,
-            container: 'body'
-        });
+        let picker = null;
+
+        const destroyPicker = () => {
+            if (picker) {
+                picker.destroy();
+                picker = null;
+            }
+        };
+
+        const initPicker = () => {
+            if (picker) return;
+            picker = new Datepicker(node, {
+                autohide: true,
+                format: 'yyyy-mm-dd',
+                todayBtn: true,
+                clearBtn: false,
+                container: 'body'
+            });
+            picker.show();
+        };
 
         const handleChange = (e) => {
+            if (!picker) return;
             const d = picker.getDate();
             if (d) {
                 // Preserve time when updating date
                 const newD = new Date(d);
                 newD.setHours(dateValue.getHours(), dateValue.getMinutes(), dateValue.getSeconds());
                 dateValue = newD;
+                destroyPicker();
+                node.blur();
             }
         };
 
+        const handleOutside = (event) => {
+            if (!picker) return;
+            const isClickInsideInput = node.contains(event.target) || node === event.target;
+            
+            let isClickInsidePicker = false;
+            if (event.target instanceof Element) {
+                isClickInsidePicker = event.target.closest('.datepicker-dropdown') || event.target.closest('.datepicker');
+            }
+
+            if (!isClickInsideInput && !isClickInsidePicker) {
+                destroyPicker();
+                node.blur();
+            }
+        };
+
+        node.addEventListener('focus', initPicker);
+        node.addEventListener('click', initPicker);
         node.addEventListener('changeDate', handleChange);
+        document.addEventListener('mousedown', handleOutside, true);
+
         return {
             destroy() {
+                node.removeEventListener('focus', initPicker);
+                node.removeEventListener('click', initPicker);
                 node.removeEventListener('changeDate', handleChange);
-                picker.destroy();
+                document.removeEventListener('mousedown', handleOutside, true);
+                destroyPicker();
             }
         };
     }
