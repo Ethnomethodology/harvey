@@ -230,7 +230,7 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     // Parse CSS style for color, background-color, font-family, and font-size
                     let mut text_color: Option<String> = None;
-                    let mut font_family: Option<String> = None;
+                    let mut font_family: Option<String> = Some("Inter".to_string()); // Default font
                     let mut font_size: Option<String> = None;
                     let mut highlight_color: Option<String> = None;
 
