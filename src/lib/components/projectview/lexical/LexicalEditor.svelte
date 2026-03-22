@@ -798,10 +798,10 @@
         text: { bold: 'font-bold', italic: 'italic', underline: 'underline', strikethrough: 'line-through' },
         heading: { h1: 'text-2xl font-bold mb-1 mt-2', h2: 'text-xl font-semibold mb-1 mt-1', h3: 'text-lg font-semibold mb-1' },
         list: {
-          ul: 'list-disc list-outside mb-1 pl-5 ml-2',
-          ol: 'list-decimal list-outside mb-1 pl-5 ml-2',
+          ul: 'list-disc list-outside mb-1 lexical-ul',
+          ol: 'list-decimal list-outside mb-1 lexical-ol',
           checklist: 'list-none mb-1 pl-0',
-          listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
+          listitem: 'mb-0.5 relative list-item-checkbox',
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
@@ -3703,6 +3703,16 @@ $: if (editor && activeLayout) {
 
   html.dark .toolbar button.mini-toolbar-button.active {
     @apply bg-blue-500 text-white;
+  }
+
+  /* Unordered and Ordered List padding */
+  :global(.lexical-ul), :global(.lexical-ol) {
+      padding-left: 2em;
+      margin-left: 0;
+  }
+
+  :global(.lexical-ul > li.list-item-checkbox), :global(.lexical-ol > li.list-item-checkbox) {
+      padding-left: 0.25em;
   }
 
   /* Checklist item styles */
