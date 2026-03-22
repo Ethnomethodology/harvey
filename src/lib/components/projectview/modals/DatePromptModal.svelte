@@ -15,7 +15,8 @@
         Clock, 
         Settings2,
         X,
-        CheckCircle2
+        CheckCircle2,
+        Trash2
     } from '@lucide/svelte';
     import { Datepicker } from 'flowbite-datepicker';
 
@@ -24,6 +25,7 @@
     export let initialFormat = 'YYYY-MM-DD';
     export let initialShowTime = false;
     export let initialTimeFormat = 'HH:mm';
+    export let isEditing = false;
 
     const dispatch = createEventDispatcher();
 
@@ -258,7 +260,12 @@
     </div>
 
     <svelte:fragment slot="footer">
-        <div class="flex w-full items-center justify-between gap-3">
+        <div class="flex w-full items-center justify-between gap-2">
+            {#if isEditing}
+                <Button color="red" variant="outline" class="px-3" on:click={() => { showModal = false; dispatch('delete'); }} title="Delete Date Node">
+                    <Trash2 size={16} />
+                </Button>
+            {/if}
             <Button color="alternative" class="flex-1" on:click={() => { showModal = false; dispatch('cancel'); }}>
                 <X size={16} class="mr-2" /> Cancel
             </Button>

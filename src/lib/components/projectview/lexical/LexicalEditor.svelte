@@ -205,7 +205,8 @@
   let showInsertImageModal = false;
   let showDateModal = false;
   let dateNodeToEditKey = null;
-  let dateInitialData = { date: new Date().toISOString(), format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
+  let lastUsedDateConfig = { format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
+  let dateInitialData = { date: new Date().toISOString(), ...lastUsedDateConfig };
   let savedImageSelection = null;
 
   let isResizing = false;
@@ -549,15 +550,18 @@
     showInsertImageModal = true;
   }
 
+
   function openInsertDateDialog() {
     dateNodeToEditKey = null;
-    dateInitialData = { date: new Date().toISOString(), format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
+    dateInitialData = { date: new Date().toISOString(), ...lastUsedDateConfig };
     showDateModal = true;
     isInsertDropdownOpen = false;
   }
-
   function handleDateConfirm(event) {
     const { date, format, showTime, timeFormat, displayValue } = event.detail;
+    
+    // Remember last used config
+    lastUsedDateConfig = { format, showTime, timeFormat };
 
     if (dateNodeToEditKey) {
         // Update existing node
@@ -577,6 +581,19 @@
         editor.update(() => {
             const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
             _insertNodes([dateNode]);
+        });
+    }
+    showDateModal = false;
+    dateNodeToEditKey = null;
+  }
+
+  function handleDateDelete() {
+    if (dateNodeToEditKey) {
+        editor.update(() => {
+            const node = _getNodeByKey(dateNodeToEditKey);
+            if (node) {
+                node.remove();
+            }
         });
     }
     showDateModal = false;
@@ -3712,11 +3729,13 @@ $: if (editor && activeLayout) {
 
 <DatePromptModal
   bind:showModal={showDateModal}
+  isEditing={!!dateNodeToEditKey}
   initialDate={dateInitialData.date}
   initialFormat={dateInitialData.format}
   initialShowTime={dateInitialData.showTime}
   initialTimeFormat={dateInitialData.timeFormat}
   on:confirm={handleDateConfirm}
+  on:delete={handleDateDelete}
   on:cancel={() => { showDateModal = false; dateNodeToEditKey = null; }}
 />
 
