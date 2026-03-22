@@ -113,11 +113,20 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                 html.push_str(&format!("<p{}>", style_attr));
 
+                let mut has_content = false;
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    if !children.is_empty() {
+                        has_content = true;
+                    }
                     for child in children {
                         append_node_html(child, html);
                     }
                 }
+
+                if !has_content {
+                    html.push_str("&nbsp;");
+                }
+
                 html.push_str("</p>");
             }
             "heading" => {
@@ -300,14 +309,14 @@ fn append_node_html(node: &Value, html: &mut String) {
                     let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
                     let total_width: f64 = widths.iter().sum();
                     
-                    html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
+                    html.push_str("<table custom-style=\"Table Grid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
                     for w in widths {
                         let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
                         html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
                     }
                     html.push_str("</colgroup><tbody>");
                  } else {
-                    html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
+                    html.push_str("<table custom-style=\"Table Grid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
                  }
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
@@ -356,7 +365,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str(&format!("<img src=\"attachments/{}\" alt=\"{}\" />", encode_text(filename), encode_text(alt)));
             }
             "code" => {
-                html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
+                html.push_str("<table custom-style=\"Table Grid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);

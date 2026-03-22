@@ -423,12 +423,13 @@ function CodeBlock(el)
     -- Start table
     result_xml = result_xml .. '<w:tbl>' ..
       '<w:tblPr>' ..
-        '<w:tblW w:w="0" w:type="auto"/>' ..
+        '<w:tblStyle w:val="TableGrid"/>' ..
+        '<w:tblW w:w="5000" w:type="pct"/>' ..
         '<w:tblBorders>' ..
-          '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
-          '<w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
-          '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
-          '<w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
+          '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
+          '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
+          '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
+          '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>' ..
         '</w:tblBorders>' ..
         '<w:tblCellMar>' ..
           '<w:top w:w="100" w:type="dxa"/>' ..
@@ -437,6 +438,7 @@ function CodeBlock(el)
           '<w:right w:w="100" w:type="dxa"/>' ..
         '</w:tblCellMar>' ..
       '</w:tblPr>' ..
+      '<w:tblGrid><w:gridCol w:w="8000"/></w:tblGrid>' ..
       '<w:tr>' ..
       '<w:tc>' ..
         '<w:tcPr>' ..
@@ -533,13 +535,21 @@ function Mark(el)
 end
 
 function Table(el)
-    -- Force Table Grid style for borders in DOCX
+    -- Remove custom-style overriding standard Pandoc borders
     if el.classes then
-        el.classes:insert('TableGrid')
-        el.attributes['custom-style'] = 'Table Grid'
+        for i, class in ipairs(el.classes) do
+            if class == 'TableGrid' then
+                table.remove(el.classes, i)
+            end
+        end
+        el.attributes['custom-style'] = nil
     elseif el.attr then
-        el.attr.classes:insert('TableGrid')
-        el.attr.attributes['custom-style'] = 'Table Grid'
+        for i, class in ipairs(el.attr.classes) do
+            if class == 'TableGrid' then
+                table.remove(el.attr.classes, i)
+            end
+        end
+        el.attr.attributes['custom-style'] = nil
     end
     return el
 end
