@@ -130,57 +130,79 @@ fn append_node_html(node: &Value, html: &mut String) {
                 }
                 html.push_str(&format!("</{}>", tag));
             }
+            "quote" => {
+                let tag = node.get("tag").and_then(|t| t.as_str()).unwrap_or("blockquote");
+                let style_attr = " style=\"border-left: 2px solid #ccc; padding-left: 10px; margin-left: 20px; color: #555; font-style: italic;\"";
+                html.push_str(&format!("<{}{}>", tag, style_attr));
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                   for child in children {
+                       append_node_html(child, html);
+                   }
+                }
+                html.push_str(&format!("</{}>", tag));
+            }
              "list" => {
                 let tag = node.get("tag").and_then(|t| t.as_str()).unwrap_or("ul");
                 let list_type = node.get("listType").and_then(|t| t.as_str()).unwrap_or("");
 
-                let list_style = if list_type == "check" {
-                    " style=\"list-style-type: none;\""
-                } else {
-                    ""
-                };
-
-                 html.push_str(&format!("<{}{}>", tag, list_style));
-                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                    for child in children {
-                        append_node_html(child, html);
+                if list_type == "check" {
+                    // Use a div instead of a list container so Pandoc doesn't force bullet points
+                    html.push_str("<div class=\"checklist\" style=\"margin-left: 20px; margin-bottom: 10px;\">");
+                    if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                        for child in children {
+                            append_node_html(child, html);
+                        }
                     }
+                    html.push_str("</div>");
+                } else {
+                    html.push_str(&format!("<{}>", tag));
+                    if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                        for child in children {
+                            append_node_html(child, html);
+                        }
+                    }
+                    html.push_str(&format!("</{}>", tag));
                 }
-                 html.push_str(&format!("</{}>", tag));
              }
              "listitem" => {
                  let checked = node.get("checked").and_then(|c| c.as_bool());
 
-                 let style_attr = if checked == Some(true) {
-                     " style=\"text-decoration: line-through; color: #888;\""
-                 } else {
-                     ""
-                 };
+                 if checked.is_some() {
+                     // This is a checklist item. Output as a standard paragraph so Word doesn't bullet it.
+                     let style_attr = if checked == Some(true) {
+                         " style=\"text-decoration: line-through; color: #888; margin: 4px 0;\""
+                     } else {
+                         " style=\"margin: 4px 0;\""
+                     };
 
-                 html.push_str(&format!("<li{}>", style_attr));
+                     html.push_str(&format!("<p{}>", style_attr));
 
-                 if let Some(is_checked) = checked {
-                     if is_checked {
-                         html.push_str("☑ ");
+                     if checked == Some(true) {
+                         html.push_str("☑ <s>");
                      } else {
                          html.push_str("☐ ");
                      }
-                 }
 
-                 if checked == Some(true) {
-                     html.push_str("<s>");
-                 }
-
-                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                    for child in children {
-                        append_node_html(child, html);
+                     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                        for child in children {
+                            append_node_html(child, html);
+                        }
                     }
-                }
 
-                if checked == Some(true) {
-                    html.push_str("</s>");
-                }
-                 html.push_str("</li>");
+                    if checked == Some(true) {
+                        html.push_str("</s>");
+                    }
+                    html.push_str("</p>");
+                 } else {
+                     // Standard list item
+                     html.push_str("<li>");
+                     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                        for child in children {
+                            append_node_html(child, html);
+                        }
+                     }
+                     html.push_str("</li>");
+                 }
              }
             "text" | "extended-text" => {
                 if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
@@ -278,14 +300,14 @@ fn append_node_html(node: &Value, html: &mut String) {
                     let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
                     let total_width: f64 = widths.iter().sum();
                     
-                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
+                    html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
                     for w in widths {
                         let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
                         html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
                     }
                     html.push_str("</colgroup><tbody>");
                  } else {
-                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
+                    html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
                  }
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
@@ -332,6 +354,15 @@ fn append_node_html(node: &Value, html: &mut String) {
                  let filename = node.get("filename").and_then(|f| f.as_str()).unwrap_or("image.png");
                  let alt = node.get("altText").and_then(|a| a.as_str()).unwrap_or("Image");
                  html.push_str(&format!("<img src=\"attachments/{}\" alt=\"{}\" />", encode_text(filename), encode_text(alt)));
+            }
+            "code" => {
+                html.push_str("<table class=\"TableGrid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        append_node_html(child, html);
+                    }
+                }
+                html.push_str("</td></tr></tbody></table>");
             }
             _ => {
                 warn!("Unknown lexical node type encountered in HTML export: {}", node_type);
