@@ -533,15 +533,32 @@ function Mark(el)
 end
 
 function Table(el)
-    -- Map to reference docx's "Table" style instead of "Table Grid" as the latter is missing in the default template.
-    -- We also add a border="1" attribute which Pandoc's writer can sometimes use to force border rendering.
+    -- Check for an existing custom-style or a class that might represent a style name.
+    -- This allows specifically styled tables (like "code_block") to persist.
+    local style = el.attributes['custom-style'] or (el.attr and el.attr.attributes['custom-style'])
+
+    if not style or style == "" then
+        -- Fallback to the first class if one exists and isn't a known layout class
+        if el.classes and #el.classes > 0 then
+            style = el.classes[1]
+            -- If the class matches what we know we want for code blocks, use it as the style.
+            if style == "codeblock" or style == "code_block" then
+                style = "codeblock"
+            elseif style == "Table" or style == "TableGrid" or style == "Table Grid" then
+                style = "Table"
+            end
+        else
+            style = "Table"
+        end
+    end
+
     if el.classes then
-        el.classes:insert('Table')
-        el.attributes['custom-style'] = 'Table'
+        el.classes:insert((style:gsub("%s+", ""))) -- Remove spaces for class ID, extra () ensures one return value
+        el.attributes['custom-style'] = style
         el.attributes['border'] = '1'
     elseif el.attr then
-        el.attr.classes:insert('Table')
-        el.attr.attributes['custom-style'] = 'Table'
+        el.attr.classes:insert((style:gsub("%s+", "")))
+        el.attr.attributes['custom-style'] = style
         el.attr.attributes['border'] = '1'
     end
     return el

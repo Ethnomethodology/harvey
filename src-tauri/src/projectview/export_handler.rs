@@ -370,7 +370,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str(&format!("<img src=\"attachments/{}\" alt=\"{}\" />", encode_text(filename), encode_text(alt)));
             }
             "code" => {
-                html.push_str("<table custom-style=\"Table\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
+                html.push_str("<table class=\"codeblock\" custom-style=\"codeblock\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
