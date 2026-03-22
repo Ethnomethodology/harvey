@@ -263,7 +263,7 @@
         <div class="flex w-full items-center justify-between gap-2">
             {#if isEditing}
                 <Button color="red" variant="outline" class="px-3" on:click={() => { showModal = false; dispatch('delete'); }} title="Delete Date Node">
-                    <Trash2 size={16} />
+                    <Trash2 size={16} class="mr-2" /> Delete
                 </Button>
             {/if}
             <Button color="alternative" class="flex-1" on:click={() => { showModal = false; dispatch('cancel'); }}>
