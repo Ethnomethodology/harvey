@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  table.auto-wfull { table-layout: auto; width: 100%; border-collapse: collapse; }
+  table.fixed-wfull { table-layout: fixed; width: 100%; border-collapse: collapse; }
+  table.fixed-auto { table-layout: fixed; width: auto; border-collapse: collapse; }
+  td, th { border: 1px solid black; padding: 8px; }
+</style>
+</head>
+<body>
+  <h3>Auto layout, width 100% (Current behavior)</h3>
+  <table class="auto-wfull">
+    <colgroup><col width="150"><col width="250"></colgroup>
+    <tr><td>Col 1 (150)</td><td>Col 2 (250)</td></tr>
+  </table>
+
+  <h3>Fixed layout, width 100%</h3>
+  <table class="fixed-wfull">
+    <colgroup><col width="150"><col width="250"></colgroup>
+    <tr><td>Col 1 (150)</td><td>Col 2 (250)</td></tr>
+  </table>
+
+  <h3>Fixed layout, width auto</h3>
+  <table class="fixed-auto">
+    <colgroup><col width="150"><col width="250"></colgroup>
+    <tr><td>Col 1 (150)</td><td>Col 2 (250)</td></tr>
+  </table>
+</body>
+</html>
