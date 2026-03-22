@@ -669,6 +669,29 @@
         const normalizedSelection = _getSelection();
         if (_isRangeSelection(normalizedSelection)) {
             _patchStyleText(normalizedSelection, { 'font-size': fontSize + 'px' });
+
+            // Also apply the font size to parent ListItemNodes so bullets/numbers scale
+            const nodes = normalizedSelection.getNodes();
+            const listItems = new Set();
+            for (const node of nodes) {
+                let current = node;
+                while (current !== null) {
+                    if (_isListItemNode(current)) {
+                        listItems.add(current.getKey());
+                        break;
+                    }
+                    current = current.getParent();
+                }
+            }
+
+            for (const key of listItems) {
+                const liNode = _getNodeByKey(key);
+                if (liNode && typeof liNode.getStyle === 'function') {
+                    const currentStyle = liNode.getStyle() || '';
+                    const newStyle = currentStyle.replace(/font-size:\s*[^;]+;?/g, '').trim();
+                    liNode.setStyle(`${newStyle} font-size: ${fontSize}px;`.trim());
+                }
+            }
         }
     });
 
@@ -3684,7 +3707,7 @@ $: if (editor && activeLayout) {
 
   /* Checklist item styles */
   :global(.lexical-content ul.list-none > li.list-item-checkbox) {
-      padding-left: 24px;
+      padding-left: 1.5em;
       list-style-type: none;
       position: relative;
   }
@@ -3692,12 +3715,12 @@ $: if (editor && activeLayout) {
   :global(.lexical-content ul.list-none > li.list-item-checkbox::before) {
       content: '';
       position: absolute;
-      left: 2px;
-      top: 4px;
-      width: 16px;
-      height: 16px;
+      left: 0.125em;
+      top: 0.25em;
+      width: 1em;
+      height: 1em;
       border: 1px solid #ccc;
-      border-radius: 3px;
+      border-radius: 0.1875em;
       background-color: transparent;
       cursor: pointer;
   }
@@ -3710,12 +3733,12 @@ $: if (editor && activeLayout) {
   :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]::after) {
       content: '';
       position: absolute;
-      left: 7px;
-      top: 6px;
-      width: 5px;
-      height: 10px;
+      left: 0.4375em;
+      top: 0.375em;
+      width: 0.3125em;
+      height: 0.625em;
       border: solid white;
-      border-width: 0 2px 2px 0;
+      border-width: 0 0.125em 0.125em 0;
       transform: rotate(45deg);
       pointer-events: none;
   }
