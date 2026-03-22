@@ -254,10 +254,8 @@ local function collect_text(inlines, props)
         table.insert(result, elem)
 
     elseif elem.t == 'Link' then
-        -- Handle links by recursing into content with forced blue/underline props
+        -- Handle links by recursing into content with link property set
         local sub_props = clone(props)
-        sub_props.color = "0000FF"
-        sub_props.underline = true
         sub_props.is_link = true
 
         -- Recurse into link content
@@ -364,8 +362,7 @@ local function collect_text(inlines, props)
 
         local url = escape_xml(elem.target)
         local sub_props = clone(props)
-        sub_props.color = "0000FF"
-        sub_props.underline = true
+        sub_props.is_link = true
 
         -- Recurse into link content to get styled runs
         local sub_res = collect_text(elem.content, sub_props)
@@ -396,8 +393,6 @@ end
 function Link(el)
     -- Handle top-level links
     local props = {
-        color = "0000FF",
-        underline = true,
         is_link = true
     }
 
