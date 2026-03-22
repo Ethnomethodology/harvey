@@ -85,7 +85,7 @@ fn lexical_value_to_html(value: &Value) -> String {
     if let Some(root) = value.get("root") {
         if let Some(children) = root.get("children").and_then(|c| c.as_array()) {
             for node in children {
-                append_node_html(node, &mut html);
+                append_node_html(node, &mut html, false);
             }
         }
     } else {
@@ -97,7 +97,7 @@ fn lexical_value_to_html(value: &Value) -> String {
 }
 
 /// Recursive helper to append HTML for a single Lexical node and its children.
-fn append_node_html(node: &Value, html: &mut String) {
+fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
     if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
         match node_type {
             "paragraph" => {
@@ -119,7 +119,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                         has_content = true;
                     }
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                 }
 
@@ -134,7 +134,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                 html.push_str(&format!("<{}>", tag));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                 }
                 html.push_str(&format!("</{}>", tag));
@@ -144,7 +144,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                 html.push_str(&format!("<{}>", tag));
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                    for child in children {
-                       append_node_html(child, html);
+                       append_node_html(child, html, inside_code_block);
                    }
                 }
                 html.push_str(&format!("</{}>", tag));
@@ -152,13 +152,13 @@ fn append_node_html(node: &Value, html: &mut String) {
              "list" => {
                 let tag = node.get("tag").and_then(|t| t.as_str()).unwrap_or("ul");
                 let list_type = node.get("listType").and_then(|t| t.as_str()).unwrap_or("");
-
+ 
                 if list_type == "check" {
                     // Use a div instead of a list container so Pandoc doesn't force bullet points
                     html.push_str("<div class=\"checklist\" style=\"margin-left: 20px; margin-bottom: 10px;\">");
                     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                         for child in children {
-                            append_node_html(child, html);
+                            append_node_html(child, html, inside_code_block);
                         }
                     }
                     html.push_str("</div>");
@@ -166,7 +166,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                     html.push_str(&format!("<{}>", tag));
                     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                         for child in children {
-                            append_node_html(child, html);
+                            append_node_html(child, html, inside_code_block);
                         }
                     }
                     html.push_str(&format!("</{}>", tag));
@@ -193,7 +193,7 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                      if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                         for child in children {
-                            append_node_html(child, html);
+                            append_node_html(child, html, inside_code_block);
                         }
                     }
 
@@ -206,7 +206,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                      html.push_str("<li>");
                      if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                         for child in children {
-                            append_node_html(child, html);
+                            append_node_html(child, html, inside_code_block);
                         }
                      }
                      html.push_str("</li>");
@@ -230,7 +230,7 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                     // Parse CSS style for color, background-color, font-family, and font-size
                     let mut text_color: Option<String> = None;
-                    let mut font_family: Option<String> = Some("Inter".to_string()); // Default font
+                    let mut font_family: Option<String> = if inside_code_block { None } else { Some("Inter".to_string()) }; // Only apply "Inter" default outside code blocks
                     let mut font_size: Option<String> = None;
                     let mut highlight_color: Option<String> = None;
 
@@ -298,7 +298,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str(&format!("<a href=\"{}\">", encode_text(url)));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                  }
                  html.push_str("</a>");
@@ -320,7 +320,7 @@ fn append_node_html(node: &Value, html: &mut String) {
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                  }
                  html.push_str("</tbody></table>");
@@ -329,7 +329,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str("<tr>");
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                  }
                  html.push_str("</tr>");
@@ -359,7 +359,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str(&format!("<{}{}>", tag, style_attr));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                  }
                  html.push_str(&format!("</{}>", tag));
@@ -373,7 +373,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                 html.push_str("<table class=\"codeblock\" custom-style=\"codeblock\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, true);
                     }
                 }
                 html.push_str("</td></tr></tbody></table>");
@@ -382,7 +382,7 @@ fn append_node_html(node: &Value, html: &mut String) {
                 warn!("Unknown lexical node type encountered in HTML export: {}", node_type);
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        append_node_html(child, html);
+                        append_node_html(child, html, inside_code_block);
                     }
                 } else if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
                      html.push_str(&encode_text(text_content).to_string());
