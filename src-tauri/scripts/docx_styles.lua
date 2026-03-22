@@ -533,13 +533,16 @@ function Mark(el)
 end
 
 function Table(el)
-    -- Map to reference docx's Table Grid style explicitly to ensure bordered rendering overrides default Word no-border views
+    -- Map to reference docx's "Table" style instead of "Table Grid" as the latter is missing in the default template.
+    -- We also add a border="1" attribute which Pandoc's writer can sometimes use to force border rendering.
     if el.classes then
-        el.classes:insert('TableGrid')
-        el.attributes['custom-style'] = 'Table Grid'
+        el.classes:insert('Table')
+        el.attributes['custom-style'] = 'Table'
+        el.attributes['border'] = '1'
     elseif el.attr then
-        el.attr.classes:insert('TableGrid')
-        el.attr.attributes['custom-style'] = 'Table Grid'
+        el.attr.classes:insert('Table')
+        el.attr.attributes['custom-style'] = 'Table'
+        el.attr.attributes['border'] = '1'
     end
     return el
 end
