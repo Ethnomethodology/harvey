@@ -801,7 +801,7 @@
           ul: 'list-disc list-outside mb-1 lexical-ul',
           ol: 'list-decimal list-outside mb-1 lexical-ol',
           checklist: 'list-none mb-1 pl-0',
-          listitem: 'mb-0.5 relative list-item-checkbox',
+          listitem: 'mb-0.5 relative lexical-li list-item-checkbox',
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
@@ -833,14 +833,16 @@
         const closestLi = e.target.closest('li.list-item-checkbox');
         if (closestLi) {
             const rect = closestLi.getBoundingClientRect();
+            const fontSizePx = parseFloat(window.getComputedStyle(closestLi).fontSize) || 15;
             const clickX = e.clientX;
             const clickY = e.clientY;
 
-            // Checkbox pseudo-element bounding box (with padding)
+            // Checkbox pseudo-element bounding box (with padding), approximate 1.5em box
+            const checkboxSizePx = fontSizePx * 1.5;
             const checkboxLeft = rect.left;
-            const checkboxRight = rect.left + 24;
+            const checkboxRight = rect.left + checkboxSizePx;
             const checkboxTop = rect.top;
-            const checkboxBottom = rect.top + 24;
+            const checkboxBottom = rect.top + checkboxSizePx;
 
             if (clickX >= checkboxLeft && clickX <= checkboxRight && clickY >= checkboxTop && clickY <= checkboxBottom) {
                 // We are inside the checkbox pseudo-element!
@@ -3707,22 +3709,24 @@ $: if (editor && activeLayout) {
 
   /* Unordered and Ordered List padding */
   :global(.lexical-ul), :global(.lexical-ol) {
-      padding-left: 2em;
+      padding-left: 0;
       margin-left: 0;
   }
 
-  :global(.lexical-ul > li.list-item-checkbox), :global(.lexical-ol > li.list-item-checkbox) {
+  :global(.lexical-ul > li.lexical-li), :global(.lexical-ol > li.lexical-li) {
+      margin-left: 2em;
       padding-left: 0.25em;
   }
 
   /* Checklist item styles */
-  :global(.lexical-content ul.list-none > li.list-item-checkbox) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox) {
       padding-left: 1.5em;
+      margin-left: 0;
       list-style-type: none;
       position: relative;
   }
 
-  :global(.lexical-content ul.list-none > li.list-item-checkbox::before) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox::before) {
       content: '';
       position: absolute;
       left: 0.125em;
@@ -3735,12 +3739,12 @@ $: if (editor && activeLayout) {
       cursor: pointer;
   }
 
-  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]::before) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked="true"]::before) {
       background-color: #3b82f6; /* Tailwind blue-500 */
       border-color: #3b82f6;
   }
 
-  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]::after) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked="true"]::after) {
       content: '';
       position: absolute;
       left: 0.4375em;
@@ -3753,7 +3757,7 @@ $: if (editor && activeLayout) {
       pointer-events: none;
   }
 
-  :global(.lexical-content ul.list-none > li.list-item-checkbox[aria-checked="true"]) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked="true"]) {
       text-decoration: line-through;
       color: #888;
   }
