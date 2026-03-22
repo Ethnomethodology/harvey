@@ -132,7 +132,15 @@ fn append_node_html(node: &Value, html: &mut String) {
             }
              "list" => {
                 let tag = node.get("tag").and_then(|t| t.as_str()).unwrap_or("ul");
-                 html.push_str(&format!("<{}>", tag));
+                let list_type = node.get("listType").and_then(|t| t.as_str()).unwrap_or("");
+
+                let list_style = if list_type == "check" {
+                    " style=\"list-style-type: none;\""
+                } else {
+                    ""
+                };
+
+                 html.push_str(&format!("<{}{}>", tag, list_style));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
@@ -141,11 +149,36 @@ fn append_node_html(node: &Value, html: &mut String) {
                  html.push_str(&format!("</{}>", tag));
              }
              "listitem" => {
-                 html.push_str("<li>");
+                 let checked = node.get("checked").and_then(|c| c.as_bool());
+
+                 let style_attr = if checked == Some(true) {
+                     " style=\"text-decoration: line-through; color: #888;\""
+                 } else {
+                     ""
+                 };
+
+                 html.push_str(&format!("<li{}>", style_attr));
+
+                 if let Some(is_checked) = checked {
+                     if is_checked {
+                         html.push_str("☑ ");
+                     } else {
+                         html.push_str("☐ ");
+                     }
+                 }
+
+                 if checked == Some(true) {
+                     html.push_str("<s>");
+                 }
+
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
                     }
+                }
+
+                if checked == Some(true) {
+                    html.push_str("</s>");
                 }
                  html.push_str("</li>");
              }
@@ -245,14 +278,14 @@ fn append_node_html(node: &Value, html: &mut String) {
                     let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
                     let total_width: f64 = widths.iter().sum();
                     
-                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse;\"><colgroup>");
+                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
                     for w in widths {
                         let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
                         html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
                     }
                     html.push_str("</colgroup><tbody>");
                  } else {
-                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse;\"><tbody>");
+                    html.push_str("<table border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
                  }
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
@@ -276,12 +309,18 @@ fn append_node_html(node: &Value, html: &mut String) {
                  let tag = if is_header { "th" } else { "td" };
                  
                  let width_style = if let Some(width) = node.get("width").and_then(|w| w.as_f64()) {
-                     format!(" style=\"width: {}px;\"", width)
+                     format!("width: {}px;", width)
                  } else {
                      "".to_string()
                  };
 
-                 html.push_str(&format!("<{}{}>", tag, width_style));
+                 let font_weight_style = if !is_header {
+                     "font-weight: normal;"
+                 } else {
+                     ""
+                 };
+
+                 html.push_str(&format!("<{} style=\"border: 1px solid black; padding: 8px; {}{}\">", tag, width_style, font_weight_style));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
