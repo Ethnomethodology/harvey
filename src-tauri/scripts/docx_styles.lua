@@ -420,14 +420,35 @@ function CodeBlock(el)
     -- Prefix and suffix newlines to ensure block separation in XML
     local result_xml = "\n"
 
+    -- Start table
+    result_xml = result_xml .. '<w:tbl>' ..
+      '<w:tblPr>' ..
+        '<w:tblW w:w="0" w:type="auto"/>' ..
+        '<w:tblBorders>' ..
+          '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
+          '<w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
+          '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
+          '<w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>' ..
+        '</w:tblBorders>' ..
+        '<w:tblCellMar>' ..
+          '<w:top w:w="100" w:type="dxa"/>' ..
+          '<w:left w:w="100" w:type="dxa"/>' ..
+          '<w:bottom w:w="100" w:type="dxa"/>' ..
+          '<w:right w:w="100" w:type="dxa"/>' ..
+        '</w:tblCellMar>' ..
+      '</w:tblPr>' ..
+      '<w:tr>' ..
+      '<w:tc>' ..
+        '<w:tcPr>' ..
+          '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
+        '</w:tcPr>'
+
     for _, line in ipairs(lines) do
         local safe_line = escape_xml(line)
         local p = string.format(
             '<w:p>' ..
               '<w:pPr>' ..
                 '<w:pStyle w:val="NoSpacing"/>' ..
-                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
-                '<w:ind w:left="120" w:right="120"/>' ..
                 '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
@@ -443,7 +464,10 @@ function CodeBlock(el)
         )
         result_xml = result_xml .. p
     end
-    result_xml = result_xml .. '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>\n'
+
+    -- End table
+    result_xml = result_xml .. '</w:tc></w:tr></w:tbl><w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>\n'
+
     return pandoc.RawBlock('openxml', result_xml)
 end
 
@@ -463,7 +487,10 @@ function BlockQuote(el)
                 '<w:p>' ..
                   '<w:pPr>' ..
                     '<w:pStyle w:val="Quote"/>' ..
-                    '<w:ind w:left="720"/>' ..
+                    '<w:pBdr>' ..
+                      '<w:left w:val="single" w:sz="12" w:space="15" w:color="CCCCCC"/>' ..
+                    '</w:pBdr>' ..
+                    '<w:ind w:left="360"/>' ..
                     '<w:spacing w:after="120"/>' ..
                   '</w:pPr>' ..
                   '%s' ..
@@ -503,4 +530,16 @@ function Mark(el)
         highlight = "yellow"
     }
     return collect_text(el.content, props)
+end
+
+function Table(el)
+    -- Force Table Grid style for borders in DOCX
+    if el.classes then
+        el.classes:insert('TableGrid')
+        el.attributes['custom-style'] = 'Table Grid'
+    elseif el.attr then
+        el.attr.classes:insert('TableGrid')
+        el.attr.attributes['custom-style'] = 'Table Grid'
+    end
+    return el
 end
