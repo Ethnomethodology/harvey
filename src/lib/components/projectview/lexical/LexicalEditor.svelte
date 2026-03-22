@@ -44,7 +44,7 @@
   import {
     ListNode, ListItemNode, $isListNode as _isListNode, $isListItemNode as _isListItemNode,
     INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, INSERT_CHECK_LIST_COMMAND,
-    REMOVE_LIST_COMMAND, registerList, registerCheckList
+    REMOVE_LIST_COMMAND, registerList, registerCheckList, $createListNode as _createListNode
   } from '@lexical/list';
   import {
       TableNode, TableRowNode, TableCellNode,
@@ -1126,21 +1126,40 @@
               editor.update(() => {
                 const li = listItemNode;
                 const list = listNode;
-                // If it's the only item, replace the whole list with a paragraph
-                const siblings = list.getChildren();
+                const children = list.getChildren();
+                const index = children.indexOf(li);
                 const paragraph = _createParagraphNode();
-                if (siblings.length === 1) {
-                  list.replace(paragraph);
-                } else {
-                  // Otherwise remove just this item and insert a paragraph after the list
-                  const nextSibling = list.getNextSibling();
-                  li.remove();
-                  if (nextSibling) {
-                    nextSibling.insertBefore(paragraph);
-                  } else {
+
+                if (children.length === 1) {
+                    // Only item in the list: Replace the list with a paragraph
+                    list.replace(paragraph);
+                } else if (index === 0) {
+                    // First item in the list: Remove it and put paragraph before list
+                    li.remove();
+                    list.insertBefore(paragraph);
+                } else if (index === children.length - 1) {
+                    // Last item in the list: Remove it and put paragraph after list
+                    li.remove();
                     list.insertAfter(paragraph);
-                  }
+                } else {
+                    // Middle item: Split the list
+                    const listType = list.getListType();
+                    // Extract remaining siblings into an array before we start moving them
+                    const siblingsToMove = children.slice(index + 1);
+
+                    li.remove();
+
+                    const newList = _createListNode(listType);
+                    if (listType === 'number') newList.setStart(1); // Reset numbering for the split list
+
+                    for (const sibling of siblingsToMove) {
+                        newList.append(sibling);
+                    }
+
+                    list.insertAfter(paragraph);
+                    paragraph.insertAfter(newList);
                 }
+
                 paragraph.select();
               });
               return true;
@@ -1183,7 +1202,15 @@
                     const selection = _getSelection();
                     if (!_isRangeSelection(selection)) return;
 
-                    const newColWidths = Array(numCols).fill(MIN_COLUMN_WIDTH);
+                    let defaultWidth = MIN_COLUMN_WIDTH;
+                    if (editorContainer) {
+                        const containerWidth = editorContainer.getBoundingClientRect().width;
+                        const availableWidth = containerWidth - 40; // 40px margin/padding buffer
+                        if (availableWidth > 0) {
+                            defaultWidth = Math.max(MIN_COLUMN_WIDTH, Math.floor(availableWidth / numCols));
+                        }
+                    }
+                    const newColWidths = Array(numCols).fill(defaultWidth);
                     const tableNode = _createTableNode();
                     tableNode.setColWidths(newColWidths);
 
