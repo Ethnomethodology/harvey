@@ -43,6 +43,7 @@
     "@tiptap/extension-text-align": "^2.11.7",
     "@tiptap/pm": "^2.11.7",
     "echarts": "^6.0.0",
+    "katex": "^0.16.40",
     "lexical": "^0.30.0",
     "openseadragon": "^4.1.1",
     "pdfjs-dist": "^5.2.133",
