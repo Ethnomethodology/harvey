@@ -40,7 +40,7 @@
 
     $: if (showModal && equationInput) {
       setTimeout(() => {
-        equationInput.focus();
+        document.getElementById('equation-input')?.focus();
         equation = initialEquation;
         inline = initialInline;
       }, 50);
