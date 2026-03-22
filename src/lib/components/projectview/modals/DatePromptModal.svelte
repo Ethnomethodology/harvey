@@ -102,7 +102,8 @@
             autohide: true,
             format: 'yyyy-mm-dd',
             todayBtn: true,
-            clearBtn: false
+            clearBtn: false,
+            container: 'body'
         });
 
         const handleChange = (e) => {
@@ -288,6 +289,10 @@
 </Modal>
 
 <style>
+    :global(.datepicker) {
+        z-index: 100000 !important;
+    }
+
     .scrollbar-hide::-webkit-scrollbar {
         display: none;
     }
