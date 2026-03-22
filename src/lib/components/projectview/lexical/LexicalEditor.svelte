@@ -585,10 +585,10 @@
              existingNode.replace(newNode);
           }
         } else {
-          const selection = _lexicalCore.$getSelection();
-          if (_lexicalCore.$isRangeSelection(selection)) {
+          const selection = _getSelection();
+          if (_isRangeSelection(selection)) {
             const node = _createEquationNode(equation, inline);
-            _lexicalCore.$insertNodes([node]);
+            _insertNodes([node]);
           }
         }
       });
