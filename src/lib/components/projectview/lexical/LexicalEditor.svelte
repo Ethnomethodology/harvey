@@ -18,7 +18,8 @@
     $normalizeSelection__EXPERIMENTAL as _normalizeSelection,
     createCommand,
     $isNodeSelection as _isNodeSelection,
-    $createNodeSelection as _createNodeSelection
+    $createNodeSelection as _createNodeSelection,
+    $insertNodes as _insertNodes
   } from 'lexical';
 
   import {
@@ -83,12 +84,13 @@
 
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
   import { ImageNode, $createImageNode as _createImageNode, $isImageNode as _isImageNode } from '$lib/nodes/ImageNode.js';
-
+  import { DateNode, $createDateNode as _createDateNode, $isDateNode as _isDateNode } from '$lib/nodes/DateNode.js';
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import InsertImageModal from './InsertImageModal.svelte';
+  import DatePromptModal from '../modals/DatePromptModal.svelte';
   import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
@@ -100,7 +102,7 @@
     List, ListOrdered, ListChecks, Quote as QuoteIcon, Code as CodeIcon, Heading1, Heading2, Heading3, Type,
     Highlighter, Baseline, X, ChevronUp, CheckSquare,
     Table as TableIcon, Minus, Link as LinkIcon, ChevronLeft, ChevronRight, MoreVertical, Play,
-    CaseSensitive, Subscript as SubscriptIcon, Superscript as SuperscriptIcon
+    CaseSensitive, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, CalendarDays
   } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
@@ -182,6 +184,7 @@
   let activeTableCellKey = null;
 
   const INSERT_HORIZONTAL_RULE_COMMAND = createCommand('INSERT_HORIZONTAL_RULE_COMMAND');
+  const INSERT_DATE_COMMAND = createCommand('INSERT_DATE_COMMAND');
 
   let searchUiContainerElement;
   let searchToggleButtonElement;
@@ -200,6 +203,9 @@
   let imageResizeStartParams = null; // { width, height, x, y }
   
   let showInsertImageModal = false;
+  let showDateModal = false;
+  let dateNodeToEditKey = null;
+  let dateInitialData = { date: new Date().toISOString(), format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
   let savedImageSelection = null;
 
   let isResizing = false;
@@ -230,7 +236,8 @@
     LinkNode,
     TableNode, TableRowNode, TableCellNode,
     HorizontalRuleNode,
-    ImageNode
+    ImageNode,
+    DateNode
   ];
 
   function handleShortcut(event) {
@@ -521,6 +528,7 @@
   const insertOptions = [
     { value: 'table', label: 'Table', action: openInsertTableDialog, iconComponent: TableIcon },
     { value: 'hr', label: 'Horizontal Rule', action: insertHorizontalRule, iconComponent: Minus },
+    { value: 'date', label: 'Date', action: openInsertDateDialog, iconComponent: CalendarDays },
     { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
     { value: 'image', label: 'Image', action: insertImage, iconComponent: ImageIcon },
   ];
@@ -539,6 +547,40 @@
 
     isInsertDropdownOpen = false;
     showInsertImageModal = true;
+  }
+
+  function openInsertDateDialog() {
+    dateNodeToEditKey = null;
+    dateInitialData = { date: new Date().toISOString(), format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
+    showDateModal = true;
+    isInsertDropdownOpen = false;
+  }
+
+  function handleDateConfirm(event) {
+    const { date, format, showTime, timeFormat, displayValue } = event.detail;
+
+    if (dateNodeToEditKey) {
+        // Update existing node
+        editor.update(() => {
+            const node = _getNodeByKey(dateNodeToEditKey);
+            if (_isDateNode(node)) {
+                const writable = node.getWritable();
+                writable.__date = date;
+                writable.__format = format;
+                writable.__showTime = showTime;
+                writable.__timeFormat = timeFormat;
+                writable.__displayValue = displayValue;
+            }
+        });
+    } else {
+        // Insert new node
+        editor.update(() => {
+            const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
+            _insertNodes([dateNode]);
+        });
+    }
+    showDateModal = false;
+    dateNodeToEditKey = null;
   }
   
   function handleInsertImageAttached(event) {
@@ -981,6 +1023,17 @@
                       clickedCell = _findMatchingParent(targetNode, _isTableCellNode);
                       if (_isImageNode(targetNode)) {
                           clickedImageKey = targetNode.getKey();
+                      } else if (_isDateNode(targetNode)) {
+                          // Handle DateNode click
+                          dateNodeToEditKey = targetNode.getKey();
+                          dateInitialData = {
+                              date: targetNode.__date,
+                              format: targetNode.__format,
+                              showTime: targetNode.__showTime,
+                              timeFormat: targetNode.__timeFormat
+                          };
+                          showDateModal = true;
+                          return true;
                       }
                   }
                 });
@@ -1330,6 +1383,14 @@
                         _insertNodes([horizontalRuleNode]);
                     }
                 });
+                return true;
+            },
+            COMMAND_PRIORITY_EDITOR
+        ),
+        editor.registerCommand(
+            INSERT_DATE_COMMAND,
+            () => {
+                openInsertDateDialog();
                 return true;
             },
             COMMAND_PRIORITY_EDITOR
@@ -3154,7 +3215,7 @@ $: if (editor && activeLayout) {
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
   {#if editable || $$slots.toolbar_prepend}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-[100]">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       <slot name="toolbar_prepend"></slot>
 
       {#if toolbarConfig.undo}
@@ -3647,6 +3708,16 @@ $: if (editor && activeLayout) {
   {documentPath}
   on:insert_attached={handleInsertImageAttached}
   on:insert_external={handleInsertImageExternal}
+/>
+
+<DatePromptModal
+  bind:showModal={showDateModal}
+  initialDate={dateInitialData.date}
+  initialFormat={dateInitialData.format}
+  initialShowTime={dateInitialData.showTime}
+  initialTimeFormat={dateInitialData.timeFormat}
+  on:confirm={handleDateConfirm}
+  on:cancel={() => { showDateModal = false; dateNodeToEditKey = null; }}
 />
 
 {#if enableFloatingToolbar}
