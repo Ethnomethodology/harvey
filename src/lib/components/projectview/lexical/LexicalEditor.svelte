@@ -234,7 +234,7 @@
   ];
 
   function handleShortcut(event) {
-      if (!editable) return;
+      if (!editable || !editor) return;
       const mod = event.metaKey || event.ctrlKey;
 
       if (mod && event.altKey) {
@@ -246,6 +246,25 @@
         if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             toggleLink();
+            return;
+        }
+        if (mod && event.key === ']') {
+            event.preventDefault();
+            indentContent();
+            return;
+        }
+        if (mod && event.key === '[') {
+            event.preventDefault();
+            outdentContent();
+            return;
+        }
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            if (event.shiftKey) {
+                outdentContent();
+            } else {
+                indentContent();
+            }
             return;
         }
   }
@@ -802,6 +821,9 @@
           ol: 'list-decimal list-outside mb-1 lexical-ol',
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 relative lexical-li list-item-checkbox',
+          nested: {
+            listitem: 'lexical-nested-listitem'
+          }
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
@@ -868,6 +890,7 @@
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
     editorWrapper.addEventListener('pointermove', handlePointerHover);
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
+    editorContainer.addEventListener('keydown', handleShortcut);
     window.addEventListener('mousedown', handleClickOutside, true);
 
     isReady = true; // Set to true before registering listener and setting state
@@ -1332,6 +1355,7 @@
       if (editorContainer) {
           editorContainer.removeEventListener('pointerdown', handlePointerDownOnContainer);
           editorContainer.removeEventListener('contextmenu', handleContextMenu, true);
+          editorContainer.removeEventListener('keydown', handleShortcut);
           editorContainer.removeEventListener('click', (e) => {
               const anchor = e.target.closest('a');
               if (anchor) { e.preventDefault(); }
@@ -3716,6 +3740,15 @@ $: if (editor && activeLayout) {
   :global(.lexical-ul > li.lexical-li), :global(.lexical-ol > li.lexical-li) {
       margin-left: 2em;
       padding-left: 0.25em;
+  }
+
+  /* Nested list items shouldn't inherit outer list styles */
+  :global(.lexical-content .lexical-nested-listitem) {
+      list-style-type: none !important;
+  }
+  :global(.lexical-content .lexical-nested-listitem::before),
+  :global(.lexical-content .lexical-nested-listitem::after) {
+      display: none !important;
   }
 
   /* Checklist item styles */
