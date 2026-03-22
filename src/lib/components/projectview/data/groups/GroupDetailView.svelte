@@ -739,7 +739,7 @@
                                                     playsinline
                                                     class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                 ></video>
-                                            {:else if (file.file_type === 'document' || file.file_type === 'imported_transcript' || file.file_type === 'transcript') && file.full_path && file.full_path.endsWith('.json')}
+                                            {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path && file.full_path.endsWith('.json')}
                                                 <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
                                             {:else}
                                                 <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
