@@ -748,6 +748,17 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         pandoc_args.push(lua_path.to_string_lossy().to_string());
     }
 
+    let reference_docx_path = app_handle.path()
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(ref_path) = reference_docx_path {
+        if ref_path.exists() {
+            pandoc_args.push("--reference-doc".to_string());
+            pandoc_args.push(ref_path.to_string_lossy().to_string());
+        }
+    }
+
     // Add resource path to resolve attachments/ relative to the transcript's directory
     if let Some(parent) = source_path.parent() {
         pandoc_args.push("--resource-path".to_string());
@@ -2029,6 +2040,17 @@ pub async fn export_document_to_docx<R: Runtime>(
     if let Some(lua_path) = lua_filter_path {
         pandoc_args.push("--lua-filter".to_string());
         pandoc_args.push(lua_path.to_string_lossy().to_string());
+    }
+
+    let reference_docx_path = app_handle.path()
+        .resolve("assets/reference.docx", tauri::path::BaseDirectory::Resource)
+        .ok();
+
+    if let Some(ref_path) = reference_docx_path {
+        if ref_path.exists() {
+            pandoc_args.push("--reference-doc".to_string());
+            pandoc_args.push(ref_path.to_string_lossy().to_string());
+        }
     }
 
     // Add resource path to resolve attachments/ relative to the document's directory

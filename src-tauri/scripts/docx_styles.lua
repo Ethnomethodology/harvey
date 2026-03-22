@@ -535,21 +535,13 @@ function Mark(el)
 end
 
 function Table(el)
-    -- Remove custom-style overriding standard Pandoc borders
+    -- Map to reference docx's Table Grid style explicitly to ensure bordered rendering overrides default Word no-border views
     if el.classes then
-        for i, class in ipairs(el.classes) do
-            if class == 'TableGrid' then
-                table.remove(el.classes, i)
-            end
-        end
-        el.attributes['custom-style'] = nil
+        el.classes:insert('TableGrid')
+        el.attributes['custom-style'] = 'Table Grid'
     elseif el.attr then
-        for i, class in ipairs(el.attr.classes) do
-            if class == 'TableGrid' then
-                table.remove(el.attr.classes, i)
-            end
-        end
-        el.attr.attributes['custom-style'] = nil
+        el.attr.classes:insert('TableGrid')
+        el.attr.attributes['custom-style'] = 'Table Grid'
     end
     return el
 end
