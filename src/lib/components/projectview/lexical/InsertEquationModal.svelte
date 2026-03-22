@@ -79,7 +79,7 @@
         bind:value={equation}
         rows="4"
         class="font-mono text-sm"
-        placeholder="e.g., E = mc^2 or \frac{a}{b}"
+        placeholder="e.g., E = mc^2 or \\frac{a}{b}"
         autocomplete="off"
         autocorrect="off"
         spellcheck="false"
