@@ -218,7 +218,7 @@
   let playButtonPosition = { top: 0, left: 0 };
   let showPlayButton = false;
 
-  const MIN_COLUMN_WIDTH = 50;
+  const MIN_COLUMN_WIDTH = 20;
 
 
   export const editorNodes = [
@@ -828,8 +828,8 @@
         quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
         code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
-        table: `editor-table w-full border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed`,
-        tableCell: `editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[${isDocument ? '10px' : '50px'}] relative overflow-hidden`,
+        table: `editor-table border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed`,
+        tableCell: `editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[20px] relative overflow-hidden`,
         tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700 overflow-hidden',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
@@ -2528,8 +2528,7 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
                       const currentWidths = tableNode.getColWidths()?.slice() || [];
                       let currentWidthVal = currentWidths[targetColIndex];
 
-                      const isDoc = enableTableCellResize || documentPath?.toLowerCase().includes('/documents/') || documentPath?.toLowerCase().includes('\\documents\\');
-                      const localMinWidth = isDoc ? 10 : 50;
+                      const localMinWidth = 20;
 
                       // Handle string/percentage widths
                       if (typeof currentWidthVal === 'string') {
