@@ -451,13 +451,14 @@ function CodeBlock(el)
             '<w:p>' ..
               '<w:pPr>' ..
                 '<w:pStyle w:val="NoSpacing"/>' ..
-                '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' ..
+                '<w:shd w:val="clear" w:color="auto" w:fill="EAEAEA"/>' ..
                 '%s' ..
                 '<w:ind w:left="120" w:right="120"/>' ..
                 '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' ..
               '</w:pPr>' ..
               '<w:r>' ..
                 '<w:rPr>' ..
+                  '<w:shd w:val="clear" w:color="auto" w:fill="EAEAEA"/>' ..
                   '<w:rFonts w:ascii="Courier Prime" w:hAnsi="Courier Prime" w:cs="Courier Prime"/>' ..
                   '<w:sz w:val="19"/>' ..
                   '<w:szCs w:val="19"/>' ..

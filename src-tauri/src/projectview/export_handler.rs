@@ -308,14 +308,14 @@ fn append_node_html(node: &Value, html: &mut String) {
                     let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
                     let total_width: f64 = widths.iter().sum();
                     
-                    html.push_str("<table custom-style=\"Table Grid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><colgroup>");
+                    html.push_str("<table custom-style=\"Table Grid\"><colgroup>");
                     for w in widths {
                         let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
                         html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
                     }
                     html.push_str("</colgroup><tbody>");
                  } else {
-                    html.push_str("<table custom-style=\"Table Grid\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody>");
+                    html.push_str("<table custom-style=\"Table Grid\"><tbody>");
                  }
 
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
@@ -350,7 +350,13 @@ fn append_node_html(node: &Value, html: &mut String) {
                      ""
                  };
 
-                 html.push_str(&format!("<{} style=\"border: 1px solid black; padding: 8px; {}{}\">", tag, width_style, font_weight_style));
+                 let style_attr = if !width_style.is_empty() || !font_weight_style.is_empty() {
+                     format!(" style=\"{}{}\"", width_style, font_weight_style)
+                 } else {
+                     "".to_string()
+                 };
+
+                 html.push_str(&format!("<{}{}>", tag, style_attr));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html);
