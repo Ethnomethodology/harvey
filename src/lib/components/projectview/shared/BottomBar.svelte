@@ -20,16 +20,18 @@ import { project } from '$lib/stores/projectStore.js';
     {:else if error}
       <span class="text-red-600 truncate" title={error}>Error: {error}</span>
     {:else}
-      <span class="truncate" title={statusMessage}>{statusMessage || 'Ready'}</span>
+      <span class="truncate" title={statusMessage}>
+        {statusMessage || 'Ready'}
+        {#if isIdle && textCount}
+          <span class="text-gray-500 font-medium" title="Word & Character Count">
+            : {textCount.words} words, {textCount.chars} chars
+          </span>
+        {/if}
+      </span>
     {/if}
   </div>
 
   <div class="flex items-center gap-4 flex-shrink-0 ml-4">
-    {#if isIdle && textCount}
-      <span class="text-gray-500 font-medium" title="Word & Character Count">
-        {textCount.words} words, {textCount.chars} chars
-      </span>
-    {/if}
     {#if isDirty && !isLoading && !error}
       <span class="text-orange-600 font-medium">Unsaved Changes</span>
     {/if}
