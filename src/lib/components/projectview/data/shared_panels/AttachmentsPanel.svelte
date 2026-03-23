@@ -522,8 +522,8 @@
                 {#each groupedAttachments.root as { attachment, originalIndex } (attachment)}
                     <li
                         class="p-2 flex items-center justify-between group cursor-pointer"
-                        class:bg-blue-100={currentTrackIndex === originalIndex}
-                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                        class:bg-blue-100={currentTrackIndex === originalIndex || (typeof attachment === 'object' && attachment.is_transcript && attachment.path === $project.activeTranscriptPathInDataTab)}
+                        class:dark:bg-blue-800={currentTrackIndex === originalIndex || (typeof attachment === 'object' && attachment.is_transcript && attachment.path === $project.activeTranscriptPathInDataTab)}
                         on:click={() => playTrack(originalIndex)}
                     >
                         <div class="flex items-center space-x-3 truncate">
