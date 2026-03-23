@@ -500,6 +500,13 @@ function BlockQuote(el)
 end
 
 function Span(el)
+  if el.classes:includes('custom-math') then
+    local math_text = pandoc.utils.stringify(el)
+    local is_inline = el.attributes['data-inline'] == 'true'
+    local math_type = is_inline and pandoc.InlineMath or pandoc.DisplayMath
+    return pandoc.Math(math_type, math_text)
+  end
+
   -- Only process Spans that have our target attributes
   local color = el.attributes['data-color'] or el.attributes['color']
   local font = el.attributes['data-font-family'] or el.attributes['font-family']

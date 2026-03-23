@@ -373,12 +373,9 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
                 let equation = node.get("equation").and_then(|e| e.as_str()).unwrap_or("");
                 let inline = node.get("inline").and_then(|i| i.as_bool()).unwrap_or(true);
 
-                // Pandoc understands standard TeX delimiters in HTML
-                if inline {
-                    html.push_str(&format!("<span class=\"math inline\">\\({}\\)</span>", encode_text(equation)));
-                } else {
-                    html.push_str(&format!("<span class=\"math display\">\\[{}\\]</span>", encode_text(equation)));
-                }
+                // Output a custom element that our Lua filter will catch and turn into a true Pandoc Math object.
+                let inline_str = if inline { "true" } else { "false" };
+                html.push_str(&format!("<span class=\"custom-math\" data-inline=\"{}\">{}</span>", inline_str, encode_text(equation)));
             }
             "date" => {
                 let display_value = node.get("displayValue").and_then(|d| d.as_str()).unwrap_or("");
