@@ -6,7 +6,7 @@
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
-    import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
+    import { project, switchTranscriptInDataTab, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
@@ -51,6 +51,21 @@
     let isTable = false;
     let isGroup = false;
     let pathForExportModal = '';
+
+    $: currentTranscriptPathForSplit = isImportedTranscript ? $project.currentImportedTranscriptPath : $project.activeTranscriptPathInDataTab;
+    $: splitState = currentTranscriptPathForSplit && $project.importedTranscriptSplits ? $project.importedTranscriptSplits[currentTranscriptPathForSplit] : null;
+    $: isHorizontalSplitActive = splitState?.orientation === 'horizontal';
+    $: isVerticalSplitActive = splitState?.orientation === 'vertical';
+
+    function handleSplitToggle(orientation) {
+        if (orientation === 'horizontal' && isHorizontalSplitActive) {
+            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+        } else if (orientation === 'vertical' && isVerticalSplitActive) {
+            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+        } else {
+            project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: orientation }));
+        }
+    }
 
     $: {
         const p = $project;
@@ -633,11 +648,11 @@
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
-            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
+            <Button size="xs" color={isHorizontalSplitActive ? 'blue' : 'alternative'} class="px-2 !py-1 {isHorizontalSplitActive ? '!ring-0' : ''}" on:click={() => handleSplitToggle('horizontal')} title="Split Transcript (Horizontal)">
                 <SquareSplitHorizontal class="w-3.5 h-3.5" />
             </Button>
 
-            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
+            <Button size="xs" color={isVerticalSplitActive ? 'blue' : 'alternative'} class="px-2 !py-1 {isVerticalSplitActive ? '!ring-0' : ''}" on:click={() => handleSplitToggle('vertical')} title="Split Transcript (Vertical)">
                 <SquareSplitVertical class="w-3.5 h-3.5" />
             </Button>
         {/if}
