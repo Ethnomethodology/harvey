@@ -26,6 +26,9 @@
     let showRenameModal = false;
     let itemToRename = null;
 
+    let showRenameFolderModal = false;
+    let folderToRename = null;
+
     let showImagePreviewModal = false;
     let imagePreviewPath = '';
 
@@ -185,6 +188,47 @@
     function handleRenameModalClose() {
         showRenameModal = false;
         itemToRename = null;
+    }
+
+    function openRenameFolderModal(folderName) {
+        // Find actual view object logic if needed or just use folderName
+        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+        folderToRename = {
+            folderName: folderName,
+            viewName: viewName
+        };
+        showRenameFolderModal = true;
+    }
+
+    async function handleRenameFolderConfirm(event) {
+        const { newName } = event.detail;
+        if (!folderToRename || !newName || newName.trim() === '') {
+            showRenameFolderModal = false;
+            return;
+        }
+
+        const finalNewName = newName.trim();
+        showRenameFolderModal = false;
+        const projectStoreState = get(project);
+
+        try {
+            await invoke('rename_table_view_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                oldViewName: folderToRename.viewName,
+                newViewName: finalNewName,
+                projectXmlPathStr: projectStoreState.xmlPath
+            });
+            notificationStore.add('Folder renamed successfully.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (error) {
+            console.error('Failed to rename folder via attachments panel:', error);
+            notificationStore.add(`Failed to rename folder: ${error.message || error}`, 'error');
+        } finally {
+            folderToRename = null;
+        }
     }
 
     async function handleDeleteTranscript(transcript) {
@@ -524,17 +568,24 @@
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <span class="text-xs text-gray-400 dark:text-gray-500 group-hover:hidden transition-opacity">{groupedAttachments.folders[folderName].length} items</span>
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                                    title="Delete Folder"
-                                    on:click|stopPropagation={() => {
-                                        // The view name is the folder name without the trailing "_participants" or "_questions"
-                                        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
-                                                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
-                                        handleDeleteView({ view_name: viewName, view_type: 'survey' });
-                                    }}
-                                >
-                                    <Trash2 class="w-3.5 h-3.5 text-red-500" />
-                                </button>
+                                <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                    <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Folder Options" id="folder-options-{folderName.replace(/[^a-zA-Z0-9]/g, '-')}" on:click|stopPropagation>
+                                        <MoreVertical class="w-4 h-4" />
+                                    </button>
+                                    <Dropdown triggeredBy="#folder-options-{folderName.replace(/[^a-zA-Z0-9]/g, '-')}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                        <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); openRenameFolderModal(folderName); }}>
+                                            <FilePenLine class="w-4 h-4 text-gray-500" /> Rename...
+                                        </DropdownItem>
+                                        <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => {
+                                            e.stopPropagation();
+                                            const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                                                             folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+                                            handleDeleteView({ view_name: viewName, view_type: 'survey' });
+                                        }}>
+                                            <Trash2 class="w-4 h-4" /> Delete
+                                        </DropdownItem>
+                                    </Dropdown>
+                                </div>
                             </div>
                         </div>
 
@@ -713,6 +764,14 @@
     itemType={itemToRename?.file_type || ''}
     on:confirm={handleRenameConfirm}
     on:close={handleRenameModalClose}
+/>
+
+<FileRenameModal
+    bind:showModal={showRenameFolderModal}
+    currentName={folderToRename?.viewName || ''}
+    itemType={'survey view'}
+    on:confirm={handleRenameFolderConfirm}
+    on:close={() => showRenameFolderModal = false}
 />
 
 <ImagePreviewModal

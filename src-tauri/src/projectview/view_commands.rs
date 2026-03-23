@@ -45,3 +45,14 @@ pub async fn delete_table_view_command(
     info!("Deleting table view: {} for table: {} in project: {}", view_name, table_path, project_id);
     view_handler::delete_table_view(&project_id, &table_path, &view_name, &project_xml_path_str)
 }
+#[tauri::command]
+pub async fn rename_table_view_command(
+    project_id: String,
+    table_path: String,
+    old_view_name: String,
+    new_view_name: String,
+    project_xml_path_str: String,
+) -> Result<(), CommandError> {
+    info!("Renaming table view: {} to {} for table: {} in project: {}", old_view_name, new_view_name, table_path, project_id);
+    view_handler::rename_table_view(&project_id, &table_path, &old_view_name, &new_view_name, &project_xml_path_str)
+}
