@@ -373,23 +373,6 @@ local function collect_text(inlines, props)
   return result
 end
 
-function Link(el)
-    -- Handle top-level links.
-    -- We've injected `style="color: #0563C1; text-decoration: underline;"` natively in export_handler.rs
-    -- so Pandoc should natively translate those to Word inline styles.
-    -- We just apply the 'Hyperlink' style for semantic correctness.
-
-    -- Get the manually styled runs (OpenXML) by parsing the link's contents
-    -- using our inline style collector (this respects the native attributes Pandoc found)
-    local props = { is_link = true }
-    local sub_res = collect_text(el.content, props)
-
-    -- Wrap them in a Span that Pandoc understands as a style trigger
-    local styled_content = pandoc.Span(sub_res, {['custom-style'] = 'Hyperlink'})
-
-    return pandoc.Link(styled_content, el.target, el.title, el.attr)
-end
-
 function CodeBlock(el)
     local code = el.text
     local lines = code:split("\n")
