@@ -1730,6 +1730,11 @@
     return { index: -1, offset: 0 };
   }
 
+  export function insertImageByPath(imagePath) {
+      if (!imagePath) return;
+      handleInsertImageAttached({ detail: { path: imagePath } });
+  }
+
   export function getCursorRowInfo() {
     if (!editorWrapper || !editor) return { index: -1, offset: 0, visible: false };
     

@@ -172,6 +172,12 @@
         console.log('[DocumentEditorPanel] External discard() called.');
         return handleDiscard();
     }
+    export function insertImage(path) {
+        if (editorRef) {
+            editorRef.insertImageByPath(path);
+        }
+    }
+
     export function resetEditorState(jsonString) {
         if (editorRef) {
              console.log('[DocumentEditorPanel] External resetEditorState called.');

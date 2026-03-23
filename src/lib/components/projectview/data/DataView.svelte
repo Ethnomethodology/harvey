@@ -56,6 +56,18 @@
         }
     }
 
+    function handleRequestInsertAttachedImage(event) {
+        const { imagePath } = event.detail;
+        console.log('[DataView] Received requestInsertAttachedImage:', imagePath);
+        if (activeViewType === 'documents' && documentViewRef && typeof documentViewRef.insertImage === 'function') {
+            documentViewRef.insertImage(imagePath);
+        } else if (activeViewType === 'imported_transcript' && importedTranscriptViewRef && typeof importedTranscriptViewRef.insertImage === 'function') {
+            importedTranscriptViewRef.insertImage(imagePath);
+        } else {
+            console.warn("[DataView] Active view does not support inserting images");
+        }
+    }
+
     function handleRequestPlayMedia(event) {
         const { mediaPath } = event.detail;
         console.log('[DataView] Received requestPlayMedia:', mediaPath);
@@ -413,7 +425,7 @@
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
                     <HighlightsPanel itemPath={activeSubItemPath || activeItemPath} itemType={activeSubItemType || activeItemTypeForInfoPanel} refreshKey={highlightsPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
-                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} on:attachmentdeleted={handleAttachmentDeleted} />
+                    <AttachmentsPanel bind:this={attachmentsPanelRef} itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} on:requestInsertAttachedImage={handleRequestInsertAttachedImage} on:requestPlayMedia={handleRequestPlayMedia} on:requestOpenChart={handleRequestOpenChart} on:requestOpenView={handleRequestOpenView} on:requestConfigureView={handleRequestConfigureView} on:requestDeleteView={handleRequestDeleteView} on:requestOpenLexicalDocument={handleRequestOpenLexicalDocument} on:attachmentdeleted={handleAttachmentDeleted} />
                 {/if}
             </div>
         {/if}

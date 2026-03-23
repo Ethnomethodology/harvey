@@ -17,6 +17,7 @@
 
     let attachments = [];
     import FileRenameModal from '../../modals/FileRenameModal.svelte';
+    import ImagePreviewModal from '../../modals/ImagePreviewModal.svelte';
 
     let isLoading = true;
     let previousProcessedItemPath = null;
@@ -24,6 +25,9 @@
 
     let showRenameModal = false;
     let itemToRename = null;
+
+    let showImagePreviewModal = false;
+    let imagePreviewPath = '';
 
     // Helper to search the file tree for active media file
     function findFileInTree(nodes, path) {
@@ -129,7 +133,8 @@
             } else if (typeof attachment === 'object' && attachment.is_transcript) {
                 switchTranscriptInDataTab(attachment.path);
             } else if (typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)) {
-                // Images do not play in the media player
+                imagePreviewPath = attachment;
+                showImagePreviewModal = true;
                 return;
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
@@ -708,4 +713,12 @@
     itemType={itemToRename?.file_type || ''}
     on:confirm={handleRenameConfirm}
     on:close={handleRenameModalClose}
+/>
+
+<ImagePreviewModal
+    bind:showModal={showImagePreviewModal}
+    imagePath={imagePreviewPath}
+    on:insert={(e) => dispatch('requestInsertAttachedImage', { imagePath: e.detail.path })}
+    on:delete={(e) => handleDeleteDocument(e.detail.path)}
+    on:cancel={() => showImagePreviewModal = false}
 />
