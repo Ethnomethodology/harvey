@@ -55,11 +55,8 @@ export class DateNode extends DecoratorNode {
   createDOM(config) {
     const span = document.createElement('span');
     span.contentEditable = 'false';
-    span.className = 'lexical-date-node inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-medium cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors my-0.5 align-baseline text-sm';
+    span.className = 'lexical-date-node inline-flex items-center cursor-pointer transition-colors align-baseline text-inherit font-inherit border-b border-dashed border-gray-400 hover:border-gray-600 dark:border-gray-500 dark:hover:border-gray-300';
     span.innerText = this.__displayValue;
-    
-    // Add a small calendar icon implicitly via pseudo-elements or just keep it clean
-    // For now keep it as a clean pill
     
     return span;
   }
