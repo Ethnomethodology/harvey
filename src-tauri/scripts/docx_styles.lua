@@ -393,7 +393,10 @@ end
 function Link(el)
     -- Handle top-level links
     local props = {
-        is_link = true
+        is_link = true,
+        -- Force hyperlink styling explicitly via OpenXML run properties
+        color = "#0563C1",
+        underline = true
     }
 
     -- We use the native pandoc.Link but ensure the content has the "Hyperlink" style
