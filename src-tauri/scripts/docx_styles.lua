@@ -359,28 +359,11 @@ local function collect_text(inlines, props)
         -- Word supports fields for hyperlinks: { HYPERLINK "url" }.
         -- This avoids the Relationship ID issue!
         -- Syntax: <w:fldSimple w:instr=" HYPERLINK &quot;url&quot; "> ... runs ... </w:fldSimple>
+        -- Actually, since we want to rely on the HTML inline styling, we should completely avoid shredding the Link
+        -- into RawInlines inside `collect_text`. By just passing the Link as-is, Pandoc will use its AST knowledge
+        -- of the link (including the HTML `style` attributes we attached to the `<a>` tag) and natively write it out.
 
-        local url = escape_xml(elem.target)
-        local sub_props = clone(props)
-        sub_props.is_link = true
-
-        -- Recurse into link content to get styled runs
-        local sub_res = collect_text(elem.content, sub_props)
-
-        -- Construct fldSimple XML
-        -- Note: fldSimple is robust and doesn't require rId.
-        local runs_xml = ""
-        for _, inline in ipairs(sub_res) do
-            if inline.t == 'RawInline' then
-                runs_xml = runs_xml .. inline.text
-            else
-                -- Should not happen with collect_text but for safety
-                runs_xml = runs_xml .. pandoc.utils.stringify(inline)
-            end
-        end
-
-        local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; ">%s</w:fldSimple>', url, runs_xml)
-        table.insert(result, pandoc.RawInline('openxml', xml))
+        table.insert(result, elem)
 
     else
        -- Fallback for other elements
