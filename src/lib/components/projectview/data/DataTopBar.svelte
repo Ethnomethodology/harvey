@@ -648,13 +648,21 @@
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
-            <Button size="xs" color={isHorizontalSplitActive ? 'blue' : 'alternative'} class="px-2 !py-1 {isHorizontalSplitActive ? '!ring-0' : ''}" on:click={() => handleSplitToggle('horizontal')} title="Split Transcript (Horizontal)">
-                <SquareSplitHorizontal class="w-3.5 h-3.5" />
-            </Button>
+            <button
+                on:click={() => handleSplitToggle('horizontal')}
+                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                title="Split Transcript (Horizontal)"
+            >
+                <SquareSplitHorizontal class="w-4 h-4" />
+            </button>
 
-            <Button size="xs" color={isVerticalSplitActive ? 'blue' : 'alternative'} class="px-2 !py-1 {isVerticalSplitActive ? '!ring-0' : ''}" on:click={() => handleSplitToggle('vertical')} title="Split Transcript (Vertical)">
-                <SquareSplitVertical class="w-3.5 h-3.5" />
-            </Button>
+            <button
+                on:click={() => handleSplitToggle('vertical')}
+                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                title="Split Transcript (Vertical)"
+            >
+                <SquareSplitVertical class="w-4 h-4" />
+            </button>
         {/if}
 
   

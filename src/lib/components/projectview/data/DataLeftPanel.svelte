@@ -16,26 +16,12 @@
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { type as getOsType } from '@tauri-apps/plugin-os';
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
-    import CategoryTooltip from './CategoryTooltip.svelte';
+    import { Dropdown, DropdownItem } from 'flowbite-svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
     import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from '@lucide/svelte';
 
 
     const dispatch = createEventDispatcher();
-
-    function showTooltip(event, category) {
-        const buttonRect = event.currentTarget.getBoundingClientRect();
-        const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
-        tooltipCategoryName = category.name;
-        tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
-        tooltipX = buttonRect.right + 8;
-        tooltipY = buttonRect.top;
-        tooltipVisible = true;
-    }
-
-    function hideTooltip() {
-        tooltipVisible = false;
-    }
 
     async function handleImportTranscriptConfirm(event) {
         const { sourceType } = event.detail;
@@ -905,10 +891,7 @@
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_DATA_PANEL_STATE = 'harveyDataPanelCategoryState';
 
-    // --- Group & Tooltip States (moved from reactive block) ---
-    let tooltipVisible = false;
-    let tooltipCategoryName = '';
-    let tooltipFiles = [];
+    // --- Group States (moved from reactive block) ---
     let groupContextMenuVisible = false;
     let groupContextMenuX = 0;
     let groupContextMenuY = 0;
@@ -916,8 +899,6 @@
     let closeGroupContextMenuListener = null;
     let showGroupRenameModal = false;
     let groupToRename = null;
-    let tooltipX = 0;
-    let tooltipY = 0;
     let activeCollapsedCategoryType = null;
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_DATA_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[DataLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
@@ -1304,29 +1285,49 @@
             </div>
             {:else}
         <!-- Collapsed Content (Vertical Icons) -->
-        <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
+        <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0 w-full px-1">
             {#each CATEGORIES_BASE as category (category.type)}
-                <button
-                    type="button"
-                    class="p-1.5 focus:outline-none dark:focus:ring-offset-gray-900 focus:ring-offset-1"
-                    class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
-                    class:dark:hover:bg-gray-800={category.type !== activeCollapsedCategoryType}
-                    class:focus:ring-2={category.type !== activeCollapsedCategoryType}
-                    class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
-                    class:text-gray-500={category.type !== activeCollapsedCategoryType}
-                    class:dark:text-gray-600={category.type !== activeCollapsedCategoryType}
-                    class:text-blue-600={category.type === activeCollapsedCategoryType}
-                    class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
-                    class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
-                    class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
-                    on:click={handleToggleDataLeftPanel}
-                    on:mouseenter={(event) => showTooltip(event, category)}
-                    on:mouseleave={hideTooltip}
-                    on:focus={(event) => showTooltip(event, category)}
-                    on:blur={hideTooltip}
-                >
-                    <svelte:component this={category.iconComponent} class="w-5 h-5" />
-                </button>
+                <div class="relative w-full flex justify-center">
+                    <button
+                        type="button"
+                        id="collapsed-category-{category.type}"
+                        class="p-1.5 rounded-md focus:outline-none transition-colors dark:focus:ring-offset-gray-900 focus:ring-offset-1"
+                        class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
+                        class:dark:hover:bg-gray-800={category.type !== activeCollapsedCategoryType}
+                        class:focus:ring-2={category.type !== activeCollapsedCategoryType}
+                        class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
+                        class:text-gray-500={category.type !== activeCollapsedCategoryType}
+                        class:dark:text-gray-600={category.type !== activeCollapsedCategoryType}
+                        class:text-blue-600={category.type === activeCollapsedCategoryType}
+                        class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
+                        class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
+                        class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
+                        on:click={handleToggleDataLeftPanel}
+                    >
+                        <svelte:component this={category.iconComponent} class="w-5 h-5" />
+                    </button>
+                    <Dropdown triggeredBy="#collapsed-category-{category.type}" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
+                        <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
+                            {category.name}
+                        </div>
+                        {#if (filteredCategories.find(fc => fc.type === category.type)?.files?.length || 0) > 0}
+                            {#each filteredCategories.find(fc => fc.type === category.type)?.files || [] as file (file.path || file.name)}
+                                <DropdownItem
+                                    class="truncate text-sm flex items-center py-1.5 {isItemActive(file) ? 'bg-blue-50 dark:bg-gray-700 font-semibold' : ''}"
+                                    on:click={() => handleItemClick(file)}
+                                    title={file.name}
+                                >
+                                    <svelte:component this={category.iconComponent} class="w-3.5 h-3.5 mr-2 text-gray-400 dark:text-gray-500 shrink-0" />
+                                    <span class="truncate text-gray-800 dark:text-gray-200">{file.name}</span>
+                                </DropdownItem>
+                            {/each}
+                        {:else}
+                            <div class="px-4 py-3 text-xs italic text-gray-500 dark:text-gray-400">
+                                No {category.name.toLowerCase()} found.
+                            </div>
+                        {/if}
+                    </Dropdown>
+                </div>
             {/each}
         </div>
     {/if}
@@ -1519,15 +1520,6 @@
       </div>
     {/if}
 </div>
-
-<CategoryTooltip
-    visible={tooltipVisible}
-    categoryName={tooltipCategoryName}
-    files={tooltipFiles}
-    activePath={selectedItemPathInStore}
-    x={tooltipX}
-    y={tooltipY}
-/>
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <HeaderConfirmationModal 
