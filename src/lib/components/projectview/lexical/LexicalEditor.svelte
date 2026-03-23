@@ -81,6 +81,7 @@
     $createExtendedTextNode as _createExtendedTextNode,
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
+  import { $createTextNode as _createTextNode } from 'lexical';
 
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
   import { ImageNode, $createImageNode as _createImageNode, $isImageNode as _isImageNode } from '$lib/nodes/ImageNode.js';
@@ -598,7 +599,7 @@
     equationNodeToEditKey = null;
   }
   function handleDateConfirm(event) {
-    const { date, format, showTime, timeFormat, displayValue } = event.detail;
+    const { date, format, showTime, timeFormat, displayValue, insertAsText } = event.detail;
     
     // Remember last used config
     lastUsedDateConfig = { format, showTime, timeFormat };
@@ -617,10 +618,15 @@
             }
         });
     } else {
-        // Insert new node
+        // Insert new node or text
         editor.update(() => {
-            const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
-            _insertNodes([dateNode]);
+            if (insertAsText) {
+                const textNode = _createTextNode(displayValue);
+                _insertNodes([textNode]);
+            } else {
+                const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
+                _insertNodes([dateNode]);
+            }
         });
     }
     showDateModal = false;
