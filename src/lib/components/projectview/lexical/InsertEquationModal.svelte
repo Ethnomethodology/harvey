@@ -17,6 +17,11 @@
 
     const dispatch = createEventDispatcher();
 
+    let isMac = false;
+    onMount(() => {
+        isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
+    });
+
     function handleConfirm() {
       if (equation.trim()) {
         dispatch('confirm', { equation, inline });
@@ -97,7 +102,7 @@
             <Sigma size={14} class="text-gray-400" />
             LaTeX Expression
         </Label>
-        <span class="text-xs text-gray-500">Ctrl+Enter to save</span>
+        <span class="text-xs text-gray-500">{isMac ? '⌘+Enter' : 'Ctrl+Enter'} to save</span>
       </div>
       <Textarea
         id="equation-input"
