@@ -1446,11 +1446,15 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                  buffer.push_str("\n");
             }
             "tablecell" => {
+                 let mut cell_buffer = String::new();
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
-                        lexical_to_markdown_text_node(child, buffer);
+                        lexical_to_markdown_text_node(child, &mut cell_buffer);
                     }
                  }
+                 // Markdown tables cannot contain unescaped newlines.
+                 let clean_cell = cell_buffer.replace('\n', " ");
+                 buffer.push_str(&clean_cell);
                  buffer.push_str(" | ");
             }
             _ => { // Generic fallback for other unknown node types

@@ -1020,6 +1020,7 @@ export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
         }
 
         const mediaFileNode = findMediaFileInTree(currentProjectState.files, normalizedMediaPath);
+
         const targetTranscriptPath = normalizedTranscriptPath || mediaFileNode?.associated_transcripts?.[0]?.path || null;
 
         project.update(p => ({
