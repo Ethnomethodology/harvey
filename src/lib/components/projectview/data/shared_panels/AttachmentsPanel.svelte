@@ -553,8 +553,8 @@
                                                 <MoreVertical class="w-3.5 h-3.5" />
                                             </button>
                                             <Dropdown triggeredBy="#doc-options-folder-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
-                                                    <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                                    <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                                 </DropdownItem>
                                                 <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
                                                     <Trash2 class="w-4 h-4" /> Delete
@@ -606,8 +606,8 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#chart-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenChart', { chart: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -620,8 +620,8 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#view-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenView', { view: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestConfigureView', { view: attachment }); }}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
@@ -654,8 +654,8 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#doc-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -664,15 +664,31 @@
                             </div>
                         {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Image" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
-                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Image Options" id="image-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
                                 </button>
+                                <Dropdown triggeredBy="#image-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
                             </div>
                         {:else}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Audio" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
-                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Media Options" id="media-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
                                 </button>
+                                <Dropdown triggeredBy="#media-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
                             </div>
                         {/if}
                     </li>
