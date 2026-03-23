@@ -7,7 +7,7 @@
     import { refresher, triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon, MessageSquareText } from '@lucide/svelte';
+    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon, MessageSquareText, SquareArrowOutUpLeft, FilePenLine } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -16,9 +16,14 @@
     const dispatch = createEventDispatcher();
 
     let attachments = [];
+    import FileRenameModal from '../../modals/FileRenameModal.svelte';
+
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
+
+    let showRenameModal = false;
+    let itemToRename = null;
 
     // Helper to search the file tree for active media file
     function findFileInTree(nodes, path) {
@@ -130,6 +135,51 @@
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }
         }
+    }
+
+    function openRenameModal(transcript) {
+        if (!transcript || !transcript.path) return;
+        itemToRename = {
+            path: transcript.path,
+            name: transcript.name || transcript.path.split(/[\/\\]/).pop(),
+            file_type: 'transcript'
+        };
+        showRenameModal = true;
+    }
+
+    async function handleRenameConfirm(event) {
+        const { newName } = event.detail;
+        const item = itemToRename;
+
+        if (!item || !newName || newName.trim() === '') {
+            console.error("[AttachmentsPanel] Rename confirmation failed: Missing item or new name.");
+            showRenameModal = false;
+            itemToRename = null;
+            return;
+        }
+
+        const finalNewName = newName.trim();
+        showRenameModal = false;
+
+        const { renameProjectItem } = await import('$lib/services/projectService.js');
+        const { confirm } = await import('@tauri-apps/plugin-dialog');
+
+        try {
+            await renameProjectItem(item.path, finalNewName, item.file_type);
+            notificationStore.add('Transcript renamed successfully.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (err) {
+            console.error(`[AttachmentsPanel] Rename service call failed:`, err);
+            notificationStore.add(`Failed to rename transcript: ${err.message || err}`, 'error');
+        } finally {
+            itemToRename = null;
+        }
+    }
+
+    function handleRenameModalClose() {
+        showRenameModal = false;
+        itemToRename = null;
     }
 
     async function handleDeleteTranscript(transcript) {
@@ -588,7 +638,10 @@
                                 </button>
                                 <Dropdown triggeredBy="#transcript-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
                                     <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; switchTranscriptInDataTab(attachment.path); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Switch
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); openRenameModal(attachment); }}>
+                                        <FilePenLine class="w-4 h-4 text-gray-500" /> Rename...
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteTranscript(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -632,3 +685,11 @@
         {/if}
     </div>
 </div>
+
+<FileRenameModal
+    bind:showModal={showRenameModal}
+    currentName={itemToRename?.name || ''}
+    itemType={itemToRename?.file_type || ''}
+    on:confirm={handleRenameConfirm}
+    on:close={handleRenameModalClose}
+/>
