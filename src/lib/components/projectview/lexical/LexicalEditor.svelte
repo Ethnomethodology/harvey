@@ -81,7 +81,6 @@
     $createExtendedTextNode as _createExtendedTextNode,
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
-  import { $createTextNode as _createTextNode } from 'lexical';
 
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
   import { ImageNode, $createImageNode as _createImageNode, $isImageNode as _isImageNode } from '$lib/nodes/ImageNode.js';
