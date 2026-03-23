@@ -752,29 +752,6 @@
         table-layout: fixed !important;
         width: 100% !important;
     }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(1)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(1)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(1)) {
-        width: 10% !important;
-        min-width: 2.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(2)) {
-        width: 15% !important;
-        min-width: 5.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(3)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(3)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(3)) {
-        width: 15% !important;
-        min-width: 5.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(4)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(4)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(4)) {
-        width: 60% !important;
-    }
 
     /* Layout 2: Segment Block (Simulated via CSS) */
     :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content table),

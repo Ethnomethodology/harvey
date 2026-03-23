@@ -1243,7 +1243,7 @@
                     {#if $activeLayout === 'Layout1'}
                     <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 dark:text-white w-[10%] min-w-[2.5rem] max-w-[3rem]" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white w-[5%] min-w-[2.5rem]" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
