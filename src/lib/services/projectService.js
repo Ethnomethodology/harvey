@@ -1696,6 +1696,11 @@ async function processJsonToRemoveHighlights(jsonString) {
                     node.setStyle(newStyle);
                 }
             }
+            if (node.getType() === 'table' && typeof node.setColWidths === 'function') {
+                // When saving as document, clear the percentage-based fixed column widths
+                // so Lexical can automatically generate a full-width resizable table.
+                node.setColWidths([]);
+            }
         });
     });
     
