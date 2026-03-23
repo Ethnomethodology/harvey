@@ -391,20 +391,19 @@ local function collect_text(inlines, props)
 end
 
 function Link(el)
-    -- If we use RawInline 'openxml', Pandoc's docx writer struggles to embed it properly inside hyperlinks.
-    -- Instead, we wrap the link's content inside a Span that explicitly defines the color and underline properties.
-    -- Then, we let the native Pandoc DOCX writer handle the `<w:hyperlink>` creation, and our `Span` filter
-    -- will translate the `data-color` and `data-underline` into the raw `<w:r>` tags that the link expects.
+    -- Handle top-level links.
+    -- We've injected `style="color: #0563C1; text-decoration: underline;"` natively in export_handler.rs
+    -- so Pandoc should natively translate those to Word inline styles.
+    -- We just apply the 'Hyperlink' style for semantic correctness.
 
-    local span_attr = pandoc.Attr("", {}, {
-        ['data-color'] = "#0563C1",
-        ['data-underline'] = "single"
-    })
+    -- Get the manually styled runs (OpenXML) by parsing the link's contents
+    -- using our inline style collector (this respects the native attributes Pandoc found)
+    local props = { is_link = true }
+    local sub_res = collect_text(el.content, props)
 
-    -- Wrap the link content inside our styled Span
-    local styled_content = pandoc.Span(el.content, span_attr)
+    -- Wrap them in a Span that Pandoc understands as a style trigger
+    local styled_content = pandoc.Span(sub_res, {['custom-style'] = 'Hyperlink'})
 
-    -- Return a standard Link object containing the explicitly styled Span.
     return pandoc.Link(styled_content, el.target, el.title, el.attr)
 end
 
