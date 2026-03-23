@@ -23,7 +23,7 @@
 	let currentExtension = '';
     let currentDisplayName = '';
 
-	$: titleType = itemType === 'imported_transcript' ? 'Transcript' : (itemType ? itemType.charAt(0).toUpperCase() + itemType.slice(1) : 'Item');
+	$: titleType = itemType === 'imported_transcript' ? 'Transcript' : (itemType === 'survey view' ? 'Survey View' : (itemType ? itemType.charAt(0).toUpperCase() + itemType.slice(1) : 'Item'));
 
 	function updateNameParts() {
 		if (currentName) {
@@ -87,7 +87,7 @@
 			}
 		} else {
 			// User provides full name, must include an extension.
-			if (!baseNameInput.includes('.')) {
+			if (!baseNameInput.includes('.') && itemType !== 'survey view') {
 				errorMessage = 'Filename must include an extension.';
 			}
 		}
