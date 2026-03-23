@@ -9,7 +9,7 @@ import { project } from '$lib/stores/projectStore.js';
   $: isLoading = $project.isLoading;
   $: error = $project.error;
   $: textCount = $project.documentTextCount;
-  $: isIdle = !isLoading && !error && (!statusMessage || statusMessage === 'Ready' || statusMessage.includes('Loaded data') || statusMessage.includes('Loaded project') || statusMessage.includes('Project refreshed'));
+  $: isIdle = !isLoading && !error;
 
 </script>
 

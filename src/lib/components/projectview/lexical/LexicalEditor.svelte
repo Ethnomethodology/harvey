@@ -1491,6 +1491,14 @@
         const parsedState = editor.parseEditorState(initialStateString);
         editor.setEditorState(parsedState);
         areNodesReady = true;
+
+        // Force immediate text count dispatch for initial state since listener might skip it if unchanged
+        editor.getEditorState().read(() => {
+            const textContent = _getRoot().getTextContent();
+            const chars = textContent.length;
+            const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+            dispatch('textcountchange', { chars, words });
+        });
     } catch (e) {
         console.error(`[LexicalEditor] Failed to parse and set initial editor state:`, e);
         editor.update(() => {
