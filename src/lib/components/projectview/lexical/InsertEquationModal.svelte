@@ -122,7 +122,6 @@
     <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
         <div class="flex items-center justify-between mb-2">
             <span class="text-[10px] font-extrabold uppercase tracking-widest text-blue-600/60">Preview</span>
-            <CheckCircle2 size={14} class="text-blue-500" />
         </div>
         <div
             bind:this={previewContainer}

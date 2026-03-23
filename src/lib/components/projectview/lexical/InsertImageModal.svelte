@@ -5,7 +5,7 @@
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-    import { Image as FileImage, Paperclip, FolderOpen, HardDrive } from '@lucide/svelte';
+    import { Image as ImageIcon, FileImage, Paperclip, FolderOpen, HardDrive } from '@lucide/svelte';
 
     export let showModal = false;
     export let documentPath = '';
@@ -105,11 +105,21 @@
 </script>
 
 <Modal bind:open={showModal} size="lg" autoclose={false} outsideclose={true}
+    class="w-full"
     backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+    bodyClass="p-6 space-y-4 bg-white dark:bg-gray-900"
+    headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+    footerClass="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
 >
-    <div slot="header" class="text-lg font-semibold text-gray-900 dark:text-white">
-        Insert Image
+    <div slot="header" class="flex items-center gap-2">
+        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <ImageIcon class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div class="flex flex-col">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white leading-tight">Insert Image</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Choose from attachments or upload</p>
+        </div>
     </div>
 
     <div class="flex min-h-[18rem]">
