@@ -2,7 +2,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { Modal, Label, Input, Button } from 'flowbite-svelte';
-    import { Table as TableIcon, Rows, Columns } from 'lucide-svelte';
+    import { Table as TableIcon, Rows, Columns } from '@lucide/svelte';
   
     export let showModal = false;
   
