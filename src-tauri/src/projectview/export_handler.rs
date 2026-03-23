@@ -305,14 +305,43 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
             }
             "table" => {
                  if let Some(col_widths) = node.get("colWidths").and_then(|cw| cw.as_array()) {
-                    let widths: Vec<f64> = col_widths.iter().filter_map(|cw| cw.as_f64()).collect();
-                    let total_width: f64 = widths.iter().sum();
-                    
                     html.push_str("<table custom-style=\"Table\"><colgroup>");
-                    for w in widths {
-                        let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
-                        html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
+
+                    let mut is_percentage_based = false;
+                    let mut parsed_widths: Vec<String> = Vec::new();
+
+                    for cw in col_widths {
+                        if let Some(num) = cw.as_f64() {
+                            parsed_widths.push(num.to_string());
+                        } else if let Some(s) = cw.as_str() {
+                            parsed_widths.push(s.to_string());
+                            if s.contains('%') {
+                                is_percentage_based = true;
+                            }
+                        }
                     }
+
+                    if is_percentage_based {
+                        // Use exact percentages (e.g. "5%", "15%")
+                        for w_str in parsed_widths {
+                            html.push_str(&format!("<col width=\"{}\" />", w_str));
+                        }
+                    } else {
+                        // Calculate percentage from raw pixel values
+                        let mut total_width: f64 = 0.0;
+                        let mut numeric_widths: Vec<f64> = Vec::new();
+                        for w_str in &parsed_widths {
+                            let val: f64 = w_str.parse().unwrap_or(0.0);
+                            total_width += val;
+                            numeric_widths.push(val);
+                        }
+
+                        for w in numeric_widths {
+                            let pct = if total_width > 0.0 { (w / total_width) * 100.0 } else { 0.0 };
+                            html.push_str(&format!("<col width=\"{:.1}%\" />", pct));
+                        }
+                    }
+
                     html.push_str("</colgroup><tbody>");
                  } else {
                     html.push_str("<table custom-style=\"Table\"><tbody>");
@@ -1383,14 +1412,50 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
             // Other block types like list, table, tablecell, tablerow are not directly translated to simple markdown text here.
             // They would require more complex handling if their structure is to be preserved in Markdown.
             // For now, just recurse through children to extract any text.
-            "list" | "table" | "tablerow" | "tablecell" => {
+            "list" => {
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         lexical_to_markdown_text_node(child, buffer);
-                         if node_type == "tablecell" { buffer.push_str(" "); } // Add space between cell contents
                     }
                 }
-                if node_type == "tablerow" { buffer.push_str("\n");} // Newline after each row
+            }
+            "table" => {
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for (i, child) in children.iter().enumerate() {
+                        lexical_to_markdown_text_node(child, buffer);
+                        if i == 0 && child.get("type").and_then(|t| t.as_str()) == Some("tablerow") {
+                            // Add a markdown header separator row after the first row
+                            let num_cells = child.get("children").and_then(|c| c.as_array()).map_or(1, |c| c.len());
+                            buffer.push_str("|");
+                            for _ in 0..num_cells {
+                                buffer.push_str("---|");
+                            }
+                            buffer.push_str("\n");
+                        }
+                    }
+                }
+                buffer.push_str("\n");
+            }
+            "tablerow" => {
+                 buffer.push_str("| ");
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                    }
+                 }
+                 buffer.push_str("\n");
+            }
+            "tablecell" => {
+                 let mut cell_buffer = String::new();
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, &mut cell_buffer);
+                    }
+                 }
+                 // Markdown tables cannot contain unescaped newlines.
+                 let clean_cell = cell_buffer.replace('\n', " ");
+                 buffer.push_str(&clean_cell);
+                 buffer.push_str(" | ");
             }
             _ => { // Generic fallback for other unknown node types
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) { // Corrected: value -> node

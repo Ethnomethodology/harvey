@@ -90,33 +90,62 @@
         localEditorJsonState = defaultEmptyJson;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
 
-        try {
-            const jsonContent = await invoke('load_transcript_json', { transcriptPath: path });
-            if (!jsonContent || jsonContent.trim() === '') {
-                if (isPrimary) setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
+        let retryCount = 0;
+        const maxRetries = 2;
+        let success = false;
+
+        while (retryCount <= maxRetries && !success) {
+            try {
+                const jsonContent = await invoke('load_transcript_json', { transcriptPath: path });
+                if (!jsonContent || jsonContent.trim() === '') {
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        continue;
+                    }
+                    if (isPrimary) setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
+                    else {
+                        localTranscriptLoadError = "INFO:FILE_NOT_FOUND";
+                        localIsTranscriptLoading = false;
+                    }
+                } else {
+                    let parsed = JSON.parse(jsonContent);
+                    if (parsed && parsed.root && parsed.root.children) {
+                        if (isPrimary) setLoadedMediaNoteTranscriptData(mediaPath, jsonContent);
+                        else {
+                            localCurrentTranscriptJson = jsonContent;
+                            localInitialTranscriptJson = jsonContent;
+                            localIsTranscriptLoading = false;
+                            localIsTranscriptDirty = false;
+                        }
+                        success = true;
+                    } else { throw new Error("Invalid Lexical JSON structure."); }
+                }
+            } catch (error) {
+                let errorMessage = "Unknown error";
+                if (typeof error === 'string') {
+                    errorMessage = error;
+                } else if (error && typeof error === 'object') {
+                    errorMessage = error.message || error.Message || error.Io || String(error);
+                    if (typeof errorMessage === 'object') errorMessage = JSON.stringify(errorMessage);
+                } else {
+                    errorMessage = String(error);
+                }
+                const isNotFound = errorMessage.toLowerCase().includes('file not found') || errorMessage.toLowerCase().includes('json file not found') || errorMessage.toLowerCase().includes('no such file');
+
+                if (isNotFound && retryCount < maxRetries) {
+                    retryCount++;
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    continue;
+                }
+
+                errorMessage = `(Path: ${path}) ` + errorMessage;
+                if (isPrimary) setMediaNoteTranscriptLoadFailed(mediaPath, errorMessage, isNotFound);
                 else {
-                    localTranscriptLoadError = "INFO:FILE_NOT_FOUND";
+                    localTranscriptLoadError = isNotFound ? "INFO:FILE_NOT_FOUND" : errorMessage;
                     localIsTranscriptLoading = false;
                 }
-            } else {
-                let parsed = JSON.parse(jsonContent);
-                if (parsed && parsed.root && parsed.root.children) {
-                    if (isPrimary) setLoadedMediaNoteTranscriptData(mediaPath, jsonContent);
-                    else {
-                        localCurrentTranscriptJson = jsonContent;
-                        localInitialTranscriptJson = jsonContent;
-                        localIsTranscriptLoading = false;
-                        localIsTranscriptDirty = false;
-                    }
-                } else { throw new Error("Invalid Lexical JSON structure."); }
-            }
-        } catch (error) {
-            const errorMessage = error.message || String(error);
-            const isNotFound = errorMessage.toLowerCase().includes('file not found') || errorMessage.toLowerCase().includes('json file not found');
-            if (isPrimary) setMediaNoteTranscriptLoadFailed(mediaPath, errorMessage, isNotFound);
-            else {
-                localTranscriptLoadError = isNotFound ? "INFO:FILE_NOT_FOUND" : errorMessage;
-                localIsTranscriptLoading = false;
+                break;
             }
         }
     }
@@ -272,10 +301,11 @@
                 initialJson={currentTranscriptJson || defaultEmptyJson}
                 editable={true}
                 enableSegmentPlayback={enableSegmentPlayback}
-                enableTableCellResize={true}
+                enableTableCellResize={false}
                 placeholder="Enter data for this transcript..."
                 externalHighlightedRowIndex={highlightedRowIndex}
                 on:change={handleEditorChange}
+                on:textcountchange={(e) => { if (isPrimary) project.update(p => ({...p, documentTextCount: e.detail})) }}
                 on:highlightschange={handleHighlightsChange}
                 on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                 on:playsegment={(e) => dispatch('playsegment', e.detail)}

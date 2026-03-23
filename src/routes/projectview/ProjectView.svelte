@@ -1905,7 +1905,7 @@
     class="relative flex flex-col h-screen w-full font-sans text-sm text-gray-900 dark:text-gray-200 overflow-hidden"
 >
     <!-- Top Bar Area -->
-    <div class="flex-shrink-0">
+    <div class="flex-shrink-0 relative z-50">
         {#if selectedTab === "data"}
             <DataTopBar
                 {dataViewRef}
@@ -2134,7 +2134,7 @@
             </div>
         </div>
     </div>
-    <BottomBar />
+    <BottomBar {selectedTab} />
 
     <TranscribeConfirmModal
         bind:this={transcribeModalRef}

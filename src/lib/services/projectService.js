@@ -1441,6 +1441,7 @@ export async function deleteProjectItem(itemPath) {
         const wasSelectedDocument = currentProj.selectedDocumentPath === itemPath;
         const wasSelectedImportedTranscript = currentProj.currentImportedTranscriptPath === itemPath;
         const wasSelectedMediaNote = currentProj.selectedMediaNotePath === itemPath;
+        const wasActiveTranscriptInDataTab = currentProj.activeTranscriptPathInDataTab === itemPath;
 
         if (wasSelectedMedia) selectMedia(null);
         else if (wasCurrentTranscript) clearTranscriptState();
@@ -1448,7 +1449,18 @@ export async function deleteProjectItem(itemPath) {
         else if (wasSelectedImportedTranscript) prepareImportedTranscriptView(null);
         else if (wasSelectedMediaNote) prepareMediaNoteView(null);
 
+        // Clear the data tab's active transcript if it was deleted, so it can correctly fall back or show "No Transcription Yet"
+        if (wasActiveTranscriptInDataTab) {
+            project.update(p => ({ ...p, activeTranscriptPathInDataTab: null, mediaNoteTranscriptError: "INFO:FILE_NOT_FOUND" }));
+        }
+
         await refreshProjectFiles();
+
+        // Re-prepare the media note view to auto-select any remaining transcript if the active one was deleted
+        if (wasActiveTranscriptInDataTab && currentProj.selectedMediaNotePath) {
+             prepareMediaNoteView(currentProj.selectedMediaNotePath);
+        }
+
         project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`}));
  } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; } }
 export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false })); throw new Error(`Trim failed: ${errorMessage}`); } }
@@ -1695,6 +1707,14 @@ async function processJsonToRemoveHighlights(jsonString) {
                     const newStyle = style.replace(/background-color\s*:\s*[^;]+;?/gi, '');
                     node.setStyle(newStyle);
                 }
+            }
+            if (node.getType() === 'table' && typeof node.setColWidths === 'function') {
+                // When saving as document, clear the percentage-based fixed column widths
+                // and assign default pixel widths so the TableCellResizer works properly.
+                const firstRow = node.getFirstChild();
+                const numCols = firstRow ? firstRow.getChildrenSize() : 4;
+                const defaultWidth = Math.max(100, Math.floor(800 / numCols));
+                node.setColWidths(Array(numCols).fill(defaultWidth));
             }
         });
     });

@@ -598,7 +598,7 @@
     equationNodeToEditKey = null;
   }
   function handleDateConfirm(event) {
-    const { date, format, showTime, timeFormat, displayValue } = event.detail;
+    const { date, format, showTime, timeFormat, displayValue, insertAsText } = event.detail;
     
     // Remember last used config
     lastUsedDateConfig = { format, showTime, timeFormat };
@@ -608,19 +608,29 @@
         editor.update(() => {
             const node = _getNodeByKey(dateNodeToEditKey);
             if (_isDateNode(node)) {
-                const writable = node.getWritable();
-                writable.__date = date;
-                writable.__format = format;
-                writable.__showTime = showTime;
-                writable.__timeFormat = timeFormat;
-                writable.__displayValue = displayValue;
+                if (insertAsText) {
+                    const textNode = _createTextNode(displayValue);
+                    node.replace(textNode);
+                } else {
+                    const writable = node.getWritable();
+                    writable.__date = date;
+                    writable.__format = format;
+                    writable.__showTime = showTime;
+                    writable.__timeFormat = timeFormat;
+                    writable.__displayValue = displayValue;
+                }
             }
         });
     } else {
-        // Insert new node
+        // Insert new node or text
         editor.update(() => {
-            const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
-            _insertNodes([dateNode]);
+            if (insertAsText) {
+                const textNode = _createTextNode(displayValue);
+                _insertNodes([textNode]);
+            } else {
+                const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
+                _insertNodes([dateNode]);
+            }
         });
     }
     showDateModal = false;
@@ -1020,14 +1030,19 @@
                 }
                 const jsonString = JSON.stringify(editorState.toJSON());
                 let htmlString = '';
+                let textContent = '';
                 try {
                     editorState.read(() => {
                         htmlString = _generateHtmlFromNodes(editor);
+                        textContent = _getRoot().getTextContent();
                     });
                 } catch (htmlError) {
-                    console.error("Error generating HTML in update listener:", htmlError);
+                    console.error("Error generating HTML or text in update listener:", htmlError);
                 }
-                dispatch('change', { jsonString, htmlString });
+                const chars = textContent.length;
+                const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+                dispatch('change', { jsonString, htmlString, textContent, chars, words });
+                dispatch('textcountchange', { chars, words });
             }
             if (showTableCellMenu) {
                 try {
@@ -1476,6 +1491,14 @@
         const parsedState = editor.parseEditorState(initialStateString);
         editor.setEditorState(parsedState);
         areNodesReady = true;
+
+        // Force immediate text count dispatch for initial state since listener might skip it if unchanged
+        editor.getEditorState().read(() => {
+            const textContent = _getRoot().getTextContent();
+            const chars = textContent.length;
+            const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+            dispatch('textcountchange', { chars, words });
+        });
     } catch (e) {
         console.error(`[LexicalEditor] Failed to parse and set initial editor state:`, e);
         editor.update(() => {

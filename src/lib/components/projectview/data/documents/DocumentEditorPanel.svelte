@@ -217,6 +217,7 @@
                      enableTableCellResize={true}
                      externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
+                     on:textcountchange={(e) => project.update(p => ({...p, documentTextCount: e.detail}))}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}

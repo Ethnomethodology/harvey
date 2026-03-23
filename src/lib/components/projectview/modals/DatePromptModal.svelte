@@ -26,6 +26,7 @@
     export let initialShowTime = false;
     export let initialTimeFormat = 'HH:mm';
     export let isEditing = false;
+    export let initialInsertAsText = false;
 
     const dispatch = createEventDispatcher();
 
@@ -33,6 +34,7 @@
     let format = initialFormat || 'YYYY-MM-DD';
     let showTime = initialShowTime || false;
     let timeFormat = initialTimeFormat || 'HH:mm';
+    let insertAsText = initialInsertAsText;
 
     const dateFormats = [
         { name: 'YYYY-MM-DD (2024-03-22)', value: 'YYYY-MM-DD' },
@@ -91,7 +93,8 @@
             format,
             showTime,
             timeFormat,
-            displayValue
+            displayValue,
+            insertAsText
         });
         showModal = false;
     }
@@ -232,7 +235,7 @@
         </div>
 
         <!-- Time Toggle -->
-        <div class="pt-2">
+        <div class="pt-2 flex flex-col gap-3">
             <Toggle bind:checked={showTime} class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Include Time
             </Toggle>
@@ -306,6 +309,12 @@
             <div class="text-sm font-semibold text-blue-800 dark:text-blue-300">
                 {previewText}
             </div>
+        </div>
+
+        <div class="pt-2 flex flex-col gap-3">
+            <Toggle bind:checked={insertAsText} class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Insert as Text
+            </Toggle>
         </div>
     </div>
 

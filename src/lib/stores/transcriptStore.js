@@ -1456,6 +1456,15 @@ listen('custom_transcription_job_completed', async (event) => {
                     console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
                     await service.refreshProjectFiles(currentStore.selectedMediaFile.path, activePathToLoad);
 
+                    // Force an update to the Data tab's active transcript path so "No Transcription Yet" is cleared
+                    if (activePathToLoad) {
+                        projectMainStore.update(p => ({
+                            ...p,
+                            activeTranscriptPathInDataTab: activePathToLoad,
+                            mediaNoteTranscriptError: null
+                        }));
+                    }
+
                     const latestProjectStore = get(projectMainStore);
                     const allFiles = latestProjectStore.files;
                     const mediaPath = jobFinishedPath;

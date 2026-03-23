@@ -679,6 +679,7 @@
                      placeholder="Transcript content will appear here as a table..."
                      externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
+                     on:textcountchange={(e) => { if (isPrimary) project.update(p => ({...p, documentTextCount: e.detail})) }}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      on:playsegment
@@ -751,29 +752,6 @@
     :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table) {
         table-layout: fixed !important;
         width: 100% !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(1)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(1)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(1)) {
-        width: 10% !important;
-        min-width: 2.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(2)) {
-        width: 15% !important;
-        min-width: 5.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(3)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(3)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(3)) {
-        width: 15% !important;
-        min-width: 5.5rem !important;
-    }
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table th:nth-child(4)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table td:nth-child(4)),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table-cell:nth-child(4)) {
-        width: 60% !important;
     }
 
     /* Layout 2: Segment Block (Simulated via CSS) */
