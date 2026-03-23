@@ -1030,14 +1030,19 @@
                 }
                 const jsonString = JSON.stringify(editorState.toJSON());
                 let htmlString = '';
+                let textContent = '';
                 try {
                     editorState.read(() => {
                         htmlString = _generateHtmlFromNodes(editor);
+                        textContent = _getRoot().getTextContent();
                     });
                 } catch (htmlError) {
-                    console.error("Error generating HTML in update listener:", htmlError);
+                    console.error("Error generating HTML or text in update listener:", htmlError);
                 }
-                dispatch('change', { jsonString, htmlString });
+                const chars = textContent.length;
+                const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+                dispatch('change', { jsonString, htmlString, textContent, chars, words });
+                dispatch('textcountchange', { chars, words });
             }
             if (showTableCellMenu) {
                 try {

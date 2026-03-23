@@ -607,7 +607,7 @@
                             <div class="flex items-start gap-x-1 w-full">
                                 <div class='lexical-editor-wrapper-style w-full flex-grow' class:is-disabled="{!editEnabled}">
                                     {#if currentIndex !== -1 && initialJsonForEditor}
-                                        <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
+                                        <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:textcountchange={(e) => project.update(p => ({...p, documentTextCount: e.detail}))} enableFloatingToolbar="{false}" />
                                     {:else}
                                         <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                                     {/if}

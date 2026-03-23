@@ -305,6 +305,7 @@
                 placeholder="Enter data for this transcript..."
                 externalHighlightedRowIndex={highlightedRowIndex}
                 on:change={handleEditorChange}
+                on:textcountchange={(e) => { if (isPrimary) project.update(p => ({...p, documentTextCount: e.detail})) }}
                 on:highlightschange={handleHighlightsChange}
                 on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                 on:playsegment={(e) => dispatch('playsegment', e.detail)}

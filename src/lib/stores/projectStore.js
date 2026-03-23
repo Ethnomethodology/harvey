@@ -113,6 +113,8 @@ export const initialState = {
     importedTranscriptSplits: {}, // Maps path -> { partner: path, orientation: 'horizontal' | 'vertical' }
     showSplitTranscriptModal: false,
     pendingSplitOrientation: 'horizontal', // Track orientation for next split
+
+    documentTextCount: null, // { words: 0, chars: 0 }
 };
 
 export const project = writable({ ...initialState });

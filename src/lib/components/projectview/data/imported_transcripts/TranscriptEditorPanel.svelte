@@ -679,6 +679,7 @@
                      placeholder="Transcript content will appear here as a table..."
                      externalHighlightedRowIndex={highlightedRowIndex}
                      on:change={handleEditorChange}
+                     on:textcountchange={(e) => { if (isPrimary) project.update(p => ({...p, documentTextCount: e.detail})) }}
                      on:highlightschange={handleHighlightsChange}
                      on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      on:playsegment
