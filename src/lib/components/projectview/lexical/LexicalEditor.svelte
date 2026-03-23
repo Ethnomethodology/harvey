@@ -608,12 +608,17 @@
         editor.update(() => {
             const node = _getNodeByKey(dateNodeToEditKey);
             if (_isDateNode(node)) {
-                const writable = node.getWritable();
-                writable.__date = date;
-                writable.__format = format;
-                writable.__showTime = showTime;
-                writable.__timeFormat = timeFormat;
-                writable.__displayValue = displayValue;
+                if (insertAsText) {
+                    const textNode = _createTextNode(displayValue);
+                    node.replace(textNode);
+                } else {
+                    const writable = node.getWritable();
+                    writable.__date = date;
+                    writable.__format = format;
+                    writable.__showTime = showTime;
+                    writable.__timeFormat = timeFormat;
+                    writable.__displayValue = displayValue;
+                }
             }
         });
     } else {

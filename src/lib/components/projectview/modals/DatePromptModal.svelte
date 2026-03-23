@@ -239,11 +239,9 @@
             <Toggle bind:checked={showTime} class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Include Time
             </Toggle>
-            {#if !isEditing}
             <Toggle bind:checked={insertAsText} class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Insert as Text
             </Toggle>
-            {/if}
         </div>
 
         {#if showTime}
