@@ -239,6 +239,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
             currentDocumentFileLevelMetadata: (isJsonDocument && selectingSamePath) ? p.currentDocumentFileLevelMetadata : { ...defaultFileLevelMetadata },
             currentDocumentHighlights: (isJsonDocument && selectingSamePath) ? p.currentDocumentHighlights : [],
             isDocumentMetadataDirty: (isJsonDocument && selectingSamePath) ? p.isDocumentMetadataDirty : false,
+            documentTextCount: (isJsonDocument && selectingSamePath) ? p.documentTextCount : null,
             currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [],
             initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [],
             isPdfAnnotationsDirty: (isPdf && selectingSamePath) ? p.isPdfAnnotationsDirty : false,
@@ -903,6 +904,7 @@ export function prepareImportedTranscriptView(filePath) {
             activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
             statusMessage: finalStatusMessage,
             isLoading: finalIsGlobalLoading,
+            documentTextCount: isReselectingSameLoadedPath ? p.documentTextCount : null,
             selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
             currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
@@ -998,6 +1000,7 @@ export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
             isMediaNoteTranscriptLoading: newIsMediaNoteLoading,
             mediaNoteTranscriptError: null,
             activeMediaNoteEditorRef: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.activeMediaNoteEditorRef : null,
+            documentTextCount: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.documentTextCount : null,
 
             statusMessage: normalizedMediaPath ? `Loading data for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media data selection cleared.',
             isLoading: finalIsGlobalLoading,

@@ -2134,7 +2134,7 @@
             </div>
         </div>
     </div>
-    <BottomBar />
+    <BottomBar {selectedTab} />
 
     <TranscribeConfirmModal
         bind:this={transcribeModalRef}

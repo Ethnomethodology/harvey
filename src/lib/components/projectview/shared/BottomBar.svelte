@@ -3,12 +3,14 @@
   // *** FIXED: Import single project store ***
 import { project } from '$lib/stores/projectStore.js';
 
+  export let selectedTab = null;
+
   // *** FIXED: Read relevant state from $project ***
   $: isDirty = $project.transcriptDirty;
   $: statusMessage = $project.statusMessage; // Use the message from the store
   $: isLoading = $project.isLoading;
   $: error = $project.error;
-  $: textCount = $project.documentTextCount;
+  $: textCount = selectedTab === 'data' ? $project.documentTextCount : null;
   $: isIdle = !isLoading && !error;
 
 </script>
