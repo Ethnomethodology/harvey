@@ -7,7 +7,7 @@
     import { refresher, triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
+    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon, MessageSquareText } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -19,6 +19,18 @@
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
+
+    // Helper to search the file tree for active media file
+    function findFileInTree(nodes, path) {
+        for (const node of nodes) {
+            if (node.path === path) return node;
+            if (node.children) {
+                const found = findFileInTree(node.children, path);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
 
     // We will group string attachments by their folder if they are inside attachments/something/
     let groupedAttachments = { root: [], folders: {} };
@@ -97,6 +109,7 @@
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
         if (typeof path === 'object' && path.view_name) return path.view_name;
+        if (typeof path === 'object' && path.is_transcript) return path.displayLabel || path.name || path.path.split(/[\/\\]/).pop();
         return path.split(/[\/\\]/).pop() || path;
     }
 
@@ -108,12 +121,52 @@
                 dispatch('requestOpenChart', { chart: attachment });
             } else if (typeof attachment === 'object' && attachment.view_name) {
                 dispatch('requestOpenView', { view: attachment });
+            } else if (typeof attachment === 'object' && attachment.is_transcript) {
+                switchTranscriptInDataTab(attachment.path);
             } else if (typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)) {
                 // Images do not play in the media player
                 return;
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }
+        }
+    }
+
+    async function handleDeleteTranscript(transcript) {
+        if (!transcript || !transcript.path) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete the transcript file "${transcript.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`, { title: 'Delete Transcript', type: 'warning' });
+        if (!confirmed) return;
+
+        const { deleteProjectItem } = await import('$lib/services/projectService.js');
+
+        const projectStoreState = get(project);
+        const isActive = projectStoreState.activeTranscriptPathInDataTab === transcript.path;
+
+        try {
+            await deleteProjectItem(transcript.path);
+            notificationStore.add('Transcript deleted.', 'success');
+
+            if (isActive) {
+                // Find another transcript to fall back to after deletion
+                const currentFiles = get(project).files;
+                const activeMediaFile = findFileInTree(currentFiles, projectStoreState.selectedMediaNotePath);
+
+                if (activeMediaFile && activeMediaFile.associated_transcripts && activeMediaFile.associated_transcripts.length > 0) {
+                    const fallbackTranscript = activeMediaFile.associated_transcripts[0];
+                    switchTranscriptInDataTab(fallbackTranscript.path);
+                } else {
+                    switchTranscriptInDataTab(null);
+                }
+            }
+
+            // Refresh attachments
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (error) {
+            console.error('Failed to delete transcript via attachments panel:', error);
+            notificationStore.add(`Failed to delete transcript: ${error.message || error}`, 'error');
         }
     }
 
@@ -282,6 +335,40 @@
                     tablePath: assetRelativePathToLoad
                 });
                 loadedAttachments = [...charts, ...views];
+            } else if (projectStoreState.selectedMediaNotePath) {
+                const activeMediaFile = findFileInTree(projectStoreState.files, projectStoreState.selectedMediaNotePath);
+                if (activeMediaFile && activeMediaFile.associated_transcripts) {
+                    const { languageOptions } = await import('$lib/constants/transcriptionOptions.js');
+                    const getLanguageLabel = (langCode) => {
+                        if (!langCode || langCode === 'original') return 'Original';
+                        let targetCode = langCode;
+                        if (langCode.includes('-')) {
+                            targetCode = langCode.split('-').pop(); // e.g., 'en-hi' -> 'hi'
+                        }
+                        const option = languageOptions.find(opt => opt.value === targetCode);
+                        return option ? option.label : targetCode;
+                    };
+                    const mappedTranscripts = activeMediaFile.associated_transcripts.map(t => {
+                        const langLabel = getLanguageLabel(t.language_code || 'original');
+                        let fileName = t.name;
+                        if (!fileName && t.path) {
+                            try {
+                                const pathParts = t.path.split(/[\/\\]/);
+                                fileName = pathParts[pathParts.length - 1];
+                                if (fileName.toLowerCase().endsWith('.json')) {
+                                    fileName = fileName.substring(0, fileName.length - 5);
+                                }
+                            } catch (e) {
+                                fileName = '';
+                            }
+                        }
+                        const fileNamePart = fileName ? ` (${fileName})` : '';
+                        const displayLabel = `${langLabel}${fileNamePart}`;
+                        return { ...t, is_transcript: true, displayLabel };
+                    }).sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+
+                    loadedAttachments = [...loadedAttachments, ...mappedTranscripts];
+                }
             }
 
             // Always attempt to load raw file attachments from asset_metadata for all types
@@ -322,9 +409,10 @@
         $refresher;
         (async () => {
             const currentProjectStoreState = get(project);
-            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table';
-            if (itemPath && isSupportedType && currentProjectStoreState?.baseDirectory) {
-                const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
+            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table' || currentProjectStoreState.selectedMediaNotePath;
+            const currentPathToUse = itemType === 'doc' && currentProjectStoreState.selectedMediaNotePath ? currentProjectStoreState.selectedMediaNotePath : itemPath;
+            if (currentPathToUse && isSupportedType && currentProjectStoreState?.baseDirectory) {
+                const newOriginalDetails = await getOriginalAssetDetails(currentPathToUse, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
                 // Also reload if refreshKey changes OR $refresher increments, but we handle the initial load as well
@@ -449,6 +537,8 @@
                             {:else if typeof attachment === 'object' && attachment.view_name}
                                 {#if attachment.view_type === 'partial'}<Table2 class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                                 {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'object' && attachment.is_transcript}
+                                <MessageSquareText class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
                                 <FileText class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
@@ -456,7 +546,7 @@
                             {:else}
                                 <Music class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
-                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name) : attachment}>
+                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name || (attachment.is_transcript ? attachment.displayLabel : '')) : attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
@@ -487,6 +577,20 @@
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'object' && attachment.is_transcript}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Transcript Options" id="transcript-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#transcript-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; switchTranscriptInDataTab(attachment.path); }}>
+                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Switch
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteTranscript(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>
