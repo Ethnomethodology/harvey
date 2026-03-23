@@ -239,9 +239,6 @@
             <Toggle bind:checked={showTime} class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Include Time
             </Toggle>
-            <Toggle bind:checked={insertAsText} class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Insert as Text
-            </Toggle>
         </div>
 
         {#if showTime}
@@ -312,6 +309,12 @@
             <div class="text-sm font-semibold text-blue-800 dark:text-blue-300">
                 {previewText}
             </div>
+        </div>
+
+        <div class="pt-2 flex flex-col gap-3">
+            <Toggle bind:checked={insertAsText} class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Insert as Text
+            </Toggle>
         </div>
     </div>
 
