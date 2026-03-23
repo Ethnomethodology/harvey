@@ -295,13 +295,13 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
             }
             "link" => {
                  let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("#");
-                 html.push_str(&format!("<a href=\"{}\" style=\"color: #0563C1; text-decoration: underline;\">", encode_text(url)));
+                 html.push_str(&format!("<a href=\"{}\"><span data-color=\"0563C1\" data-underline=\"single\">", encode_text(url)));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html, inside_code_block);
                     }
                  }
-                 html.push_str("</a>");
+                 html.push_str("</span></a>");
             }
             "table" => {
                  if let Some(col_widths) = node.get("colWidths").and_then(|cw| cw.as_array()) {
