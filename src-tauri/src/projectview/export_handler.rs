@@ -295,13 +295,13 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
             }
             "link" => {
                  let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("#");
-                 html.push_str(&format!("<a href=\"{}\">", encode_text(url)));
+                 html.push_str(&format!("<a href=\"{}\"><u><span style=\"color: #0563C1;\">", encode_text(url)));
                  if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         append_node_html(child, html, inside_code_block);
                     }
                  }
-                 html.push_str("</a>");
+                 html.push_str("</span></u></a>");
             }
             "table" => {
                  if let Some(col_widths) = node.get("colWidths").and_then(|cw| cw.as_array()) {
@@ -368,6 +368,14 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
                  let filename = node.get("filename").and_then(|f| f.as_str()).unwrap_or("image.png");
                  let alt = node.get("altText").and_then(|a| a.as_str()).unwrap_or("Image");
                  html.push_str(&format!("<img src=\"attachments/{}\" alt=\"{}\" />", encode_text(filename), encode_text(alt)));
+            }
+            "equation" => {
+                let equation = node.get("equation").and_then(|e| e.as_str()).unwrap_or("");
+                let inline = node.get("inline").and_then(|i| i.as_bool()).unwrap_or(true);
+
+                // Output a custom element that our Lua filter will catch and turn into a true Pandoc Math object.
+                let inline_str = if inline { "true" } else { "false" };
+                html.push_str(&format!("<span class=\"custom-math\" data-inline=\"{}\">{}</span>", inline_str, encode_text(equation)));
             }
             "date" => {
                 let display_value = node.get("displayValue").and_then(|d| d.as_str()).unwrap_or("");

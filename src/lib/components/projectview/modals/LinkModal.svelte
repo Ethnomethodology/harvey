@@ -92,15 +92,23 @@
   on:close={closeModal}
 >
   <div slot="header" class="flex items-center gap-2">
-    <LinkIcon class="w-5 h-5 text-gray-500" />
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-      {isEditing ? 'Edit Link' : 'Add Link'}
-    </h3>
+    <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+      <LinkIcon class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+    </div>
+    <div class="flex flex-col">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white leading-tight">
+        {isEditing ? 'Edit Link' : 'Add Link'}
+      </h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400">Manage hyperlinked text</p>
+    </div>
   </div>
 
   <div class="space-y-4">
     <div class="space-y-2">
-      <Label for="link-url-input">URL</Label>
+      <Label for="link-url-input" class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+        <LinkIcon size={14} class="text-gray-400" />
+        URL Address
+      </Label>
       <div class="flex items-center gap-2">
         <Input
           bind:this={inputElement}
@@ -111,7 +119,7 @@
           on:keydown={handleKeydown}
           autocomplete="off"
           autocorrect="off"
-          class="flex-grow"
+          class="flex-grow bg-gray-50 dark:bg-gray-800"
         />
         <Button
           color="alternative"

@@ -85,11 +85,13 @@
   import { HorizontalRuleNode, $createHorizontalRuleNode as _createHorizontalRuleNode } from '$lib/nodes/HorizontalRuleNode.js';
   import { ImageNode, $createImageNode as _createImageNode, $isImageNode as _isImageNode } from '$lib/nodes/ImageNode.js';
   import { DateNode, $createDateNode as _createDateNode, $isDateNode as _isDateNode } from '$lib/nodes/DateNode.js';
+  import { EquationNode, $createEquationNode as _createEquationNode, $isEquationNode as _isEquationNode } from '$lib/nodes/EquationNode.js';
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import InsertImageModal from './InsertImageModal.svelte';
+  import InsertEquationModal from './InsertEquationModal.svelte';
   import DatePromptModal from '../modals/DatePromptModal.svelte';
   import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
@@ -207,6 +209,11 @@
   let dateNodeToEditKey = null;
   let lastUsedDateConfig = { format: 'YYYY-MM-DD', showTime: false, timeFormat: 'HH:mm' };
   let dateInitialData = { date: new Date().toISOString(), ...lastUsedDateConfig };
+
+  let showInsertEquationModal = false;
+  let equationNodeToEditKey = null;
+  let equationInitialData = { equation: '', inline: true };
+
   let savedImageSelection = null;
 
   let isResizing = false;
@@ -238,7 +245,8 @@
     TableNode, TableRowNode, TableCellNode,
     HorizontalRuleNode,
     ImageNode,
-    DateNode
+    DateNode,
+    EquationNode
   ];
 
   function handleShortcut(event) {
@@ -524,7 +532,7 @@
     { value: 'code',      label: 'Code Block',    shortcut: `${modLabel}+${optLabel}+C` }
   ];
 
-  import { Image as ImageIcon } from '@lucide/svelte';
+  import { Image as ImageIcon, Sigma } from '@lucide/svelte';
 
   const insertOptions = [
     { value: 'table', label: 'Table', action: openInsertTableDialog, iconComponent: TableIcon },
@@ -532,6 +540,7 @@
     { value: 'date', label: 'Date', action: openInsertDateDialog, iconComponent: CalendarDays },
     { value: 'link', label: 'Link', action: toggleLink, iconComponent: LinkIcon },
     { value: 'image', label: 'Image', action: insertImage, iconComponent: ImageIcon },
+    { value: 'equation', label: 'Equation', action: openInsertEquationDialog, iconComponent: Sigma },
   ];
 
   async function insertImage() {
@@ -556,6 +565,37 @@
     dateInitialData = { date: new Date().toISOString(), ...lastUsedDateConfig };
     showDateModal = true;
     isInsertDropdownOpen = false;
+  }
+
+  function openInsertEquationDialog() {
+    equationNodeToEditKey = null;
+    equationInitialData = { equation: '', inline: true };
+    showInsertEquationModal = true;
+    isInsertDropdownOpen = false;
+  }
+
+  function handleEquationConfirm(event) {
+    const { equation, inline } = event.detail;
+    if (editor) {
+      editor.update(() => {
+        if (equationNodeToEditKey) {
+          const existingNode = _getNodeByKey(equationNodeToEditKey);
+          if (existingNode && _isEquationNode(existingNode)) {
+             const newNode = _createEquationNode(equation, inline);
+             existingNode.replace(newNode);
+          }
+        } else {
+          const selection = _getSelection();
+          if (_isRangeSelection(selection)) {
+            const node = _createEquationNode(equation, inline);
+            _insertNodes([node]);
+          }
+        }
+      });
+      editor.focus();
+    }
+    showInsertEquationModal = false;
+    equationNodeToEditKey = null;
   }
   function handleDateConfirm(event) {
     const { date, format, showTime, timeFormat, displayValue } = event.detail;
@@ -1050,6 +1090,15 @@
                               timeFormat: targetNode.__timeFormat
                           };
                           showDateModal = true;
+                          return true;
+                      } else if (_isEquationNode(targetNode)) {
+                          // Handle EquationNode click
+                          equationNodeToEditKey = targetNode.getKey();
+                          equationInitialData = {
+                              equation: targetNode.__equation,
+                              inline: targetNode.__inline
+                          };
+                          showInsertEquationModal = true;
                           return true;
                       }
                   }
@@ -3725,6 +3774,14 @@ $: if (editor && activeLayout) {
   {documentPath}
   on:insert_attached={handleInsertImageAttached}
   on:insert_external={handleInsertImageExternal}
+/>
+
+<InsertEquationModal
+  bind:showModal={showInsertEquationModal}
+  initialEquation={equationInitialData.equation}
+  initialInline={equationInitialData.inline}
+  on:confirm={handleEquationConfirm}
+  on:close={() => { showInsertEquationModal = false; equationNodeToEditKey = null; }}
 />
 
 <DatePromptModal
