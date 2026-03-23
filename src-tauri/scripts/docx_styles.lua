@@ -399,17 +399,24 @@ function Link(el)
         underline = true
     }
 
-    -- We use the native pandoc.Link but ensure the content has the "Hyperlink" style
-    -- by wrapping the styled runs in a Span with custom-style="Hyperlink".
-    -- This triggers Pandoc's native rStyle mapping.
+    local url = escape_xml(el.target)
 
-    -- Get the manually styled runs (OpenXML)
+    -- Recurse into link content to get styled runs
     local sub_res = collect_text(el.content, props)
 
-    -- Wrap them in a Span that Pandoc understands as a style trigger
-    local styled_content = pandoc.Span(sub_res, {['custom-style'] = 'Hyperlink'})
+    -- Construct fldSimple XML
+    -- Note: fldSimple is robust and doesn't require rId.
+    local runs_xml = ""
+    for _, inline in ipairs(sub_res) do
+        if inline.t == 'RawInline' then
+            runs_xml = runs_xml .. inline.text
+        else
+            runs_xml = runs_xml .. pandoc.utils.stringify(inline)
+        end
+    end
 
-    return pandoc.Link(styled_content, el.target, el.title, el.attr)
+    local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; ">%s</w:fldSimple>', url, runs_xml)
+    return pandoc.RawInline('openxml', xml)
 end
 
 function CodeBlock(el)
