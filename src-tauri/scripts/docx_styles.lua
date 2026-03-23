@@ -391,32 +391,21 @@ local function collect_text(inlines, props)
 end
 
 function Link(el)
-    -- Handle top-level links
-    local props = {
-        is_link = true,
-        -- Force hyperlink styling explicitly via OpenXML run properties
-        color = "#0563C1",
-        underline = true
-    }
+    -- If we use RawInline 'openxml', Pandoc's docx writer struggles to embed it properly inside hyperlinks.
+    -- Instead, we wrap the link's content inside a Span that explicitly defines the color and underline properties.
+    -- Then, we let the native Pandoc DOCX writer handle the `<w:hyperlink>` creation, and our `Span` filter
+    -- will translate the `data-color` and `data-underline` into the raw `<w:r>` tags that the link expects.
 
-    local url = escape_xml(el.target)
+    local span_attr = pandoc.Attr("", {}, {
+        ['data-color'] = "#0563C1",
+        ['data-underline'] = "single"
+    })
 
-    -- Recurse into link content to get styled runs
-    local sub_res = collect_text(el.content, props)
+    -- Wrap the link content inside our styled Span
+    local styled_content = pandoc.Span(el.content, span_attr)
 
-    -- Construct fldSimple XML
-    -- Note: fldSimple is robust and doesn't require rId.
-    local runs_xml = ""
-    for _, inline in ipairs(sub_res) do
-        if inline.t == 'RawInline' then
-            runs_xml = runs_xml .. inline.text
-        else
-            runs_xml = runs_xml .. pandoc.utils.stringify(inline)
-        end
-    end
-
-    local xml = string.format('<w:fldSimple w:instr=" HYPERLINK &quot;%s&quot; ">%s</w:fldSimple>', url, runs_xml)
-    return pandoc.RawInline('openxml', xml)
+    -- Return a standard Link object containing the explicitly styled Span.
+    return pandoc.Link(styled_content, el.target, el.title, el.attr)
 end
 
 function CodeBlock(el)
@@ -522,13 +511,15 @@ function Span(el)
   local font = el.attributes['data-font-family'] or el.attributes['font-family']
   local size = el.attributes['data-font-size'] or el.attributes['font-size']
   local highlight = el.attributes['data-highlight'] or el.attributes['highlight']
+  local underline = el.attributes['data-underline'] or el.attributes['underline']
 
-  if color or font or size or highlight then
+  if color or font or size or highlight or underline then
     local props = {
       color = color,
       font = font,
       size = size,
-      highlight = highlight
+      highlight = highlight,
+      underline = underline
     }
 
     return collect_text(el.content, props)
