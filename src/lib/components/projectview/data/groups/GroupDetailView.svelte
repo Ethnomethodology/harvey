@@ -13,6 +13,7 @@
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
     import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
     import DocumentThumbnail from './DocumentThumbnail.svelte';
+    import TableThumbnail from './TableThumbnail.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
@@ -741,6 +742,8 @@
                                                 ></video>
                                             {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path && file.full_path.endsWith('.json')}
                                                 <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                            {:else if file.file_type === 'table' && file.full_path}
+                                                <TableThumbnail {file} />
                                             {:else}
                                                 <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
                                                     <svelte:component this={category.icon} class="w-12 h-12" />
