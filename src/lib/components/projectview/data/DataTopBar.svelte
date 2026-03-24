@@ -558,9 +558,6 @@
         </div>
 
         <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
-        {#if $activeMediaFile || $project.activeDocumentEditorRef || isLexicalDocument}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
-        {/if}
         {#if $activeMediaFile}
         <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
@@ -647,7 +644,6 @@
             </Button>
         {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
             <button
                 on:click={() => handleSplitToggle('horizontal')}
                 class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
@@ -713,7 +709,6 @@
             {/if}
         </button>
         {/if}
-        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Sun class="w-4 h-4" />
