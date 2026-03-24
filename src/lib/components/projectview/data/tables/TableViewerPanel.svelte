@@ -61,6 +61,7 @@
         Badge
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     export let tablePath = '';
@@ -611,6 +612,13 @@
         scrollToHighlight($project.requestedHighlightId);
     }
 
+    $: if (tableReady && $isLexicalEditMode !== undefined) {
+        // Redraw/Re-run floating layout/buttons when edit mode toggles
+        if (tabulatorInstance) {
+            addFloatingAddRowButton();
+        }
+    }
+
     async function toggleFilters() {
         if (!tabulatorInstance) return;
         areFiltersVisible = !areFiltersVisible;
@@ -763,7 +771,8 @@
     }
 
     function getColumnContextMenu(column) {
-        if (currentActiveViewType === 'pivot') {
+        const isEditMode = get(isLexicalEditMode);
+        if (currentActiveViewType === 'pivot' || !isEditMode) {
             return [
                 { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
                 { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
@@ -2026,6 +2035,7 @@
                         </div>`;
                     };
                     colDef.cellClick = function(e, cell) {
+                        if (!get(isLexicalEditMode)) return;
                         // Immediate toggle on single click
                         const currentVal = cell.getValue();
                         const isCurrentlyChecked = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === "1";
@@ -2122,6 +2132,8 @@
                         };
                         // Force edit on single click rather than waiting for double-click
                         colDef.cellClick = function(e, cell) { 
+                            if (!get(isLexicalEditMode)) return;
+
                             if (!e || !e.target) {
                                 cell.edit(true);
                                 return;
@@ -2423,31 +2435,33 @@
         }
 
         // Add the "Add Field" column at the end
-        dataColumnDefs.push({
-            title: (() => {
-                const button = document.createElement("button");
-                button.className = "flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors";
-                button.title = "Add New Field";
-                mount(TableIcon, {
-                    target: button,
-                    props: { icon: Plus, size: 16 }
-                });
-                return button;
-            })(),
-            headerClick: (e, column) => {
-                insertColumn(column, 'after'); // Generic button at end
-            },
-            width: 40,
-            minWidth: 40,
-            headerSort: false,
-            resizable: false,
-            frozen: false,
-            cssClass: "add-column-header",
-            formatter: (cell) => {
-                // Important: returning empty/standard to avoid custom row highlights applying here
-                return "";
-            }
-        });
+        if (get(isLexicalEditMode)) {
+            dataColumnDefs.push({
+                title: (() => {
+                    const button = document.createElement("button");
+                    button.className = "flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors";
+                    button.title = "Add New Field";
+                    mount(TableIcon, {
+                        target: button,
+                        props: { icon: Plus, size: 16 }
+                    });
+                    return button;
+                })(),
+                headerClick: (e, column) => {
+                    insertColumn(column, 'after'); // Generic button at end
+                },
+                width: 40,
+                minWidth: 40,
+                headerSort: false,
+                resizable: false,
+                frozen: false,
+                cssClass: "add-column-header",
+                formatter: (cell) => {
+                    // Important: returning empty/standard to avoid custom row highlights applying here
+                    return "";
+                }
+            });
+        }
 
         return dataColumnDefs;
     }
@@ -3122,6 +3136,7 @@
                     }
                 },
                 rowContextMenu: (e, row) => {
+                    const isEditMode = get(isLexicalEditMode);
                     const ranges = tabulatorInstance.getRanges();
                     let selectedRowsForMenu = [row];
 
@@ -3142,9 +3157,12 @@
                         action: () => highlightAction(option.value)
                     }));
 
-                    if (currentActiveViewType === 'pivot') {
+                    if (currentActiveViewType === 'pivot' || !isEditMode) {
                         return [
-                            { label: "Copy Entry", action: (e, row) => copyRow(row) }
+                            { label: "Copy Entry", action: (e, row) => copyRow(row) },
+                            { separator: true },
+                            { label: "Highlight Entry", menu: highlightColorOptions },
+                            { label: "Clear Entry Highlight", action: () => highlightAction(null) }
                         ];
                     }
 
@@ -3177,7 +3195,7 @@
                     headerVAlign:"middle",
                     editor: "textarea",
                     editable: function(cell) {
-                        return currentActiveViewType !== 'pivot';
+                        return currentActiveViewType !== 'pivot' && get(isLexicalEditMode);
                     },
                     editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:false },
                     resizable:"header",
@@ -3198,7 +3216,7 @@
                         span.className = "row-number-text group-hover:hidden";
                         span.textContent = rowNum;
                         
-                        if (currentActiveViewType !== 'pivot') {
+                        if (currentActiveViewType !== 'pivot' && get(isLexicalEditMode)) {
                             const button = document.createElement("button");
                             button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
                             button.title = "Edit Entry";
@@ -3214,7 +3232,7 @@
                         return container;
                     },
                     cellClick: (e, cell) => {
-                        if (currentActiveViewType === 'pivot') return;
+                        if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
                         if (e.target.closest('.edit-icon-placeholder')) {
                             e.preventDefault();
                             e.stopPropagation();
@@ -3396,7 +3414,7 @@
         const existingBtns = tableContainer.querySelectorAll(".tabulator-add-entry-row");
         existingBtns.forEach(btn => btn.remove());
 
-        if (currentActiveViewType === 'pivot') return;
+        if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
 
         const tableHolder = tableContainer.querySelector(".tabulator-table");
         if (!tableHolder) return;
@@ -3727,32 +3745,32 @@
                 <div class="separator mx-0.5 mr-2"></div>
             {/if}
 
-            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
+            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo" disabled={!$isLexicalEditMode}>
                 <Undo2 size={14} />
             </button>
             
-            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
+            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo" disabled={!$isLexicalEditMode}>
                 <Redo2 size={14} />
             </button>
 
             <div class="separator mx-0.5"></div>
 
-            <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold">
+            <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold" disabled={!$isLexicalEditMode}>
                 <Bold size={14} />
             </button>
 
-            <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic">
+            <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic" disabled={!$isLexicalEditMode}>
                 <Italic size={14} />
             </button>
 
-            <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline">
+            <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline" disabled={!$isLexicalEditMode}>
                 <Underline size={14} />
             </button>
 
             <div class="separator mx-0.5"></div>
 
             <div class="relative" bind:this={colorDropdownRef}>
-              <button id="style-color" on:click={toggleColorDropdown} class="mini-toolbar-button flex items-center" title="Text Color">
+              <button id="style-color" on:click={toggleColorDropdown} class="mini-toolbar-button flex items-center" title="Text Color" disabled={!$isLexicalEditMode}>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
                     <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
                 </svg>
@@ -3775,18 +3793,18 @@
 
             <div class="separator mx-0.5"></div>
 
-            <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
+            <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting" disabled={!$isLexicalEditMode}>
                 <Eraser size={14} />
             </button>
             <div class="separator mx-0.5"></div>
 
-            <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
+            <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts" disabled={!$isLexicalEditMode}>
                 <ChartBar size={14} />
                 <span>Insert Charts</span>
             </button>
 
             <div class="separator mx-0.5"></div>
-            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot'}>
+            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot' || !$isLexicalEditMode}>
                 <Table2 size={14} />
                 <span>Create Views</span>
             </button>
@@ -3917,7 +3935,8 @@
                     <div class="flex-grow min-h-0">
                         <LexicalEditor
                             initialJson={currentActiveDocumentJson}
-                            editable={true}
+                            editable={$isLexicalEditMode}
+                            allowReadModeHighlights={true}
                             placeholder="Start typing your document..."
                             enableTableCellMenu={true}
                             enableTableCellResize={true}
