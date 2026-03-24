@@ -18,7 +18,7 @@
     import { listen, emit } from '@tauri-apps/api/event'; // Added listen and emit
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
     import { searchQuery, showSearchBox } from '$lib/stores/searchStore.js';
-    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd } from '@lucide/svelte';
+    import { Music, Film, FileText, MessageSquareText, Sheet, Image as ImageIcon, Search, GalleryVerticalEnd, Plus } from '@lucide/svelte';
 
 
     const dispatch = createEventDispatcher();
@@ -1335,8 +1335,21 @@
         <!-- Render Dropdowns OUTSIDE the overflow container so they aren't clipped -->
         {#each CATEGORIES_BASE as category (category.type)}
             <Dropdown triggeredBy="#collapsed-category-{category.type}" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
-                <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
-                    {category.name}
+                <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10 flex justify-between items-center">
+                    <span>{category.name}</span>
+                    {#if category.type === 'document' || category.type === 'table'}
+                        <button id="add-btn-{category.type}" class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Add New"><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
+                        <Dropdown triggeredBy="#add-btn-{category.type}" placement="right-start" class="w-36 z-[1002]" on:click={(e) => e.stopPropagation()}>
+                            <DropdownItem on:click={(e) => { e.stopPropagation(); if (category.type === 'document') { const p = get(project); if(p?.xmlPath) createNewDocument(p.xmlPath); } else { emit('request-create-table-modal'); } }}>
+                                Create New
+                            </DropdownItem>
+                            <DropdownItem on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}>
+                                Import...
+                            </DropdownItem>
+                        </Dropdown>
+                    {#else}
+                        <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Import" on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
+                    {/if}
                 </div>
                 {#if (filteredCategories.find(fc => fc.type === category.type)?.files?.length || 0) > 0}
                     {#each filteredCategories.find(fc => fc.type === category.type)?.files || [] as file (file.path || file.name)}
@@ -1359,8 +1372,9 @@
 
         <!-- Dropdown for Groups -->
         <Dropdown triggeredBy="#collapsed-category-groups" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
-            <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
-                Groups
+            <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10 flex justify-between items-center">
+                <span>Groups</span>
+                <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Create New Group" on:click={(e) => { e.stopPropagation(); handleNewGroupClick(); }}><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
             </div>
             {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
                 {#each $currentProjectGroupsList as group (group.id)}
