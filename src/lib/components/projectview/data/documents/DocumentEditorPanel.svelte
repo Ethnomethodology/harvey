@@ -22,6 +22,7 @@
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -217,7 +218,8 @@
                  <LexicalEditor
                      bind:this={editorRef}
                      initialJson={currentJson}
-                     editable={true}
+                     editable={$isLexicalEditMode}
+                     allowReadModeHighlights={true}
                      placeholder="Start typing your document..."
                      enableTableCellMenu={true}
                      enableTableCellResize={true}
