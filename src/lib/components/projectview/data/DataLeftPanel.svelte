@@ -1088,7 +1088,6 @@
 
     function handleToggleDataLeftPanel() {
         panelStateStore.toggleDataLeftPanel();
-        hideTooltip();
     }
 
     onMount(async () => {
@@ -1306,30 +1305,34 @@
                     >
                         <svelte:component this={category.iconComponent} class="w-5 h-5" />
                     </button>
-                    <Dropdown triggeredBy="#collapsed-category-{category.type}" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
-                        <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
-                            {category.name}
-                        </div>
-                        {#if (filteredCategories.find(fc => fc.type === category.type)?.files?.length || 0) > 0}
-                            {#each filteredCategories.find(fc => fc.type === category.type)?.files || [] as file (file.path || file.name)}
-                                <DropdownItem
-                                    class="truncate text-sm flex items-center py-1.5 {file.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-gray-700 font-semibold text-blue-700 dark:text-blue-400' : ''}"
-                                    on:click={() => handleItemClick(file)}
-                                    title={file.name}
-                                >
-                                    <svelte:component this={category.iconComponent} class="w-3.5 h-3.5 mr-2 text-gray-400 dark:text-gray-500 shrink-0" />
-                                    <span class="truncate text-gray-800 dark:text-gray-200">{file.name}</span>
-                                </DropdownItem>
-                            {/each}
-                        {:else}
-                            <div class="px-4 py-3 text-xs italic text-gray-500 dark:text-gray-400">
-                                No {category.name.toLowerCase()} found.
-                            </div>
-                        {/if}
-                    </Dropdown>
                 </div>
             {/each}
         </div>
+
+        <!-- Render Dropdowns OUTSIDE the overflow container so they aren't clipped -->
+        {#each CATEGORIES_BASE as category (category.type)}
+            <Dropdown triggeredBy="#collapsed-category-{category.type}" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
+                <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
+                    {category.name}
+                </div>
+                {#if (filteredCategories.find(fc => fc.type === category.type)?.files?.length || 0) > 0}
+                    {#each filteredCategories.find(fc => fc.type === category.type)?.files || [] as file (file.path || file.name)}
+                        <DropdownItem
+                            class="truncate text-sm flex items-center py-1.5 {file.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-gray-700 font-semibold text-blue-700 dark:text-blue-400' : ''}"
+                            on:click={() => handleItemClick(file)}
+                            title={file.name}
+                        >
+                            <svelte:component this={category.iconComponent} class="w-3.5 h-3.5 mr-2 text-gray-400 dark:text-gray-500 shrink-0" />
+                            <span class="truncate text-gray-800 dark:text-gray-200">{file.name}</span>
+                        </DropdownItem>
+                    {/each}
+                {:else}
+                    <div class="px-4 py-3 text-xs italic text-gray-500 dark:text-gray-400">
+                        No {category.name.toLowerCase()} found.
+                    </div>
+                {/if}
+            </Dropdown>
+        {/each}
     {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
