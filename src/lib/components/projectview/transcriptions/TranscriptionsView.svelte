@@ -133,14 +133,14 @@
 
     async function handlePreviousRequest() {
         if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript();
+            await handleSaveTranscript(true);
         }
         editableTranscriptRef?.previous();
     }
 
     async function handleNextRequest() {
         if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript();
+            await handleSaveTranscript(true);
         }
         editableTranscriptRef?.next();
     }
@@ -157,10 +157,9 @@
 
             if (get(transcriptStore).transcriptDirty) {
                 try {
-                    await handleSaveTranscript();
+                    await handleSaveTranscript(true);
                 } catch (err) {
                     console.error("Autosave failed on segment click:", err);
-                    message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
                 }
             }
             
@@ -193,10 +192,9 @@
 
         if (get(transcriptStore).transcriptDirty) {
             try {
-                await handleSaveTranscript();
+                await handleSaveTranscript(true);
             } catch (err) {
                 console.error("Autosave failed on panel navigation:", err);
-                message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
             }
         }
         if (detail && typeof detail.time === 'number') {
@@ -297,8 +295,8 @@
         }
     }
 
-    export async function handleSaveTranscript() {
-        console.log("[TranscriptionsView] handleSaveTranscript called.");
+    export async function handleSaveTranscript(isAutoSave = false) {
+        console.log(`[TranscriptionsView] handleSaveTranscript called (isAutoSave: ${isAutoSave}).`);
         
         // CRITICAL: Commit any pending edits in the editable transcript before saving
         if (panelEditModeActive && editableTranscriptRef) {
@@ -467,7 +465,7 @@
         }
 
         if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript();
+            await handleSaveTranscript(true);
         }
 
         // Proceed with loading immediately

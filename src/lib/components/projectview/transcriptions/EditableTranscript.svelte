@@ -356,6 +356,13 @@
     });
     onDestroy(() => {
         isMounted = false;
+
+        // Ensure any pending read-mode highlight saves are committed before unmounting
+        if (editorUpdateDebounceTimer) {
+            clearTimeout(editorUpdateDebounceTimer);
+            commitCurrentSegmentEdits();
+        }
+
         window.removeEventListener('keydown', handleSegmentNavShortcut, true);
         unsubscribeTranscriptStore && unsubscribeTranscriptStore();
         cleanupPlainTextConverter();
