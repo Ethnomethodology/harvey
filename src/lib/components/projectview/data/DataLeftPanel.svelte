@@ -1313,7 +1313,7 @@
                         {#if (filteredCategories.find(fc => fc.type === category.type)?.files?.length || 0) > 0}
                             {#each filteredCategories.find(fc => fc.type === category.type)?.files || [] as file (file.path || file.name)}
                                 <DropdownItem
-                                    class="truncate text-sm flex items-center py-1.5 {isItemActive(file) ? 'bg-blue-50 dark:bg-gray-700 font-semibold' : ''}"
+                                    class="truncate text-sm flex items-center py-1.5 {file.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-gray-700 font-semibold text-blue-700 dark:text-blue-400' : ''}"
                                     on:click={() => handleItemClick(file)}
                                     title={file.name}
                                 >
