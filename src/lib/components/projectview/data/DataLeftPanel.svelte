@@ -1339,14 +1339,6 @@
                     <span>{category.name}</span>
                     {#if category.type === 'document' || category.type === 'table'}
                         <button id="add-btn-{category.type}" class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Add New"><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
-                        <Dropdown triggeredBy="#add-btn-{category.type}" placement="bottom-end" class="w-36 z-[1002]" on:click={(e) => e.stopPropagation()}>
-                            <DropdownItem on:click={(e) => { e.stopPropagation(); if (category.type === 'document') { const p = get(project); if(p?.xmlPath) createNewDocument(p.xmlPath); } else { emit('request-create-table-modal'); } }}>
-                                Create New
-                            </DropdownItem>
-                            <DropdownItem on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}>
-                                Import...
-                            </DropdownItem>
-                        </Dropdown>
                     {:else}
                         <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Import" on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
                     {/if}
@@ -1368,6 +1360,16 @@
                     </div>
                 {/if}
             </Dropdown>
+            {#if category.type === 'document' || category.type === 'table'}
+                <Dropdown triggeredBy="#add-btn-{category.type}" placement="right-start" class="w-36 z-[1002]" on:click={(e) => e.stopPropagation()}>
+                    <DropdownItem on:click={(e) => { e.stopPropagation(); if (category.type === 'document') { const p = get(project); if(p?.xmlPath) createNewDocument(p.xmlPath); } else { emit('request-create-table-modal'); } }}>
+                        Create New
+                    </DropdownItem>
+                    <DropdownItem on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}>
+                        Import...
+                    </DropdownItem>
+                </Dropdown>
+            {/if}
         {/each}
 
         <!-- Dropdown for Groups -->
