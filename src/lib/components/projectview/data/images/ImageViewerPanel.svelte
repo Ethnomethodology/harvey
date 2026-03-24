@@ -10,6 +10,7 @@
     import { v4 as uuidv4 } from 'uuid';
     import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
     import { Square, Circle, Hexagon, MessageCircle, MessageSquare, Type, HatGlasses } from '@lucide/svelte';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
 
     export let imagePath = '';
 
@@ -89,6 +90,10 @@
 
     $: if (activeDrawingTool) {
         selectedAnnotationId = null;
+    }
+
+    $: if (!$isLexicalEditMode && activeDrawingTool && ['speech-bubble-rect', 'speech-bubble-circle', 'text-area', 'censored'].includes(activeDrawingTool)) {
+        activeDrawingTool = null;
     }
 
     function fixHtmlForDisplay(html) {
@@ -1282,6 +1287,7 @@
     }
 
     function handleAnnotationDoubleClick(event, annotation) {
+        if (!get(isLexicalEditMode)) return;
         event.stopPropagation(); // Prevent OSD zoom
         console.log("Annotation double-clicked:", annotation);
         annotationBeingEdited = annotation;
@@ -1381,6 +1387,7 @@
     }
     
     function startTailWidthDrag(event, annotationId) {
+        if (!get(isLexicalEditMode)) return;
         event.preventDefault();
         isDraggingTailWidth = true;
         draggedAnnotationId = annotationId;
@@ -1391,6 +1398,7 @@
     }
 
     function startTailDrag(event, annotationId) {
+        if (!get(isLexicalEditMode)) return;
         // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
         // event.stopPropagation(); 
         event.preventDefault(); // Stop text selection etc.
@@ -1400,6 +1408,7 @@
     }
 
     function startShapeDrag(event, annotationId) {
+        if (!get(isLexicalEditMode)) return;
         // Do not stop propagation, so OSD 'canvas-press' fires
         event.preventDefault();
         isDraggingShape = true;
@@ -1414,6 +1423,7 @@
     }
 
     function startResizeDrag(event, annotationId, handleType) {
+        if (!get(isLexicalEditMode)) return;
         event.preventDefault();
         // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
         // event.stopPropagation();
@@ -1594,6 +1604,7 @@
                     class:active={activeDrawingTool === 'speech-bubble-circle'}
                     on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle'}
                     title="Draw Circular Speech Bubble"
+                    disabled={!$isLexicalEditMode}
                 >
                     <MessageCircle class="w-4 h-4" />
                 </button>
@@ -1603,6 +1614,7 @@
                     class:active={activeDrawingTool === 'speech-bubble-rect'}
                     on:click={() => activeDrawingTool = activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect'}
                     title="Draw Rectangular Speech Bubble"
+                    disabled={!$isLexicalEditMode}
                 >
                     <MessageSquare class="w-4 h-4" />
                 </button>
@@ -1612,6 +1624,7 @@
                     class:active={activeDrawingTool === 'text-area'}
                     on:click={() => activeDrawingTool = (activeDrawingTool === 'text-area' ? null : 'text-area')}
                     title="Draw Text Area"
+                    disabled={!$isLexicalEditMode}
                 >
                     <Type class="w-4 h-4" />
                 </button>
@@ -1621,6 +1634,7 @@
                     class:active={activeDrawingTool === 'censored'}
                     on:click={() => activeDrawingTool = (activeDrawingTool === 'censored' ? null : 'censored')}
                     title="Anonymise (Pixelate)"
+                    disabled={!$isLexicalEditMode}
                 >
                     <HatGlasses class="w-4 h-4" />
                 </button>
