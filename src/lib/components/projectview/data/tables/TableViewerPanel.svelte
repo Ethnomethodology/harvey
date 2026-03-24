@@ -113,7 +113,9 @@
     let tableModifyToolbarPosition = { top: 0, left: 0 };
     let clickedRow = null;
     let selectedRows = []; // Rows from a multi-cell/multi-row selection
+    let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
     let mainPanelContainer = null;
+
 
 
 
@@ -168,8 +170,40 @@
                 console.error("Error in table container click handler:", err);
             }
         }
-
     }
+
+    function handleTableMouseUp(e) {
+        if (!tabulatorInstance) return;
+        // Fallback for cases where rangeSelected doesn't fire
+        setTimeout(() => {
+            const ranges = tabulatorInstance.getRanges();
+            if (ranges && ranges.length > 0 && !showTableModifyToolbar) {
+                const range = ranges[0];
+                const rows = range.getRows();
+                if (rows && rows.length > 1) {
+                    selectedRows = rows;
+
+                    clickedRow = null;
+                    lastRangeSelectedTime = Date.now();
+                    
+                    const lastRow = rows[rows.length - 1];
+                    const lastRowEl = lastRow.getElement();
+                    if (lastRowEl) {
+                        const rect = lastRowEl.getBoundingClientRect();
+                        const showBelow = rect.top < 150;
+                        
+                        tableModifyToolbarPosition = {
+                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                            left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                        };
+                        showTableModifyToolbar = true;
+                    }
+                }
+
+            }
+        }, 100);
+    }
+
 
 
     // Reactive mapping of store highlights to Tabulator styles
@@ -289,11 +323,19 @@
         if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
             isColorDropdownOpen = false;
         }
-        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar')) {
+        
+        // Prevent immediate closing if a range was just selected (e.g. at the end of a drag)
+        const recentlySelected = (Date.now() - lastRangeSelectedTime) < 300;
+        
+        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !recentlySelected) {
             showTableModifyToolbar = false;
             clickedRow = null;
+            selectedRows = [];
         }
+
     }
+
+
 
 
     function toggleColorDropdown() {
@@ -3304,33 +3346,42 @@
                 nestedFieldSeparator: false,
                 height: "100%",
                 placeholder: "No Data Available",
-                selectableRange: 1,
+                selectableRange: true,
                 selectableRangeColumns: true,
                 selectableRangeRows: true,
+
                 history:true,
                 editTriggerEvent:"dblclick",
                 rangeSelected: (range) => {
                     const rows = range.getRows();
-                    if (rows && rows.length > 0) {
+                    if (rows && rows.length > 1) {
                         selectedRows = rows;
-                        clickedRow = null; // Prioritize range over single click target
+                        clickedRow = null;
+                        lastRangeSelectedTime = Date.now();
                         
-                        const cells = range.getCells();
-                        if (cells.length > 0) {
-                            const firstCellEl = cells[0].getElement();
-                            const rect = firstCellEl.getBoundingClientRect();
+                        const lastRow = rows[rows.length - 1];
+                        const lastRowEl = lastRow.getElement();
+                        if (lastRowEl) {
+                            const rect = lastRowEl.getBoundingClientRect();
                             const showBelow = rect.top < 150;
                             
                             tableModifyToolbarPosition = {
                                 top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
-                                left: Math.max(10, rect.left + (rect.width / 2) - 60)
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
                             };
                             showTableModifyToolbar = true;
                         }
+                    } else if (rows && rows.length === 1) {
+                        selectedRows = rows;
                     } else {
                         selectedRows = [];
                     }
                 },
+                
+
+
+
+
                 movableColumns: true,
 
                 resizableColumnFit: false,
@@ -4249,7 +4300,8 @@
             </div>
         {/if}
 
-        <div bind:this={tableContainer} on:click={handleTableContainerClick} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+        <div bind:this={tableContainer} on:click={handleTableContainerClick} on:mouseup={handleTableMouseUp} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+
 
              {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
