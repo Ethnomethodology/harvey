@@ -132,16 +132,10 @@
     let isManualSettingsModalOpen = false;
 
     async function handlePreviousRequest() {
-        if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript(true);
-        }
         editableTranscriptRef?.previous();
     }
 
     async function handleNextRequest() {
-        if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript(true);
-        }
         editableTranscriptRef?.next();
     }
 
@@ -155,14 +149,6 @@
                 await tick();
             }
 
-            if (get(transcriptStore).transcriptDirty) {
-                try {
-                    await handleSaveTranscript(true);
-                } catch (err) {
-                    console.error("Autosave failed on segment click:", err);
-                }
-            }
-            
             // Sync store index
             updatePlayerCurrentSegmentIndex(index);
             
@@ -190,13 +176,6 @@
             await tick();
         }
 
-        if (get(transcriptStore).transcriptDirty) {
-            try {
-                await handleSaveTranscript(true);
-            } catch (err) {
-                console.error("Autosave failed on panel navigation:", err);
-            }
-        }
         if (detail && typeof detail.time === 'number') {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === 'number') {
@@ -266,7 +245,7 @@
      * Exits edit mode if it's currently active.
      */
     export async function exitEditModeIfActive() {
-        if (panelEditModeActive) {
+        if (panelEditModeActive || get(transcriptStore).transcriptDirty) {
             await handleSaveTranscript();
         }
     }
