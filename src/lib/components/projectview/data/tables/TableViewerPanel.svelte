@@ -63,6 +63,8 @@
     import { Datepicker } from 'flowbite-datepicker';
     import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import FloatingTableHighlightToolbar from '../../tables/FloatingTableHighlightToolbar.svelte';
+
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -104,14 +106,54 @@
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
-    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
     let tableHasValidationErrors = false;
+    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
+
+    let showTableModifyToolbar = false;
+    let tableModifyToolbarPosition = { top: 0, left: 0 };
+    let clickedRow = null;
+    let mainPanelContainer = null;
+
+
 
     function reformatAllRows() {
         if (tabulatorInstance && tableReady) {
             tabulatorInstance.getRows().forEach(row => row.reformat());
         }
     }
+
+    function handleTableContainerClick(e) {
+        if (currentActiveViewType === 'pivot' || !mainPanelContainer || !tabulatorInstance) return;
+
+        
+        const rowEl = e.target.closest('.tabulator-row');
+        if (rowEl) {
+            try {
+                const row = tabulatorInstance.getRow(rowEl);
+                if (row) {
+                    const rowIndex = row.getData().harvey_internal_id;
+                    const rowColor = tableStyles.rowStyles[rowIndex];
+                    
+                    if (rowColor) {
+                        const rect = rowEl.getBoundingClientRect();
+                        const showBelow = rect.top < 130;
+                        
+                        tableModifyToolbarPosition = {
+                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                            left: Math.max(10, e.clientX - 60) 
+                        };
+                        clickedRow = row;
+                        showTableModifyToolbar = true;
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                }
+            } catch (err) {
+                console.error("Error detecting row on click:", err);
+            }
+        }
+    }
+
 
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
@@ -226,7 +268,12 @@
         if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
             isColorDropdownOpen = false;
         }
+        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar')) {
+            showTableModifyToolbar = false;
+            clickedRow = null;
+        }
     }
+
 
     function toggleColorDropdown() {
         if (!tabulatorInstance) return;
@@ -1213,6 +1260,9 @@
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
             
+            // Find existing highlight to preserve metadata
+            const existingHighlight = currentHighlights.find(h => h.id === cellKey);
+            
             // Remove existing highlight for this cell
             currentHighlights = currentHighlights.filter(h => h.id !== cellKey);
             
@@ -1224,11 +1274,12 @@
                     id: cellKey,
                     color: color,
                     text: text,
-                    tags: [],
-                    comments: []
+                    tags: existingHighlight ? existingHighlight.tags : [],
+                    comments: existingHighlight ? existingHighlight.comments : []
                 });
             }
         });
+
         
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
@@ -1243,9 +1294,13 @@
         rows.forEach(row => {
             const rowData = row.getData();
             const rowIndex = rowData.harvey_internal_id;
+            const highlightId = `row-${rowIndex}`;
+
+            // Find existing highlight to preserve metadata
+            const existingHighlight = currentHighlights.find(h => h.id === highlightId);
 
             // Remove existing highlight for this entry
-            currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
+            currentHighlights = currentHighlights.filter(h => h.id !== highlightId);
 
             if (color) {
                 // Construct the text in the correct order, starting with the 1-indexed entry number.
@@ -1258,11 +1313,11 @@
                 const text = textParts.join(' | ');
 
                 const newHighlight = {
-                    id: `row-${rowIndex}`,
+                    id: highlightId,
                     color: color,
                     text: text,
-                    tags: [],
-                    comments: []
+                    tags: existingHighlight ? existingHighlight.tags : [],
+                    comments: existingHighlight ? existingHighlight.comments : []
                 };
                 currentHighlights.push(newHighlight);
             }
@@ -1317,7 +1372,25 @@
         return editor;
     }
 
+
+    function handleTableHighlightColorChange(color) {
+        if (clickedRow) {
+            applyHighlightToRows(color, [clickedRow]);
+        }
+        showTableModifyToolbar = false;
+        clickedRow = null;
+    }
+
+    function handleTableHighlightDelete() {
+        if (clickedRow) {
+            applyHighlightToRows(null, [clickedRow]);
+        }
+        showTableModifyToolbar = false;
+        clickedRow = null;
+    }
+
     function checkValidationErrors() {
+
         if (!tabulatorInstance) return;
         
         const rows = tabulatorInstance.getRows();
@@ -3137,6 +3210,7 @@
                 },
                 rowContextMenu: (e, row) => {
                     const isEditMode = get(isLexicalEditMode);
+
                     const ranges = tabulatorInstance.getRanges();
                     let selectedRowsForMenu = [row];
 
@@ -3733,7 +3807,8 @@
     />
 {/if}
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+<div bind:this={mainPanelContainer} class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden relative">
+
      {#if !isViewingDocument}
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
@@ -4034,13 +4109,25 @@
             </div>
         {/if}
 
-        <div bind:this={tableContainer} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+        <div bind:this={tableContainer} on:click={handleTableContainerClick} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+
              {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}
         </div>
+
     </div>
+
+    <FloatingTableHighlightToolbar 
+        showToolbar={showTableModifyToolbar}
+        toolbarPosition={tableModifyToolbarPosition}
+        onChangeColor={handleTableHighlightColorChange}
+        onDelete={handleTableHighlightDelete}
+        onClose={() => { showTableModifyToolbar = false; clickedRow = null; }}
+    />
 </div>
+
+
 
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
