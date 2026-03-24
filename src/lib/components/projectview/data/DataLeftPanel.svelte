@@ -1286,7 +1286,7 @@
         <!-- Collapsed Content (Vertical Icons) -->
         <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0 w-full px-1">
             {#each CATEGORIES_BASE as category (category.type)}
-                <div class="relative w-full flex justify-center">
+                <div class="relative w-full flex justify-center shrink-0">
                     <button
                         type="button"
                         id="collapsed-category-{category.type}"
@@ -1307,6 +1307,29 @@
                     </button>
                 </div>
             {/each}
+
+            <div class="w-6 h-px bg-gray-300 dark:bg-gray-700 my-1 shrink-0"></div>
+
+            <div class="relative w-full flex justify-center shrink-0">
+                <button
+                    type="button"
+                    id="collapsed-category-groups"
+                    class="p-1.5 rounded-md focus:outline-none transition-colors dark:focus:ring-offset-gray-900 focus:ring-offset-1"
+                    class:hover:bg-gray-200={!$project.selectedGroupId}
+                    class:dark:hover:bg-gray-800={!$project.selectedGroupId}
+                    class:focus:ring-2={!$project.selectedGroupId}
+                    class:focus:ring-blue-500={!$project.selectedGroupId}
+                    class:text-gray-500={!$project.selectedGroupId}
+                    class:dark:text-gray-600={!$project.selectedGroupId}
+                    class:text-blue-600={!!$project.selectedGroupId}
+                    class:dark:text-blue-400={!!$project.selectedGroupId}
+                    class:hover:bg-blue-300={!!$project.selectedGroupId}
+                    class:dark:hover:bg-blue-600={!!$project.selectedGroupId}
+                    on:click={handleToggleDataLeftPanel}
+                >
+                    <GalleryVerticalEnd class="w-5 h-5" />
+                </button>
+            </div>
         </div>
 
         <!-- Render Dropdowns OUTSIDE the overflow container so they aren't clipped -->
@@ -1333,6 +1356,29 @@
                 {/if}
             </Dropdown>
         {/each}
+
+        <!-- Dropdown for Groups -->
+        <Dropdown triggeredBy="#collapsed-category-groups" trigger="hover" placement="right-start" class="w-64 max-h-96 overflow-y-auto z-[1001] shadow-xl">
+            <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 sticky top-0 z-10">
+                Groups
+            </div>
+            {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
+                {#each $currentProjectGroupsList as group (group.id)}
+                    <DropdownItem
+                        class="truncate text-sm flex items-center py-1.5 {$project.selectedGroupId === group.id ? 'bg-blue-50 dark:bg-gray-700 font-semibold text-blue-700 dark:text-blue-400' : ''}"
+                        on:click={() => handleGroupSelected(group)}
+                        title={group.name}
+                    >
+                        <GalleryVerticalEnd class="w-3.5 h-3.5 mr-2 text-gray-400 dark:text-gray-500 shrink-0" />
+                        <span class="truncate text-gray-800 dark:text-gray-200">{group.name}</span>
+                    </DropdownItem>
+                {/each}
+            {:else}
+                <div class="px-4 py-3 text-xs italic text-gray-500 dark:text-gray-400">
+                    No groups created yet.
+                </div>
+            {/if}
+        </Dropdown>
     {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
