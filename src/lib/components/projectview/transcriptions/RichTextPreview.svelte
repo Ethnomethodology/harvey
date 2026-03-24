@@ -14,7 +14,7 @@
     	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
     	import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
     	import FindReplaceModal from '../modals/FindReplaceModal.svelte';
-        import { Search, SquarePen, UnfoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X, ChevronDown } from '@lucide/svelte';
+        import { Search, SquarePen, UnfoldVertical, FoldVertical, Save, Trash2, Undo, Redo, PlusSquare, MoreVertical, Play, ChevronLeft, ChevronRight, X, ChevronDown } from '@lucide/svelte';
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;
@@ -872,6 +872,13 @@
         dispatch('splittranscriptsegment', idx);
     }
 
+    async function handleMergeWithNext(idx) {
+        if (!previewEditMode) return;
+        const store = get(transcriptStore);
+        if (idx < 0 || idx >= store.segments.length - 1) return;
+        dispatch('mergetranscriptsegment', idx);
+    }
+
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) {
@@ -1313,7 +1320,19 @@
                     {/if}
                 </div>
                 {#if previewEditMode && (!$transcriptStore.isDualModeActive || !seg.isPrimary)}
-                      <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300 flex items-center justify-center" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> <PlusSquare class="w-5 h-5" /> </button> </div>
+                      <div class="flex items-center justify-center insert-button-wrapper relative px-4">
+                        {#if seg.segmentIndex < $transcriptStore.segments.length - 1}
+                            <button
+                                class="btn-icon text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center absolute left-4"
+                                on:click={() => handleMergeWithNext(seg.segmentIndex)}
+                                title="Merge with next segment"
+                                aria-label="Merge with next segment"
+                            >
+                                <FoldVertical class="w-5 h-5" />
+                            </button>
+                        {/if}
+                        <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300 flex items-center justify-center" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> <PlusSquare class="w-5 h-5" /> </button>
+                      </div>
                     {/if}
             {/each}
             <div style="height: {paddingBottom}px;"></div>

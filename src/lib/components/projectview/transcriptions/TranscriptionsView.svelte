@@ -11,6 +11,7 @@
         redoTranscriptChange,
         insertTranscriptSegment,
         splitTranscriptSegment,
+        mergeTranscriptSegments,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         deactivateDualMode,
@@ -353,6 +354,7 @@
 
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
     export function handleSplitSegmentRequest(event) { const indexToSplit = event.detail; if (typeof indexToSplit === 'number') splitTranscriptSegment(indexToSplit); }
+    export function handleMergeSegmentRequest(event) { const indexToMerge = event.detail; if (typeof indexToMerge === 'number') mergeTranscriptSegments(indexToMerge); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleInsertSegmentRequest(event) {
@@ -598,6 +600,7 @@
                 on:requestopentab={(e) => dispatch('requestopentab', e.detail)}
                 on:deletetranscriptsegment={handleDeleteSegmentRequest}
                 on:splittranscriptsegment={handleSplitSegmentRequest}
+                on:mergetranscriptsegment={handleMergeSegmentRequest}
                 on:insertnewsegment={handleInsertSegmentRequest}
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
