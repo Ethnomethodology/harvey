@@ -271,7 +271,6 @@
             if (get(transcriptStore).transcriptDirty) {
                 await handleSaveTranscript();
             }
-            isLexicalEditMode.set(false);
         }
     }
 
