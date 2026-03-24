@@ -112,7 +112,9 @@
     let showTableModifyToolbar = false;
     let tableModifyToolbarPosition = { top: 0, left: 0 };
     let clickedRow = null;
+    let selectedRows = []; // Rows from a multi-cell/multi-row selection
     let mainPanelContainer = null;
+
 
 
 
@@ -131,27 +133,42 @@
             try {
                 const row = tabulatorInstance.getRow(rowEl);
                 if (row) {
-                    const rowIndex = row.getData().harvey_internal_id;
-                    const rowColor = tableStyles.rowStyles[rowIndex];
+                    const rowData = row.getData();
+                    const rowIndex = rowData.harvey_internal_id;
+                    const highlights = get(project).currentTableHighlights || [];
                     
-                    if (rowColor) {
+                    // Find the highlight this row belongs to
+                    const existingHighlight = highlights.find(h => {
+                        const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
+                        return indices.includes(rowIndex);
+                    });
+
+                    if (existingHighlight) {
+                        // If it's a group, load the whole group into selectedRows
+                        if (existingHighlight.rowIndices && existingHighlight.rowIndices.length > 1) {
+                            selectedRows = existingHighlight.rowIndices.map(idx => tabulatorInstance.getRow(idx)).filter(r => r !== false);
+                            clickedRow = null;
+                        } else {
+                            // Single row highlight
+                            clickedRow = row;
+                            selectedRows = [];
+                        }
+
                         const rect = rowEl.getBoundingClientRect();
-                        const showBelow = rect.top < 130;
+                        const showBelow = rect.top < 150;
                         
                         tableModifyToolbarPosition = {
                             top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
-                            left: Math.max(10, e.clientX - 60) 
+                            left: Math.max(10, rect.left + (rect.width / 2) - 60)
                         };
-                        clickedRow = row;
                         showTableModifyToolbar = true;
-                        e.preventDefault();
-                        e.stopPropagation();
                     }
                 }
             } catch (err) {
-                console.error("Error detecting row on click:", err);
+                console.error("Error in table container click handler:", err);
             }
         }
+
     }
 
 
@@ -163,9 +180,12 @@
         
         if (Array.isArray(hls)) {
             hls.forEach(h => {
-                if (h.id?.startsWith('row-')) {
-                    const rowIndex = h.id.substring(4);
-                    newRowStyles[rowIndex] = h.color;
+                if (h.id?.startsWith('row-') || h.rowIndices) {
+                    // Handle both old single-row and new grouped-row formats
+                    const indices = h.rowIndices || [h.id.substring(4)];
+                    indices.forEach(idx => {
+                        newRowStyles[idx] = h.color;
+                    });
                 } else if (h.id?.startsWith('cell-')) {
                     // Cell IDs are in format "cell-rowIndex-colField"
                     newCellStyles[h.id] = {
@@ -184,6 +204,7 @@
         // Trigger a reformat of entries to apply new styles
         reformatAllRows();
     }
+
 
     async function toggleStyle(styleType) {
         if (!tabulatorInstance) return;
@@ -1285,44 +1306,123 @@
         await saveTableHighlights();
     }
 
-    async function applyHighlightToRows(color, rows) {
+    async function applyHighlightToRows(rows, color, preserveMetadata = true) {
         if (!tabulatorInstance || !rows || rows.length === 0) return;
-
+        
         let currentHighlights = get(project).currentTableHighlights || [];
-        const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
+        const orderedColumns = tabulatorInstance.getColumns();
 
-        rows.forEach(row => {
-            const rowData = row.getData();
-            const rowIndex = rowData.harvey_internal_id;
-            const highlightId = `row-${rowIndex}`;
+        // 1. Identify rows to highlight
+        const newIndices = rows.map(r => r.getData().harvey_internal_id);
+        const newIndicesSet = new Set(newIndices);
 
-            // Find existing highlight to preserve metadata
-            const existingHighlight = currentHighlights.find(h => h.id === highlightId);
+        // 2. Intersection Logic (Precedence)
+        // Separate row highlights from cell highlights
+        let cellHighlights = currentHighlights.filter(h => h.id?.startsWith('cell-'));
+        let rowHighlights = currentHighlights.filter(h => h.id?.startsWith('row-') || h.rowIndices);
+        
+        let updatedRowHighlights = [];
 
-            // Remove existing highlight for this entry
-            currentHighlights = currentHighlights.filter(h => h.id !== highlightId);
-
-            if (color) {
-                // Construct the text in the correct order, starting with the 1-indexed entry number.
-                const rowNumber = rowIndex + 1;
-                const textParts = [rowNumber.toString()];
-                orderedColumns.forEach(column => {
-                    const value = rowData[column.getField()];
-                    textParts.push(value !== null && value !== undefined ? value : "");
-                });
-                const text = textParts.join(' | ');
-
-                const newHighlight = {
-                    id: highlightId,
-                    color: color,
-                    text: text,
-                    tags: existingHighlight ? existingHighlight.tags : [],
-                    comments: existingHighlight ? existingHighlight.comments : []
-                };
-                currentHighlights.push(newHighlight);
+        rowHighlights.forEach(h => {
+            const hIndices = h.rowIndices || [parseInt(h.id.substring(4), 10)];
+            // Remove any rows that are in the new selection
+            const remainingIndices = hIndices.filter(idx => !newIndicesSet.has(idx)).sort((a, b) => a - b);
+            
+            if (remainingIndices.length > 0) {
+                // Check for continuity and split if necessary
+                let currentGroup = [remainingIndices[0]];
+                for (let i = 1; i < remainingIndices.length; i++) {
+                    if (remainingIndices[i] === remainingIndices[i-1] + 1) {
+                        currentGroup.push(remainingIndices[i]);
+                    } else {
+                        // Split point: finish current group and start a new one
+                        updatedRowHighlights.push(createGroupedHighlight(currentGroup, h.color, h.tags, h.comments));
+                        currentGroup = [remainingIndices[i]];
+                    }
+                }
+                updatedRowHighlights.push(createGroupedHighlight(currentGroup, h.color, h.tags, h.comments));
             }
         });
 
+        // 3. Add the new grouped highlight if color is provided
+        if (color) {
+            // Find existing metadata if requested
+            let existingTags = [];
+            let existingComments = [];
+            if (preserveMetadata) {
+                // If it was a group click, we look for the highlight that contained these rows.
+                // We'll use the metadata if ANY of the new indices were part of an existing highlight.
+                const sampleIdx = newIndices[0];
+                const existing = rowHighlights.find(h => {
+                    const idxs = h.rowIndices || [parseInt(h.id.substring(4), 10)];
+                    return idxs.includes(sampleIdx);
+                });
+                if (existing) {
+                    existingTags = existing.tags || [];
+                    existingComments = existing.comments || [];
+                }
+            }
+
+
+            // Generate grouped text
+            const textParts = [];
+            newIndices.sort((a,b) => a-b).forEach(idx => {
+                const rowData = tableData[idx];
+                if (rowData) {
+                    const rowNum = idx + 1;
+                    const rowTextParts = [rowNum.toString()];
+                    orderedColumns.forEach(column => {
+                        const field = column.getField();
+                        if (field) {
+                            const value = rowData[field];
+                            rowTextParts.push(value !== null && value !== undefined ? value : "");
+                        }
+                    });
+                    textParts.push(rowTextParts.join(' | '));
+                }
+            });
+            const groupedText = textParts.join('\n');
+
+            updatedRowHighlights.push({
+                id: `rows-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                color: color,
+                text: groupedText,
+                rowIndices: newIndices,
+                tags: existingTags,
+                comments: existingComments
+            });
+        }
+
+        // Helper to create grouped highlight object
+        function createGroupedHighlight(indices, hColor, hTags = [], hComments = []) {
+            const textParts = [];
+            indices.sort((a,b) => a-b).forEach(idx => {
+                const rowData = tableData[idx];
+                if (rowData) {
+                    const rowNum = idx + 1;
+                    const rowTextParts = [rowNum.toString()];
+                    orderedColumns.forEach(column => {
+                        const field = column.getField();
+                        if (field) {
+                            const value = rowData[field];
+                            rowTextParts.push(value !== null && value !== undefined ? value : "");
+                        }
+                    });
+                    textParts.push(rowTextParts.join(' | '));
+                }
+            });
+            return {
+                id: `rows-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                color: hColor,
+                text: textParts.join('\n'),
+                rowIndices: indices,
+                tags: hTags,
+                comments: hComments
+            };
+        }
+
+        currentHighlights = [...cellHighlights, ...updatedRowHighlights];
+        
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
 
@@ -1331,6 +1431,7 @@
             ranges.forEach(range => range.remove());
         }
     }
+
 
     // Custom header filter editor to prevent Enter key propagation
     function customHeaderFilterEditor(cell, onRendered, success, cancel, editorParams){
@@ -1373,21 +1474,34 @@
     }
 
 
-    function handleTableHighlightColorChange(color) {
-        if (clickedRow) {
-            applyHighlightToRows(color, [clickedRow]);
+    async function handleTableHighlightColorChange(color) {
+        if (selectedRows && selectedRows.length > 0) {
+            // Widget action for many rows (range or group): preserve metadata if it was an existing group click
+            await applyHighlightToRows(selectedRows, color, true);
+            showTableModifyToolbar = false;
+            selectedRows = [];
+        } else if (clickedRow) {
+            // Widget action for single row: preserve metadata
+            await applyHighlightToRows([clickedRow], color, true);
+            showTableModifyToolbar = false;
+            clickedRow = null;
         }
-        showTableModifyToolbar = false;
-        clickedRow = null;
     }
 
-    function handleTableHighlightDelete() {
-        if (clickedRow) {
-            applyHighlightToRows(null, [clickedRow]);
+    async function handleTableHighlightDelete() {
+        if (selectedRows && selectedRows.length > 0) {
+            // Widget action: delete the whole group/range
+            await applyHighlightToRows(selectedRows, null, false);
+            showTableModifyToolbar = false;
+            selectedRows = [];
+        } else if (clickedRow) {
+            // Widget action: delete single row
+            await applyHighlightToRows([clickedRow], null, false);
+            showTableModifyToolbar = false;
+            clickedRow = null;
         }
-        showTableModifyToolbar = false;
-        clickedRow = null;
     }
+
 
     function checkValidationErrors() {
 
@@ -3195,7 +3309,30 @@
                 selectableRangeRows: true,
                 history:true,
                 editTriggerEvent:"dblclick",
+                rangeSelected: (range) => {
+                    const rows = range.getRows();
+                    if (rows && rows.length > 0) {
+                        selectedRows = rows;
+                        clickedRow = null; // Prioritize range over single click target
+                        
+                        const cells = range.getCells();
+                        if (cells.length > 0) {
+                            const firstCellEl = cells[0].getElement();
+                            const rect = firstCellEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.max(10, rect.left + (rect.width / 2) - 60)
+                            };
+                            showTableModifyToolbar = true;
+                        }
+                    } else {
+                        selectedRows = [];
+                    }
+                },
                 movableColumns: true,
+
                 resizableColumnFit: false,
                 rowFormatter: (row) => {
                     const rowIndex = row.getData().harvey_internal_id;
@@ -3223,8 +3360,11 @@
                     }
 
                     const highlightAction = (color) => {
-                        applyHighlightToRows(color, selectedRowsForMenu);
+                        // Action from right-click: overwrite metadata (Intersection logic)
+                        applyHighlightToRows(selectedRowsForMenu, color, false);
                     };
+
+
 
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
