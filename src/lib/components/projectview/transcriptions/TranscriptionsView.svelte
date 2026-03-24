@@ -268,9 +268,7 @@
      */
     export async function exitEditModeIfActive() {
         if (panelEditModeActive) {
-            if (get(transcriptStore).transcriptDirty) {
-                await handleSaveTranscript();
-            }
+            await handleSaveTranscript();
         }
     }
 
