@@ -1050,21 +1050,7 @@
                 <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-600 italic">No Media Selected</span>
             {/if}
 
-            <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
-            {#if allSegmentsData.length || previewEditMode}
-                <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center" title={previewEditMode ? `Save & Exit Edit mode (${modKeyName}+E)` : `Edit Transcript (${modKeyName}+E)`} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}>
-                    {#if previewEditMode}
-                        <Save class="w-5 h-5" />
-                    {:else}
-                        <SquarePen class="w-5 h-5" />
-                    {/if}
-                </button>
-                {#if previewEditMode}
-                  <button class="btn-icon ml-2 flex items-center justify-center" class:text-gray-400={!canUndo} class:dark:text-gray-700={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-600={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title={`Undo (${modKeyName}+Z)`} aria-label="Undo Transcript Change" disabled={!canUndo}> <Undo class="w-5 h-5" /> </button>
-                  <button class="btn-icon ml-2 flex items-center justify-center" class:text-gray-400={!canRedo} class:dark:text-gray-700={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-600={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title={`Redo (${modKeyName}+Y)`} aria-label="Redo Transcript Change" disabled={!canRedo}> <Redo class="w-5 h-5" /> </button>
-                {/if}
-            {/if}
-            <!-- Edit/Save/Undo/Redo buttons HTML block ends here -->
+
         </div>
 
         <div class="flex items-center relative"> <!-- This div now only effectively holds the "More options" menu -->

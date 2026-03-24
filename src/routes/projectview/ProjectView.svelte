@@ -982,124 +982,39 @@
             return true; // Return true as we are "on" the tab
         }
 
-        let canProceed = true;
-
-        // Return a promise that resolves to true/false for complex async modals
-        return new Promise((resolve) => {
-            // Check for unsaved changes in the transcriptions tab before switching away
-            if (
-                selectedTab === "transcriptions" &&
-                get(transcriptStore).transcriptDirty
-            ) {
-                project.update((p) => ({
-                    ...p,
-                    showUnsavedChangesModal: true,
-                    unsavedItemName: "current transcript",
-                    unsavedItemType: "transcript",
-                    // Set up callbacks for the modal actions
-                    onUnsavedSave: async () => {
-                        hideUnsavedChangesPrompt();
-                        project.update((p) => ({
-                            ...p,
-                            isLoading: true,
-                            statusMessage: `Switching to ${tabName} tab...`,
-                        }));
-                        try {
-                            await transcriptionsViewRef.handleSaveTranscript();
-                            // After successful save, proceed with tab switch
-                            await proceedTabSwitch(tabName);
-                            resolve(true);
-                        } catch (e) {
-                            // If save fails, keep user on current tab and show error
-                            project.update((p) => ({
-                                ...p,
-                                isLoading: false,
-                                statusMessage:
-                                    "Save failed, tab switch cancelled.",
-                            }));
-                            message(
-                                `Failed to save transcript: ${e.message || e}`,
-                                { title: "Save Error", type: "error" },
-                            );
-                            resolve(false);
-                        }
-                    },
-                    onUnsavedDiscard: async () => {
-                        hideUnsavedChangesPrompt();
-                        project.update((p) => ({
-                            ...p,
-                            isLoading: true,
-                            statusMessage: `Switching to ${tabName} tab...`,
-                        }));
-                        // Discard changes and proceed with tab switch
-                        transcriptStore.update((ts) => ({
-                            ...ts,
-                            transcriptDirty: false,
-                            transcriptUndoStack: [],
-                            transcriptRedoStack: [],
-                        }));
-                        await proceedTabSwitch(tabName);
-                        resolve(true);
-                    },
-                    onUnsavedCancel: () => {
-                        hideUnsavedChangesPrompt();
-                        // Cancel tab switch
-                        project.update((p) => ({
-                            ...p,
-                            isLoading: false,
-                            statusMessage: "Tab switch cancelled.",
-                        }));
-                        resolve(false);
-                    },
-                }));
-                // Stop here, wait for user interaction with the modal
-                return;
+        // Perform silent saves if necessary before switching tabs
+        if (selectedTab === "transcriptions") {
+            if (transcriptionsViewRef) {
+                try {
+                    await transcriptionsViewRef.handleSaveTranscript();
+                } catch (e) {
+                    console.error("[ProjectView] Silent save failed before tab switch:", e);
+                }
             }
-            // Existing data tab unsaved changes check (if any)
-            else if (selectedTab === "data") {
-                // checkUnsavedChangesThenProceed handles its own modals/promises
-                checkUnsavedChangesThenProceed(null, "switching tabs").then(
-                    (result) => {
-                        canProceed = result;
-                        if (!canProceed) {
-                            project.update((p) => ({
-                                ...p,
-                                isLoading: false,
-                                statusMessage: "Tab switch cancelled.",
-                            }));
-                            resolve(false);
-                            return;
-                        }
-                        project.update((p) => ({
-                            ...p,
-                            isLoading: true,
-                            statusMessage: `Switching to ${tabName} tab...`,
-                        }));
-                        proceedTabSwitch(tabName).then(() => resolve(true));
-                    },
-                );
-                return;
-            }
-
-            // Fallback for simple cases (no dirty state)
+        } else if (selectedTab === "data") {
+            // checkUnsavedChangesThenProceed handles its own silent saves for data tab items
+            const canProceed = await checkUnsavedChangesThenProceed(
+                null,
+                "switching tabs",
+            );
             if (!canProceed) {
                 project.update((p) => ({
                     ...p,
                     isLoading: false,
                     statusMessage: "Tab switch cancelled.",
                 }));
-                resolve(false);
-                return;
+                return false;
             }
+        }
 
-            project.update((p) => ({
-                ...p,
-                isLoading: true,
-                statusMessage: `Switching to ${tabName} tab...`,
-            }));
-            // If no unsaved changes or user chose to save/discard, proceed
-            proceedTabSwitch(tabName).then(() => resolve(true));
-        });
+        project.update((p) => ({
+            ...p,
+            isLoading: true,
+            statusMessage: `Switching to ${tabName} tab...`,
+        }));
+
+        await proceedTabSwitch(tabName);
+        return true;
     }
 
     async function proceedTabSwitch(tabName) {
@@ -1457,23 +1372,15 @@
                 get(transcriptStore).selectedMediaFile?.path
             ) {
                 console.log(
-                    "[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Calling exitEditModeIfActive.",
+                    "[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Performing silent save if dirty.",
                 );
                 if (transcriptionsViewRef) {
-                    try {
-                        // Attempt to save and exit edit mode if active. exitEditModeIfActive handles dirty check and confirmation via handleToggleEditMode.
-                        await transcriptionsViewRef.exitEditModeIfActive();
-                    } catch (e) {
-                        // If exitEditModeIfActive throws (via handleToggleEditMode), it means the user cancelled the save/discard.
-                        project.update((p) => ({
-                            ...p,
-                            isLoading: false,
-                            statusMessage: "Media selection cancelled.",
-                        }));
-                        console.log(
-                            `[ProjectView] handleRequestMediaSelection: 'exitEditModeIfActive' threw an error. Aborting media selection.`,
-                        );
-                        return;
+                    if (get(transcriptStore).transcriptDirty) {
+                        try {
+                            await transcriptionsViewRef.handleSaveTranscript();
+                        } catch (e) {
+                            console.error("[ProjectView] Silent save failed before media selection:", e);
+                        }
                     }
                 }
                 console.log(
@@ -1732,21 +1639,10 @@
             );
         else if (selectedTab === "transcriptions") {
             if (get(transcriptStore).transcriptDirty) {
-                const confirmImport = await confirm(
-                    `Discard unsaved transcript changes to import new ${actionType || "asset"}?`,
-                    {
-                        title: "Unsaved Transcript",
-                        type: "warning",
-                        okLabel: "Discard and Import",
-                        cancelLabel: "Cancel",
-                    },
-                );
-                if (!confirmImport) canProceed = false;
-                else {
-                    clearTranscriptState();
-                    if (transcriptionsViewRef?.exitEditModeIfActive)
-                        transcriptionsViewRef.exitEditModeIfActive();
+                if (transcriptionsViewRef) {
+                    await transcriptionsViewRef.handleSaveTranscript();
                 }
+                clearTranscriptState();
             }
         }
         if (!canProceed) {

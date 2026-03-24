@@ -556,17 +556,6 @@
     {:else}
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
-                <button on:click="{handleEditSaveClick}"
-                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white flex items-center justify-center'
-                        title="{editEnabled ? `Save & Exit Edit mode (${modKeyName}+E)` : `Enable Editing (${modKeyName}+E)`}"
-                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        style="padding-left:0px;">
-                    {#if editEnabled}
-                        <Save class="w-5 h-5" />
-                    {:else}
-                        <SquarePen class="w-5 h-5" />
-                    {/if}
-                </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2 flex items-center justify-center" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
                     <ChevronUp class="w-5 h-5" />
                 </button>
