@@ -1347,7 +1347,7 @@
                                 Import...
                             </DropdownItem>
                         </Dropdown>
-                    {#else}
+                    {:else}
                         <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Import" on:click={(e) => { e.stopPropagation(); handleImportClick(category.type); }}><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
                     {/if}
                 </div>
