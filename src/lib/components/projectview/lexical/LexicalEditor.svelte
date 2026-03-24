@@ -3309,7 +3309,7 @@ $: if (editor && activeLayout) {
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
-  {#if editable || $$slots.toolbar_prepend}
+  {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       <slot name="toolbar_prepend"></slot>
 

@@ -695,6 +695,13 @@
         {/if}
         {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile}
         <button
+            on:click="{() => openLayoutSettingsModal()}"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            title="Change Transcript View Layout"
+        >
+            <LayoutDashboard class="w-4 h-4" />
+        </button>
+        <button
             on:click={() => $isMediaTranscriptEditMode = !$isMediaTranscriptEditMode}
             class="p-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 {$isMediaTranscriptEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}"
             title={$isMediaTranscriptEditMode ? "Edit Mode (Click to enter Read Mode)" : "Read Mode (Click to enter Edit Mode)"}
@@ -704,13 +711,6 @@
             {:else}
                 <PencilOff class="w-4 h-4" />
             {/if}
-        </button>
-        <button
-            on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-            title="Change Transcript View Layout"
-        >
-            <LayoutDashboard class="w-4 h-4" />
         </button>
         {/if}
         <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
