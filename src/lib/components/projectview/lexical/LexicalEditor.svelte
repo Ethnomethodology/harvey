@@ -1150,7 +1150,8 @@
           CLICK_COMMAND,
           (payload) => {
             const event = payload;
-            if (event.button !== 0 || !editor || !editor.isEditable()) return false;
+            if (event.button !== 0 || !editor) return false;
+            if (!editor.isEditable() && !allowReadModeHighlights) return false;
 
             editor.update(() => {
                 const selection = _getSelection();

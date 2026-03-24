@@ -24,6 +24,8 @@
         replaceTranscriptText,
         replaceAllTranscriptText
     } from '$lib/services/projectService.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+
 
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -121,7 +123,8 @@
     let currentEditSegmentStart = 0;
     let currentEditSegmentEnd = 0;
 
-    let panelEditModeActive = false;
+    $: panelEditModeActive = $isLexicalEditMode;
+
     let wasPlayingBeforeEdit = false;
 
     // State for UnsavedChangesModal
@@ -280,10 +283,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     return; // Keep editing
                  }
             }
-            panelEditModeActive = false; // Always exit edit mode after attempting save or discarding
+            isLexicalEditMode.set(false); // Always exit edit mode after attempting save or discarding
+
         } else { // If not editing, enter edit mode
-            panelEditModeActive = true;
+            isLexicalEditMode.set(true);
             await tick();
+
             editableTranscriptRef?.focusEditor?.();
         }
     }

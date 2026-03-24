@@ -10,6 +10,9 @@
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+	import { Pencil, PencilOff } from '@lucide/svelte';
+
 
 	// --- Service Imports ---
 	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
@@ -470,6 +473,26 @@
                 <Monitor class="w-4 h-4" />
             {/if}
 		 </button>
+
+		 <!-- Read/Edit Mode Toggle -->
+		 <div class="px-2 border-l border-gray-300 dark:border-gray-700 h-6 flex items-center">
+			<Button
+				id="read-edit-toggle-transcription"
+				size="xs"
+				color="alternative"
+				class="space-x-1.5 px-2 !py-1 flex items-center shadow-none border-none hover:bg-gray-200 dark:hover:bg-gray-800"
+				on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+				title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+			>
+				{#if $isLexicalEditMode}
+					<PencilOff class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+					<span class="text-blue-600 dark:text-blue-400 font-medium">Edit Mode</span>
+				{:else}
+					<Pencil class="w-3.5 h-3.5 text-gray-500" />
+					<span class="text-gray-500 font-medium">Read Mode</span>
+				{/if}
+			</Button>
+		</div>
 	</div>
 </div>
 
