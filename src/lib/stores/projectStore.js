@@ -1195,6 +1195,8 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
                 initialMediaNoteTranscriptJson: savedJsonContent,
                 currentMediaNoteTranscriptJson: savedJsonContent,
                 isMediaNoteTranscriptDirty: false,
+                isDocumentDirty: false, // Ensure both dirty flags are cleared
+                isDocumentMetadataDirty: false, // Metadata (highlights) are also saved in the same call
                 mediaNoteTranscriptError: null,
                 statusMessage: `Data for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
             };

@@ -166,7 +166,7 @@
                 }
             });
             const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
-            if (isPrimary) setDocumentHighlights(highlights);
+            if (isPrimary) setDocumentHighlights(highlights, false);
             else localCurrentHighlights = highlights;
         } catch (e) {
             console.error("[MediaTranscriptEditorSubPanel] Error loading highlights:", e);

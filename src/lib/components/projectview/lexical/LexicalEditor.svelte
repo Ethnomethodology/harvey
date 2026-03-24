@@ -2799,18 +2799,18 @@ $: if ($project.requestedHighlightId && isReady && areHighlightsReady && areNode
 function handleDocumentHighlightsChange(highlights) {
     if (!editor || !areHighlightsReady || !areNodesReady) return;
 
-    const currentHighlightsIds = new Set(highlights.map(h => h.id));
-    let hasDeletions = false;
+    const currentHighlights = highlights || [];
+    const currentHighlightsIds = new Set(currentHighlights.map(h => h.id));
+    
+    // 1. Handle Deletions: Find nodes with IDs not in currentHighlightsIds and clear them
     let deletedIds = new Set();
-
     for (const id of previousDocumentHighlightsIds) {
         if (!currentHighlightsIds.has(id)) {
-            hasDeletions = true;
             deletedIds.add(id);
         }
     }
 
-    if (hasDeletions) {
+    if (deletedIds.size > 0) {
         editor.update(() => {
             const root = _getRoot();
             const nodesToVisit = [root];
@@ -2833,7 +2833,52 @@ function handleDocumentHighlightsChange(highlights) {
         });
     }
 
-    // Update our reference
+    // 2. Handle Additions/Updates: Ensure all highlights in the array are applied
+    editor.update(() => {
+        const root = _getRoot();
+        const existingNodeMap = new Map(); // id -> nodeKey
+        
+        // First pass: scan for existing highlight IDs in the editor
+        const nodesToVisit = [root];
+        while (nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            if (_isExtendedTextNode(currentNode)) {
+                const id = currentNode.getHighlightId();
+                if (id) {
+                    existingNodeMap.set(id, currentNode.getKey());
+                }
+            }
+            if (currentNode.getChildren) {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
+        }
+
+        // Second pass: apply missing or updated highlights
+        for (const highlight of currentHighlights) {
+            let node = null;
+            if (existingNodeMap.has(highlight.id)) {
+                node = _getNodeByKey(existingNodeMap.get(highlight.id));
+            } else if (highlight.nodeKey) {
+                // Try applying by nodeKey if not found by ID (for newly created highlights)
+                node = _getNodeByKey(highlight.nodeKey);
+            }
+
+            if (_isExtendedTextNode(node)) {
+                // Check if we need to update style or ID
+                const currentStyle = node.getStyle() || '';
+                const targetStyle = `background-color: ${highlight.color}`;
+                if (node.getHighlightId() !== highlight.id || !currentStyle.includes(targetStyle)) {
+                    node.setStyle(targetStyle);
+                    node.setHighlightId(highlight.id);
+                }
+            }
+        }
+    });
+
+    // Update our reference tracker
     previousDocumentHighlightsIds = currentHighlightsIds;
 }
 
