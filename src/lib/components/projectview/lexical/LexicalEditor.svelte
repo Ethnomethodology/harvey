@@ -848,7 +848,7 @@
   let isHighlightDropdownOpen = false;
   let highlightDropdownRef;
   function toggleHighlightDropdown() {
-    if (!editable) return;
+    if (!editable && !allowReadModeHighlights) return;
     const nextState = !isHighlightDropdownOpen;
     closeAllDropdowns();
     isHighlightDropdownOpen = nextState;
