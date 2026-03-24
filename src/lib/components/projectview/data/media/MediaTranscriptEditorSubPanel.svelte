@@ -18,6 +18,7 @@
     import { saveDocumentContent } from '$lib/services/projectService.js';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { isMediaTranscriptEditMode } from '$lib/stores/mediaEditorStore.js';
 
     export let mediaPath = null;
     export let transcriptPath = null;
@@ -299,7 +300,8 @@
             <LexicalEditor
                 bind:this={lexicalEditorRef}
                 initialJson={currentTranscriptJson || defaultEmptyJson}
-                editable={true}
+                editable={$isMediaTranscriptEditMode}
+                allowReadModeHighlights={true}
                 enableSegmentPlayback={enableSegmentPlayback}
                 enableTableCellResize={false}
                 placeholder="Enter data for this transcript..."

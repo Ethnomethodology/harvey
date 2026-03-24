@@ -108,6 +108,7 @@
   } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
+  export let allowReadModeHighlights = false;
   export let placeholder = 'Enter text...';
   export let activeLayout = 'Layout1'; // New prop
   export let toolbarConfig = {
@@ -1945,7 +1946,7 @@
   }
 
   function applyHighlightColor(colorToApply) {
-    if (!editor || !editable) return;
+    if (!editor || (!editable && !allowReadModeHighlights)) return;
     editor.update(() => {
         const selection = _getSelection();
         if (_isTableSelection(selection)) {
@@ -3576,7 +3577,7 @@ $: if (editor && activeLayout) {
       {/if}
       {#if toolbarConfig.highlight}
         <div class="relative" bind:this={highlightDropdownRef}>
-          <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={!editable} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
+          <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={!editable && !allowReadModeHighlights} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
             <Highlighter size={14} />
             <ChevronDown size={12} class="ml-1" />
           </button>
