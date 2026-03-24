@@ -643,6 +643,10 @@
                 <span>Export</span>
             </Button>
         {/if}
+
+        {#if $activeMediaFile || isLexicalDocument || isTable || isImage}
+            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+        {/if}
         {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <button
                 on:click={() => handleSplitToggle('horizontal')}
@@ -698,17 +702,26 @@
                 <LayoutDashboard class="w-4 h-4" />
             </button>
         {/if}
+
+        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
+            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+        {/if}
         <button
-            on:click={() => $isLexicalEditMode = !$isLexicalEditMode}
-            class="p-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}"
-            title={$isLexicalEditMode ? "Edit Mode (Click to enter Read Mode)" : "Read Mode (Click to enter Edit Mode)"}
+            id="read-edit-toggle-data"
+            on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+            class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+            title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
         >
             {#if $isLexicalEditMode}
-                <Pencil class="w-4 h-4" />
+                <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
             {:else}
-                <PencilOff class="w-4 h-4" />
+                <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
             {/if}
         </button>
+
+        <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Sun class="w-4 h-4" />

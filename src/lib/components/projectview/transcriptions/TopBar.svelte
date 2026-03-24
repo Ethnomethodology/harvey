@@ -432,6 +432,8 @@
 		   <Share class="w-3.5 h-3.5" />
 		   <span>Export</span>
 		</Button>
+		
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
 
 
 		<!-- Dual Mode Toggle Button -->
@@ -463,6 +465,26 @@
 			</div>
 		</button>
 
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+
+		 <!-- Read/Edit Mode Toggle -->
+		<button
+			id="read-edit-toggle-transcription"
+			on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+			class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+			title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+		>
+			{#if $isLexicalEditMode}
+				<Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+				<span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+			{:else}
+				<PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+				<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+			{/if}
+		</button>
+
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+
 		<!-- Theme Toggle Button -->
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
@@ -474,25 +496,6 @@
             {/if}
 		 </button>
 
-		 <!-- Read/Edit Mode Toggle -->
-		 <div class="px-2 border-l border-gray-300 dark:border-gray-700 h-6 flex items-center">
-			<Button
-				id="read-edit-toggle-transcription"
-				size="xs"
-				color="alternative"
-				class="space-x-1.5 px-2 !py-1 flex items-center shadow-none border-none hover:bg-gray-200 dark:hover:bg-gray-800"
-				on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
-				title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
-			>
-				{#if $isLexicalEditMode}
-					<PencilOff class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-					<span class="text-blue-600 dark:text-blue-400 font-medium">Edit Mode</span>
-				{:else}
-					<Pencil class="w-3.5 h-3.5 text-gray-500" />
-					<span class="text-gray-500 font-medium">Read Mode</span>
-				{/if}
-			</Button>
-		</div>
 	</div>
 </div>
 
