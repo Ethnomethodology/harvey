@@ -10,7 +10,9 @@ Master these platform-aware shortcuts to significantly speed up your workflow.
 | Shortcut | Action |
 | :--- | :--- |
 | `Ctrl/Cmd + E` | Toggle Edit Mode |
-| `Ctrl/Cmd + S` | Save Transcript |
-| `F8` | Play / Pause Media |
-| `F7 / F9` | Rewind / Forward 5s |
-| `Ctrl/Cmd + ↑ / ↓` | Previous / Next Segment |
+| `Shift + Space` | Play / Pause |
+| `Ctrl/Cmd + Shift + ← / →` | Rewind / Forward 10s |
+| `Ctrl/Cmd + Opt + ↑ / ↓` | Previous / Next Segment |
+| `Ctrl/Cmd + Shift + Enter` | Insert New Segment |
+| `Ctrl/Cmd + Shift + J / K` | Change Speaker |
+| `Ctrl/Cmd + Shift + , / .` | Speed Down / Up |

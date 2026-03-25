@@ -176,6 +176,19 @@
             await tick();
         }
 
+        if (detail && detail.action) {
+            if (mediaPlayerRef) {
+                switch (detail.action) {
+                    case 'toggle-play': mediaPlayerRef.handleTogglePlay(); break;
+                    case 'rewind': mediaPlayerRef.rewind10s(); break;
+                    case 'forward': mediaPlayerRef.forward10s(); break;
+                    case 'speed-up': mediaPlayerRef.changeSpeed(1); break;
+                    case 'speed-down': mediaPlayerRef.changeSpeed(-1); break;
+                }
+            }
+            return;
+        }
+
         if (detail && typeof detail.time === 'number') {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === 'number') {
@@ -186,6 +199,17 @@
             }
         } else {
             console.warn('[TranscriptionsView] Unexpected navigation event detail:', detail);
+        }
+    }
+
+    function handleGlobalKeydown(event) {
+        const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
+        if (modKey && event.key.toLowerCase() === 'e') {
+            // Check if user is typing in some other input outside transcriptional panels if needed
+            // For now, E is safe to toggle
+            event.preventDefault();
+            handleToggleEditMode();
         }
     }
 
@@ -498,6 +522,8 @@
         }
     }
 </script>
+
+<svelte:window on:keydown={handleGlobalKeydown} />
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">

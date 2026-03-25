@@ -197,6 +197,33 @@
 		if (videoElement) videoElement.playbackRate = rate;
 		showPlaybackSpeedMenu = false;
 	}
+
+    export function changeSpeed(delta) {
+        // Find current rate from video element if possible, fallback to state
+        const currentRate = videoElement ? videoElement.playbackRate : selectedPlaybackRate;
+        
+        // Find best match in our defined rates
+        let currentIndex = playbackRates.indexOf(currentRate);
+        
+        let nextIndex;
+        if (currentIndex === -1) {
+            // Find the closest rate in the list
+            if (delta > 0) {
+                nextIndex = playbackRates.findIndex(r => r > currentRate);
+                if (nextIndex === -1) nextIndex = playbackRates.length - 1;
+            } else {
+                nextIndex = playbackRates.findLastIndex(r => r < currentRate);
+                if (nextIndex === -1) nextIndex = 0;
+            }
+        } else {
+            nextIndex = currentIndex + delta;
+        }
+
+        if (nextIndex >= 0 && nextIndex < playbackRates.length) {
+            console.log(`[MediaPlayer] Changing speed from ${currentRate} to ${playbackRates[nextIndex]}`);
+            selectPlaybackRate(playbackRates[nextIndex]);
+        }
+    }
 	// --- Volume Control State ---
 	let currentVolume = 1;
 	let isMuted = false;
@@ -497,12 +524,12 @@
 		}
 	}
 
-	function rewind10s() {
+	export function rewind10s() {
 		if (!videoElement || isLoadingMedia) return;
 		const newTime = Math.max(0, videoElement.currentTime - 10);
 		seekTo(newTime);
 	}
-	function forward10s() {
+	export function forward10s() {
 		if (!videoElement || isLoadingMedia || !localDuration) return;
 		const newTime = Math.min(localDuration, videoElement.currentTime + 10);
 		seekTo(newTime);
@@ -524,15 +551,16 @@
 				unlistenShortcutFn = await listen('shortcut-event', (event) => {
 					// console.log('[MediaPlayer] Tauri "shortcut-event" received:', event); // Removed this line
 					if (event.payload === 'rewind') {
-						if (typeof rewind10s === 'function') rewind10s();
-						else console.error('[MediaPlayer] rewind10s function not found!');
+						rewind10s();
 					} else if (event.payload === 'play-pause') {
-						if (typeof handleTogglePlay === 'function') handleTogglePlay();
-						else console.error('[MediaPlayer] handleTogglePlay function not found!');
+						handleTogglePlay();
 					} else if (event.payload === 'forward') {
-						if (typeof forward10s === 'function') forward10s();
-						else console.error('[MediaPlayer] forward10s function not found!');
-					}
+						forward10s();
+					} else if (event.payload === 'speed-up') {
+                        changeSpeed(1);
+                    } else if (event.payload === 'speed-down') {
+                        changeSpeed(-1);
+                    }
 				});
 				console.log('[MediaPlayer] Tauri event listener for "shortcut-event" set up.');
 			} catch (err) {

@@ -26,24 +26,59 @@
         const isEditingText = tgt instanceof HTMLElement && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable);
         const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const modKey = isMac ? event.metaKey : event.ctrlKey;
+        const shiftKey = event.shiftKey;
 
-        // --- Editing Shortcuts ---
+        // --- Toggle Edit Mode (Global) ---
+        if (modKey && event.key.toLowerCase() === 'e') {
+            event.preventDefault();
+            dispatch('toggleedit');
+            return;
+        }
+
+        // --- Playback Controls (Shift + Space, Cmd/Ctrl + Shift + Arrows) ---
+        if (shiftKey && event.key === ' ') {
+            event.preventDefault();
+            dispatch('navigate', { action: 'toggle-play' });
+            return;
+        }
+
+        if (modKey && shiftKey) {
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'rewind' });
+                return;
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'forward' });
+                return;
+            } else if (event.key === ',' || event.key === '<' || event.code === 'Comma') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'speed-down' });
+                return;
+            } else if (event.key === '.' || event.key === '>' || event.code === 'Period') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'speed-up' });
+                return;
+            }
+        }
+
+        // --- Editing Specific Shortcuts ---
         if (isEditingText && editEnabled && currentIndex >= 0) {
             // Cmd/Ctrl + Shift + Enter -> Insert new segment after current
-            if (modKey && event.shiftKey && event.key === 'Enter') {
+            if (modKey && shiftKey && event.key === 'Enter') {
                 event.preventDefault();
                 commitCurrentSegmentEdits();
                 dispatch('insertnewsegment', currentIndex);
                 return;
             }
 
-            // Alt + Up/Down (without Cmd/Ctrl) -> Cycle Speaker
-            if (!modKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+            // Cmd/Ctrl + Shift + J/K -> Cycle Speaker (More ergonomic than Alt + Arrows)
+            if (modKey && shiftKey && (event.key.toLowerCase() === 'j' || event.key.toLowerCase() === 'k')) {
                 event.preventDefault();
                 const options = speakerOptions.map(o => o.value);
                 const currentSpeakerIndex = options.indexOf(localSpeaker);
                 if (currentSpeakerIndex !== -1) {
-                    let newIndex = currentSpeakerIndex + (event.key === 'ArrowDown' ? 1 : -1);
+                    let newIndex = currentSpeakerIndex + (event.key.toLowerCase() === 'k' ? 1 : -1);
                     if (newIndex < 0) newIndex = options.length - 1;
                     if (newIndex >= options.length) newIndex = 0;
                     localSpeaker = options[newIndex];
@@ -52,7 +87,10 @@
                 return;
             }
 
-            // Cmd/Ctrl + Alt + Arrow navigation
+            // Legacy Alt + Up/Down support (Optional, but let's encourage the new ones)
+            // if (!modKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) { ... }
+
+            // Cmd/Ctrl + Alt + Arrow navigation (Existing)
             if (modKey && event.altKey) {
                 if (event.key === 'ArrowUp') {
                     event.preventDefault();
@@ -68,11 +106,12 @@
             }
         }
 
-        // --- Global / Non-editing Shortcuts ---
-        if (isEditingText) {
-            return; // Allow native text input navigation to work normally
+        // Allow native text input navigation if editing
+        if (isEditingText && !modKey && !shiftKey) {
+            return;
         }
 
+        // --- Global Navigation ---
         // Cmd/Ctrl + Alt + Arrow navigation
         if (modKey && event.altKey) {
             if (event.key === 'ArrowUp') {
