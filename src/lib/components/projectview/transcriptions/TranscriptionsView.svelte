@@ -275,8 +275,6 @@
     }
 
     export async function handleSaveTranscript(isAutoSave = false) {
-        console.log(`[TranscriptionsView] handleSaveTranscript called (isAutoSave: ${isAutoSave}).`);
-        
         // CRITICAL: Commit any pending edits in the editable transcript before saving
         if (panelEditModeActive && editableTranscriptRef) {
             editableTranscriptRef.commitCurrentSegmentEdits();
@@ -284,7 +282,6 @@
         }
 
         if (!get(transcriptStore).transcriptDirty) {
-            console.log("[TranscriptionsView] handleSaveTranscript: Transcript not dirty, skipping save.");
             return;
         }
 
@@ -292,7 +289,6 @@
         
         try {
             project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' })); // Global loading state
-            console.log("[TranscriptionsView] handleSaveTranscript: Calling saveTranscriptData.");
             await saveTranscriptData(); // This service will use get(transcriptStore) for currentTranscriptPath and segments
             project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' })); // Global status
         } catch (error) {

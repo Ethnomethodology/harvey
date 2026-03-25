@@ -567,7 +567,6 @@ export function updateSecondarySegment(index, updatedSegmentData) {
 }
 
 export function updateSegment(index, updatedSegmentData, silent = false) {
-    console.log("[TranscriptStore] updateSegment called for index:", index, "data:", updatedSegmentData);
     const currentSegments = get(transcriptStore).segments;
     if (index < 0 || index >= currentSegments.length) {
         console.warn('[TranscriptStore] updateSegment invalid index:', index);
@@ -609,7 +608,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
     }
 
     if (changed) {
-        console.log("[TranscriptStore] updateSegment: Changes detected, pushing to undo stack and marking dirty.");
         pushToUndoStack();
         transcriptStore.update((ts) => {
             const newSegments = [...ts.segments];
@@ -621,8 +619,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                 transcriptDirty: true,
             };
         });
-    } else {
-        console.log("[TranscriptStore] updateSegment: No changes detected.");
     }
 }
 
