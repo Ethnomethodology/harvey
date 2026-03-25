@@ -41,9 +41,7 @@
         const normalizedBaseDirectory = normalizePath($project.baseDirectory);
         const mediaPathPrefix = normalizePath(`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`);
         const seen = new Set();
-        console.log('[LeftPanel] Filtering projectFileTree...');
-        console.log('[LeftPanel] normalizedBaseDirectory:', normalizedBaseDirectory);
-        console.log('[LeftPanel] mediaPathPrefix:', mediaPathPrefix);
+
         const filtered = projectFileTree.filter(node => {
             const normalizedNodePath = normalizePath(node.path);
             const key = normalizedNodePath || normalizePath(node.relativePath);
@@ -57,21 +55,9 @@
             const isWithinMediaPath = normalizedNodePath && normalizedNodePath.startsWith(mediaPathPrefix);
             const isRootMediaDirectory = normalizedNodePath === mediaPathPrefix;
 
-            console.log('---');
-            console.log('[LeftPanel] Node:', node.name, '(', node.file_type, ')');
-            console.log('[LeftPanel]   node.path:', node.path);
-            console.log('[LeftPanel]   normalizedNodePath:', normalizedNodePath);
-            console.log('[LeftPanel]   mediaPathPrefix:', mediaPathPrefix);
-            console.log('[LeftPanel]   normalizedNodePath.startsWith(mediaPathPrefix):', normalizedNodePath.startsWith(mediaPathPrefix));
-            console.log('[LeftPanel]   isMediaFileOrDirectory:', isMediaFileOrDirectory);
-            console.log('[LeftPanel]   isWithinMediaPath:', isWithinMediaPath);
-            console.log('[LeftPanel]   isRootMediaDirectory:', isRootMediaDirectory);
-            console.log('[LeftPanel]   Result:', (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory)));
-            console.log('---');
-
             return (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory));
         });
-        console.log('[LeftPanel] uniqueProjectFileTree (filtered):', filtered);
+
         return filtered;
     })();
 
