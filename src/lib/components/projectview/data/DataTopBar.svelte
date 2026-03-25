@@ -109,9 +109,6 @@
     }
 
     $: showTranslateDocumentModal = $transcriptStore.showTranslateModal;
-    $: isCurrentMediaTranslating = $transcriptStore.isTranslating && $transcriptStore.translationSourcePath === $project.activeTranscriptPathInDataTab;
-    $: currentDocPath = isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath;
-    $: isCurrentDocTranslating = $transcriptStore.isTranslating && $transcriptStore.translationSourcePath === currentDocPath;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -569,10 +566,9 @@
 
         <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
             on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
-            title={isCurrentMediaTranslating ? "View Translation Status" : $transcriptStore.isTranslating ? "Translation in Progress (Another File)" : "Translate Transcript"}
-            disabled={$transcriptStore.isTranslating && !isCurrentMediaTranslating}
+            title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
         >
-            {#if isCurrentMediaTranslating}
+            {#if $transcriptStore.isTranslating}
                 <Languages class="w-3.5 h-3.5 animate-spin" />
                 <span>Translating...</span>
             {:else}
@@ -590,10 +586,9 @@
         {#if isLexicalDocument}
             <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
                 on:click={() => toggleTranslateModal(true)} 
-                title={isCurrentDocTranslating ? "View Translation Status" : $transcriptStore.isTranslating ? "Translation in Progress (Another File)" : "Translate Document"}
-                disabled={$transcriptStore.isTranslating && !isCurrentDocTranslating}
+                title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Document"}
             >
-                {#if isCurrentDocTranslating}
+                {#if $transcriptStore.isTranslating}
                     <Languages class="w-3.5 h-3.5 animate-spin" />
                     <span>Translating...</span>
                 {:else}
