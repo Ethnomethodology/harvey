@@ -1473,9 +1473,12 @@ listen('custom_transcription_job_completed', async (event) => {
     
     const currentStore = get(transcriptStore);
 
+
+
     if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
         const wasModalVisibleAtEventTime = currentStore.showTranscribeModal;
         const wasJobRunInBackground = currentStore.ranInBackground;
+
         const shouldShowToastNotification = wasJobRunInBackground || !wasModalVisibleAtEventTime;
 
         let finalProgressMessage = '';
@@ -1585,9 +1588,10 @@ listen('custom_transcription_job_completed', async (event) => {
                     updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
                     if (updatedMediaFile) {
-
                         const { emit } = await import('@tauri-apps/api/event');
-                        emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
+                        if (!wasJobRunInBackground) {
+                            emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
+                        }
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after refresh for path: ${mediaPath}`);
                     }
