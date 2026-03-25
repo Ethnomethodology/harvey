@@ -1,13 +1,13 @@
 <!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
     import { Button, Select, Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List, ChevronDown } from '@lucide/svelte';
+    import { MessageSquareText, Share, Languages, ImageDown, Mic, LayoutDashboard, SquareSplitHorizontal, SquareSplitVertical, Sun, Moon, Monitor, LayoutGrid, List, ChevronDown, Pencil, PencilOff } from '@lucide/svelte';
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
-    import { project, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
-    import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
+    import { project, switchTranscriptInDataTab, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
+    import { isMediaEditorOpen, isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
     import { transcriptStore, toggleTranslateModal } from "$lib/stores/transcriptStore.js";
@@ -51,6 +51,21 @@
     let isTable = false;
     let isGroup = false;
     let pathForExportModal = '';
+
+    $: currentTranscriptPathForSplit = isImportedTranscript ? $project.currentImportedTranscriptPath : $project.activeTranscriptPathInDataTab;
+    $: splitState = currentTranscriptPathForSplit && $project.importedTranscriptSplits ? $project.importedTranscriptSplits[currentTranscriptPathForSplit] : null;
+    $: isHorizontalSplitActive = splitState?.orientation === 'horizontal';
+    $: isVerticalSplitActive = splitState?.orientation === 'vertical';
+
+    function handleSplitToggle(orientation) {
+        if (orientation === 'horizontal' && isHorizontalSplitActive) {
+            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+        } else if (orientation === 'vertical' && isVerticalSplitActive) {
+            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+        } else {
+            project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: orientation }));
+        }
+    }
 
     $: {
         const p = $project;
@@ -543,9 +558,6 @@
         </div>
 
         <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
-        {#if $activeMediaFile || $project.activeDocumentEditorRef || isLexicalDocument}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
-        {/if}
         {#if $activeMediaFile}
         <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
             <MessageSquareText class="w-3.5 h-3.5" />
@@ -631,15 +643,26 @@
                 <span>Export</span>
             </Button>
         {/if}
-        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
-            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'horizontal' }))} title="Split Transcript (Horizontal)">
-                <SquareSplitHorizontal class="w-3.5 h-3.5" />
-            </Button>
 
-            <Button size="xs" color="alternative" class="px-2 !py-1" on:click={() => project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: 'vertical' }))} title="Split Transcript (Vertical)">
-                <SquareSplitVertical class="w-3.5 h-3.5" />
-            </Button>
+        {#if $activeMediaFile || isLexicalDocument || isTable || isImage}
+            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+        {/if}
+        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
+            <button
+                on:click={() => handleSplitToggle('horizontal')}
+                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                title="Split Transcript (Horizontal)"
+            >
+                <SquareSplitHorizontal class="w-4 h-4" />
+            </button>
+
+            <button
+                on:click={() => handleSplitToggle('vertical')}
+                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                title="Split Transcript (Vertical)"
+            >
+                <SquareSplitVertical class="w-4 h-4" />
+            </button>
         {/if}
 
   
@@ -670,16 +693,35 @@
                 </button>
             </div>
         {/if}
-        {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile}
-        <button
-            on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-            title="Change Transcript View Layout"
-        >
-            <LayoutDashboard class="w-4 h-4" />
-        </button>
+        {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile || isLexicalDocument}
+            <button
+                on:click="{() => openLayoutSettingsModal()}"
+                class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                title="Change Transcript View Layout"
+            >
+                <LayoutDashboard class="w-4 h-4" />
+            </button>
         {/if}
-        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
+
+        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
+            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+        {/if}
+        <button
+            id="read-edit-toggle-data"
+            on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+            class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+            title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+        >
+            {#if $isLexicalEditMode}
+                <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+            {:else}
+                <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+            {/if}
+        </button>
+
+        <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Sun class="w-4 h-4" />

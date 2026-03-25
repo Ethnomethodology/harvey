@@ -11,6 +11,7 @@
         redoTranscriptChange,
         insertTranscriptSegment,
         splitTranscriptSegment,
+        mergeTranscriptSegments,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
         deactivateDualMode,
@@ -24,6 +25,8 @@
         replaceTranscriptText,
         replaceAllTranscriptText
     } from '$lib/services/projectService.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+
 
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -121,29 +124,18 @@
     let currentEditSegmentStart = 0;
     let currentEditSegmentEnd = 0;
 
-    let panelEditModeActive = false;
-    let wasPlayingBeforeEdit = false;
+    $: panelEditModeActive = $isLexicalEditMode;
 
-    // State for UnsavedChangesModal
-    let showUnsavedChangesModal = false;
-    let pendingLoadItem = null; // Stores the item that was requested to be loaded
-    let pendingLoadItemName = ''; // Name for the modal
-    let pendingLoadItemType = ''; // Type for the modal (e.g., 'media', 'transcript')
+    let wasPlayingBeforeEdit = false;
 
     // State for ManualSettingsModal
     let isManualSettingsModalOpen = false;
 
     async function handlePreviousRequest() {
-        if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript();
-        }
         editableTranscriptRef?.previous();
     }
 
     async function handleNextRequest() {
-        if (get(transcriptStore).transcriptDirty) {
-            await handleSaveTranscript();
-        }
         editableTranscriptRef?.next();
     }
 
@@ -157,15 +149,6 @@
                 await tick();
             }
 
-            if (get(transcriptStore).transcriptDirty) {
-                try {
-                    await handleSaveTranscript();
-                } catch (err) {
-                    console.error("Autosave failed on segment click:", err);
-                    message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
-                }
-            }
-            
             // Sync store index
             updatePlayerCurrentSegmentIndex(index);
             
@@ -193,14 +176,19 @@
             await tick();
         }
 
-        if (get(transcriptStore).transcriptDirty) {
-            try {
-                await handleSaveTranscript();
-            } catch (err) {
-                console.error("Autosave failed on panel navigation:", err);
-                message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
+        if (detail && detail.action) {
+            if (mediaPlayerRef) {
+                switch (detail.action) {
+                    case 'toggle-play': mediaPlayerRef.handleTogglePlay(); break;
+                    case 'rewind': mediaPlayerRef.rewind10s(); break;
+                    case 'forward': mediaPlayerRef.forward10s(); break;
+                    case 'speed-up': mediaPlayerRef.changeSpeed(1); break;
+                    case 'speed-down': mediaPlayerRef.changeSpeed(-1); break;
+                }
             }
+            return;
         }
+
         if (detail && typeof detail.time === 'number') {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === 'number') {
@@ -211,6 +199,17 @@
             }
         } else {
             console.warn('[TranscriptionsView] Unexpected navigation event detail:', detail);
+        }
+    }
+
+    function handleGlobalKeydown(event) {
+        const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
+        if (modKey && event.key.toLowerCase() === 'e') {
+            // Check if user is typing in some other input outside transcriptional panels if needed
+            // For now, E is safe to toggle
+            event.preventDefault();
+            handleToggleEditMode();
         }
     }
 
@@ -254,35 +253,13 @@
 
     export async function handleToggleEditMode() {
         console.log("[TranscriptionsView] handleToggleEditMode called. Current panelEditModeActive:", panelEditModeActive);
-        const wasEditing = panelEditModeActive;
-
-        // If currently editing, commit any pending edits from EditableTranscript before proceeding
-        if (wasEditing && editableTranscriptRef) {
-            console.log("[TranscriptionsView] handleToggleEditMode: Committing current segment edits.");
-            editableTranscriptRef.commitCurrentSegmentEdits();
-            await tick(); // Ensure Svelte has processed the update and transcriptStore is potentially dirty
-            console.log("[TranscriptionsView] handleToggleEditMode: After commit, transcriptDirty:", get(transcriptStore).transcriptDirty);
-        }
-
-        if (wasEditing) { // If was editing, always attempt to save and then exit edit mode
-            try {
-                console.log("[TranscriptionsView] handleToggleEditMode: Calling handleSaveTranscript.");
-                await handleSaveTranscript(); // This will call saveTranscriptData()
-            } catch (error) {
-                 const discard = await confirm( `Failed to save changes: ${error.message}
-
-Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warning", okLabel: "Discard & Exit", cancelLabel: "Keep Editing" } );
-                 if (discard) {
-                    // transcriptDirty, transcriptUndoStack, transcriptRedoStack are in transcriptStore now
-                    transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
-                    editableTranscriptRef?.forceReloadFromStore?.();
-                 } else {
-                    return; // Keep editing
-                 }
-            }
-            panelEditModeActive = false; // Always exit edit mode after attempting save or discarding
-        } else { // If not editing, enter edit mode
-            panelEditModeActive = true;
+        
+        if (panelEditModeActive) {
+            // Explicitly exiting edit mode
+            isLexicalEditMode.set(false);
+        } else {
+            // Explicitly entering edit mode
+            isLexicalEditMode.set(true);
             await tick();
             editableTranscriptRef?.focusEditor?.();
         }
@@ -292,8 +269,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
      * Exits edit mode if it's currently active.
      */
     export async function exitEditModeIfActive() {
-        if (panelEditModeActive) {
-            await handleToggleEditMode();
+        if (panelEditModeActive || get(transcriptStore).transcriptDirty) {
+            await handleSaveTranscript();
         }
     }
 
@@ -321,13 +298,21 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
-    export async function handleSaveTranscript() {
-        console.log("[TranscriptionsView] handleSaveTranscript called. Current transcriptDirty:", get(transcriptStore).transcriptDirty);
+    export async function handleSaveTranscript(isAutoSave = false) {
+        // CRITICAL: Commit any pending edits in the editable transcript before saving
+        if (panelEditModeActive && editableTranscriptRef) {
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick(); // Allow store to update from the commit
+        }
+
+        if (!get(transcriptStore).transcriptDirty) {
+            return;
+        }
+
         const tsStore = get(transcriptStore);
         
         try {
             project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' })); // Global loading state
-            console.log("[TranscriptionsView] handleSaveTranscript: Calling saveTranscriptData.");
             await saveTranscriptData(); // This service will use get(transcriptStore) for currentTranscriptPath and segments
             project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' })); // Global status
         } catch (error) {
@@ -344,11 +329,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     async function handleConvertToDocumentEvent() {
         if (get(transcriptStore).transcriptDirty) {
-			const confirmConvert = await confirm( "You have unsaved transcript changes. Save them before converting?", { title: "Unsaved Changes", type: "warning", okLabel: "Save & Convert", cancelLabel: "Cancel" });
-			if (!confirmConvert) return;
-			            try { await handleSaveTranscript(); }
-            catch (e) { await message(`Save failed: ${e.message || e}. Cannot convert.`, {type:'error', title: 'Save Error'}); return; }
-		}
+            await handleSaveTranscript();
+        }
+        showConfirmConversionModal = true;
+    }
+
+    async function confirmConvertToDocument() {
         try {
             project.update(p => ({...p, statusMessage: "Converting to document..."}));
             const newDocPath = await convertAndSaveTranscriptAsDoc();
@@ -358,16 +344,32 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         } catch (error) {
             await message(`Failed to convert: ${error.message || error}`, { title: 'Conversion Error', type: 'error' });
             project.update(p => ({...p, statusMessage: "Conversion failed."}));
+        } finally {
+            showConfirmConversionModal = false;
         }
     }
 
     export function handleDeleteSegmentRequest(event) { const indexToDelete = event.detail; if (typeof indexToDelete === 'number') deleteTranscriptSegment(indexToDelete); }
     export function handleSplitSegmentRequest(event) { const indexToSplit = event.detail; if (typeof indexToSplit === 'number') splitTranscriptSegment(indexToSplit); }
+    export function handleMergeSegmentRequest(event) { const indexToMerge = event.detail; if (typeof indexToMerge === 'number') mergeTranscriptSegments(indexToMerge); }
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleInsertSegmentRequest(event) {
-        const { index, startTime, endTime, speaker } = event.detail;
+        // Detail can either be a simple index (from EditableTranscript shortcut)
+        // or a full object with timestamps (from RichTextPreview manual calculation flow)
+        if (typeof event.detail === 'number') {
+            const index = event.detail;
+            if (richTextPreviewRef && typeof richTextPreviewRef.handleInsertNewSegment === 'function') {
+                richTextPreviewRef.handleInsertNewSegment(index + 1); // Pass index + 1 to insert AFTER current
+            } else {
+                console.warn("[TranscriptionsView] richTextPreviewRef.handleInsertNewSegment is not available.");
+            }
+            return;
+        }
+
+        const { index, startTime, endTime, speaker } = event.detail || {};
         if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return;
+
         const newSegment = {
             start_time: startTime,
             end_time: endTime,
@@ -437,41 +439,6 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     
 
-    // Handlers for UnsavedChangesModal
-    async function handleModalSave() {
-        showUnsavedChangesModal = false;
-        try {
-            await handleSaveTranscript();
-            if (pendingLoadItem) {
-                await loadRequestedItem(pendingLoadItem);
-            }
-        } catch (err) {
-            console.error("Save failed from modal:", err);
-            message(`Save failed: ${err.message || err}. Cannot proceed with loading new item.`, { title: "Error", type: "error" });
-        } finally {
-            pendingLoadItem = null;
-            pendingLoadItemName = '';
-            pendingLoadItemType = '';
-        }
-    }
-
-    async function handleModalDiscard() {
-        showUnsavedChangesModal = false;
-        transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] })); // Discard changes
-        if (pendingLoadItem) {
-            await loadRequestedItem(pendingLoadItem);
-        }
-        pendingLoadItem = null;
-        pendingLoadItemName = '';
-        pendingLoadItemType = '';
-    }
-
-    function handleModalCancel() {
-        showUnsavedChangesModal = false;
-        pendingLoadItem = null;
-        pendingLoadItemName = '';
-        pendingLoadItemType = '';
-    }
 
     // Helper function to find media by associated transcript path
     function findMediaByTranscriptPath(transcriptPath, projectFiles) {
@@ -510,21 +477,16 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
 
         if (get(transcriptStore).transcriptDirty) {
-            // Store the pending item and show the modal
-            pendingLoadItem = event.detail;
-            pendingLoadItemName = event.detail.name;
-            pendingLoadItemType = event.detail.file_type;
-            showUnsavedChangesModal = true;
-            return; // Stop the current load operation
+            await handleSaveTranscript(true);
         }
 
-        // If not dirty, proceed with loading
+        // Proceed with loading immediately
         await loadRequestedItem(event.detail);
     }
 
     // New helper function to encapsulate the loading logic
     async function loadRequestedItem(item) {
-        panelEditModeActive = false; // Exit edit mode
+        // DO NOT exit edit mode here, preserve current mode across loads
         const store = get(transcriptStore);
 
         if (item.file_type === 'media') {
@@ -560,6 +522,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 </script>
+
+<svelte:window on:keydown={handleGlobalKeydown} />
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
@@ -605,6 +569,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     on:toggleedit={handleToggleEditMode}
                     on:previous={handlePreviousRequest}
                     on:next={handleNextRequest}
+                    on:insertnewsegment={handleInsertSegmentRequest}
                  />
             </div>
         </div>
@@ -648,6 +613,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 on:requestopentab={(e) => dispatch('requestopentab', e.detail)}
                 on:deletetranscriptsegment={handleDeleteSegmentRequest}
                 on:splittranscriptsegment={handleSplitSegmentRequest}
+                on:mergetranscriptsegment={handleMergeSegmentRequest}
                 on:insertnewsegment={handleInsertSegmentRequest}
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
@@ -698,17 +664,6 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         </div>
     {/if}
 </div>
-
-{#if showUnsavedChangesModal}
-    <UnsavedChangesModal
-        bind:showModal={showUnsavedChangesModal}
-        itemName={pendingLoadItemName}
-        itemType={pendingLoadItemType}
-        on:save={handleModalSave}
-        on:discard={handleModalDiscard}
-        on:cancel={handleModalCancel}
-    />
-{/if}
 
 {#if isManualSettingsModalOpen}
     <ManualSettingsModal

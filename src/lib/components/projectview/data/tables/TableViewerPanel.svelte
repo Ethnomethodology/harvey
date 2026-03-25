@@ -61,7 +61,10 @@
         Badge
     } from 'flowbite-svelte';
     import { Datepicker } from 'flowbite-datepicker';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import FloatingTableHighlightToolbar from '../../tables/FloatingTableHighlightToolbar.svelte';
+
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -103,14 +106,105 @@
     let currentPrimaryField = null;
     let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
     
-    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
     let tableHasValidationErrors = false;
+    let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
+
+    let showTableModifyToolbar = false;
+    let tableModifyToolbarPosition = { top: 0, left: 0 };
+    let clickedRow = null;
+    let selectedRows = []; // Rows from a multi-cell/multi-row selection
+    let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
+    let mainPanelContainer = null;
+
+
+
+
 
     function reformatAllRows() {
         if (tabulatorInstance && tableReady) {
             tabulatorInstance.getRows().forEach(row => row.reformat());
         }
     }
+
+    function handleTableContainerClick(e) {
+        if (currentActiveViewType === 'pivot' || !mainPanelContainer || !tabulatorInstance) return;
+
+        
+        const rowEl = e.target.closest('.tabulator-row');
+        if (rowEl) {
+            try {
+                const row = tabulatorInstance.getRow(rowEl);
+                if (row) {
+                    const rowData = row.getData();
+                    const rowIndex = rowData.harvey_internal_id;
+                    const highlights = get(project).currentTableHighlights || [];
+                    
+                    // Find the highlight this row belongs to
+                    const existingHighlight = highlights.find(h => {
+                        const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
+                        return indices.includes(rowIndex);
+                    });
+
+                    if (existingHighlight) {
+                        // If it's a group, load the whole group into selectedRows
+                        if (existingHighlight.rowIndices && existingHighlight.rowIndices.length > 1) {
+                            selectedRows = existingHighlight.rowIndices.map(idx => tabulatorInstance.getRow(idx)).filter(r => r !== false);
+                            clickedRow = null;
+                        } else {
+                            // Single row highlight
+                            clickedRow = row;
+                            selectedRows = [];
+                        }
+
+                        const rect = rowEl.getBoundingClientRect();
+                        const showBelow = rect.top < 150;
+                        
+                        tableModifyToolbarPosition = {
+                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                            left: Math.max(10, rect.left + (rect.width / 2) - 60)
+                        };
+                        showTableModifyToolbar = true;
+                    }
+                }
+            } catch (err) {
+                console.error("Error in table container click handler:", err);
+            }
+        }
+    }
+
+    function handleTableMouseUp(e) {
+        if (!tabulatorInstance) return;
+        // Fallback for cases where rangeSelected doesn't fire
+        setTimeout(() => {
+            const ranges = tabulatorInstance.getRanges();
+            if (ranges && ranges.length > 0 && !showTableModifyToolbar) {
+                const range = ranges[0];
+                const rows = range.getRows();
+                if (rows && rows.length > 1) {
+                    selectedRows = rows;
+
+                    clickedRow = null;
+                    lastRangeSelectedTime = Date.now();
+                    
+                    const lastRow = rows[rows.length - 1];
+                    const lastRowEl = lastRow.getElement();
+                    if (lastRowEl) {
+                        const rect = lastRowEl.getBoundingClientRect();
+                        const showBelow = rect.top < 150;
+                        
+                        tableModifyToolbarPosition = {
+                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                            left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                        };
+                        showTableModifyToolbar = true;
+                    }
+                }
+
+            }
+        }, 100);
+    }
+
+
 
     // Reactive mapping of store highlights to Tabulator styles
     $: if ($project.currentTableHighlights) {
@@ -120,9 +214,12 @@
         
         if (Array.isArray(hls)) {
             hls.forEach(h => {
-                if (h.id?.startsWith('row-')) {
-                    const rowIndex = h.id.substring(4);
-                    newRowStyles[rowIndex] = h.color;
+                if (h.id?.startsWith('row-') || h.rowIndices) {
+                    // Handle both old single-row and new grouped-row formats
+                    const indices = h.rowIndices || [h.id.substring(4)];
+                    indices.forEach(idx => {
+                        newRowStyles[idx] = h.color;
+                    });
                 } else if (h.id?.startsWith('cell-')) {
                     // Cell IDs are in format "cell-rowIndex-colField"
                     newCellStyles[h.id] = {
@@ -141,6 +238,7 @@
         // Trigger a reformat of entries to apply new styles
         reformatAllRows();
     }
+
 
     async function toggleStyle(styleType) {
         if (!tabulatorInstance) return;
@@ -225,7 +323,20 @@
         if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
             isColorDropdownOpen = false;
         }
+        
+        // Prevent immediate closing if a range was just selected (e.g. at the end of a drag)
+        const recentlySelected = (Date.now() - lastRangeSelectedTime) < 300;
+        
+        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !recentlySelected) {
+            showTableModifyToolbar = false;
+            clickedRow = null;
+            selectedRows = [];
+        }
+
     }
+
+
+
 
     function toggleColorDropdown() {
         if (!tabulatorInstance) return;
@@ -611,6 +722,13 @@
         scrollToHighlight($project.requestedHighlightId);
     }
 
+    $: if (tableReady && $isLexicalEditMode !== undefined) {
+        // Redraw/Re-run floating layout/buttons when edit mode toggles
+        if (tabulatorInstance) {
+            addFloatingAddRowButton();
+        }
+    }
+
     async function toggleFilters() {
         if (!tabulatorInstance) return;
         areFiltersVisible = !areFiltersVisible;
@@ -763,7 +881,8 @@
     }
 
     function getColumnContextMenu(column) {
-        if (currentActiveViewType === 'pivot') {
+        const isEditMode = get(isLexicalEditMode);
+        if (currentActiveViewType === 'pivot' || !isEditMode) {
             return [
                 { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
                 { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
@@ -1204,6 +1323,9 @@
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
             
+            // Find existing highlight to preserve metadata
+            const existingHighlight = currentHighlights.find(h => h.id === cellKey);
+            
             // Remove existing highlight for this cell
             currentHighlights = currentHighlights.filter(h => h.id !== cellKey);
             
@@ -1215,50 +1337,134 @@
                     id: cellKey,
                     color: color,
                     text: text,
-                    tags: [],
-                    comments: []
+                    tags: existingHighlight ? existingHighlight.tags : [],
+                    comments: existingHighlight ? existingHighlight.comments : []
                 });
             }
         });
+
         
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
     }
 
-    async function applyHighlightToRows(color, rows) {
+    async function applyHighlightToRows(rows, color, preserveMetadata = true) {
         if (!tabulatorInstance || !rows || rows.length === 0) return;
-
+        
         let currentHighlights = get(project).currentTableHighlights || [];
-        const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
+        const orderedColumns = tabulatorInstance.getColumns();
 
-        rows.forEach(row => {
-            const rowData = row.getData();
-            const rowIndex = rowData.harvey_internal_id;
+        // 1. Identify rows to highlight
+        const newIndices = rows.map(r => r.getData().harvey_internal_id);
+        const newIndicesSet = new Set(newIndices);
 
-            // Remove existing highlight for this entry
-            currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
+        // 2. Intersection Logic (Precedence)
+        // Separate row highlights from cell highlights
+        let cellHighlights = currentHighlights.filter(h => h.id?.startsWith('cell-'));
+        let rowHighlights = currentHighlights.filter(h => h.id?.startsWith('row-') || h.rowIndices);
+        
+        let updatedRowHighlights = [];
 
-            if (color) {
-                // Construct the text in the correct order, starting with the 1-indexed entry number.
-                const rowNumber = rowIndex + 1;
-                const textParts = [rowNumber.toString()];
-                orderedColumns.forEach(column => {
-                    const value = rowData[column.getField()];
-                    textParts.push(value !== null && value !== undefined ? value : "");
-                });
-                const text = textParts.join(' | ');
-
-                const newHighlight = {
-                    id: `row-${rowIndex}`,
-                    color: color,
-                    text: text,
-                    tags: [],
-                    comments: []
-                };
-                currentHighlights.push(newHighlight);
+        rowHighlights.forEach(h => {
+            const hIndices = h.rowIndices || [parseInt(h.id.substring(4), 10)];
+            // Remove any rows that are in the new selection
+            const remainingIndices = hIndices.filter(idx => !newIndicesSet.has(idx)).sort((a, b) => a - b);
+            
+            if (remainingIndices.length > 0) {
+                // Check for continuity and split if necessary
+                let currentGroup = [remainingIndices[0]];
+                for (let i = 1; i < remainingIndices.length; i++) {
+                    if (remainingIndices[i] === remainingIndices[i-1] + 1) {
+                        currentGroup.push(remainingIndices[i]);
+                    } else {
+                        // Split point: finish current group and start a new one
+                        updatedRowHighlights.push(createGroupedHighlight(currentGroup, h.color, h.tags, h.comments));
+                        currentGroup = [remainingIndices[i]];
+                    }
+                }
+                updatedRowHighlights.push(createGroupedHighlight(currentGroup, h.color, h.tags, h.comments));
             }
         });
 
+        // 3. Add the new grouped highlight if color is provided
+        if (color) {
+            // Find existing metadata if requested
+            let existingTags = [];
+            let existingComments = [];
+            if (preserveMetadata) {
+                // If it was a group click, we look for the highlight that contained these rows.
+                // We'll use the metadata if ANY of the new indices were part of an existing highlight.
+                const sampleIdx = newIndices[0];
+                const existing = rowHighlights.find(h => {
+                    const idxs = h.rowIndices || [parseInt(h.id.substring(4), 10)];
+                    return idxs.includes(sampleIdx);
+                });
+                if (existing) {
+                    existingTags = existing.tags || [];
+                    existingComments = existing.comments || [];
+                }
+            }
+
+
+            // Generate grouped text
+            const textParts = [];
+            newIndices.sort((a,b) => a-b).forEach(idx => {
+                const rowData = tableData[idx];
+                if (rowData) {
+                    const rowNum = idx + 1;
+                    const rowTextParts = [rowNum.toString()];
+                    orderedColumns.forEach(column => {
+                        const field = column.getField();
+                        if (field) {
+                            const value = rowData[field];
+                            rowTextParts.push(value !== null && value !== undefined ? value : "");
+                        }
+                    });
+                    textParts.push(rowTextParts.join(' | '));
+                }
+            });
+            const groupedText = textParts.join('\n');
+
+            updatedRowHighlights.push({
+                id: `rows-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                color: color,
+                text: groupedText,
+                rowIndices: newIndices,
+                tags: existingTags,
+                comments: existingComments
+            });
+        }
+
+        // Helper to create grouped highlight object
+        function createGroupedHighlight(indices, hColor, hTags = [], hComments = []) {
+            const textParts = [];
+            indices.sort((a,b) => a-b).forEach(idx => {
+                const rowData = tableData[idx];
+                if (rowData) {
+                    const rowNum = idx + 1;
+                    const rowTextParts = [rowNum.toString()];
+                    orderedColumns.forEach(column => {
+                        const field = column.getField();
+                        if (field) {
+                            const value = rowData[field];
+                            rowTextParts.push(value !== null && value !== undefined ? value : "");
+                        }
+                    });
+                    textParts.push(rowTextParts.join(' | '));
+                }
+            });
+            return {
+                id: `rows-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                color: hColor,
+                text: textParts.join('\n'),
+                rowIndices: indices,
+                tags: hTags,
+                comments: hComments
+            };
+        }
+
+        currentHighlights = [...cellHighlights, ...updatedRowHighlights];
+        
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
 
@@ -1267,6 +1473,7 @@
             ranges.forEach(range => range.remove());
         }
     }
+
 
     // Custom header filter editor to prevent Enter key propagation
     function customHeaderFilterEditor(cell, onRendered, success, cancel, editorParams){
@@ -1308,7 +1515,38 @@
         return editor;
     }
 
+
+    async function handleTableHighlightColorChange(color) {
+        if (selectedRows && selectedRows.length > 0) {
+            // Widget action for many rows (range or group): preserve metadata if it was an existing group click
+            await applyHighlightToRows(selectedRows, color, true);
+            showTableModifyToolbar = false;
+            selectedRows = [];
+        } else if (clickedRow) {
+            // Widget action for single row: preserve metadata
+            await applyHighlightToRows([clickedRow], color, true);
+            showTableModifyToolbar = false;
+            clickedRow = null;
+        }
+    }
+
+    async function handleTableHighlightDelete() {
+        if (selectedRows && selectedRows.length > 0) {
+            // Widget action: delete the whole group/range
+            await applyHighlightToRows(selectedRows, null, false);
+            showTableModifyToolbar = false;
+            selectedRows = [];
+        } else if (clickedRow) {
+            // Widget action: delete single row
+            await applyHighlightToRows([clickedRow], null, false);
+            showTableModifyToolbar = false;
+            clickedRow = null;
+        }
+    }
+
+
     function checkValidationErrors() {
+
         if (!tabulatorInstance) return;
         
         const rows = tabulatorInstance.getRows();
@@ -2026,6 +2264,7 @@
                         </div>`;
                     };
                     colDef.cellClick = function(e, cell) {
+                        if (!get(isLexicalEditMode)) return;
                         // Immediate toggle on single click
                         const currentVal = cell.getValue();
                         const isCurrentlyChecked = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === "1";
@@ -2122,6 +2361,8 @@
                         };
                         // Force edit on single click rather than waiting for double-click
                         colDef.cellClick = function(e, cell) { 
+                            if (!get(isLexicalEditMode)) return;
+
                             if (!e || !e.target) {
                                 cell.edit(true);
                                 return;
@@ -2423,31 +2664,33 @@
         }
 
         // Add the "Add Field" column at the end
-        dataColumnDefs.push({
-            title: (() => {
-                const button = document.createElement("button");
-                button.className = "flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors";
-                button.title = "Add New Field";
-                mount(TableIcon, {
-                    target: button,
-                    props: { icon: Plus, size: 16 }
-                });
-                return button;
-            })(),
-            headerClick: (e, column) => {
-                insertColumn(column, 'after'); // Generic button at end
-            },
-            width: 40,
-            minWidth: 40,
-            headerSort: false,
-            resizable: false,
-            frozen: false,
-            cssClass: "add-column-header",
-            formatter: (cell) => {
-                // Important: returning empty/standard to avoid custom row highlights applying here
-                return "";
-            }
-        });
+        if (get(isLexicalEditMode)) {
+            dataColumnDefs.push({
+                title: (() => {
+                    const button = document.createElement("button");
+                    button.className = "flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors";
+                    button.title = "Add New Field";
+                    mount(TableIcon, {
+                        target: button,
+                        props: { icon: Plus, size: 16 }
+                    });
+                    return button;
+                })(),
+                headerClick: (e, column) => {
+                    insertColumn(column, 'after'); // Generic button at end
+                },
+                width: 40,
+                minWidth: 40,
+                headerSort: false,
+                resizable: false,
+                frozen: false,
+                cssClass: "add-column-header",
+                formatter: (cell) => {
+                    // Important: returning empty/standard to avoid custom row highlights applying here
+                    return "";
+                }
+            });
+        }
 
         return dataColumnDefs;
     }
@@ -3103,12 +3346,44 @@
                 nestedFieldSeparator: false,
                 height: "100%",
                 placeholder: "No Data Available",
-                selectableRange: 1,
+                selectableRange: true,
                 selectableRangeColumns: true,
                 selectableRangeRows: true,
+
                 history:true,
                 editTriggerEvent:"dblclick",
+                rangeSelected: (range) => {
+                    const rows = range.getRows();
+                    if (rows && rows.length > 1) {
+                        selectedRows = rows;
+                        clickedRow = null;
+                        lastRangeSelectedTime = Date.now();
+                        
+                        const lastRow = rows[rows.length - 1];
+                        const lastRowEl = lastRow.getElement();
+                        if (lastRowEl) {
+                            const rect = lastRowEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                            };
+                            showTableModifyToolbar = true;
+                        }
+                    } else if (rows && rows.length === 1) {
+                        selectedRows = rows;
+                    } else {
+                        selectedRows = [];
+                    }
+                },
+                
+
+
+
+
                 movableColumns: true,
+
                 resizableColumnFit: false,
                 rowFormatter: (row) => {
                     const rowIndex = row.getData().harvey_internal_id;
@@ -3122,6 +3397,8 @@
                     }
                 },
                 rowContextMenu: (e, row) => {
+                    const isEditMode = get(isLexicalEditMode);
+
                     const ranges = tabulatorInstance.getRanges();
                     let selectedRowsForMenu = [row];
 
@@ -3134,17 +3411,23 @@
                     }
 
                     const highlightAction = (color) => {
-                        applyHighlightToRows(color, selectedRowsForMenu);
+                        // Action from right-click: overwrite metadata (Intersection logic)
+                        applyHighlightToRows(selectedRowsForMenu, color, false);
                     };
+
+
 
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
                         action: () => highlightAction(option.value)
                     }));
 
-                    if (currentActiveViewType === 'pivot') {
+                    if (currentActiveViewType === 'pivot' || !isEditMode) {
                         return [
-                            { label: "Copy Entry", action: (e, row) => copyRow(row) }
+                            { label: "Copy Entry", action: (e, row) => copyRow(row) },
+                            { separator: true },
+                            { label: "Highlight Entry", menu: highlightColorOptions },
+                            { label: "Clear Entry Highlight", action: () => highlightAction(null) }
                         ];
                     }
 
@@ -3177,7 +3460,7 @@
                     headerVAlign:"middle",
                     editor: "textarea",
                     editable: function(cell) {
-                        return currentActiveViewType !== 'pivot';
+                        return currentActiveViewType !== 'pivot' && get(isLexicalEditMode);
                     },
                     editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:false },
                     resizable:"header",
@@ -3198,7 +3481,7 @@
                         span.className = "row-number-text group-hover:hidden";
                         span.textContent = rowNum;
                         
-                        if (currentActiveViewType !== 'pivot') {
+                        if (currentActiveViewType !== 'pivot' && get(isLexicalEditMode)) {
                             const button = document.createElement("button");
                             button.className = "edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors";
                             button.title = "Edit Entry";
@@ -3214,7 +3497,7 @@
                         return container;
                     },
                     cellClick: (e, cell) => {
-                        if (currentActiveViewType === 'pivot') return;
+                        if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
                         if (e.target.closest('.edit-icon-placeholder')) {
                             e.preventDefault();
                             e.stopPropagation();
@@ -3396,7 +3679,7 @@
         const existingBtns = tableContainer.querySelectorAll(".tabulator-add-entry-row");
         existingBtns.forEach(btn => btn.remove());
 
-        if (currentActiveViewType === 'pivot') return;
+        if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
 
         const tableHolder = tableContainer.querySelector(".tabulator-table");
         if (!tableHolder) return;
@@ -3715,7 +3998,8 @@
     />
 {/if}
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
+<div bind:this={mainPanelContainer} class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden relative">
+
      {#if !isViewingDocument}
      <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10 justify-between">
         <div class="flex items-center gap-1">
@@ -3727,32 +4011,32 @@
                 <div class="separator mx-0.5 mr-2"></div>
             {/if}
 
-            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo">
+            <button id="history-undo" on:click={undo} class="mini-toolbar-button" title="Undo" disabled={!$isLexicalEditMode}>
                 <Undo2 size={14} />
             </button>
             
-            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo">
+            <button id="history-redo" on:click={redo} class="mini-toolbar-button" title="Redo" disabled={!$isLexicalEditMode}>
                 <Redo2 size={14} />
             </button>
 
             <div class="separator mx-0.5"></div>
 
-            <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold">
+            <button id="style-bold" on:click={() => toggleStyle('bold')} class="mini-toolbar-button" title="Bold" disabled={!$isLexicalEditMode}>
                 <Bold size={14} />
             </button>
 
-            <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic">
+            <button id="style-italic" on:click={() => toggleStyle('italic')} class="mini-toolbar-button" title="Italic" disabled={!$isLexicalEditMode}>
                 <Italic size={14} />
             </button>
 
-            <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline">
+            <button id="style-underline" on:click={() => toggleStyle('underline')} class="mini-toolbar-button" title="Underline" disabled={!$isLexicalEditMode}>
                 <Underline size={14} />
             </button>
 
             <div class="separator mx-0.5"></div>
 
             <div class="relative" bind:this={colorDropdownRef}>
-              <button id="style-color" on:click={toggleColorDropdown} class="mini-toolbar-button flex items-center" title="Text Color">
+              <button id="style-color" on:click={toggleColorDropdown} class="mini-toolbar-button flex items-center" title="Text Color" disabled={!$isLexicalEditMode}>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
                     <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
                 </svg>
@@ -3775,18 +4059,18 @@
 
             <div class="separator mx-0.5"></div>
 
-            <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting">
+            <button id="style-clear" on:click={clearFormatting} class="mini-toolbar-button" title="Clear Formatting" disabled={!$isLexicalEditMode}>
                 <Eraser size={14} />
             </button>
             <div class="separator mx-0.5"></div>
 
-            <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts">
+            <button id="insert-charts" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialChartToLoad = null; showChartModal = true; }} class="mini-toolbar-button flex items-center gap-1" title="Insert Charts" disabled={!$isLexicalEditMode}>
                 <ChartBar size={14} />
                 <span>Insert Charts</span>
             </button>
 
             <div class="separator mx-0.5"></div>
-            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot'}>
+            <button id="create-views" on:click={() => { tableColumnsForModal = tabulatorInstance.getColumnDefinitions().filter(c => c.field && c.field !== "harvey_internal_id"); initialViewToLoad = null; showViewModal = true; }} class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Create Views" disabled={currentActiveViewType === 'pivot' || !$isLexicalEditMode}>
                 <Table2 size={14} />
                 <span>Create Views</span>
             </button>
@@ -3917,7 +4201,8 @@
                     <div class="flex-grow min-h-0">
                         <LexicalEditor
                             initialJson={currentActiveDocumentJson}
-                            editable={true}
+                            editable={$isLexicalEditMode}
+                            allowReadModeHighlights={true}
                             placeholder="Start typing your document..."
                             enableTableCellMenu={true}
                             enableTableCellResize={true}
@@ -4015,13 +4300,26 @@
             </div>
         {/if}
 
-        <div bind:this={tableContainer} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+        <div bind:this={tableContainer} on:click={handleTableContainerClick} on:mouseup={handleTableMouseUp} class="w-full h-full" style="display: {(currentActiveViewType === 'pivot' || isViewingDocument) ? 'none' : 'block'};">
+
+
              {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
                  <div class="p-4 text-center text-gray-500 dark:text-gray-400">Table is empty or data could not be loaded.</div>
              {/if}
         </div>
+
     </div>
+
+    <FloatingTableHighlightToolbar 
+        showToolbar={showTableModifyToolbar}
+        toolbarPosition={tableModifyToolbarPosition}
+        onChangeColor={handleTableHighlightColorChange}
+        onDelete={handleTableHighlightDelete}
+        onClose={() => { showTableModifyToolbar = false; clickedRow = null; }}
+    />
 </div>
+
+
 
 <style lang="postcss">
     .min-h-0 { min-height: 0; }

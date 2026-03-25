@@ -1458,10 +1458,28 @@ export async function deleteProjectItem(itemPath) {
 
         // Re-prepare the media note view to auto-select any remaining transcript if the active one was deleted
         if (wasActiveTranscriptInDataTab && currentProj.selectedMediaNotePath) {
-             prepareMediaNoteView(currentProj.selectedMediaNotePath);
+             // Instead of calling prepareMediaNoteView directly (which forces the app into a global loading state
+             // that might get stuck if the user is in the Transcriptions tab), we just resolve the fallback manually.
+             const currentProjectState = get(project);
+             function findMediaFileInTree(nodes, path) {
+                 if (!Array.isArray(nodes)) return null;
+                 for (const node of nodes) {
+                     if (node.path === path && node.file_type === 'media') return node;
+                     if (node.children) { const found = findMediaFileInTree(node.children, path); if (found) return found; }
+                 }
+                 return null;
+             }
+             const mediaFileNode = findMediaFileInTree(currentProjectState.files, currentProj.selectedMediaNotePath);
+             const fallbackPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+
+             project.update(p => ({
+                 ...p,
+                 activeTranscriptPathInDataTab: fallbackPath,
+                 mediaNoteTranscriptError: fallbackPath ? null : "INFO:FILE_NOT_FOUND",
+             }));
         }
 
-        project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`}));
+        project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`, isLoading: false }));
  } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; } }
 export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false })); throw new Error(`Trim failed: ${errorMessage}`); } }
 

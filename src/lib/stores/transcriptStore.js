@@ -567,7 +567,6 @@ export function updateSecondarySegment(index, updatedSegmentData) {
 }
 
 export function updateSegment(index, updatedSegmentData, silent = false) {
-    console.log("[TranscriptStore] updateSegment called for index:", index, "data:", updatedSegmentData);
     const currentSegments = get(transcriptStore).segments;
     if (index < 0 || index >= currentSegments.length) {
         console.warn('[TranscriptStore] updateSegment invalid index:', index);
@@ -609,7 +608,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
     }
 
     if (changed) {
-        console.log("[TranscriptStore] updateSegment: Changes detected, pushing to undo stack and marking dirty.");
         pushToUndoStack();
         transcriptStore.update((ts) => {
             const newSegments = [...ts.segments];
@@ -621,8 +619,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                 transcriptDirty: true,
             };
         });
-    } else {
-        console.log("[TranscriptStore] updateSegment: No changes detected.");
     }
 }
 
@@ -798,8 +794,8 @@ export function splitTranscriptSegment(index) {
              };
              
              const updatedOriginalSecondary = {
-                 ...originalSecondary,
-                 end_time: secSplitTime
+                  ...originalSecondary,
+                  end_time: secSplitTime
              };
              
              newSecondarySegments = [
@@ -853,6 +849,95 @@ export function splitTranscriptSegment(index) {
                 segments: newSegments,
                 transcriptDirty: true,
                 player: { ...ts.player, currentSegmentIndex: index + 1 }
+            };
+        });
+    }
+}
+
+export function mergeTranscriptSegments(index) {
+    const store = get(transcriptStore);
+    if (index < 0 || index >= store.segments.length - 1) {
+        console.warn('[TranscriptStore] mergeTranscriptSegments called with invalid index:', index);
+        return;
+    }
+
+    pushToUndoStack();
+
+    function mergeLexicalText(text1, text2) {
+        try {
+            const json1 = JSON.parse(text1);
+            const json2 = JSON.parse(text2);
+            
+            const mergedJson = {
+                ...json1,
+                root: {
+                    ...json1.root,
+                    children: [...(json1.root?.children || []), ...(json2.root?.children || [])]
+                }
+            };
+            return JSON.stringify(mergedJson);
+        } catch (e) {
+            console.error('[TranscriptStore] Error merging Lexical JSON:', e);
+            return text1; // Fallback to first text if merge fails
+        }
+    }
+
+    const seg1 = store.segments[index];
+    const seg2 = store.segments[index + 1];
+
+    const mergedSegment = {
+        ...seg1,
+        end_time: seg2.end_time,
+        text: mergeLexicalText(seg1.text, seg2.text)
+    };
+
+    if (store.isDualModeActive) {
+        const sec1 = store.secondaryTranscriptSegments[index];
+        const sec2 = store.secondaryTranscriptSegments[index + 1];
+        
+        let mergedSecondary = null;
+        if (sec1 && sec2) {
+            mergedSecondary = {
+                ...sec1,
+                end_time: sec2.end_time,
+                text: mergeLexicalText(sec1.text, sec2.text)
+            };
+        }
+
+        transcriptStore.update(ts => {
+            const newSegments = [
+                ...ts.segments.slice(0, index),
+                mergedSegment,
+                ...ts.segments.slice(index + 2)
+            ];
+            
+            const newSecondarySegments = [...ts.secondaryTranscriptSegments];
+            if (mergedSecondary) {
+                newSecondarySegments.splice(index, 2, mergedSecondary);
+            }
+
+            return {
+                ...ts,
+                segments: newSegments,
+                secondaryTranscriptSegments: newSecondarySegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: index }
+            };
+        });
+    } else {
+        transcriptStore.update(ts => {
+            const newSegments = [
+                ...ts.segments.slice(0, index),
+                mergedSegment,
+                ...ts.segments.slice(index + 2)
+            ];
+            
+            updateProjectStoreState({ statusMessage: 'Segments merged (undoable).' });
+            return {
+                ...ts,
+                segments: newSegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: index }
             };
         });
     }

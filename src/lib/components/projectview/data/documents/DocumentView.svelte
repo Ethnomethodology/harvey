@@ -52,6 +52,12 @@
         }
     }
 
+    export function insertImage(path) {
+        if (documentEditorPanelRef && typeof documentEditorPanelRef.insertImage === 'function') {
+            documentEditorPanelRef.insertImage(path);
+        }
+    }
+
     export function playMedia(path) {
         if (path) {
             mediaPath = path;

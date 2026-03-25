@@ -26,7 +26,11 @@
 
     // Determine platform-specific modifier key name
     const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const modKeyName = isMac ? 'Cmd' : 'Ctrl';
+    const modKeyName = isMac ? '⌘' : 'Ctrl';
+    const ctrlKeyName = isMac ? '⌃' : 'Ctrl';
+    const optKeyName = isMac ? '⌥' : 'Alt';
+    const shiftKeyName = isMac ? '⇧' : 'Shift';
+    const enterKeyName = isMac ? '↵' : 'Enter';
 
 	// --- File Tree Logic ---
 	$: selectedMediaPath = $transcriptStore.selectedMediaFile?.path;
@@ -41,9 +45,7 @@
         const normalizedBaseDirectory = normalizePath($project.baseDirectory);
         const mediaPathPrefix = normalizePath(`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`);
         const seen = new Set();
-        console.log('[LeftPanel] Filtering projectFileTree...');
-        console.log('[LeftPanel] normalizedBaseDirectory:', normalizedBaseDirectory);
-        console.log('[LeftPanel] mediaPathPrefix:', mediaPathPrefix);
+
         const filtered = projectFileTree.filter(node => {
             const normalizedNodePath = normalizePath(node.path);
             const key = normalizedNodePath || normalizePath(node.relativePath);
@@ -57,21 +59,9 @@
             const isWithinMediaPath = normalizedNodePath && normalizedNodePath.startsWith(mediaPathPrefix);
             const isRootMediaDirectory = normalizedNodePath === mediaPathPrefix;
 
-            console.log('---');
-            console.log('[LeftPanel] Node:', node.name, '(', node.file_type, ')');
-            console.log('[LeftPanel]   node.path:', node.path);
-            console.log('[LeftPanel]   normalizedNodePath:', normalizedNodePath);
-            console.log('[LeftPanel]   mediaPathPrefix:', mediaPathPrefix);
-            console.log('[LeftPanel]   normalizedNodePath.startsWith(mediaPathPrefix):', normalizedNodePath.startsWith(mediaPathPrefix));
-            console.log('[LeftPanel]   isMediaFileOrDirectory:', isMediaFileOrDirectory);
-            console.log('[LeftPanel]   isWithinMediaPath:', isWithinMediaPath);
-            console.log('[LeftPanel]   isRootMediaDirectory:', isRootMediaDirectory);
-            console.log('[LeftPanel]   Result:', (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory)));
-            console.log('---');
-
             return (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory));
         });
-        console.log('[LeftPanel] uniqueProjectFileTree (filtered):', filtered);
+
         return filtered;
     })();
 
@@ -278,12 +268,16 @@
 	<!-- Shortcuts Content -->
 	{#if openSection === 'shortcuts'}
 		<div id="shortcuts-content" class="flex-grow overflow-y-auto min-h-0 p-3 text-xs" role="region" aria-live="polite">
-            <ul class="space-y-1.5 text-gray-700 dark:text-gray-300">
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + E</span> <span>Edit Mode</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + S</span> <span>Save Transcript</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F8</span> <span>Play / Pause</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F7 / F9</span> <span>Rewind / Forward</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + ↑/↓</span> <span>Prev/Next Segment</span> </li>
+            <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;E</span> <span>Switch Edit / Read Mode</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{shiftKeyName}&nbsp;&nbsp;Space</span> <span>Play / Pause</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{shiftKeyName}&nbsp;&nbsp;←</span> <span>Rewind</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{shiftKeyName}&nbsp;&nbsp;→</span> <span>Forward</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{optKeyName}&nbsp;&nbsp;↑</span> <span>Previous Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{optKeyName}&nbsp;&nbsp;↓</span> <span>Next Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{shiftKeyName}&nbsp;&nbsp;{enterKeyName}</span> <span>Insert New Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{shiftKeyName}&nbsp;&nbsp;J&nbsp;/&nbsp;K</span> <span>Change Speaker</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded text-gray-800 dark:text-gray-200 mr-3 text-[13px] min-w-[100px] text-center">{modKeyName}&nbsp;&nbsp;{shiftKeyName}&nbsp;&nbsp;,&nbsp;/&nbsp;.</span> <span>Speed Down / Up</span> </li>
 			</ul>
 		</div>
 	{/if}

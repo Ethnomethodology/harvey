@@ -22,6 +22,7 @@
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -172,6 +173,12 @@
         console.log('[DocumentEditorPanel] External discard() called.');
         return handleDiscard();
     }
+    export function insertImage(path) {
+        if (editorRef) {
+            editorRef.insertImageByPath(path);
+        }
+    }
+
     export function resetEditorState(jsonString) {
         if (editorRef) {
              console.log('[DocumentEditorPanel] External resetEditorState called.');
@@ -211,7 +218,8 @@
                  <LexicalEditor
                      bind:this={editorRef}
                      initialJson={currentJson}
-                     editable={true}
+                     editable={$isLexicalEditMode}
+                     allowReadModeHighlights={true}
                      placeholder="Start typing your document..."
                      enableTableCellMenu={true}
                      enableTableCellResize={true}

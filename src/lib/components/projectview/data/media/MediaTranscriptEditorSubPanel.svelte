@@ -18,6 +18,7 @@
     import { saveDocumentContent } from '$lib/services/projectService.js';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
 
     export let mediaPath = null;
     export let transcriptPath = null;
@@ -165,7 +166,7 @@
                 }
             });
             const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
-            if (isPrimary) setDocumentHighlights(highlights);
+            if (isPrimary) setDocumentHighlights(highlights, false);
             else localCurrentHighlights = highlights;
         } catch (e) {
             console.error("[MediaTranscriptEditorSubPanel] Error loading highlights:", e);
@@ -299,7 +300,8 @@
             <LexicalEditor
                 bind:this={lexicalEditorRef}
                 initialJson={currentTranscriptJson || defaultEmptyJson}
-                editable={true}
+                editable={$isLexicalEditMode}
+                allowReadModeHighlights={true}
                 enableSegmentPlayback={enableSegmentPlayback}
                 enableTableCellResize={false}
                 placeholder="Enter data for this transcript..."

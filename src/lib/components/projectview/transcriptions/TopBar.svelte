@@ -10,6 +10,9 @@
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
 	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+	import { Pencil, PencilOff } from '@lucide/svelte';
+
 
 	// --- Service Imports ---
 	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
@@ -429,8 +432,9 @@
 		   <Share class="w-3.5 h-3.5" />
 		   <span>Export</span>
 		</Button>
+		
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
 
-		<div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
 
 		<!-- Dual Mode Toggle Button -->
 		<button 
@@ -461,7 +465,26 @@
 			</div>
 		</button>
 
-        <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2"></div>
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+
+		 <!-- Read/Edit Mode Toggle -->
+		<button
+			id="read-edit-toggle-transcription"
+			on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+			class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+			title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+		>
+			{#if $isLexicalEditMode}
+				<Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+				<span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+			{:else}
+				<PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+				<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+			{/if}
+		</button>
+
+		<div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+
 		<!-- Theme Toggle Button -->
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
@@ -472,6 +495,7 @@
                 <Monitor class="w-4 h-4" />
             {/if}
 		 </button>
+
 	</div>
 </div>
 

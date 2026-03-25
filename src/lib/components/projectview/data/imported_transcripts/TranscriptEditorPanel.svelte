@@ -18,6 +18,8 @@
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+
 
     import { createHeadlessEditor } from '@lexical/headless';
     import {
@@ -674,7 +676,8 @@
                      bind:this={editorRef}
                      nodes={LEXICAL_NODES}
                      initialJson={currentLexicalJson}
-                     editable={true}
+                     editable={$isLexicalEditMode}
+                     allowReadModeHighlights={true}
                      enableTableCellResize={false}
                      placeholder="Transcript content will appear here as a table..."
                      externalHighlightedRowIndex={highlightedRowIndex}

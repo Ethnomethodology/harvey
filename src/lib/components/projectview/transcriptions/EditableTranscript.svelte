@@ -22,16 +22,98 @@
 
     /* --- Keyboard Shortcut --- */
     function handleSegmentNavShortcut(event) {
-        // Ignore if focused in text inputs or contenteditable areas
         const tgt = event.target;
-        if (tgt instanceof HTMLElement) {
-            const tag = tgt.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tgt.isContentEditable) {
+        const isEditingText = tgt instanceof HTMLElement && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable);
+        const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
+        const shiftKey = event.shiftKey;
+
+        // --- Toggle Edit Mode (Global) ---
+        if (modKey && event.key.toLowerCase() === 'e') {
+            event.preventDefault();
+            dispatch('toggleedit');
+            return;
+        }
+
+        // --- Playback Controls (Shift + Space, Cmd/Ctrl + Shift + Arrows) ---
+        if (shiftKey && event.key === ' ') {
+            event.preventDefault();
+            dispatch('navigate', { action: 'toggle-play' });
+            return;
+        }
+
+        if (modKey && shiftKey) {
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'rewind' });
+                return;
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'forward' });
+                return;
+            } else if (event.key === ',' || event.key === '<' || event.code === 'Comma') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'speed-down' });
+                return;
+            } else if (event.key === '.' || event.key === '>' || event.code === 'Period') {
+                event.preventDefault();
+                dispatch('navigate', { action: 'speed-up' });
                 return;
             }
         }
-        // Meta+Arrow navigation
-        if (event.metaKey && !event.ctrlKey && !event.altKey) {
+
+        // --- Editing Specific Shortcuts ---
+        if (isEditingText && editEnabled && currentIndex >= 0) {
+            // Cmd/Ctrl + Shift + Enter -> Insert new segment after current
+            if (modKey && shiftKey && event.key === 'Enter') {
+                event.preventDefault();
+                commitCurrentSegmentEdits();
+                dispatch('insertnewsegment', currentIndex);
+                return;
+            }
+
+            // Cmd/Ctrl + Shift + J/K -> Cycle Speaker (More ergonomic than Alt + Arrows)
+            if (modKey && shiftKey && (event.key.toLowerCase() === 'j' || event.key.toLowerCase() === 'k')) {
+                event.preventDefault();
+                const options = speakerOptions.map(o => o.value);
+                const currentSpeakerIndex = options.indexOf(localSpeaker);
+                if (currentSpeakerIndex !== -1) {
+                    let newIndex = currentSpeakerIndex + (event.key.toLowerCase() === 'k' ? 1 : -1);
+                    if (newIndex < 0) newIndex = options.length - 1;
+                    if (newIndex >= options.length) newIndex = 0;
+                    localSpeaker = options[newIndex];
+                    handleSpeakerChange();
+                }
+                return;
+            }
+
+            // Legacy Alt + Up/Down support (Optional, but let's encourage the new ones)
+            // if (!modKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) { ... }
+
+            // Cmd/Ctrl + Alt + Arrow navigation (Existing)
+            if (modKey && event.altKey) {
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    commitCurrentSegmentEdits();
+                    previous();
+                    return;
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    commitCurrentSegmentEdits();
+                    next();
+                    return;
+                }
+            }
+        }
+
+        // Allow native text input navigation if editing
+        if (isEditingText && !modKey && !shiftKey) {
+            return;
+        }
+
+        // --- Global Navigation ---
+        // Cmd/Ctrl + Alt + Arrow navigation
+        if (modKey && event.altKey) {
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
                 commitCurrentSegmentEdits();
@@ -356,6 +438,13 @@
     });
     onDestroy(() => {
         isMounted = false;
+
+        // Ensure any pending read-mode highlight saves are committed before unmounting
+        if (editorUpdateDebounceTimer) {
+            clearTimeout(editorUpdateDebounceTimer);
+            commitCurrentSegmentEdits();
+        }
+
         window.removeEventListener('keydown', handleSegmentNavShortcut, true);
         unsubscribeTranscriptStore && unsubscribeTranscriptStore();
         cleanupPlainTextConverter();
@@ -417,11 +506,34 @@
         }
     }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
+    let editorUpdateDebounceTimer;
+
     function handleEditorUpdate(event) {
         currentEditorJson = event.detail.jsonString;
-	}
+
+        if (!editEnabled) {
+            // Auto-save read-mode highlight changes with debounce
+            clearTimeout(editorUpdateDebounceTimer);
+            editorUpdateDebounceTimer = setTimeout(() => {
+                commitCurrentSegmentEdits();
+            }, 500);
+        }
+    }
+
+    // In dual mode, listen to secondary editor updates to trigger auto-save if in read mode
+    function handleSecondaryEditorUpdate(event) {
+        currentEditorJsonSecondary = event.detail.jsonString;
+
+        if (!editEnabled) {
+            clearTimeout(editorUpdateDebounceTimer);
+            editorUpdateDebounceTimer = setTimeout(() => {
+                commitCurrentSegmentEdits();
+            }, 500);
+        }
+    }
+
     export function commitCurrentSegmentEdits() {
-        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) {
+        if (currentIndex < 0 || currentIndex >= segments.length) {
             return false;
         }
 
@@ -485,19 +597,23 @@
             }
         }
 
-        const startTimeChanged = Math.abs(newStartTime - (segmentInStore.start_time || 0)) > 0.0001;
-        if (startTimeChanged) {
-            changes.start_time = newStartTime;
-        }
+        // Only save start/end time and speaker changes if editEnabled is true,
+        // to prevent read mode layout quirks from accidentally modifying them.
+        if (editEnabled) {
+            const startTimeChanged = Math.abs(newStartTime - (segmentInStore.start_time || 0)) > 0.0001;
+            if (startTimeChanged) {
+                changes.start_time = newStartTime;
+            }
 
-        const endTimeChanged = Math.abs(newEndTime - (segmentInStore.end_time || 0)) > 0.0001;
-        if (endTimeChanged) {
-            changes.end_time = newEndTime;
-        }
+            const endTimeChanged = Math.abs(newEndTime - (segmentInStore.end_time || 0)) > 0.0001;
+            if (endTimeChanged) {
+                changes.end_time = newEndTime;
+            }
 
-        const speakerChanged = localSpeaker !== segmentInStore.speaker;
-        if (speakerChanged) {
-            changes.speaker = localSpeaker;
+            const speakerChanged = localSpeaker !== segmentInStore.speaker;
+            if (speakerChanged) {
+                changes.speaker = localSpeaker;
+            }
         }
 
         const hasChanges = Object.keys(changes).length > 0;
@@ -516,7 +632,7 @@
                 secondaryChanges.text = currentEditorJsonSecondary;
                 secondaryTextChanged = true;
             }
-            if (localSpeakerSecondary !== secondarySegmentInStore.speaker) {
+            if (editEnabled && localSpeakerSecondary !== secondarySegmentInStore.speaker) {
                 secondaryChanges.speaker = localSpeakerSecondary;
             }
 
@@ -556,17 +672,6 @@
     {:else}
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
-                <button on:click="{handleEditSaveClick}"
-                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white flex items-center justify-center'
-                        title="{editEnabled ? `Save & Exit Edit mode (${modKeyName}+E)` : `Enable Editing (${modKeyName}+E)`}"
-                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        style="padding-left:0px;">
-                    {#if editEnabled}
-                        <Save class="w-5 h-5" />
-                    {:else}
-                        <SquarePen class="w-5 h-5" />
-                    {/if}
-                </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2 flex items-center justify-center" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
                     <ChevronUp class="w-5 h-5" />
                 </button>
@@ -607,7 +712,8 @@
                             <div class="flex items-start gap-x-1 w-full">
                                 <div class='lexical-editor-wrapper-style w-full flex-grow' class:is-disabled="{!editEnabled}">
                                     {#if currentIndex !== -1 && initialJsonForEditor}
-                                        <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:textcountchange={(e) => project.update(p => ({...p, documentTextCount: e.detail}))} enableFloatingToolbar="{false}" />
+                                        <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" allowReadModeHighlights={true} enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:textcountchange={(e) => project.update(p => ({...p, documentTextCount: e.detail}))} enableFloatingToolbar="{false}" />
+
                                     {:else}
                                         <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                                     {/if}
@@ -623,7 +729,8 @@
                                 <div class="flex items-start gap-x-1 w-full">
                                     <div class='lexical-editor-wrapper-style w-full flex-grow' class:is-disabled="{!editEnabled}">
                                         {#if currentIndex !== -1 && initialJsonForEditorSecondary}
-                                            <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{(e) => currentEditorJsonSecondary = e.detail.jsonString}" enableFloatingToolbar="{false}" />
+                                            <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" allowReadModeHighlights={true} enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleSecondaryEditorUpdate}" enableFloatingToolbar="{false}" />
+
                                         {/if}
                                     </div>
                                 </div>

@@ -7,7 +7,7 @@
     import { refresher, triggerRefresh } from '$lib/stores/refresherStore.js';
     import notificationStore from '$lib/stores/notificationStore.js';
     import { Dropdown, DropdownItem } from 'flowbite-svelte';
-    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon } from '@lucide/svelte';
+    import { Music, PlayCircle, Plus, PieChart, ChartBar, ChartColumn, LineChart, ScatterChart, SquareChartGantt, Table2, LayoutGrid, Trash2, MoreVertical, ExternalLink, Settings, FolderClosed, FolderOpen as FolderOpenIcon, FileText, Image as ImageIcon, MessageSquareText, SquareArrowOutUpLeft, FilePenLine } from '@lucide/svelte';
 
     export let itemPath = null;
     export let itemType = null;
@@ -16,9 +16,33 @@
     const dispatch = createEventDispatcher();
 
     let attachments = [];
+    import FileRenameModal from '../../modals/FileRenameModal.svelte';
+    import ImagePreviewModal from '../../modals/ImagePreviewModal.svelte';
+
     let isLoading = true;
     let previousProcessedItemPath = null;
     let currentTrackIndex = -1;
+
+    let showRenameModal = false;
+    let itemToRename = null;
+
+    let showRenameFolderModal = false;
+    let folderToRename = null;
+
+    let showImagePreviewModal = false;
+    let imagePreviewPath = '';
+
+    // Helper to search the file tree for active media file
+    function findFileInTree(nodes, path) {
+        for (const node of nodes) {
+            if (node.path === path) return node;
+            if (node.children) {
+                const found = findFileInTree(node.children, path);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
 
     // We will group string attachments by their folder if they are inside attachments/something/
     let groupedAttachments = { root: [], folders: {} };
@@ -97,6 +121,7 @@
     function getFileName(path) {
         if (typeof path === 'object' && path.chart_name) return path.chart_name;
         if (typeof path === 'object' && path.view_name) return path.view_name;
+        if (typeof path === 'object' && path.is_transcript) return path.displayLabel || path.name || path.path.split(/[\/\\]/).pop();
         return path.split(/[\/\\]/).pop() || path;
     }
 
@@ -108,12 +133,139 @@
                 dispatch('requestOpenChart', { chart: attachment });
             } else if (typeof attachment === 'object' && attachment.view_name) {
                 dispatch('requestOpenView', { view: attachment });
+            } else if (typeof attachment === 'object' && attachment.is_transcript) {
+                switchTranscriptInDataTab(attachment.path);
             } else if (typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)) {
-                // Images do not play in the media player
+                imagePreviewPath = attachment;
+                showImagePreviewModal = true;
                 return;
             } else {
                 dispatch('requestPlayMedia', { mediaPath: attachment });
             }
+        }
+    }
+
+    function openRenameModal(transcript) {
+        if (!transcript || !transcript.path) return;
+        itemToRename = {
+            path: transcript.path,
+            name: transcript.name || transcript.path.split(/[\/\\]/).pop(),
+            file_type: 'transcript'
+        };
+        showRenameModal = true;
+    }
+
+    async function handleRenameConfirm(event) {
+        const { newName } = event.detail;
+        const item = itemToRename;
+
+        if (!item || !newName || newName.trim() === '') {
+            console.error("[AttachmentsPanel] Rename confirmation failed: Missing item or new name.");
+            showRenameModal = false;
+            itemToRename = null;
+            return;
+        }
+
+        const finalNewName = newName.trim();
+        showRenameModal = false;
+
+        const { renameProjectItem } = await import('$lib/services/projectService.js');
+        const { confirm } = await import('@tauri-apps/plugin-dialog');
+
+        try {
+            await renameProjectItem(item.path, finalNewName, item.file_type);
+            notificationStore.add('Transcript renamed successfully.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (err) {
+            console.error(`[AttachmentsPanel] Rename service call failed:`, err);
+            notificationStore.add(`Failed to rename transcript: ${err.message || err}`, 'error');
+        } finally {
+            itemToRename = null;
+        }
+    }
+
+    function handleRenameModalClose() {
+        showRenameModal = false;
+        itemToRename = null;
+    }
+
+    function openRenameFolderModal(folderName) {
+        // Find actual view object logic if needed or just use folderName
+        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+        folderToRename = {
+            folderName: folderName,
+            viewName: viewName
+        };
+        showRenameFolderModal = true;
+    }
+
+    async function handleRenameFolderConfirm(event) {
+        const { newName } = event.detail;
+        if (!folderToRename || !newName || newName.trim() === '') {
+            showRenameFolderModal = false;
+            return;
+        }
+
+        const finalNewName = newName.trim();
+        showRenameFolderModal = false;
+        const projectStoreState = get(project);
+
+        try {
+            await invoke('rename_table_view_command', {
+                projectId: projectStoreState.id,
+                tablePath: previousProcessedItemPath,
+                oldViewName: folderToRename.viewName,
+                newViewName: finalNewName,
+                projectXmlPathStr: projectStoreState.xmlPath
+            });
+            notificationStore.add('Folder renamed successfully.', 'success');
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (error) {
+            console.error('Failed to rename folder via attachments panel:', error);
+            notificationStore.add(`Failed to rename folder: ${error.message || error}`, 'error');
+        } finally {
+            folderToRename = null;
+        }
+    }
+
+    async function handleDeleteTranscript(transcript) {
+        if (!transcript || !transcript.path) return;
+
+        const { ask } = await import('@tauri-apps/plugin-dialog');
+        const confirmed = await ask(`Are you sure you want to delete the transcript file "${transcript.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`, { title: 'Delete Transcript', type: 'warning' });
+        if (!confirmed) return;
+
+        const { deleteProjectItem } = await import('$lib/services/projectService.js');
+
+        const projectStoreState = get(project);
+        const isActive = projectStoreState.activeTranscriptPathInDataTab === transcript.path;
+
+        try {
+            await deleteProjectItem(transcript.path);
+            notificationStore.add('Transcript deleted.', 'success');
+
+            if (isActive) {
+                // Find another transcript to fall back to after deletion
+                const currentFiles = get(project).files;
+                const activeMediaFile = findFileInTree(currentFiles, projectStoreState.selectedMediaNotePath);
+
+                if (activeMediaFile && activeMediaFile.associated_transcripts && activeMediaFile.associated_transcripts.length > 0) {
+                    const fallbackTranscript = activeMediaFile.associated_transcripts[0];
+                    switchTranscriptInDataTab(fallbackTranscript.path);
+                } else {
+                    switchTranscriptInDataTab(null);
+                }
+            }
+
+            // Refresh attachments
+            await loadAttachments(previousProcessedItemPath);
+            triggerRefresh();
+        } catch (error) {
+            console.error('Failed to delete transcript via attachments panel:', error);
+            notificationStore.add(`Failed to delete transcript: ${error.message || error}`, 'error');
         }
     }
 
@@ -282,6 +434,40 @@
                     tablePath: assetRelativePathToLoad
                 });
                 loadedAttachments = [...charts, ...views];
+            } else if (projectStoreState.selectedMediaNotePath) {
+                const activeMediaFile = findFileInTree(projectStoreState.files, projectStoreState.selectedMediaNotePath);
+                if (activeMediaFile && activeMediaFile.associated_transcripts) {
+                    const { languageOptions } = await import('$lib/constants/transcriptionOptions.js');
+                    const getLanguageLabel = (langCode) => {
+                        if (!langCode || langCode === 'original') return 'Original';
+                        let targetCode = langCode;
+                        if (langCode.includes('-')) {
+                            targetCode = langCode.split('-').pop(); // e.g., 'en-hi' -> 'hi'
+                        }
+                        const option = languageOptions.find(opt => opt.value === targetCode);
+                        return option ? option.label : targetCode;
+                    };
+                    const mappedTranscripts = activeMediaFile.associated_transcripts.map(t => {
+                        const langLabel = getLanguageLabel(t.language_code || 'original');
+                        let fileName = t.name;
+                        if (!fileName && t.path) {
+                            try {
+                                const pathParts = t.path.split(/[\/\\]/);
+                                fileName = pathParts[pathParts.length - 1];
+                                if (fileName.toLowerCase().endsWith('.json')) {
+                                    fileName = fileName.substring(0, fileName.length - 5);
+                                }
+                            } catch (e) {
+                                fileName = '';
+                            }
+                        }
+                        const fileNamePart = fileName ? ` (${fileName})` : '';
+                        const displayLabel = `${langLabel}${fileNamePart}`;
+                        return { ...t, is_transcript: true, displayLabel };
+                    }).sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+
+                    loadedAttachments = [...loadedAttachments, ...mappedTranscripts];
+                }
             }
 
             // Always attempt to load raw file attachments from asset_metadata for all types
@@ -322,9 +508,10 @@
         $refresher;
         (async () => {
             const currentProjectStoreState = get(project);
-            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table';
-            if (itemPath && isSupportedType && currentProjectStoreState?.baseDirectory) {
-                const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
+            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table' || currentProjectStoreState.selectedMediaNotePath;
+            const currentPathToUse = itemType === 'doc' && currentProjectStoreState.selectedMediaNotePath ? currentProjectStoreState.selectedMediaNotePath : itemPath;
+            if (currentPathToUse && isSupportedType && currentProjectStoreState?.baseDirectory) {
+                const newOriginalDetails = await getOriginalAssetDetails(currentPathToUse, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
                 // Also reload if refreshKey changes OR $refresher increments, but we handle the initial load as well
@@ -381,17 +568,24 @@
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <span class="text-xs text-gray-400 dark:text-gray-500 group-hover:hidden transition-opacity">{groupedAttachments.folders[folderName].length} items</span>
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                                    title="Delete Folder"
-                                    on:click|stopPropagation={() => {
-                                        // The view name is the folder name without the trailing "_participants" or "_questions"
-                                        const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
-                                                         folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
-                                        handleDeleteView({ view_name: viewName, view_type: 'survey' });
-                                    }}
-                                >
-                                    <Trash2 class="w-3.5 h-3.5 text-red-500" />
-                                </button>
+                                <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                    <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Folder Options" id="folder-options-{folderName.replace(/[^a-zA-Z0-9]/g, '-')}" on:click|stopPropagation>
+                                        <MoreVertical class="w-4 h-4" />
+                                    </button>
+                                    <Dropdown triggeredBy="#folder-options-{folderName.replace(/[^a-zA-Z0-9]/g, '-')}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                        <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); openRenameFolderModal(folderName); }}>
+                                            <FilePenLine class="w-4 h-4 text-gray-500" /> Rename...
+                                        </DropdownItem>
+                                        <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => {
+                                            e.stopPropagation();
+                                            const viewName = folderName.endsWith('_participants') ? folderName.slice(0, -13) :
+                                                             folderName.endsWith('_questions') ? folderName.slice(0, -10) : folderName;
+                                            handleDeleteView({ view_name: viewName, view_type: 'survey' });
+                                        }}>
+                                            <Trash2 class="w-4 h-4" /> Delete
+                                        </DropdownItem>
+                                    </Dropdown>
+                                </div>
                             </div>
                         </div>
 
@@ -415,8 +609,8 @@
                                                 <MoreVertical class="w-3.5 h-3.5" />
                                             </button>
                                             <Dropdown triggeredBy="#doc-options-folder-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
-                                                    <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                                <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                                    <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                                 </DropdownItem>
                                                 <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
                                                     <Trash2 class="w-4 h-4" /> Delete
@@ -434,8 +628,8 @@
                 {#each groupedAttachments.root as { attachment, originalIndex } (attachment)}
                     <li
                         class="p-2 flex items-center justify-between group cursor-pointer"
-                        class:bg-blue-100={currentTrackIndex === originalIndex}
-                        class:dark:bg-blue-800={currentTrackIndex === originalIndex}
+                        class:bg-blue-100={currentTrackIndex === originalIndex || (typeof attachment === 'object' && attachment.is_transcript && attachment.path === $project.activeTranscriptPathInDataTab)}
+                        class:dark:bg-blue-800={currentTrackIndex === originalIndex || (typeof attachment === 'object' && attachment.is_transcript && attachment.path === $project.activeTranscriptPathInDataTab)}
                         on:click={() => playTrack(originalIndex)}
                     >
                         <div class="flex items-center space-x-3 truncate">
@@ -449,6 +643,8 @@
                             {:else if typeof attachment === 'object' && attachment.view_name}
                                 {#if attachment.view_type === 'partial'}<Table2 class="w-4 h-4 text-gray-400 shrink-0" />{/if}
                                 {#if attachment.view_type === 'pivot'}<LayoutGrid class="w-4 h-4 text-gray-400 shrink-0" />{/if}
+                            {:else if typeof attachment === 'object' && attachment.is_transcript}
+                                <MessageSquareText class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else if typeof attachment === 'string' && attachment.endsWith('.json')}
                                 <FileText class="w-4 h-4 text-gray-400 shrink-0" />
                             {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
@@ -456,7 +652,7 @@
                             {:else}
                                 <Music class="w-4 h-4 text-gray-400 shrink-0" />
                             {/if}
-                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name) : attachment}>
+                            <span class="text-sm text-gray-800 dark:text-gray-200 truncate" title={typeof attachment === 'object' ? (attachment.chart_name || attachment.view_name || (attachment.is_transcript ? attachment.displayLabel : '')) : attachment}>
                                 {getFileName(attachment)}
                             </span>
                         </div>
@@ -466,8 +662,8 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#chart-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenChart', { chart: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteChart(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -480,13 +676,30 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#view-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenView', { view: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestConfigureView', { view: attachment }); }}>
                                         <Settings class="w-4 h-4 text-gray-500" /> Configure
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteView(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
+                            </div>
+                        {:else if typeof attachment === 'object' && attachment.is_transcript}
+                            <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Transcript Options" id="transcript-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
+                                </button>
+                                <Dropdown triggeredBy="#transcript-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; switchTranscriptInDataTab(attachment.path); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); openRenameModal(attachment); }}>
+                                        <FilePenLine class="w-4 h-4 text-gray-500" /> Rename...
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteTranscript(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
                                     </DropdownItem>
                                 </Dropdown>
@@ -497,8 +710,8 @@
                                     <MoreVertical class="w-4 h-4" />
                                 </button>
                                 <Dropdown triggeredBy="#doc-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
-                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); currentTrackIndex = originalIndex; dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
-                                        <ExternalLink class="w-4 h-4 text-gray-500" /> Open
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); dispatch('requestOpenLexicalDocument', { docPath: attachment }); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
                                     </DropdownItem>
                                     <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
                                         <Trash2 class="w-4 h-4" /> Delete
@@ -507,15 +720,31 @@
                             </div>
                         {:else if typeof attachment === 'string' && /\.(png|jpe?g|gif|webp|svg)$/i.test(attachment)}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Image" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
-                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Image Options" id="image-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
                                 </button>
+                                <Dropdown triggeredBy="#image-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
                             </div>
                         {:else}
                             <div class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center">
-                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Delete Audio" on:click|stopPropagation={() => handleDeleteDocument(attachment)}>
-                                    <Trash2 class="w-4 h-4 hover:text-red-500" />
+                                <button class="text-gray-500 dark:text-gray-400 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded" title="Media Options" id="media-options-{originalIndex}" on:click|stopPropagation>
+                                    <MoreVertical class="w-4 h-4" />
                                 </button>
+                                <Dropdown triggeredBy="#media-options-{originalIndex}" class="w-36 z-50" on:click={(e) => e.stopPropagation()}>
+                                    <DropdownItem class="flex items-center gap-2" on:click={(e) => { e.stopPropagation(); playTrack(originalIndex); }}>
+                                        <SquareArrowOutUpLeft class="w-4 h-4 text-gray-500" /> Open
+                                    </DropdownItem>
+                                    <DropdownItem class="flex items-center gap-2 text-red-600 dark:text-red-400" on:click={(e) => { e.stopPropagation(); handleDeleteDocument(attachment); }}>
+                                        <Trash2 class="w-4 h-4" /> Delete
+                                    </DropdownItem>
+                                </Dropdown>
                             </div>
                         {/if}
                     </li>
@@ -528,3 +757,27 @@
         {/if}
     </div>
 </div>
+
+<FileRenameModal
+    bind:showModal={showRenameModal}
+    currentName={itemToRename?.name || ''}
+    itemType={itemToRename?.file_type || ''}
+    on:confirm={handleRenameConfirm}
+    on:close={handleRenameModalClose}
+/>
+
+<FileRenameModal
+    bind:showModal={showRenameFolderModal}
+    currentName={folderToRename?.viewName || ''}
+    itemType={'survey view'}
+    on:confirm={handleRenameFolderConfirm}
+    on:close={() => showRenameFolderModal = false}
+/>
+
+<ImagePreviewModal
+    bind:showModal={showImagePreviewModal}
+    imagePath={imagePreviewPath}
+    on:insert={(e) => dispatch('requestInsertAttachedImage', { imagePath: e.detail.path })}
+    on:delete={(e) => handleDeleteDocument(e.detail.path)}
+    on:cancel={() => showImagePreviewModal = false}
+/>

@@ -626,3 +626,95 @@ pub fn delete_all_table_views_for_table(
 
     Ok(())
 }
+pub fn rename_table_view(
+    project_id: &str,
+    table_path: &str,
+    old_view_name: &str,
+    new_view_name: &str,
+    project_xml_path_str: &str,
+) -> Result<(), CommandError> {
+    let db_path = get_db_path()?;
+    let conn = Connection::open(db_path)?;
+
+    info!("[DB] Renaming table view from '{}' to '{}' for table '{}' in project '{}'", old_view_name, new_view_name, table_path, project_id);
+
+    // Get the view type and config
+    let mut stmt = conn.prepare(
+        "SELECT view_type, config_json
+         FROM table_views
+         WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3"
+    )?;
+
+    let (view_type, config_json_str): (String, String) = stmt.query_row(params![project_id, table_path, old_view_name], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    }).map_err(|e| CommandError::from(format!("Failed to find view to rename: {}", e)))?;
+
+    conn.execute(
+        "UPDATE table_views SET view_name = ?1, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?2 AND table_path = ?3 AND view_name = ?4",
+        params![new_view_name, project_id, table_path, old_view_name],
+    )?;
+
+    if view_type == "survey" {
+        let config: Value = serde_json::from_str(&config_json_str).unwrap_or(json!({}));
+        let survey_group_by_type = config.get("surveyGroupByType").and_then(|v| v.as_str()).unwrap_or("Participants");
+
+        let target_dir_suffix = if survey_group_by_type == "Participants" { "participants" } else { "questions" };
+        let old_target_dir_name = format!("{}_{}", old_view_name, target_dir_suffix);
+        let new_target_dir_name = format!("{}_{}", new_view_name, target_dir_suffix);
+
+        let project_xml_path = PathBuf::from(project_xml_path_str);
+        if let Some(project_base_dir) = project_xml_path.parent() {
+            let table_path_buf = PathBuf::from(table_path);
+            if let Some(table_dir) = table_path_buf.parent() {
+                let rel_base_attachments_dir = table_dir.join("attachments");
+
+                let rel_old_target_dir = rel_base_attachments_dir.join(&old_target_dir_name);
+                let rel_new_target_dir = rel_base_attachments_dir.join(&new_target_dir_name);
+
+                let abs_old_target_dir = project_base_dir.join(&rel_old_target_dir);
+                let abs_new_target_dir = project_base_dir.join(&rel_new_target_dir);
+
+                if abs_old_target_dir.exists() && abs_old_target_dir.is_dir() {
+                    if let Err(e) = fs::rename(&abs_old_target_dir, &abs_new_target_dir) {
+                        error!("[Survey Rename] Failed to rename directory on disk: {}", e);
+                    } else {
+                        // Update asset metadata
+                        if let Ok(Some(metadata_from_db)) = db_handler::load_asset_metadata(project_id, table_path) {
+                            if let Some(custom_fields_json_str) = metadata_from_db.custom_fields_json {
+                                if let Ok(mut custom_fields) = serde_json::from_str::<Vec<Value>>(&custom_fields_json_str) {
+                                    if let Some(attachments_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
+                                        if let Some(attachments_str) = attachments_field.get("value").and_then(|v| v.as_str()) {
+                                            if let Ok(mut attachments) = serde_json::from_str::<Vec<String>>(attachments_str) {
+                                                let old_prefix = rel_old_target_dir.to_string_lossy().to_string().replace("\\", "/");
+                                                let new_prefix = rel_new_target_dir.to_string_lossy().to_string().replace("\\", "/");
+
+                                                for path in &mut attachments {
+                                                    if path.starts_with(&old_prefix) {
+                                                        *path = path.replace(&old_prefix, &new_prefix);
+                                                    }
+                                                }
+
+                                                let new_attachments_str = serde_json::to_string(&attachments).unwrap_or_else(|_| "[]".to_string());
+                                                if let Some(obj) = attachments_field.as_object_mut() {
+                                                    obj.insert("value".to_string(), json!(new_attachments_str));
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+                                    let _ = conn.execute(
+                                        "UPDATE asset_metadata SET custom_fields_json = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
+                                        params![updated_custom_fields_json_str, project_id, table_path],
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
