@@ -240,6 +240,15 @@
 			durationText = `${seconds}s`;
 		}
 	}
+
+	let translationFileName = '';
+	$: if ($transcriptStore.translationSourcePath) {
+		basename($transcriptStore.translationSourcePath).then(res => {
+			translationFileName = res;
+		});
+	} else {
+		translationFileName = '';
+	}
 </script>
 
 <Modal
@@ -344,6 +353,11 @@
 					<p class="text-lg font-bold text-gray-900 dark:text-white">
 						{jobStatus === 'initiating' ? 'Preparing Job...' : 'Translating...'}
 					</p>
+					{#if translationFileName}
+						<p class="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-xs mx-auto" title={translationFileName}>
+							{translationFileName}
+						</p>
+					{/if}
 					<p class="text-sm text-gray-500 dark:text-gray-400 h-10 flex items-center justify-center">
 						{progressMessage || 'Processing translation segments...'}
 					</p>

@@ -2645,7 +2645,7 @@ export async function requestTranslation(transcriptPath, modelName, targetLangua
         return;
     }
 
-    setTranslationStatus(true, null, { status: 'initiating' });
+    setTranslationStatus(true, null, { status: 'initiating', sourcePath: transcriptPath });
 
     try {
         const initiatedPayload = await invoke('translate_transcript_command', {
@@ -2682,7 +2682,7 @@ export async function requestDocumentTranslation(documentPath, modelName, target
         return;
     }
 
-    setTranslationStatus(true, null, { status: 'initiating' });
+    setTranslationStatus(true, null, { status: 'initiating', sourcePath: documentPath });
 
     try {
         const initiatedPayload = await invoke('translate_document_command', {
@@ -2719,7 +2719,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
         return;
     }
 
-    setTranslationStatus(true, null, { status: 'initiating' });
+    setTranslationStatus(true, null, { status: 'initiating', sourcePath: transcriptPath });
 
     try {
         const initiatedPayload = await invoke('translate_imported_transcript_command', {

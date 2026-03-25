@@ -92,6 +92,7 @@ export const initialTranscriptState = {
     ranTranslationInBackground: false,
     translationJobStatus: null, // e.g., 'initiating', 'running', 'done', 'error', 'cancelled'
     translationErrorMessage: null,
+    translationSourcePath: null,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -1620,6 +1621,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
                 updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             case 'error':
                 finalProgressMessage = `Translation failed: ${errorMessage || 'Unknown error'}`;
@@ -1630,6 +1632,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationErrorMessage = errorMessage;
                 updatePayload.isTranslating = false;
                 updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             case 'cancelled':
                 finalProgressMessage = "Translation cancelled";
@@ -1640,6 +1643,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
                 updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             default:
                 console.warn(`[TranscriptStore] Unknown status in translation_job_completed: ${status}`);
@@ -1921,7 +1925,8 @@ export function setRanTranslationInBackground(value) {
 export function setTranslationStatus(isTranslating, jobIdToSet = null, options = {}) {
     const {
         status = null,
-        errorMessage = null
+        errorMessage = null,
+        sourcePath = null
     } = options;
 
     transcriptStore.update((ts) => {
@@ -1931,7 +1936,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             
             // Set start time if starting fresh, otherwise keep existing
-            const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
+            const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
 
             updatedState = {
                 ...ts,
@@ -1946,6 +1951,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
                 translationErrorMessage: null,
                 ranTranslationInBackground: false,
                 showTranslateModal: true,
+                translationSourcePath: sourcePath || ts.translationSourcePath,
             };
         } else {
             const currentJobStatus = status || ts.translationJobStatus;
@@ -1962,9 +1968,11 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             updatedState = {
                 ...ts,
                 isTranslating: false,
+                translationJobId: jobIdToSet !== null ? jobIdToSet : ts.translationJobId,
                 translationJobStatus: currentJobStatus,
                 translationErrorMessage: errorMessage || ts.translationErrorMessage,
                 showTranslateModal: newShowModalConfig,
+                translationSourcePath: (currentJobStatus === 'done' || currentJobStatus === 'cancelled' || currentJobStatus === 'error' || currentJobStatus === null) ? null : ts.translationSourcePath
             };
 
             if (currentJobStatus === null) {

@@ -109,6 +109,9 @@
     }
 
     $: showTranslateDocumentModal = $transcriptStore.showTranslateModal;
+    $: isCurrentMediaTranslating = $transcriptStore.isTranslating && $transcriptStore.translationSourcePath === $project.activeTranscriptPathInDataTab;
+    $: currentDocPath = isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath;
+    $: isCurrentDocTranslating = $transcriptStore.isTranslating && $transcriptStore.translationSourcePath === currentDocPath;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -564,8 +567,12 @@
             <span>Transcribe</span>
         </Button>
 
-        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title={$transcriptStore.isTranslating ? "Translation in Progress" : "Translate Transcript"} disabled={$transcriptStore.isTranslating}>
-            {#if $transcriptStore.isTranslating}
+        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
+            on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
+            title={isCurrentMediaTranslating ? "View Translation Status" : $transcriptStore.isTranslating ? "Translation in Progress (Another File)" : "Translate Transcript"}
+            disabled={$transcriptStore.isTranslating && !isCurrentMediaTranslating}
+        >
+            {#if isCurrentMediaTranslating}
                 <Languages class="w-3.5 h-3.5 animate-spin" />
                 <span>Translating...</span>
             {:else}
@@ -581,8 +588,12 @@
         </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => toggleTranslateModal(true)} title={$transcriptStore.isTranslating ? "Translation in Progress" : "Translate Document"} disabled={$transcriptStore.isTranslating}>
-                {#if $transcriptStore.isTranslating}
+            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
+                on:click={() => toggleTranslateModal(true)} 
+                title={isCurrentDocTranslating ? "View Translation Status" : $transcriptStore.isTranslating ? "Translation in Progress (Another File)" : "Translate Document"}
+                disabled={$transcriptStore.isTranslating && !isCurrentDocTranslating}
+            >
+                {#if isCurrentDocTranslating}
                     <Languages class="w-3.5 h-3.5 animate-spin" />
                     <span>Translating...</span>
                 {:else}
@@ -780,6 +791,7 @@
     activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
     on:openConfig={() => dispatch("openConfig")}
+    on:runInBackgroundAndClose={() => toggleTranslateModal(false)}
     on:closeAndReset={() => toggleTranslateModal(false)}
 />
 
