@@ -7,6 +7,11 @@ import { listen } from '@tauri-apps/api/event';
 import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
+function getFilename(path) {
+    if (!path) return '';
+    return path.split(/[\\/]/).pop();
+}
+
 function normalizePath(path) {
     if (typeof path !== 'string') {
         return path;
@@ -93,6 +98,8 @@ export const initialTranscriptState = {
     translationJobStatus: null, // e.g., 'initiating', 'running', 'done', 'error', 'cancelled'
     translationErrorMessage: null,
     translationSourcePath: null,
+    transcriptionOutputFileName: null,
+    translationOutputFileName: null,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -1478,10 +1485,12 @@ listen('custom_transcription_job_completed', async (event) => {
 
         switch (status) {
             case 'done':
-                finalProgressMessage = "Transcription successful";
+                const outputFilename = getFilename(transcriptFilePath || translatedTranscriptFilePath);
+                finalProgressMessage = `Transcription successful: ${outputFilename}`;
                 if (shouldShowToastNotification) {
                     notificationManager.add(finalProgressMessage, "success", 0);
                 }
+                updatePayload.transcriptionOutputFileName = outputFilename;
                 updatePayload.transcriptionJobStatus = 'done';
                 updatePayload.transcriptionErrorMessage = null;
                 updatePayload.isTranscribing = false;
@@ -1613,10 +1622,12 @@ listen('translation_job_completed', async (event) => {
 
         switch (status) {
             case 'done':
-                finalProgressMessage = "Translation successful";
+                const outputFilenameTransl = getFilename(newTranscriptPath);
+                finalProgressMessage = `Translation successful: ${outputFilenameTransl}`;
                 if (shouldShowToastNotification) {
                     notificationManager.add(finalProgressMessage, "success", 0);
                 }
+                updatePayload.translationOutputFileName = outputFilenameTransl;
                 updatePayload.translationJobStatus = 'done';
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;

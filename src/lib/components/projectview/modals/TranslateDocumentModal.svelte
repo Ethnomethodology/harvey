@@ -213,6 +213,7 @@
     $: jobStatus = $transcriptStore.translationJobStatus;
     $: progressMessage = $transcriptStore.translationProgress.message;
     $: currentErrorMessage = $transcriptStore.translationErrorMessage;
+    $: translationOutputFileName = $transcriptStore.translationOutputFileName;
 
 	let durationText = '';
 
@@ -384,6 +385,13 @@
 				</div>
 				<div class="space-y-1">
 					<p class="text-lg font-bold text-gray-900 dark:text-white">Translation Complete!</p>
+					{#if translationOutputFileName}
+						<div class="flex flex-col items-center">
+							<p class="text-xs font-medium text-green-600 dark:text-green-400 mt-2 bg-green-50/50 dark:bg-green-900/10 px-3 py-1 rounded-full border border-green-100/50 dark:border-green-800/20 max-w-[280px] truncate" title={translationOutputFileName}>
+								Output: {translationOutputFileName}
+							</p>
+						</div>
+					{/if}
 					{#if durationText}
 						<p class="text-sm text-gray-500 dark:text-gray-400">Total processing time: {durationText}</p>
 					{/if}
