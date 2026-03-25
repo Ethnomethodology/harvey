@@ -592,6 +592,29 @@
         const proj = get(project);
         const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+
+        // Playback speed adjustment shortcuts (Alt + [ and Alt + ])
+        if (event.altKey && (event.key === '[' || event.key === ']')) {
+            const playerStoreValue = ts.player;
+            if (playerStoreValue && selectedTab === 'transcriptions') {
+                event.preventDefault();
+                let currentSpeed = playerStoreValue.playbackRate || 1.0;
+                let newSpeed = currentSpeed;
+                if (event.key === '[') {
+                    newSpeed = Math.max(0.25, currentSpeed - 0.25);
+                } else if (event.key === ']') {
+                    newSpeed = Math.min(3.0, currentSpeed + 0.25);
+                }
+
+                if (newSpeed !== currentSpeed) {
+                    transcriptStore.update(s => ({
+                        ...s,
+                        player: { ...s.player, playbackRate: newSpeed }
+                    }));
+                }
+            }
+        }
+
         const modKey = isMac ? event.metaKey : event.ctrlKey;
         if (modKey && event.key.toLowerCase() === "s") {
             event.preventDefault();
@@ -1072,6 +1095,8 @@
                 }
             }
         }
+
+
 
         if (
             tabName !== "transcriptions" &&

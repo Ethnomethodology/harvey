@@ -270,6 +270,9 @@
 				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F8</span> <span>Play / Pause</span> </li>
 				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">F7 / F9</span> <span>Rewind / Forward</span> </li>
 				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">{modKeyName} + ↑/↓</span> <span>Prev/Next Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">Shift + Enter</span> <span>Insert New Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">Alt + ↑/↓</span> <span>Change Speaker</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[85px] text-center">Alt + [ / ]</span> <span>Speed Down / Up</span> </li>
 			</ul>
 		</div>
 	{/if}

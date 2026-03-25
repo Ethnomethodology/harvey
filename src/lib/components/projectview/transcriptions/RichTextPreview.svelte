@@ -1264,7 +1264,7 @@
             dispatch("redo");
         }
     }
-    async function handleInsertNewSegment(index) {
+    export async function handleInsertNewSegment(index) {
         if (!previewEditMode) return;
         const store = get(transcriptStore);
         const mode = store.transcriptionMode;

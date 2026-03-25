@@ -331,8 +331,21 @@
     export function handleUndoRequest() { undoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleRedoRequest() { redoTranscriptChange(); editableTranscriptRef?.forceReloadFromStore?.(); }
     export function handleInsertSegmentRequest(event) {
-        const { index, startTime, endTime, speaker } = event.detail;
+        // Detail can either be a simple index (from EditableTranscript shortcut)
+        // or a full object with timestamps (from RichTextPreview manual calculation flow)
+        if (typeof event.detail === 'number') {
+            const index = event.detail;
+            if (richTextPreviewRef && typeof richTextPreviewRef.handleInsertNewSegment === 'function') {
+                richTextPreviewRef.handleInsertNewSegment(index + 1); // Pass index + 1 to insert AFTER current
+            } else {
+                console.warn("[TranscriptionsView] richTextPreviewRef.handleInsertNewSegment is not available.");
+            }
+            return;
+        }
+
+        const { index, startTime, endTime, speaker } = event.detail || {};
         if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return;
+
         const newSegment = {
             start_time: startTime,
             end_time: endTime,
@@ -530,6 +543,7 @@
                     on:toggleedit={handleToggleEditMode}
                     on:previous={handlePreviousRequest}
                     on:next={handleNextRequest}
+                    on:insertnewsegment={handleInsertSegmentRequest}
                  />
             </div>
         </div>

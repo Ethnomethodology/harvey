@@ -22,15 +22,41 @@
 
     /* --- Keyboard Shortcut --- */
     function handleSegmentNavShortcut(event) {
-        // Ignore if focused in text inputs or contenteditable areas
         const tgt = event.target;
-        if (tgt instanceof HTMLElement) {
-            const tag = tgt.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tgt.isContentEditable) {
+        const isEditingText = tgt instanceof HTMLElement && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable);
+
+        // --- Editing Shortcuts ---
+        if (isEditingText && editEnabled && currentIndex >= 0) {
+            // Shift + Enter -> Insert new segment after current
+            if (event.shiftKey && event.key === 'Enter') {
+                event.preventDefault();
+                commitCurrentSegmentEdits();
+                dispatch('insertnewsegment', currentIndex);
+                return;
+            }
+
+            // Alt + Up/Down -> Cycle Speaker
+            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault();
+                const options = speakerOptions.map(o => o.value);
+                const currentSpeakerIndex = options.indexOf(localSpeaker);
+                if (currentSpeakerIndex !== -1) {
+                    let newIndex = currentSpeakerIndex + (event.key === 'ArrowDown' ? 1 : -1);
+                    if (newIndex < 0) newIndex = options.length - 1;
+                    if (newIndex >= options.length) newIndex = 0;
+                    localSpeaker = options[newIndex];
+                    handleSpeakerChange();
+                }
                 return;
             }
         }
-        // Meta+Arrow navigation
+
+        // --- Global / Non-editing Shortcuts ---
+        if (isEditingText) {
+            return; // Allow native text input navigation to work normally
+        }
+
+        // Meta + Arrow navigation
         if (event.metaKey && !event.ctrlKey && !event.altKey) {
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
