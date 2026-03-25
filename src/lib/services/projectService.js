@@ -5,13 +5,13 @@ import { open, confirm, message } from '@tauri-apps/plugin-dialog';
 import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 import {
-	$getRoot as _getRoot,
+    $getRoot as _getRoot,
     $createParagraphNode as _createParagraphNode,
-	$createTextNode as _createTextNode,
+    $createTextNode as _createTextNode,
     $createLineBreakNode as _createLineBreakNode,
-	$isElementNode as _isElementNode,
-	$isTextNode as _isTextNode,
-	$parseSerializedNode as _parseSerializedNode,
+    $isElementNode as _isElementNode,
+    $isTextNode as _isTextNode,
+    $parseSerializedNode as _parseSerializedNode,
     ParagraphNode, RootNode, TextNode, LineBreakNode, ElementNode
 } from 'lexical';
 import {
@@ -45,7 +45,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
 import {
-	project,
+    project,
     prepareDocumentView,
     setLoadedDocumentData,
     setDocumentLoadFailed,
@@ -59,7 +59,7 @@ import {
     prepareImportedTranscriptView,
     markImportedTranscriptChangesDiscarded,
 
-	showUnsavedChangesPrompt,
+    showUnsavedChangesPrompt,
     hideUnsavedChangesPrompt,
     setAssetImportStatus,
     showConversionPrompt,
@@ -324,17 +324,17 @@ export async function loadTableLayoutPrefs(tablePath) {
 }
 
 function findMediaPathByName(nodes, filename) {
-  if (!Array.isArray(nodes)) return null;
-  for (const node of nodes) {
-    if (node.file_type === 'media' && !node.is_directory && node.name === filename) {
-      return node.path;
+    if (!Array.isArray(nodes)) return null;
+    for (const node of nodes) {
+        if (node.file_type === 'media' && !node.is_directory && node.name === filename) {
+            return node.path;
+        }
+        if (node.children) {
+            const found = findMediaPathByName(node.children, filename);
+            if (found) return found;
+        }
     }
-    if (node.children) {
-      const found = findMediaPathByName(node.children, filename);
-      if (found) return found;
-    }
-  }
-  return null;
+    return null;
 }
 
 const HARVEY_FILES_DIR = 'harvey_files';
@@ -390,58 +390,58 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         clearTranscriptState();
 
         const loadedData = await invoke('load_project_data', { projectXmlPath });
-        
+
         const normalizedBaseDirectory = normalizePath(loadedData.base_directory);
 
         if (Array.isArray(loadedData.files)) {
-          const attachTranscripts = (nodes) => {
-            for (const node of nodes) {
-              // Normalize the node's own path
-              if (node.path) {
-                node.path = normalizePath(node.path);
-              }
+            const attachTranscripts = (nodes) => {
+                for (const node of nodes) {
+                    // Normalize the node's own path
+                    if (node.path) {
+                        node.path = normalizePath(node.path);
+                    }
 
-              if (node.file_type === 'media') {
-                // Ensure node.associated_transcripts is an array before mapping
-                node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
-                node.associated_transcripts = node.associated_transcripts.map(t => {
-                    let absolutePath = null;
-                    let name = t.name; // Preserve existing name if available
-                    if (normalizedBaseDirectory && typeof normalizedBaseDirectory === 'string' &&
-                        t.relativePath && typeof t.relativePath === 'string') {
-                        // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
-                        const base = normalizedBaseDirectory.endsWith('/') || normalizedBaseDirectory.endsWith('\\')
-                                   ? normalizedBaseDirectory.slice(0, -1)
-                                   : normalizedBaseDirectory;
-                        const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
+                    if (node.file_type === 'media') {
+                        // Ensure node.associated_transcripts is an array before mapping
+                        node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
+                        node.associated_transcripts = node.associated_transcripts.map(t => {
+                            let absolutePath = null;
+                            let name = t.name; // Preserve existing name if available
+                            if (normalizedBaseDirectory && typeof normalizedBaseDirectory === 'string' &&
+                                t.relativePath && typeof t.relativePath === 'string') {
+                                // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
+                                const base = normalizedBaseDirectory.endsWith('/') || normalizedBaseDirectory.endsWith('\\')
+                                    ? normalizedBaseDirectory.slice(0, -1)
+                                    : normalizedBaseDirectory;
+                                const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = normalizePath(`${base}/${rel}`);
-                        if (!name) { // If name is not provided by backend, derive from relativePath
-                            name = t.relativePath.split(/[\\/]/).pop();
-                        }
-                    } else {
-                        // If base_directory or relativePath is missing, we can't form a full path.
-                        // Log this, as it indicates an issue with the data from the backend or project structure.
-                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${normalizedBaseDirectory}, Relative path: ${t.relativePath}`);
-                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
-                            name = t.relativePath;
-                        }
+                                absolutePath = normalizePath(`${base}/${rel}`);
+                                if (!name) { // If name is not provided by backend, derive from relativePath
+                                    name = t.relativePath.split(/[\\/]/).pop();
+                                }
+                            } else {
+                                // If base_directory or relativePath is missing, we can't form a full path.
+                                // Log this, as it indicates an issue with the data from the backend or project structure.
+                                console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${normalizedBaseDirectory}, Relative path: ${t.relativePath}`);
+                                if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                                    name = t.relativePath;
+                                }
+                            }
+                            return {
+                                path: normalizePath(absolutePath), // Normalize absolutePath here
+                                relativePath: t.relativePath, // Always preserve the original relativePath
+                                language_code: t.language_code, // Pass the language code
+                                name: name // Add the name property
+                            };
+                        });
                     }
-                    return {
-                        path: normalizePath(absolutePath), // Normalize absolutePath here
-                        relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code, // Pass the language code
-                        name: name // Add the name property
-                    };
-                });
-              }
-              if (Array.isArray(node.children)) {
-                attachTranscripts(node.children);
-              }
-            }
-          };
-          attachTranscripts(loadedData.files);
+                    if (Array.isArray(node.children)) {
+                        attachTranscripts(node.children);
+                    }
+                }
+            };
+            attachTranscripts(loadedData.files);
         }
 
         const dataToSet = {
@@ -521,10 +521,10 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
 
         if (mediaFileToSelect) {
-            
+
             selectMedia(mediaFileToSelect, targetTranscriptPathToSelect);
-        
-            
+
+
         }
     } catch (error) {
         console.error('[ProjectService] Failed to load project data:', error);
@@ -544,48 +544,48 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
 
         if (Array.isArray(loadedData.files)) {
-          const attachTranscripts = (nodes) => {
-            for (const node of nodes) {
-              if (node.file_type === 'media') {
-                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
-                 node.associated_transcripts = node.associated_transcripts.map(t => {
-                    let absolutePath = null;
-                    let name = t.name; // Preserve existing name if available
-                    if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
-                        t.relativePath && typeof t.relativePath === 'string') {
-                        // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
-                        const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
-                                   ? loadedData.base_directory.slice(0, -1)
-                                   : loadedData.base_directory;
-                        const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
+            const attachTranscripts = (nodes) => {
+                for (const node of nodes) {
+                    if (node.file_type === 'media') {
+                        node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
+                        node.associated_transcripts = node.associated_transcripts.map(t => {
+                            let absolutePath = null;
+                            let name = t.name; // Preserve existing name if available
+                            if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
+                                t.relativePath && typeof t.relativePath === 'string') {
+                                // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
+                                const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
+                                    ? loadedData.base_directory.slice(0, -1)
+                                    : loadedData.base_directory;
+                                const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
-                        absolutePath = normalizePath(`${base}/${rel}`);
-                        if (!name) { // If name is not provided by backend, derive from relativePath
-                            name = t.relativePath.split(/[\\/]/).pop();
-                        }
-                    } else {
-                        // If base_directory or relativePath is missing, we can't form a full path.
-                        // Log this, as it indicates an issue with the data from the backend or project structure.
-                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
-                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
-                            name = t.relativePath;
-                        }
+                                absolutePath = normalizePath(`${base}/${rel}`);
+                                if (!name) { // If name is not provided by backend, derive from relativePath
+                                    name = t.relativePath.split(/[\\/]/).pop();
+                                }
+                            } else {
+                                // If base_directory or relativePath is missing, we can't form a full path.
+                                // Log this, as it indicates an issue with the data from the backend or project structure.
+                                console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                                if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                                    name = t.relativePath;
+                                }
+                            }
+                            return {
+                                path: absolutePath ? normalizePath(absolutePath) : null,
+                                relativePath: t.relativePath, // Always preserve the original relativePath
+                                language_code: t.language_code, // Pass the language code
+                                name: name // Add the name property
+                            };
+                        });
                     }
-                    return {
-                        path: absolutePath ? normalizePath(absolutePath) : null,
-                        relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code, // Pass the language code
-                        name: name // Add the name property
-                    };
-                });
-              }
-              if (Array.isArray(node.children)) {
-                attachTranscripts(node.children);
-              }
-            }
-          };
-          attachTranscripts(loadedData.files);
+                    if (Array.isArray(node.children)) {
+                        attachTranscripts(node.children);
+                    }
+                }
+            };
+            attachTranscripts(loadedData.files);
         }
 
         const preRefreshSelectedPath = get(transcriptStore).selectedMediaFile?.path;
@@ -616,7 +616,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                 return ts;
             });
         } else if (preRefreshSelectedPath) {
-             transcriptStore.update(ts => {
+            transcriptStore.update(ts => {
                 if (ts.selectedMediaFile?.path === preRefreshSelectedPath) {
                     return { ...ts, selectedMediaFile: null };
                 }
@@ -743,11 +743,11 @@ export async function importDocumentFile() {
         return;
     }
 
-     const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a document");
-     if (!canProceedDialog) {
-         setAssetImportStatus(false, 'Document import cancelled by user.');
-         return;
-     }
+    const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a document");
+    if (!canProceedDialog) {
+        setAssetImportStatus(false, 'Document import cancelled by user.');
+        return;
+    }
 
     let sourceFilePath = '';
     let backendResultPathAndOriginalFilename = '';
@@ -771,8 +771,8 @@ export async function importDocumentFile() {
                 showConversionPrompt(sourceFilename, () => { hideConversionPrompt(); resolve(true); }, () => { hideConversionPrompt(); resolve(false); });
             });
             if (!conversionConfirmed) {
-                 project.update(p => ({ ...p, statusMessage: 'Document import cancelled.' }));
-                 return;
+                project.update(p => ({ ...p, statusMessage: 'Document import cancelled.' }));
+                return;
             }
         }
 
@@ -794,7 +794,7 @@ export async function importDocumentFile() {
         if (!tempHtmlPath || !tempHtmlPath.toLowerCase().endsWith('.html')) throw new Error("Backend did not return expected temporary HTML path.");
 
         const htmlContent = await invoke('read_file_content', { path: tempHtmlPath });
-        try { await invoke('delete_temporary_file', { path: tempHtmlPath }); } catch(delErr) { console.warn(`[ProjectService] Failed to delete temp HTML: ${tempHtmlPath}`); }
+        try { await invoke('delete_temporary_file', { path: tempHtmlPath }); } catch (delErr) { console.warn(`[ProjectService] Failed to delete temp HTML: ${tempHtmlPath}`); }
 
         let lexicalJsonString = '';
         const conversionEditor = createConversionEditor('import-doc');
@@ -803,7 +803,7 @@ export async function importDocumentFile() {
             await conversionEditor.update(() => { const nodes = _generateNodesFromDOM(conversionEditor, dom); _getRoot().clear(); _getRoot().append(...nodes); });
             const editorState = conversionEditor.getEditorState();
             if (editorState.isEmpty()) {
-                 conversionEditor.update(() => { _getRoot().clear(); const para = _createParagraphNode(); para.append(_createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)); _getRoot().append(para); });
+                conversionEditor.update(() => { _getRoot().clear(); const para = _createParagraphNode(); para.append(_createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)); _getRoot().append(para); });
             }
             lexicalJsonString = JSON.stringify(conversionEditor.getEditorState().toJSON(), null, 2);
         } catch (lexicalError) {
@@ -833,7 +833,7 @@ export async function importDocumentFile() {
         setAssetImportStatus(false, `Error importing: ${errorMessage}`);
         if (backendResultPathAndOriginalFilename && !backendResultPathAndOriginalFilename.toLowerCase().endsWith('.pdf') && backendResultPathAndOriginalFilename.includes('.html')) {
             let pathToClean = backendResultPathAndOriginalFilename.split("|original_filename:")[0];
-            try { await invoke('delete_temporary_file', { path: pathToClean }); } catch(delErr) {}
+            try { await invoke('delete_temporary_file', { path: pathToClean }); } catch (delErr) { }
         }
     }
 }
@@ -851,7 +851,7 @@ export async function importImageFile() {
         setAssetImportStatus(false, 'Image import cancelled by user.'); return;
     }
     try {
-        const selected = await open({ multiple: false, directory: false, filters: [imageFilter], title: 'Import Image File'});
+        const selected = await open({ multiple: false, directory: false, filters: [imageFilter], title: 'Import Image File' });
         if (!selected || typeof selected !== 'string') {
             project.update(p => ({ ...p, statusMessage: 'Image import cancelled.' })); return;
         }
@@ -885,7 +885,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
     }
     try {
         if (sourceType === 'msWord') {
-            const selected = await open({ multiple: false, directory: false, filters: [wordDocumentFilter], title: 'Import MS Word Transcript (.docx)'});
+            const selected = await open({ multiple: false, directory: false, filters: [wordDocumentFilter], title: 'Import MS Word Transcript (.docx)' });
             if (!selected || typeof selected !== 'string') {
                 project.update(p => ({ ...p, statusMessage: 'Transcript import cancelled.' })); return;
             }
@@ -1146,10 +1146,10 @@ export async function getAssetMetadata(assetRelativePath) {
 
 export async function loadTranscriptFile(transcriptFilePath) {
     if (!transcriptFilePath) {
-        project.update(p => ({ ...p, error: "Transcript file path is missing."}));
+        project.update(p => ({ ...p, error: "Transcript file path is missing." }));
         throw new Error("Transcript file path is required.");
     }
-    if (!transcriptFilePath.toLowerCase().endsWith('.json')) {}
+    if (!transcriptFilePath.toLowerCase().endsWith('.json')) { }
     const filename = transcriptFilePath.split(/[\\/]/).pop();
     project.update(p => ({ ...p, statusMessage: `Loading transcript ${filename}...` }));
     try {
@@ -1180,7 +1180,7 @@ export async function loadTranscriptFile(transcriptFilePath) {
             errorMessage = error;
         }
 
-        project.update(p => ({ ...p, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.`}));
+        project.update(p => ({ ...p, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.` }));
         throw new Error(`Failed to load transcript: ${errorMessage}`);
     }
 }
@@ -1199,7 +1199,7 @@ export async function saveTranscriptData() {
     let fullLexicalTableJsonString = "";
     try {
         const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), });
-        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); let speakerName = segment.speaker || "Unknown"; if (speakerName !== "Unknown" && !speakerName.endsWith(':')) { speakerName += ':'; } pSpeaker.append(_createTextNode(speakerName)); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
+        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); let speakerName = segment.speaker || "Unknown"; if (speakerName !== "Unknown" && !speakerName.endsWith(':')) { speakerName += ':'; } pSpeaker.append(_createTextNode(speakerName)); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError); } } else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError); } } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError); } }); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
         fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
 
         // Add validation here
@@ -1229,7 +1229,7 @@ export async function replaceTranscriptText(segmentIndex, isPrimary, find, repla
 
     const segment = segments[segmentIndex];
     const updatedJson = await performReplaceInLexicalJson(segment.text, find, replace, offset, length);
-    
+
     const { updateSegment, updateSecondarySegment } = await import('$lib/stores/transcriptStore.js');
     if (isPrimary) {
         updateSegment(segmentIndex, { text: updatedJson });
@@ -1241,7 +1241,7 @@ export async function replaceTranscriptText(segmentIndex, isPrimary, find, repla
 export async function replaceAllTranscriptText(find, replace, options = {}) {
     const tsStore = get(transcriptStore);
     const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
-    
+
     project.update(p => ({ ...p, isLoading: true, statusMessage: 'Replacing all occurrences...' }));
 
     const processSegments = async (segs, updateFn) => {
@@ -1255,7 +1255,7 @@ export async function replaceAllTranscriptText(find, replace, options = {}) {
     };
 
     const { updateSegment, updateSecondarySegment, pushToUndoStack } = await import('$lib/stores/transcriptStore.js');
-    
+
     pushToUndoStack();
     await processSegments(tsStore.segments, updateSegment);
     if (tsStore.isDualModeActive) {
@@ -1309,10 +1309,10 @@ async function performReplaceInLexicalJson(json, find, replace, offset, length) 
             // We'll keep the first node, update its text, and remove the others
             const firstNode = nodesToRemove[0];
             const lastNode = nodesToRemove[nodesToRemove.length - 1];
-            
+
             const firstNodeText = firstNode.getTextContent();
             const lastNodeText = lastNode.getTextContent();
-            
+
             const endOffsetInLastNode = matchEnd - (currentOffset - lastNode.getTextContentSize());
 
             if (nodesToRemove.length === 1) {
@@ -1325,7 +1325,7 @@ async function performReplaceInLexicalJson(json, find, replace, offset, length) 
                 const prefix = firstNodeText.slice(0, startOffsetInNode);
                 const suffix = lastNodeText.slice(endOffsetInLastNode);
                 firstNode.setTextContent(prefix + replace + suffix);
-                
+
                 // Remove intermediate nodes
                 for (let i = 1; i < nodesToRemove.length; i++) {
                     nodesToRemove[i].remove();
@@ -1350,10 +1350,10 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
 
     await editor.update(() => {
         const root = _getRoot();
-        
+
         // We must re-visit and re-flatten after each match replacement 
         // OR work backwards. Reverse order is safer for offsets.
-        
+
         const textNodes = [];
         const visit = (node) => {
             if (_isTextNode(node)) textNodes.push(node);
@@ -1397,12 +1397,12 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
             if (nodesInMatch.length > 0) {
                 const first = nodesInMatch[0];
                 const last = nodesInMatch[nodesInMatch.length - 1];
-                
+
                 const prefix = first.node.getTextContent().slice(0, first.startInNode);
                 const suffix = last.node.getTextContent().slice(last.endInNode);
-                
+
                 first.node.setTextContent(prefix + replace + suffix);
-                
+
                 // Remove intermediate and last nodes if multiple nodes involved
                 for (let j = 1; j < nodesInMatch.length; j++) {
                     nodesInMatch[j].node.remove();
@@ -1415,16 +1415,18 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
 }
 
 export async function refreshProjectFiles(targetPathToSelect = null, targetTranscriptPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect, targetTranscriptPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
-export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
-    const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
-    await refreshProjectFiles(); // Refresh the file list after rename
-    project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.`, fileRenamed: { oldPath: itemPath, newPath: newPath } }));
-} catch (error) {
-    const errorMessage = error?.message || String(error);
-    await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' });
-    project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false }));
-    throw error;
-} }
+export async function renameProjectItem(itemPath, newName, itemType) {
+    const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
+        const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
+        await refreshProjectFiles(); // Refresh the file list after rename
+        project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.`, fileRenamed: { oldPath: itemPath, newPath: newPath } }));
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' });
+        project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false }));
+        throw error;
+    }
+}
 export async function deleteProjectItem(itemPath) {
     const currentProj = get(project);
     const currentTs = get(transcriptStore);
@@ -1458,29 +1460,30 @@ export async function deleteProjectItem(itemPath) {
 
         // Re-prepare the media note view to auto-select any remaining transcript if the active one was deleted
         if (wasActiveTranscriptInDataTab && currentProj.selectedMediaNotePath) {
-             // Instead of calling prepareMediaNoteView directly (which forces the app into a global loading state
-             // that might get stuck if the user is in the Transcriptions tab), we just resolve the fallback manually.
-             const currentProjectState = get(project);
-             function findMediaFileInTree(nodes, path) {
-                 if (!Array.isArray(nodes)) return null;
-                 for (const node of nodes) {
-                     if (node.path === path && node.file_type === 'media') return node;
-                     if (node.children) { const found = findMediaFileInTree(node.children, path); if (found) return found; }
-                 }
-                 return null;
-             }
-             const mediaFileNode = findMediaFileInTree(currentProjectState.files, currentProj.selectedMediaNotePath);
-             const fallbackPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+            // Instead of calling prepareMediaNoteView directly (which forces the app into a global loading state
+            // that might get stuck if the user is in the Transcription tab), we just resolve the fallback manually.
+            const currentProjectState = get(project);
+            function findMediaFileInTree(nodes, path) {
+                if (!Array.isArray(nodes)) return null;
+                for (const node of nodes) {
+                    if (node.path === path && node.file_type === 'media') return node;
+                    if (node.children) { const found = findMediaFileInTree(node.children, path); if (found) return found; }
+                }
+                return null;
+            }
+            const mediaFileNode = findMediaFileInTree(currentProjectState.files, currentProj.selectedMediaNotePath);
+            const fallbackPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
 
-             project.update(p => ({
-                 ...p,
-                 activeTranscriptPathInDataTab: fallbackPath,
-                 mediaNoteTranscriptError: fallbackPath ? null : "INFO:FILE_NOT_FOUND",
-             }));
+            project.update(p => ({
+                ...p,
+                activeTranscriptPathInDataTab: fallbackPath,
+                mediaNoteTranscriptError: fallbackPath ? null : "INFO:FILE_NOT_FOUND",
+            }));
         }
 
         project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`, isLoading: false }));
- } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; } }
+    } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; }
+}
 export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false })); throw new Error(`Trim failed: ${errorMessage}`); } }
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
@@ -1489,7 +1492,7 @@ export async function requestTranscription() {
     console.log(`[JULES-DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
-    if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
+    if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info' }); return; }
     if (storeState.isTranscribing) {
         toggleTranscribeModal(true);
         return;
@@ -1512,7 +1515,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
             numSpeakersForPayload = 2; // Default to 2 speakers if diarize is checked but no count is set
         }
     }
-    
+
     const mediaPathForJob = currentTs.selectedMediaFile?.path;
     const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
 
@@ -1572,7 +1575,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         setTranscriptionStatus(true, backendJobId, { // Pass the backendJobId
             status: 'running',
             // The progress message might be quickly updated by the first actual progress event.
-            initialProgressMessage: `Transcription started (Job: ${backendJobId.substring(0,8)})...`,
+            initialProgressMessage: `Transcription started (Job: ${backendJobId.substring(0, 8)})...`,
             mediaPath: mediaPathForJob // Can be redundant if already set in step 1, but harmless
         });
         // The progress listener should now be able to match events to backendJobId.
@@ -1592,7 +1595,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
                 // Attempt to stringify, but this can be verbose or circular
                 const stringifiedError = JSON.stringify(error);
                 if (stringifiedError !== '{}') { // Avoid empty object stringification
-                     displayMessage = `Operation failed: ${stringifiedError}`;
+                    displayMessage = `Operation failed: ${stringifiedError}`;
                 }
             } catch (stringifyError) {
                 // Ignore if stringify fails
@@ -1687,12 +1690,12 @@ export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString
 
 async function processJsonToRemoveHighlights(jsonString) {
     if (!jsonString) return jsonString;
-    const editor = createHeadlessEditor({ 
-        nodes: ALL_EDITOR_NODES, 
-        namespace: `highlight-remover-${Date.now()}`, 
-        onError: (e) => console.error("[HighlightRemover] Error:", e) 
+    const editor = createHeadlessEditor({
+        nodes: ALL_EDITOR_NODES,
+        namespace: `highlight-remover-${Date.now()}`,
+        onError: (e) => console.error("[HighlightRemover] Error:", e)
     });
-    
+
     let parsedState;
     try {
         parsedState = editor.parseEditorState(jsonString);
@@ -1700,13 +1703,13 @@ async function processJsonToRemoveHighlights(jsonString) {
         console.warn("Failed to parse JSON for highlight removal, returning original.", e);
         return jsonString;
     }
-    
+
     editor.setEditorState(parsedState);
-    
+
     await editor.update(() => {
         const root = _getRoot();
         const nodes = [];
-        
+
         const traverse = (node) => {
             nodes.push(node);
             if (node.getChildren) {
@@ -1736,7 +1739,7 @@ async function processJsonToRemoveHighlights(jsonString) {
             }
         });
     });
-    
+
     return JSON.stringify(editor.getEditorState().toJSON());
 }
 
@@ -1758,31 +1761,31 @@ export async function convertAndSaveTranscriptAsDoc() {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
         finalLexicalJsonString = await processJsonToRemoveHighlights(fullLexicalTableString);
-        
+
         const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
-                console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
-                const originalTranscriptStem = originalTranscriptFilename.includes('.')
-                    ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
-                    : originalTranscriptFilename; // e.g., "20130922_1"
-                console.debug(`[ProjectService] originalTranscriptStem: ${originalTranscriptStem}`);
-            
-                // The base name for the new document file will be the original transcript's stem
-                const docFilenameBase = originalTranscriptStem; // Use the original stem
-                console.debug(`[ProjectService] docFilenameBase: ${docFilenameBase}`);
-            
-                // Construct the full target directory path for the new document
-                // This should be projectBaseDir/HARVEY_FILES_DIR/DOCS_DIR_NAME/originalTranscriptStem
-                const targetDocumentDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem}`;
-                console.debug(`[ProjectService] targetDocumentDir: ${targetDocumentDir}`);
-            
-                project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
-            
-                const targetFullPath = await invoke('get_unique_document_path', {
-                    targetDirStr: targetDocumentDir, // Pass the correctly constructed target directory
-                    baseName: docFilenameBase,
-                    extension: 'json'
-                });
-                console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`);        const docFilename = await basename(targetFullPath);
+        console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
+        const originalTranscriptStem = originalTranscriptFilename.includes('.')
+            ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
+            : originalTranscriptFilename; // e.g., "20130922_1"
+        console.debug(`[ProjectService] originalTranscriptStem: ${originalTranscriptStem}`);
+
+        // The base name for the new document file will be the original transcript's stem
+        const docFilenameBase = originalTranscriptStem; // Use the original stem
+        console.debug(`[ProjectService] docFilenameBase: ${docFilenameBase}`);
+
+        // Construct the full target directory path for the new document
+        // This should be projectBaseDir/HARVEY_FILES_DIR/DOCS_DIR_NAME/originalTranscriptStem
+        const targetDocumentDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem}`;
+        console.debug(`[ProjectService] targetDocumentDir: ${targetDocumentDir}`);
+
+        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+
+        const targetFullPath = await invoke('get_unique_document_path', {
+            targetDirStr: targetDocumentDir, // Pass the correctly constructed target directory
+            baseName: docFilenameBase,
+            extension: 'json'
+        });
+        console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`); const docFilename = await basename(targetFullPath);
         await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
 
         const relativePath = targetFullPath.substring(projectBaseDir.length + 1).replace(/\\/g, '/');
@@ -1831,7 +1834,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
     const selectedMedia = tsData.selectedMediaFile;
     const projectXmlPath = projData.xmlPath;
     const projectBaseDir = projData.baseDirectory;
-    
+
     if (!transcriptPath) throw new Error("No transcript file loaded.");
     if (!selectedMedia?.path) throw new Error("No media file selected.");
     if (!projectBaseDir) throw new Error("Project base directory not found.");
@@ -1843,14 +1846,14 @@ export async function convertAndSaveTranscriptAsTranscript() {
         const rawLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!rawLexicalTableString) throw new Error("Transcript file content is empty.");
         const fullLexicalTableString = await processJsonToRemoveHighlights(rawLexicalTableString);
-        
-        const originalTranscriptFilename = await basename(transcriptPath); 
+
+        const originalTranscriptFilename = await basename(transcriptPath);
         const originalTranscriptStem = originalTranscriptFilename.includes('.')
             ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
             : originalTranscriptFilename;
-        
+
         const transcriptFilenameBase = originalTranscriptStem;
-        
+
         // Target is Transcripts folder
         // Note: sep() returns a promise in Tauri v2, so await it if needed, or use the imported symbol if it's a string.
         // In this file 'sep' is imported from @tauri-apps/api/path which is a Promise in v2 usually? 
@@ -1861,14 +1864,14 @@ export async function convertAndSaveTranscriptAsTranscript() {
         // So yes, it is called as a function.
 
         const targetTranscriptsDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${TRANSCRIPTS_DIR_IMPORTED}${sep()}${originalTranscriptStem}`;
-        
+
         // Use get_unique_document_path to ensure uniqueness (reuse checking logic)
         const targetFullPath = await invoke('get_unique_document_path', {
             targetDirStr: targetTranscriptsDir,
             baseName: transcriptFilenameBase,
             extension: 'json'
         });
-        
+
         const transcriptFilename = await basename(targetFullPath);
 
         await invoke('save_imported_transcript_and_update_xml', {
@@ -1939,12 +1942,12 @@ export async function convertAndSaveTranscriptAsTranscript() {
         return targetFullPath;
 
     } catch (error) {
-         project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${error.message || error}` }));
-         throw error;
+        project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${error.message || error}` }));
+        throw error;
     }
 }
 
-export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
+export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({ ...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
 export async function saveCurrentPdfAnnotations() {
     const projState = get(project);
     if (!projState.selectedDocumentPath || !projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) return;
@@ -2012,13 +2015,13 @@ export async function saveTableData(tablePath, tableData, orderedHeaders) {
 }
 export async function saveDocumentContent(filePath, jsonContent) {
     if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
-        project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'}));
+        project.update(p => ({ ...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).' }));
         throw new Error("PDF content saving is not handled by saveDocumentContent.");
     }
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'}));
+        project.update(p => ({ ...p, documentError: errorMsg, statusMessage: 'Save failed.' }));
         throw new Error(errorMsg);
     }
     try {
@@ -2027,7 +2030,7 @@ export async function saveDocumentContent(filePath, jsonContent) {
     } catch (e) {
         const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`;
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        project.update(p => ({ ...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
         throw new Error(errorMsg);
     }
 
@@ -2123,7 +2126,7 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.'}));
+        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.' }));
         throw new Error(errorMsg);
     }
     try {
@@ -2132,7 +2135,7 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     } catch (e) {
         const errorMsg = `Cannot save transcript: Content not valid JSON or invalid structure. ${e.message}`;
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
         throw new Error(errorMsg);
     }
 
@@ -2405,7 +2408,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         itemPath = projState.selectedDocumentPath;
         itemTypeForPrompt = 'table';
         saveFunction = async () => saveTableData(itemPath, projState.tableData);
-        discardFunction = () => {};
+        discardFunction = () => { };
     } else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
@@ -2491,7 +2494,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                 if (proceedAfterFail) {
                     if (discardFunction) discardFunction();
                     if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null && itemTypeForPrompt !== 'PDF annotations') {
-                         resetEditorFunction(initialContentForReset);
+                        resetEditorFunction(initialContentForReset);
                     }
                     return true;
                 } else {
@@ -2500,7 +2503,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             }
         } else {
             console.warn(`[checkUnsavedChanges] Autosave ON, but save method missing for dirty item "${itemName}" (${itemTypeForPrompt}). Blocking action.`);
-            await message(`Cannot ${actionContextDisplay}: Unsaved changes exist for "${itemName}", but an automatic save could not be performed (missing save capability for this item type). Please save or discard changes manually.`, { title: 'Autosave Error', type: 'error'});
+            await message(`Cannot ${actionContextDisplay}: Unsaved changes exist for "${itemName}", but an automatic save could not be performed (missing save capability for this item type). Please save or discard changes manually.`, { title: 'Autosave Error', type: 'error' });
             return false;
         }
     }
@@ -2539,7 +2542,7 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
     relativePdfPath = relativePdfPath.replace(/\\/g, '/');
 
     const filename = await basename(pdfAbsPath);
-    project.update(p => ({ ...p, statusMessage: `Loading annotations for ${filename}...`}));
+    project.update(p => ({ ...p, statusMessage: `Loading annotations for ${filename}...` }));
 
     try {
         if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
@@ -2805,17 +2808,17 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
     // 3. Generate Lexical JSON
     let fullLexicalTableJsonString = "";
     try {
-        const editorForTableAssembly = createHeadlessEditor({ 
-            nodes: ALL_EDITOR_NODES, 
-            namespace: `manual-table-assembly-${Date.now()}`, 
-            onError: (e) => console.error("[ManualTableAssembly] Error:", e), 
+        const editorForTableAssembly = createHeadlessEditor({
+            nodes: ALL_EDITOR_NODES,
+            namespace: `manual-table-assembly-${Date.now()}`,
+            onError: (e) => console.error("[ManualTableAssembly] Error:", e),
         });
 
         await editorForTableAssembly.update(() => {
             const root = _getRoot();
             root.clear();
             const tableNode = _createTableNode();
-            
+
             // Headers
             const headerRow = _createTableRowNode();
             const headers = ["#", "Timestamp", "Speaker", "Text"];
@@ -2832,14 +2835,14 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
             for (let i = 0; i < segments.length; i++) {
                 const segment = segments[i];
                 const dataRow = _createTableRowNode();
-                
+
                 // #
                 const cellNum = _createTableCellNode();
                 const pNum = _createParagraphNode();
                 pNum.append(_createTextNode(String(i + 1)));
                 cellNum.append(pNum);
                 dataRow.append(cellNum);
-                
+
                 // Timestamp
                 const cellTime = _createTableCellNode();
                 const pTime = _createParagraphNode();
@@ -2848,7 +2851,7 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                 pTime.append(_createTextNode(`${startTime} - ${endTime}`));
                 cellTime.append(pTime);
                 dataRow.append(cellTime);
-                
+
                 // Speaker
                 const cellSpeaker = _createTableCellNode();
                 const pSpeaker = _createParagraphNode();
@@ -2859,7 +2862,7 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                 pSpeaker.append(_createTextNode(speakerName));
                 cellSpeaker.append(pSpeaker);
                 dataRow.append(cellSpeaker);
-                
+
                 // Text
                 const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
@@ -2874,7 +2877,7 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                         tableNode.append(dataRow);
                         continue;
                     }
-                    
+
                     function flattenNodes(nodes) {
                         return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]);
                     }
@@ -2883,10 +2886,10 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                     const serializedChildNodes = flattenNodes(rawChildren);
 
                     if (serializedChildNodes.length > 0) {
-                         const nodesToAppend = [];
-                         try {
+                        const nodesToAppend = [];
+                        try {
                             for (const serializedNode of serializedChildNodes) {
-                                if (serializedNode.type === 'root') continue; 
+                                if (serializedNode.type === 'root') continue;
                                 const node = _parseSerializedNode(serializedNode);
                                 if (node) nodesToAppend.push(node);
                             }
@@ -2895,12 +2898,12 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
                             } else {
                                 cellText.append(_createParagraphNode());
                             }
-                         } catch (parseErr) {
-                             console.error("Error parsing nodes for manual segment:", parseErr);
-                             cellText.append(_createParagraphNode());
-                         }
+                        } catch (parseErr) {
+                            console.error("Error parsing nodes for manual segment:", parseErr);
+                            cellText.append(_createParagraphNode());
+                        }
                     } else {
-                         cellText.append(_createParagraphNode());
+                        cellText.append(_createParagraphNode());
                     }
                 } else {
                     cellText.append(_createParagraphNode());
@@ -2918,9 +2921,9 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
     }
 
     // 4. Save
-    await invoke('save_transcript_json', { 
-        projectXmlPath: projectXmlPath, 
-        transcriptPath: newTranscriptPath, 
+    await invoke('save_transcript_json', {
+        projectXmlPath: projectXmlPath,
+        transcriptPath: newTranscriptPath,
         lexicalTableJsonString: fullLexicalTableJsonString,
         language_code: 'original'
     });
@@ -2939,7 +2942,7 @@ export async function createManualTranscript(mediaPath, segments, settings = nul
 export async function getProjectAssetsForLink(projectId) {
     try {
         const rawAssets = await invoke('get_project_assets_for_link_command', { projectId });
-        
+
         const categoryMap = {
             'audio': 'Audios',
             'video': 'Videos',

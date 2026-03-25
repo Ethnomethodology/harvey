@@ -19,7 +19,7 @@ const initialPanelState = {
     dataLeftPanelCollapsed: false, // For the main data/file list panel in DataView
     infoPanelCollapsed: false, // NEW - For the new combined InfoPanel, false = expanded by default
     activeInfoPanelTab: 'metadata', // NEW - Default active tab for the new InfoPanel/RightBar
-    transcriptionPanelCollapsed: false, // For the main transcription settings/info panel in TranscriptionsView
+    transcriptionPanelCollapsed: false, // For the main transcription settings/info panel in TranscriptionView
     tagsLeftPanelCollapsed: false, // Added
     groupDetailViewMode: loadedState.groupDetailViewMode || 'grid', // 'grid' or 'list', persisted
     // Add other panel states here as needed
@@ -65,7 +65,7 @@ function setActiveInfoPanelTab(tabName) {
     }));
 }
 
-// Function to toggle the Transcription Panel (main settings/info in TranscriptionsView)
+// Function to toggle the Transcription Panel (main settings/info in TranscriptionView)
 function toggleTranscriptionPanel() {
     panelStateStore.update(state => ({
         ...state,

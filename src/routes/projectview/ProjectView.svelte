@@ -79,7 +79,7 @@
     import ConfigurationModal from "$lib/components/modals/ConfigurationModal.svelte";
     import HelpModal from "$lib/components/modals/HelpModal.svelte";
     import DataView from "$lib/components/projectview/data/DataView.svelte";
-    import TranscriptionsView from "$lib/components/projectview/transcriptions/TranscriptionsView.svelte";
+    import TranscriptionView from "$lib/components/projectview/transcription/TranscriptionView.svelte";
     import TagsView from "$lib/components/projectview/tags/TagsView.svelte";
     import {
         Loader,
@@ -91,15 +91,15 @@
         Image as ImageIcon,
     } from "@lucide/svelte";
     import DataTopBar from "$lib/components/projectview/data/DataTopBar.svelte";
-    import TranscriptionsTopBar from "$lib/components/projectview/transcriptions/TopBar.svelte";
+    import TranscriptionTopBar from "$lib/components/projectview/transcription/TopBar.svelte";
     import SimpleTopBar from "$lib/components/projectview/shared/SimpleTopBar.svelte";
     import panelStateStore from "$lib/stores/panelStateStore.js";
     import CreateGroupModal from "$lib/components/projectview/modals/CreateGroupModal.svelte";
     import CreateTableModal from "$lib/components/projectview/modals/CreateTableModal.svelte";
 
     let transcribeModalRef;
-    let transcriptionsViewRef;
-    let transcriptionsTopBarRef;
+    let transcriptionViewRef;
+    let transcriptionTopBarRef;
     let dataViewRef;
     let activeSubItemPath = null;
     let activeSubItemType = null;
@@ -300,11 +300,11 @@
 
                     // Automatically enter edit mode
                     if (
-                        transcriptionsViewRef &&
-                        typeof transcriptionsViewRef.enterManualEditMode ===
+                        transcriptionViewRef &&
+                        typeof transcriptionViewRef.enterManualEditMode ===
                             "function"
                     ) {
-                        await transcriptionsViewRef.enterManualEditMode();
+                        await transcriptionViewRef.enterManualEditMode();
                     }
                 } catch (e) {
                     console.error(
@@ -597,64 +597,82 @@
         const mediaModKey = event.ctrlKey && event.altKey && !event.metaKey;
 
         // Playback speed adjustment shortcuts (Ctrl + Alt + [ and Ctrl + Alt + ])
-        if (mediaModKey && (event.key === '[' || event.key === ']')) {
+        if (mediaModKey && (event.key === "[" || event.key === "]")) {
             const playerStoreValue = ts.player;
-            if (playerStoreValue && selectedTab === 'transcriptions') {
+            if (playerStoreValue && selectedTab === "transcription") {
                 event.preventDefault();
                 let currentSpeed = playerStoreValue.playbackRate || 1.0;
                 let newSpeed = currentSpeed;
-                if (event.key === '[') {
+                if (event.key === "[") {
                     newSpeed = Math.max(0.25, currentSpeed - 0.25);
-                } else if (event.key === ']') {
+                } else if (event.key === "]") {
                     newSpeed = Math.min(3.0, currentSpeed + 0.25);
                 }
 
                 if (newSpeed !== currentSpeed) {
-                    transcriptStore.update(s => ({
+                    transcriptStore.update((s) => ({
                         ...s,
-                        player: { ...s.player, playbackRate: newSpeed }
+                        player: { ...s.player, playbackRate: newSpeed },
                     }));
                 }
             }
         }
 
         // Play/Pause, Rewind, Forward shortcuts
-        const isF8 = event.key === 'F8';
-        const isF7 = event.key === 'F7';
-        const isF9 = event.key === 'F9';
-        const isCmdOptP = mediaModKey && event.key.toLowerCase() === 'p';
-        const isCmdOptLeft = mediaModKey && event.key === 'ArrowLeft';
-        const isCmdOptRight = mediaModKey && event.key === 'ArrowRight';
+        const isF8 = event.key === "F8";
+        const isF7 = event.key === "F7";
+        const isF9 = event.key === "F9";
+        const isCmdOptP = mediaModKey && event.key.toLowerCase() === "p";
+        const isCmdOptLeft = mediaModKey && event.key === "ArrowLeft";
+        const isCmdOptRight = mediaModKey && event.key === "ArrowRight";
 
-        if ((isF8 || isCmdOptP) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+        if (
+            (isF8 || isCmdOptP) &&
+            selectedTab === "transcription" &&
+            transcriptionViewRef?.mediaPlayerRef
+        ) {
             event.preventDefault();
-            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            const playerEl = transcriptionViewRef.mediaPlayerRef.videoElement;
             if (playerEl) {
-                if (playerEl.paused) playerEl.play().catch(e => console.error("Play failed:", e));
+                if (playerEl.paused)
+                    playerEl
+                        .play()
+                        .catch((e) => console.error("Play failed:", e));
                 else playerEl.pause();
             }
         }
 
-        if ((isF7 || isCmdOptLeft) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+        if (
+            (isF7 || isCmdOptLeft) &&
+            selectedTab === "transcription" &&
+            transcriptionViewRef?.mediaPlayerRef
+        ) {
             event.preventDefault();
-            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            const playerEl = transcriptionViewRef.mediaPlayerRef.videoElement;
             if (playerEl) {
                 playerEl.currentTime = Math.max(0, playerEl.currentTime - 5);
             }
         }
 
-        if ((isF9 || isCmdOptRight) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+        if (
+            (isF9 || isCmdOptRight) &&
+            selectedTab === "transcription" &&
+            transcriptionViewRef?.mediaPlayerRef
+        ) {
             event.preventDefault();
-            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            const playerEl = transcriptionViewRef.mediaPlayerRef.videoElement;
             if (playerEl) {
-                playerEl.currentTime = Math.min(playerEl.duration || 0, playerEl.currentTime + 5);
+                playerEl.currentTime = Math.min(
+                    playerEl.duration || 0,
+                    playerEl.currentTime + 5,
+                );
             }
         }
 
         if (modKey && event.key.toLowerCase() === "s") {
             event.preventDefault();
-            if (selectedTab === "transcriptions" && transcriptionsViewRef) {
-                transcriptionsViewRef.handleSaveTranscript();
+            if (selectedTab === "transcription" && transcriptionViewRef) {
+                transcriptionViewRef.handleSaveTranscript();
             } else if (selectedTab === "data") {
                 const activeDocEditor = proj.activeDocumentEditorRef?.ref;
                 const activeImpTsEditor =
@@ -709,20 +727,20 @@
             return;
         }
         if (modKey && event.key.toLowerCase() === "e") {
-            if (selectedTab === "transcriptions" && transcriptionsViewRef) {
+            if (selectedTab === "transcription" && transcriptionViewRef) {
                 event.preventDefault();
-                transcriptionsViewRef.handleToggleEditMode();
+                transcriptionViewRef.handleToggleEditMode();
             }
             return;
         }
         if (modKey && event.key.toLowerCase() === "z" && !event.shiftKey) {
             if (
-                selectedTab === "transcriptions" &&
-                transcriptionsViewRef &&
+                selectedTab === "transcription" &&
+                transcriptionViewRef &&
                 ts.transcriptUndoStack?.length > 0
             ) {
                 event.preventDefault();
-                transcriptionsViewRef.handleUndoRequest();
+                transcriptionViewRef.handleUndoRequest();
             }
             return;
         }
@@ -732,23 +750,23 @@
                 (event.shiftKey && event.key.toLowerCase() === "z"))
         ) {
             if (
-                selectedTab === "transcriptions" &&
-                transcriptionsViewRef &&
+                selectedTab === "transcription" &&
+                transcriptionViewRef &&
                 ts.transcriptRedoStack?.length > 0
             ) {
                 event.preventDefault();
-                transcriptionsViewRef.handleRedoRequest();
+                transcriptionViewRef.handleRedoRequest();
             }
             return;
         }
         if (event.key === "F8") {
             if (
-                selectedTab === "transcriptions" &&
-                transcriptionsViewRef &&
-                transcriptionsViewRef.mediaPlayerRef
+                selectedTab === "transcription" &&
+                transcriptionViewRef &&
+                transcriptionViewRef.mediaPlayerRef
             ) {
                 event.preventDefault();
-                transcriptionsViewRef.mediaPlayerRef.handleTogglePlay();
+                transcriptionViewRef.mediaPlayerRef.handleTogglePlay();
             }
             return;
         }
@@ -998,10 +1016,10 @@
                     null,
                     "closing the project",
                 );
-            } else if (selectedTab === "transcriptions") {
-                if (transcriptionsViewRef) {
+            } else if (selectedTab === "transcription") {
+                if (transcriptionViewRef) {
                     try {
-                        await transcriptionsViewRef.exitEditModeIfActive();
+                        await transcriptionViewRef.exitEditModeIfActive();
                         canProceed = true;
                     } catch (e) {
                         canProceed = false;
@@ -1032,7 +1050,7 @@
             // If the same tab is clicked, toggle the corresponding panel
             if (tabName === "data") {
                 panelStateStore.toggleDataLeftPanel();
-            } else if (tabName === "transcriptions") {
+            } else if (tabName === "transcription") {
                 panelStateStore.toggleTranscriptionPanel();
             } else if (tabName === "tags") {
                 panelStateStore.toggleTagsLeftPanel();
@@ -1041,12 +1059,15 @@
         }
 
         // Perform silent saves if necessary before switching tabs
-        if (selectedTab === "transcriptions") {
-            if (transcriptionsViewRef) {
+        if (selectedTab === "transcription") {
+            if (transcriptionViewRef) {
                 try {
-                    await transcriptionsViewRef.handleSaveTranscript();
+                    await transcriptionViewRef.handleSaveTranscript();
                 } catch (e) {
-                    console.error("[ProjectView] Silent save failed before tab switch:", e);
+                    console.error(
+                        "[ProjectView] Silent save failed before tab switch:",
+                        e,
+                    );
                 }
             }
         } else if (selectedTab === "data") {
@@ -1093,7 +1114,7 @@
             ) {
                 prepareDocumentView(null);
             }
-        } else if (selectedTab === "transcriptions") {
+        } else if (selectedTab === "transcription") {
             // prepareDocumentView(null); // Removed to persist Data tab state
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
@@ -1118,7 +1139,7 @@
 
                 if (firstMediaFile) {
                     console.log(
-                        `[ProjectView] No media selected on transcriptions tab switch. Auto-selecting first media:`,
+                        `[ProjectView] No media selected on transcription tab switch. Auto-selecting first media:`,
                         firstMediaFile.path,
                     );
                     // Use a timeout to ensure the UI has updated before selecting the media
@@ -1131,15 +1152,13 @@
             }
         }
 
-
-
         if (
-            tabName !== "transcriptions" &&
-            transcriptionsViewRef?.mediaPlayerRef?.videoElement &&
-            !transcriptionsViewRef.mediaPlayerRef.videoElement.paused
+            tabName !== "transcription" &&
+            transcriptionViewRef?.mediaPlayerRef?.videoElement &&
+            !transcriptionViewRef.mediaPlayerRef.videoElement.paused
         ) {
             try {
-                await transcriptionsViewRef.mediaPlayerRef.videoElement.pause();
+                await transcriptionViewRef.mediaPlayerRef.videoElement.pause();
             } catch (e) {
                 console.warn("Error pausing main video on tab switch:", e);
             }
@@ -1419,46 +1438,49 @@
             return;
         }
 
-        if (selectedTab !== "transcriptions") {
+        if (selectedTab !== "transcription") {
             console.log(
-                `[ProjectView] handleRequestMediaSelection: Current tab is '${selectedTab}', switching to 'transcriptions'.`,
+                `[ProjectView] handleRequestMediaSelection: Current tab is '${selectedTab}', switching to 'transcription'.`,
             );
-            await handleTabClick("transcriptions");
+            await handleTabClick("transcription");
             await tick();
         } else {
-            // If already on transcriptions tab, check if different media is being selected
+            // If already on transcription tab, check if different media is being selected
             if (
                 get(transcriptStore).selectedMediaFile?.path !== mediaPath &&
                 get(transcriptStore).selectedMediaFile?.path
             ) {
                 console.log(
-                    "[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Performing silent save if dirty.",
+                    "[ProjectView] handleRequestMediaSelection: Different media selected on transcription tab. Performing silent save if dirty.",
                 );
-                if (transcriptionsViewRef) {
+                if (transcriptionViewRef) {
                     if (get(transcriptStore).transcriptDirty) {
                         try {
-                            await transcriptionsViewRef.handleSaveTranscript();
+                            await transcriptionViewRef.handleSaveTranscript();
                         } catch (e) {
-                            console.error("[ProjectView] Silent save failed before media selection:", e);
+                            console.error(
+                                "[ProjectView] Silent save failed before media selection:",
+                                e,
+                            );
                         }
                     }
                 }
                 console.log(
-                    `[ProjectView] handleRequestMediaSelection: Already on transcriptions tab, but different media. Clearing old transcript state.`,
+                    `[ProjectView] handleRequestMediaSelection: Already on transcription tab, but different media. Clearing old transcript state.`,
                 );
                 clearTranscriptState(); // Clear state if switching media within the same tab
             } else if (
                 get(transcriptStore).selectedMediaFile?.path === mediaPath
             ) {
                 console.log(
-                    `[ProjectView] handleRequestMediaSelection: Media path '${mediaPath}' is already selected in transcriptions tab.`,
+                    `[ProjectView] handleRequestMediaSelection: Media path '${mediaPath}' is already selected in transcription tab.`,
                 );
             }
         }
         project.update((p) => ({
             ...p,
             isLoading: true,
-            statusMessage: `Loading ${mediaName} in Transcriptions...`,
+            statusMessage: `Loading ${mediaName} in Transcription...`,
         })); // This might be redundant if handleTabClick sets loading
         await tick();
 
@@ -1528,7 +1550,7 @@
             statusMessage: `Switching to transcribe ${mediaName}...`,
         }));
 
-        await handleTabClick("transcriptions");
+        await handleTabClick("transcription");
         await tick();
         await handleRequestMediaSelection({ detail: { mediaPath } });
         await tick();
@@ -1549,7 +1571,7 @@
             statusMessage: `Switching to transcribe ${mediaName} and opening dialog...`,
         }));
 
-        await handleTabClick("transcriptions");
+        await handleTabClick("transcription");
         await tick();
         await handleRequestMediaSelection({ detail: { mediaPath } });
         await tick();
@@ -1573,7 +1595,7 @@
             statusMessage: `Switching to translate ${mediaName} and opening dialog...`,
         }));
 
-        await handleTabClick("transcriptions");
+        await handleTabClick("transcription");
         await tick();
         await handleRequestMediaSelection({ detail: { mediaPath } });
         await tick();
@@ -1587,11 +1609,11 @@
         }
 
         // Now trigger the translation dialog
-        if (transcriptionsTopBarRef) {
-            transcriptionsTopBarRef.openTranslateModal();
+        if (transcriptionTopBarRef) {
+            transcriptionTopBarRef.openTranslateModal();
         } else {
             console.warn(
-                "[ProjectView] transcriptionsTopBarRef not available. Opening translate modal via store.",
+                "[ProjectView] transcriptionTopBarRef not available. Opening translate modal via store.",
             );
             toggleTranslateModal(true);
         }
@@ -1612,8 +1634,8 @@
             statusMessage: `Preparing to trim ${mediaName}...`,
         }));
 
-        if (selectedTab !== "transcriptions") {
-            await handleTabClick("transcriptions");
+        if (selectedTab !== "transcription") {
+            await handleTabClick("transcription");
             await tick();
         }
 
@@ -1630,10 +1652,10 @@
         }
 
         if (
-            transcriptionsViewRef &&
-            typeof transcriptionsViewRef.activateTrimModeOnPlayer === "function"
+            transcriptionViewRef &&
+            typeof transcriptionViewRef.activateTrimModeOnPlayer === "function"
         ) {
-            transcriptionsViewRef.activateTrimModeOnPlayer();
+            transcriptionViewRef.activateTrimModeOnPlayer();
             project.update((p) => ({
                 ...p,
                 isLoading: false,
@@ -1641,7 +1663,7 @@
             }));
         } else {
             console.warn(
-                "[ProjectView] transcriptionsViewRef or activateTrimModeOnPlayer is not available.",
+                "[ProjectView] transcriptionViewRef or activateTrimModeOnPlayer is not available.",
             );
             project.update((p) => ({
                 ...p,
@@ -1697,10 +1719,10 @@
                 null,
                 `importing ${actionType || "asset"}`,
             );
-        else if (selectedTab === "transcriptions") {
+        else if (selectedTab === "transcription") {
             if (get(transcriptStore).transcriptDirty) {
-                if (transcriptionsViewRef) {
-                    await transcriptionsViewRef.handleSaveTranscript();
+                if (transcriptionViewRef) {
+                    await transcriptionViewRef.handleSaveTranscript();
                 }
                 clearTranscriptState();
             }
@@ -1884,9 +1906,9 @@
                     dataViewRef?.handleRequestClearSubItem()}
                 on:close={handleCloseProject}
             />
-        {:else if selectedTab === "transcriptions"}
-            <TranscriptionsTopBar
-                bind:this={transcriptionsTopBarRef}
+        {:else if selectedTab === "transcription"}
+            <TranscriptionTopBar
+                bind:this={transcriptionTopBarRef}
                 on:requestImport={handleImportMediaInSidebar}
                 on:cancelTranslationRequest={handleCancelTranslationRequest}
                 on:runTranslationInBackground={() =>
@@ -1948,23 +1970,22 @@
                     title="Transcription"
                     aria-label="Transcription"
                     class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
-                    class:border-l-4={selectedTab === "transcriptions"}
-                    class:border-blue-500={selectedTab === "transcriptions"}
-                    class:dark:border-blue-400={selectedTab ===
-                        "transcriptions"}
-                    class:bg-white={selectedTab === "transcriptions"}
-                    class:dark:bg-gray-950={selectedTab === "transcriptions"}
-                    class:text-blue-500={selectedTab === "transcriptions"}
-                    class:dark:text-accent={selectedTab === "transcriptions"}
-                    class:hover:bg-gray-300={selectedTab !== "transcriptions"}
+                    class:border-l-4={selectedTab === "transcription"}
+                    class:border-blue-500={selectedTab === "transcription"}
+                    class:dark:border-blue-400={selectedTab === "transcription"}
+                    class:bg-white={selectedTab === "transcription"}
+                    class:dark:bg-gray-950={selectedTab === "transcription"}
+                    class:text-blue-500={selectedTab === "transcription"}
+                    class:dark:text-accent={selectedTab === "transcription"}
+                    class:hover:bg-gray-300={selectedTab !== "transcription"}
                     class:dark:hover:bg-gray-800={selectedTab !==
-                        "transcriptions"}
-                    class:text-gray-700={selectedTab !== "transcriptions"}
-                    class:dark:text-gray-300={selectedTab !== "transcriptions"}
+                        "transcription"}
+                    class:text-gray-700={selectedTab !== "transcription"}
+                    class:dark:text-gray-300={selectedTab !== "transcription"}
                     class:dark:hover:text-gray-100={selectedTab !==
-                        "transcriptions"}
-                    class:hover:text-gray-900={selectedTab !== "transcriptions"}
-                    on:click={() => handleTabClick("transcriptions")}
+                        "transcription"}
+                    class:hover:text-gray-900={selectedTab !== "transcription"}
+                    on:click={() => handleTabClick("transcription")}
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -2063,9 +2084,9 @@
             class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 overflow-hidden min-w-0"
         >
             <div class="flex flex-col flex-grow min-h-0 overflow-hidden">
-                {#if selectedTab === "transcriptions"}
-                    <TranscriptionsView
-                        bind:this={transcriptionsViewRef}
+                {#if selectedTab === "transcription"}
+                    <TranscriptionView
+                        bind:this={transcriptionViewRef}
                         on:requestopentab={handleRequestOpenTab}
                         on:requestmediaselection={handleRequestMediaSelection}
                     />
