@@ -44,6 +44,10 @@
 	let transcriptsForModal = [];
 
 	export function openTranslateModal() {
+		if ($transcriptStore.isTranslating) {
+			toggleTranslateModal(true);
+			return;
+		}
 		const selectedMedia = $transcriptStore.selectedMediaFile;
 
 		if (!selectedMedia?.relative_path) {

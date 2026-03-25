@@ -1619,6 +1619,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationJobStatus = 'done';
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
                 break;
             case 'error':
                 finalProgressMessage = `Translation failed: ${errorMessage || 'Unknown error'}`;
@@ -1628,6 +1629,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationJobStatus = 'error';
                 updatePayload.translationErrorMessage = errorMessage;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
                 break;
             case 'cancelled':
                 finalProgressMessage = "Translation cancelled";
@@ -1637,6 +1639,7 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationJobStatus = 'cancelled';
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
                 break;
             default:
                 console.warn(`[TranscriptStore] Unknown status in translation_job_completed: ${status}`);
@@ -1654,7 +1657,7 @@ listen('translation_job_completed', async (event) => {
                 if (service.refreshProjectFiles) {
                     console.log('[TranscriptStore] Refreshing project files after translation completion.');
                     const mediaPath = currentStore.selectedMediaFile?.path;
-                    await service.refreshProjectFiles(mediaPath);
+                    await service.refreshProjectFiles(mediaPath, newTranscriptPath);
 
                     if (mediaPath) {
                         // After refreshing project files, re-select the media to ensure transcriptStore is updated

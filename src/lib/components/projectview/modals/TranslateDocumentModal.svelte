@@ -198,7 +198,9 @@
     }
 
     function handleCloseAndReset() {
-        clearTranslationStatus(); // Reset translation-related states
+        if (!isTranslating || (jobStatus !== 'running' && jobStatus !== 'initiating')) {
+            clearTranslationStatus(); // Reset translation-related states
+        }
         dispatch('closeAndReset');
     }
 
