@@ -287,7 +287,7 @@
 			{#if !isTranslating && jobStatus === null}
 				<Languages size={18} class="text-blue-600 dark:text-blue-400" />
 			{:else if isTranslating}
-				<Loader size={18} class="text-blue-600 dark:text-blue-400 animate-spin" />
+				<Languages size={18} class="text-blue-600 dark:text-blue-400" />
 			{:else if jobStatus === 'done'}
 				<CheckCircle size={18} class="text-green-600 dark:text-green-400" />
 			{:else if jobStatus === 'error'}

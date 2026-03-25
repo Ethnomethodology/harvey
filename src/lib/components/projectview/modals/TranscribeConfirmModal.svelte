@@ -342,7 +342,7 @@
                         {#if !isTranscribing && jobStatus === null}
                             <Settings2 size={20} class="text-blue-600 dark:text-blue-400" />
                         {:else if isTranscribing}
-                            <Loader size={20} class="text-blue-600 dark:text-blue-400 animate-spin" />
+                            <Settings2 size={20} class="text-blue-600 dark:text-blue-400" />
                         {:else if jobStatus === 'done'}
                             <CheckCircle size={20} class="text-green-600 dark:text-green-400" />
                         {:else if jobStatus === 'error'}
