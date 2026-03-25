@@ -44,7 +44,7 @@ describe('Project Creation and Tab Screenshots', () => {
     await dataTab.waitForExist({ timeout: 10000 });
 
     // Define tabs to screenshot
-    const tabs = ["Data", "Transcriptions", "Documents", "Images", "Tables", "Tags"];
+    const tabs = ["Data", "Transcription", "Documents", "Images", "Tables", "Tags"];
 
     for (const tab of tabs) {
       console.log(`Clicking on ${tab} tab and taking screenshot...`);

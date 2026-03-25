@@ -15,6 +15,7 @@
 	import { languageMap } from '$lib/constants/languageMap.js';
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { basename } from '@tauri-apps/api/path';
 	import { getSelectedTranslationEngine } from '$lib/services/configureActions';
     import { 
 		Modal,
@@ -144,6 +145,15 @@
 		selectedTranscript = '';
 	}
 
+	let translationFileName = '';
+	$: if ($transcriptStore.translationSourcePath) {
+		basename($transcriptStore.translationSourcePath).then(res => {
+			translationFileName = res;
+		});
+	} else {
+		translationFileName = '';
+	}
+
 	$: {
 		filteredModels = localModels.filter(m => m.family === selectedEngine);
 		if (filteredModels.length > 0) {
@@ -226,7 +236,9 @@
 	}
 
 	function handleCloseAndReset() {
-		clearTranslationStatus(); // Reset translation-related states
+		if (!isTranslating || (jobStatus !== 'running' && jobStatus !== 'initiating')) {
+			clearTranslationStatus(); // Reset translation-related states
+		}
 		dispatch('closeAndReset');
 	}
 
@@ -238,8 +250,10 @@
 	$: showModal = $transcriptStore.showTranslateModal;
 	$: isTranslating = $transcriptStore.isTranslating;
 	$: jobStatus = $transcriptStore.translationJobStatus;
+	$: progressPercent = $transcriptStore.translationProgress.percent;
 	$: progressMessage = $transcriptStore.translationProgress.message;
 	$: currentErrorMessage = $transcriptStore.translationErrorMessage;
+	$: translationOutputFileName = $transcriptStore.translationOutputFileName;
 
 	$: modalTitleText = (!isTranslating && jobStatus === null) ? 'Translate Transcript' :
 					 (isTranslating && jobStatus === 'initiating') ? 'Initiating Translation' :
@@ -287,7 +301,7 @@
 			{#if !isTranslating && jobStatus === null}
 				<Languages size={18} class="text-blue-600 dark:text-blue-400" />
 			{:else if isTranslating}
-				<Loader size={18} class="text-blue-600 dark:text-blue-400 animate-spin" />
+				<Languages size={18} class="text-blue-600 dark:text-blue-400" />
 			{:else if jobStatus === 'done'}
 				<CheckCircle size={18} class="text-green-600 dark:text-green-400" />
 			{:else if jobStatus === 'error'}
@@ -370,6 +384,11 @@
 					<p class="text-lg font-bold text-gray-900 dark:text-white">
 						{jobStatus === 'initiating' ? 'Preparing Job...' : 'Translating...'}
 					</p>
+					{#if translationFileName}
+						<p class="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-xs mx-auto" title={translationFileName}>
+							{translationFileName}
+						</p>
+					{/if}
 					<p class="text-sm text-gray-500 dark:text-gray-400 h-10 flex items-center justify-center">
 						{progressMessage || 'Processing translation segments...'}
 					</p>
@@ -396,6 +415,13 @@
 				</div>
 				<div class="space-y-1">
 					<p class="text-lg font-bold text-gray-900 dark:text-white">Translation Complete!</p>
+					{#if translationOutputFileName}
+						<div class="flex flex-col items-center">
+							<p class="text-xs font-medium text-green-600 dark:text-green-400 mt-2 bg-green-50/50 dark:bg-green-900/10 px-3 py-1 rounded-full border border-green-100/50 dark:border-green-800/20 max-w-[280px] truncate" title={translationOutputFileName}>
+								Output: {translationOutputFileName}
+							</p>
+						</div>
+					{/if}
 					{#if durationText}
 						<p class="text-sm text-gray-500 dark:text-gray-400">Total processing time: {durationText}</p>
 					{/if}

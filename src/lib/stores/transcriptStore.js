@@ -7,6 +7,11 @@ import { listen } from '@tauri-apps/api/event';
 import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
+function getFilename(path) {
+    if (!path) return '';
+    return path.split(/[\\/]/).pop();
+}
+
 function normalizePath(path) {
     if (typeof path !== 'string') {
         return path;
@@ -92,6 +97,9 @@ export const initialTranscriptState = {
     ranTranslationInBackground: false,
     translationJobStatus: null, // e.g., 'initiating', 'running', 'done', 'error', 'cancelled'
     translationErrorMessage: null,
+    translationSourcePath: null,
+    transcriptionOutputFileName: null,
+    translationOutputFileName: null,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -1465,9 +1473,12 @@ listen('custom_transcription_job_completed', async (event) => {
     
     const currentStore = get(transcriptStore);
 
+
+
     if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
         const wasModalVisibleAtEventTime = currentStore.showTranscribeModal;
         const wasJobRunInBackground = currentStore.ranInBackground;
+
         const shouldShowToastNotification = wasJobRunInBackground || !wasModalVisibleAtEventTime;
 
         let finalProgressMessage = '';
@@ -1477,10 +1488,12 @@ listen('custom_transcription_job_completed', async (event) => {
 
         switch (status) {
             case 'done':
-                finalProgressMessage = "Transcription successful";
+                const outputFilename = getFilename(transcriptFilePath || translatedTranscriptFilePath);
+                finalProgressMessage = `Transcription successful: ${outputFilename}`;
                 if (shouldShowToastNotification) {
                     notificationManager.add(finalProgressMessage, "success", 0);
                 }
+                updatePayload.transcriptionOutputFileName = outputFilename;
                 updatePayload.transcriptionJobStatus = 'done';
                 updatePayload.transcriptionErrorMessage = null;
                 updatePayload.isTranscribing = false;
@@ -1575,9 +1588,10 @@ listen('custom_transcription_job_completed', async (event) => {
                     updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
                     if (updatedMediaFile) {
-
                         const { emit } = await import('@tauri-apps/api/event');
-                        emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
+                        if (!wasJobRunInBackground) {
+                            emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
+                        }
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after refresh for path: ${mediaPath}`);
                     }
@@ -1612,13 +1626,17 @@ listen('translation_job_completed', async (event) => {
 
         switch (status) {
             case 'done':
-                finalProgressMessage = "Translation successful";
+                const outputFilenameTransl = getFilename(newTranscriptPath);
+                finalProgressMessage = `Translation successful: ${outputFilenameTransl}`;
                 if (shouldShowToastNotification) {
                     notificationManager.add(finalProgressMessage, "success", 0);
                 }
+                updatePayload.translationOutputFileName = outputFilenameTransl;
                 updatePayload.translationJobStatus = 'done';
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             case 'error':
                 finalProgressMessage = `Translation failed: ${errorMessage || 'Unknown error'}`;
@@ -1628,6 +1646,8 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationJobStatus = 'error';
                 updatePayload.translationErrorMessage = errorMessage;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             case 'cancelled':
                 finalProgressMessage = "Translation cancelled";
@@ -1637,6 +1657,8 @@ listen('translation_job_completed', async (event) => {
                 updatePayload.translationJobStatus = 'cancelled';
                 updatePayload.translationErrorMessage = null;
                 updatePayload.isTranslating = false;
+                updatePayload.ranTranslationInBackground = false;
+                updatePayload.translationSourcePath = null;
                 break;
             default:
                 console.warn(`[TranscriptStore] Unknown status in translation_job_completed: ${status}`);
@@ -1654,7 +1676,7 @@ listen('translation_job_completed', async (event) => {
                 if (service.refreshProjectFiles) {
                     console.log('[TranscriptStore] Refreshing project files after translation completion.');
                     const mediaPath = currentStore.selectedMediaFile?.path;
-                    await service.refreshProjectFiles(mediaPath);
+                    await service.refreshProjectFiles(mediaPath, newTranscriptPath);
 
                     if (mediaPath) {
                         // After refreshing project files, re-select the media to ensure transcriptStore is updated
@@ -1918,7 +1940,8 @@ export function setRanTranslationInBackground(value) {
 export function setTranslationStatus(isTranslating, jobIdToSet = null, options = {}) {
     const {
         status = null,
-        errorMessage = null
+        errorMessage = null,
+        sourcePath = null
     } = options;
 
     transcriptStore.update((ts) => {
@@ -1928,7 +1951,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             
             // Set start time if starting fresh, otherwise keep existing
-            const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
+            const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
 
             updatedState = {
                 ...ts,
@@ -1943,6 +1966,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
                 translationErrorMessage: null,
                 ranTranslationInBackground: false,
                 showTranslateModal: true,
+                translationSourcePath: sourcePath || ts.translationSourcePath,
             };
         } else {
             const currentJobStatus = status || ts.translationJobStatus;
@@ -1959,9 +1983,11 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
             updatedState = {
                 ...ts,
                 isTranslating: false,
+                translationJobId: jobIdToSet !== null ? jobIdToSet : ts.translationJobId,
                 translationJobStatus: currentJobStatus,
                 translationErrorMessage: errorMessage || ts.translationErrorMessage,
                 showTranslateModal: newShowModalConfig,
+                translationSourcePath: (currentJobStatus === 'done' || currentJobStatus === 'cancelled' || currentJobStatus === 'error' || currentJobStatus === null) ? null : ts.translationSourcePath
             };
 
             if (currentJobStatus === null) {

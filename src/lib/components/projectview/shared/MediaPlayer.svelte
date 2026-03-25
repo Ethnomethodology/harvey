@@ -1,24 +1,49 @@
 <!-- harvey-1.0/src/lib/components/projectview/MediaPlayer.svelte -->
 
 <script>
-	import { project } from '$lib/stores/projectStore.js';
+	import { project } from "$lib/stores/projectStore.js";
 	import {
 		transcriptStore,
 		updatePlayerTime,
 		setPlayerDuration,
 		togglePlayerPlaying,
 		setAudioBuffer, // This will be used to set both buffer and peaks
-		
-	} from '$lib/stores/transcriptStore.js';
-	import { get } from 'svelte/store'; // Ensure get is imported
-	import { readFile } from '@tauri-apps/plugin-fs';
-	import { open } from '@tauri-apps/plugin-dialog';
-	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-	import { listen } from '@tauri-apps/api/event'; // Restored listener
-	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
-    import { Volume2, Volume1, VolumeX, Minimize2, Maximize2, Expand, Shrink, Play, Pause, RotateCcw, RotateCw, Camera, ClosedCaption, Scissors, MoreVertical, Maximize, FileOutput, Subtitles } from '@lucide/svelte';
-	let waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
+	} from "$lib/stores/transcriptStore.js";
+	import { get } from "svelte/store"; // Ensure get is imported
+	import { readFile } from "@tauri-apps/plugin-fs";
+	import { open } from "@tauri-apps/plugin-dialog";
+	import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+	import { listen } from "@tauri-apps/api/event"; // Restored listener
+	import { onMount, onDestroy, tick, createEventDispatcher } from "svelte";
+	import {
+		handleTrimMediaConfirm,
+		refreshProjectFiles,
+		getAssetMetadata,
+	} from "$lib/services/projectService.js";
+	import {
+		Volume2,
+		Volume1,
+		VolumeX,
+		Minimize2,
+		Maximize2,
+		Expand,
+		Shrink,
+		Play,
+		Pause,
+		RotateCcw,
+		RotateCw,
+		Camera,
+		ClosedCaption,
+		Scissors,
+		MoreVertical,
+		Maximize,
+		FileOutput,
+		Subtitles,
+	} from "@lucide/svelte";
+	let waveformWorker = new Worker(
+		new URL("$lib/workers/waveformWorker.js", import.meta.url),
+		{ type: "module" },
+	);
 	let currentWaveformLoadId = 0;
 	let waveformLoadData = new Map();
 
@@ -26,8 +51,10 @@
 		waveformWorker.onmessage = async (event) => {
 			const { type, payload, id } = event.data;
 			if (id !== currentWaveformLoadId) {
-				console.log(`[MediaPlayer] Discarding old waveform data (ID: ${id}, current: ${currentWaveformLoadId})`);
-                waveformLoadData.delete(id);
+				console.log(
+					`[MediaPlayer] Discarding old waveform data (ID: ${id}, current: ${currentWaveformLoadId})`,
+				);
+				waveformLoadData.delete(id);
 				return; // Ignore old responses
 			}
 
@@ -35,102 +62,134 @@
 			waveformLoadData.delete(id);
 
 			if (!audioBuffer) {
-				console.error(`[MediaPlayer] Could not find audioBuffer for loadId ${id}`);
+				console.error(
+					`[MediaPlayer] Could not find audioBuffer for loadId ${id}`,
+				);
 				return;
 			}
 
-			if (type === 'DECODE_AUDIO_COMPLETE') {
+			if (type === "DECODE_AUDIO_COMPLETE") {
 				const { peaks } = payload;
 				localAudioBuffer = audioBuffer; // Set local buffer for this component instance
 				localAudioPeaks = peaks ? new Float32Array(peaks) : null;
 
-                // If peaks are ready, notify listeners (e.g. Trim Panel) immediately
-                if (localAudioPeaks) {
-                    dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
-                }
+				// If peaks are ready, notify listeners (e.g. Trim Panel) immediately
+				if (localAudioPeaks) {
+					dispatch("mediaDataPeaksReady", { peaks: localAudioPeaks });
+				}
 
 				if (!explicitMediaPath) {
 					// For the main player, we proceed to handle global state and caching.
 					const currentProject = get(project);
 					const projectId = currentProject.id;
-					const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+					const assetRelativePath =
+						$transcriptStore.selectedMediaFile?.relative_path;
 
 					// Step 2: Check for cached waveform data.
 					if (projectId && assetRelativePath) {
 						try {
-							const metadata = await getAssetMetadata(assetRelativePath);
-							if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
-								const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+							const metadata =
+								await getAssetMetadata(assetRelativePath);
+							if (
+								metadata &&
+								metadata.waveform_data &&
+								metadata.waveform_data.length > 0
+							) {
+								const cachedPeaks = new Float32Array(
+									new Uint8Array(
+										metadata.waveform_data,
+									).buffer,
+								);
 								setAudioBuffer(audioBuffer, cachedPeaks); // Set both buffer and cached peaks
 								localAudioPeaks = cachedPeaks;
-                                // Notify listeners immediately
-                                dispatch('mediaDataPeaksReady', { peaks: localAudioPeaks });
-								console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
+								// Notify listeners immediately
+								dispatch("mediaDataPeaksReady", {
+									peaks: localAudioPeaks,
+								});
+								console.log(
+									`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`,
+								);
 								return; // Successfully loaded from cache
 							}
 						} catch (e) {
-							console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+							console.warn(
+								`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`,
+								e,
+							);
 						}
 					}
 
 					// Step 3: If no cached data, use generated peaks, set in store, and save to DB.
-					console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Using newly generated peaks.`);
-					setAudioBuffer(audioBuffer, peaks ? new Float32Array(peaks) : null); // Set buffer and newly generated peaks
+					console.log(
+						`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Using newly generated peaks.`,
+					);
+					setAudioBuffer(
+						audioBuffer,
+						peaks ? new Float32Array(peaks) : null,
+					); // Set buffer and newly generated peaks
 
 					if (projectId && assetRelativePath && xmlPath && peaks) {
 						try {
-							const u8_peaks = new Uint8Array(new Float32Array(peaks).buffer);
+							const u8_peaks = new Uint8Array(
+								new Float32Array(peaks).buffer,
+							);
 							const s = $transcriptStore.selectedMediaFile;
 							const metadataPayload = {
 								...s,
 								file_name: s.name,
 								file_path: s.path,
 								last_modified: new Date().toISOString(),
-								waveform_data: Array.from(u8_peaks)
+								waveform_data: Array.from(u8_peaks),
 							};
 
-							await invoke('update_asset_metadata_command', {
+							await invoke("update_asset_metadata_command", {
 								projectXmlPathStr: xmlPath,
 								assetRelativePath: assetRelativePath,
 								metadataPayload: metadataPayload,
 								customFieldsPayload: null,
-								assetType: 'media'
+								assetType: "media",
 							});
 						} catch (error) {
-							console.error(`[MediaPlayer] Failed to save generated waveform to DB:`, error);
+							console.error(
+								`[MediaPlayer] Failed to save generated waveform to DB:`,
+								error,
+							);
 						}
 					}
 				}
-			} else if (type === 'DECODE_AUDIO_ERROR') {
-				console.error(`[MediaPlayer] Error from waveform worker (ID: ${id}):`, payload.error);
+			} else if (type === "DECODE_AUDIO_ERROR") {
+				console.error(
+					`[MediaPlayer] Error from waveform worker (ID: ${id}):`,
+					payload.error,
+				);
 				// Handle error, e.g., clear waveform, show message
 				localAudioBuffer = null;
 				if (!explicitMediaPath) setAudioBuffer(null, null);
 			}
 		};
 		waveformWorker.onerror = (error) => {
-			console.error('[MediaPlayer] Waveform worker error:', error);
+			console.error("[MediaPlayer] Waveform worker error:", error);
 			// Handle worker errors
 		};
 	}
-	
+
 	// import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut'; // Removed JS API
 
 	const dispatch = createEventDispatcher();
 
 	// --- Component Props ---
 	export let videoElement = null;
-	export let isTrimming = false; // For main transcriptions player's trim mode
+	export let isTrimming = false; // For main transcription player's trim mode
 	export let trimStartTime = 0;
 	export let trimEndTime = 0;
-	export let isEditingSegment = false; // For main transcriptions player's segment editing loop
+	export let isEditingSegment = false; // For main transcription player's segment editing loop
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
-    export let projectId = null; // Added for explicit project ID passing
-    export let xmlPath = null;
+	export let projectId = null; // Added for explicit project ID passing
+	export let xmlPath = null;
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
-    export let autoPlay = false;
+	export let autoPlay = false;
 
 	// Props for inline trim looping
 	export let loopStartTime = 0;
@@ -143,10 +202,10 @@
 	export let showDataTrimButton = false; // Default to false
 	export let showMainTrimButton = true; // Default to true
 
-	$: console.log('[MediaPlayer] projectId prop updated:', projectId);
+	$: console.log("[MediaPlayer] projectId prop updated:", projectId);
 
 	// --- Internal State ---
-	let localMediaUrl = ''; // URL for the <video> src
+	let localMediaUrl = ""; // URL for the <video> src
 	let isLoadingMedia = false;
 	let loadedPathFromProp = null; // Keep track of the loaded explicit path
 
@@ -185,7 +244,7 @@
 				const rect = playbackSpeedButtonElement.getBoundingClientRect();
 				playbackSpeedMenuPosition = {
 					x: rect.left + window.scrollX,
-					y: rect.bottom + window.scrollY + 2
+					y: rect.bottom + window.scrollY + 2,
 				};
 			}
 			showPlaybackSpeedMenu = true;
@@ -198,32 +257,36 @@
 		showPlaybackSpeedMenu = false;
 	}
 
-    export function changeSpeed(delta) {
-        // Find current rate from video element if possible, fallback to state
-        const currentRate = videoElement ? videoElement.playbackRate : selectedPlaybackRate;
-        
-        // Find best match in our defined rates
-        let currentIndex = playbackRates.indexOf(currentRate);
-        
-        let nextIndex;
-        if (currentIndex === -1) {
-            // Find the closest rate in the list
-            if (delta > 0) {
-                nextIndex = playbackRates.findIndex(r => r > currentRate);
-                if (nextIndex === -1) nextIndex = playbackRates.length - 1;
-            } else {
-                nextIndex = playbackRates.findLastIndex(r => r < currentRate);
-                if (nextIndex === -1) nextIndex = 0;
-            }
-        } else {
-            nextIndex = currentIndex + delta;
-        }
+	export function changeSpeed(delta) {
+		// Find current rate from video element if possible, fallback to state
+		const currentRate = videoElement
+			? videoElement.playbackRate
+			: selectedPlaybackRate;
 
-        if (nextIndex >= 0 && nextIndex < playbackRates.length) {
-            console.log(`[MediaPlayer] Changing speed from ${currentRate} to ${playbackRates[nextIndex]}`);
-            selectPlaybackRate(playbackRates[nextIndex]);
-        }
-    }
+		// Find best match in our defined rates
+		let currentIndex = playbackRates.indexOf(currentRate);
+
+		let nextIndex;
+		if (currentIndex === -1) {
+			// Find the closest rate in the list
+			if (delta > 0) {
+				nextIndex = playbackRates.findIndex((r) => r > currentRate);
+				if (nextIndex === -1) nextIndex = playbackRates.length - 1;
+			} else {
+				nextIndex = playbackRates.findLastIndex((r) => r < currentRate);
+				if (nextIndex === -1) nextIndex = 0;
+			}
+		} else {
+			nextIndex = currentIndex + delta;
+		}
+
+		if (nextIndex >= 0 && nextIndex < playbackRates.length) {
+			console.log(
+				`[MediaPlayer] Changing speed from ${currentRate} to ${playbackRates[nextIndex]}`,
+			);
+			selectPlaybackRate(playbackRates[nextIndex]);
+		}
+	}
 	// --- Volume Control State ---
 	let currentVolume = 1;
 	let isMuted = false;
@@ -261,10 +324,12 @@
 
 	function toggleFullscreen() {
 		if (!videoElement) return;
-		const container = document.getElementById('media-player-root');
+		const container = document.getElementById("media-player-root");
 		if (!document.fullscreenElement) {
-			container.requestFullscreen().catch(err => {
-				console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+			container.requestFullscreen().catch((err) => {
+				console.error(
+					`Error attempting to enable full-screen mode: ${err.message} (${err.name})`,
+				);
 			});
 		} else {
 			document.exitFullscreen();
@@ -290,164 +355,250 @@
 	let progressTooltipElement;
 	let progressBarElement; // bind:this to the progress bar input
 	let showProgressTooltip = false;
-	let progressTooltipText = '00:00:00';
-	let progressTooltipLeft = '0px';
-    let progressTooltipTop = '0px';
+	let progressTooltipText = "00:00:00";
+	let progressTooltipLeft = "0px";
+	let progressTooltipTop = "0px";
 
 	// --- Overlay Icon State & Icons ---
 	let isHoveringPlayer = false;
 
-    $: controlsVisible = userActive || !displayIsPlaying;
+	$: controlsVisible = userActive || !displayIsPlaying;
 
 	// --- Subtitle State ---
-    // availableSubtitles and menu state removed
+	// availableSubtitles and menu state removed
 	let ccButtonElement = null;
 	let activeSubtitleTrackPath = null;
 	let activeSubtitleUrl = null;
-	let activeSubtitleLang = 'en';
-	let activeSubtitleLabel = 'Subtitles';
+	let activeSubtitleLang = "en";
+	let activeSubtitleLabel = "Subtitles";
 
 	function extractLangFromFilename(filename) {
-		if (!filename || typeof filename !== 'string') return null;
-		const namePart = filename.substring(0, filename.lastIndexOf('.')).toLowerCase();
-		if (namePart === 'en' || namePart.includes('english')) return 'en';
-		if (namePart === 'es' || namePart.includes('spanish')) return 'es';
-		if (namePart === 'fr' || namePart.includes('french')) return 'fr';
-		if (namePart === 'de' || namePart.includes('german')) return 'de';
+		if (!filename || typeof filename !== "string") return null;
+		const namePart = filename
+			.substring(0, filename.lastIndexOf("."))
+			.toLowerCase();
+		if (namePart === "en" || namePart.includes("english")) return "en";
+		if (namePart === "es" || namePart.includes("spanish")) return "es";
+		if (namePart === "fr" || namePart.includes("french")) return "fr";
+		if (namePart === "de" || namePart.includes("german")) return "de";
 		if (namePart.length === 2) return namePart;
 		return null;
 	}
 
 	async function handleSelectSubtitles() {
-        try {
-            const selected = await open({
-                multiple: false,
-                filters: [{
-                    name: 'Subtitles',
-                    extensions: ['srt', 'vtt', 'ass']
-                }]
-            });
+		try {
+			const selected = await open({
+				multiple: false,
+				filters: [
+					{
+						name: "Subtitles",
+						extensions: ["srt", "vtt", "ass"],
+					},
+				],
+			});
 
-            if (selected && typeof selected === 'string') {
-                const name = selected.split(/[\\/]/).pop();
-                await selectSubtitleTrack({ path: selected, name: name });
-            }
-        } catch (error) {
-            console.error('[MediaPlayer] Error opening subtitle dialog:', error);
-        }
+			if (selected && typeof selected === "string") {
+				const name = selected.split(/[\\/]/).pop();
+				await selectSubtitleTrack({ path: selected, name: name });
+			}
+		} catch (error) {
+			console.error(
+				"[MediaPlayer] Error opening subtitle dialog:",
+				error,
+			);
+		}
 	}
 
-    function handleSubtitleContextMenu(event) {
-        event.preventDefault();
-        if (activeSubtitleUrl) {
-             selectSubtitleTrack(null); // Turn off
-             console.log('[MediaPlayer] Subtitles disabled via context menu.');
-        }
-    }
+	function handleSubtitleContextMenu(event) {
+		event.preventDefault();
+		if (activeSubtitleUrl) {
+			selectSubtitleTrack(null); // Turn off
+			console.log("[MediaPlayer] Subtitles disabled via context menu.");
+		}
+	}
 
 	async function selectSubtitleTrack(subtitleEntry) {
-		console.log('[MediaPlayer] Attempting to select subtitle track:', subtitleEntry);
+		console.log(
+			"[MediaPlayer] Attempting to select subtitle track:",
+			subtitleEntry,
+		);
 		// Revoke previous object URL if it exists, to prevent memory leaks
-		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
+		if (activeSubtitleUrl && activeSubtitleUrl.startsWith("blob:")) {
 			URL.revokeObjectURL(activeSubtitleUrl);
-			console.log('[MediaPlayer] Revoked previous subtitle object URL:', activeSubtitleUrl);
+			console.log(
+				"[MediaPlayer] Revoked previous subtitle object URL:",
+				activeSubtitleUrl,
+			);
 		}
-        
-        activeSubtitleUrl = null;
-        await tick();
+
+		activeSubtitleUrl = null;
+		await tick();
 
 		if (subtitleEntry && subtitleEntry.path) {
 			activeSubtitleTrackPath = subtitleEntry.path;
-			activeSubtitleLang = extractLangFromFilename(subtitleEntry.name) || 'en';
-			activeSubtitleLabel = subtitleEntry.name.substring(0, subtitleEntry.name.lastIndexOf('.')) || 'Subtitles';
+			activeSubtitleLang =
+				extractLangFromFilename(subtitleEntry.name) || "en";
+			activeSubtitleLabel =
+				subtitleEntry.name.substring(
+					0,
+					subtitleEntry.name.lastIndexOf("."),
+				) || "Subtitles";
 
 			try {
 				let subtitleDataUrl;
-				if (subtitleEntry.name.toLowerCase().endsWith('.srt')) {
-					console.log('[MediaPlayer] SRT file selected, invoking conversion:', subtitleEntry.path);
-					const vttContent = await invoke('convert_srt_to_vtt_command', { srtPathStr: subtitleEntry.path });
-					if (typeof vttContent === 'string') {
-						const blob = new Blob([vttContent], { type: 'text/vtt' });
+				if (subtitleEntry.name.toLowerCase().endsWith(".srt")) {
+					console.log(
+						"[MediaPlayer] SRT file selected, invoking conversion:",
+						subtitleEntry.path,
+					);
+					const vttContent = await invoke(
+						"convert_srt_to_vtt_command",
+						{ srtPathStr: subtitleEntry.path },
+					);
+					if (typeof vttContent === "string") {
+						const blob = new Blob([vttContent], {
+							type: "text/vtt",
+						});
 						subtitleDataUrl = URL.createObjectURL(blob);
-						console.log('[MediaPlayer] SRT converted to VTT blob URL:', subtitleDataUrl);
+						console.log(
+							"[MediaPlayer] SRT converted to VTT blob URL:",
+							subtitleDataUrl,
+						);
 					} else {
-						throw new Error('SRT to VTT conversion did not return a string.');
+						throw new Error(
+							"SRT to VTT conversion did not return a string.",
+						);
 					}
-				} else if (subtitleEntry.name.toLowerCase().endsWith('.ass')) {
-                    console.log('[MediaPlayer] ASS file selected, invoking conversion:', subtitleEntry.path);
-                    const vttContent = await invoke('convert_ass_to_vtt_command', { assPathStr: subtitleEntry.path });
-                    if (typeof vttContent === 'string') {
-                        const blob = new Blob([vttContent], { type: 'text/vtt' });
-                        subtitleDataUrl = URL.createObjectURL(blob);
-                        console.log('[MediaPlayer] ASS converted to VTT blob URL:', subtitleDataUrl);
-                    } else {
-                        throw new Error('ASS to VTT conversion did not return a string.');
-                    }
-                } else { // Assume .vtt or other directly supported format
-                    console.log('[MediaPlayer] Reading subtitle file directly:', subtitleEntry.path);
-                    const fileData = await readFile(subtitleEntry.path);
-                    
-                    // Convert to string to check for WEBVTT header
-                    const decoder = new TextDecoder('utf-8');
-                    let content = decoder.decode(fileData);
-                    
-                    if (!content.trim().startsWith('WEBVTT')) {
-                        console.log('[MediaPlayer] Missing WEBVTT header, prepending...');
-                        content = 'WEBVTT\n\n' + content;
-                    }
+				} else if (subtitleEntry.name.toLowerCase().endsWith(".ass")) {
+					console.log(
+						"[MediaPlayer] ASS file selected, invoking conversion:",
+						subtitleEntry.path,
+					);
+					const vttContent = await invoke(
+						"convert_ass_to_vtt_command",
+						{ assPathStr: subtitleEntry.path },
+					);
+					if (typeof vttContent === "string") {
+						const blob = new Blob([vttContent], {
+							type: "text/vtt",
+						});
+						subtitleDataUrl = URL.createObjectURL(blob);
+						console.log(
+							"[MediaPlayer] ASS converted to VTT blob URL:",
+							subtitleDataUrl,
+						);
+					} else {
+						throw new Error(
+							"ASS to VTT conversion did not return a string.",
+						);
+					}
+				} else {
+					// Assume .vtt or other directly supported format
+					console.log(
+						"[MediaPlayer] Reading subtitle file directly:",
+						subtitleEntry.path,
+					);
+					const fileData = await readFile(subtitleEntry.path);
 
-                    const blob = new Blob([content], { type: 'text/vtt' });
-                    subtitleDataUrl = URL.createObjectURL(blob);
-                    console.log('[MediaPlayer] Created Blob URL for subtitle:', subtitleDataUrl);
+					// Convert to string to check for WEBVTT header
+					const decoder = new TextDecoder("utf-8");
+					let content = decoder.decode(fileData);
+
+					if (!content.trim().startsWith("WEBVTT")) {
+						console.log(
+							"[MediaPlayer] Missing WEBVTT header, prepending...",
+						);
+						content = "WEBVTT\n\n" + content;
+					}
+
+					const blob = new Blob([content], { type: "text/vtt" });
+					subtitleDataUrl = URL.createObjectURL(blob);
+					console.log(
+						"[MediaPlayer] Created Blob URL for subtitle:",
+						subtitleDataUrl,
+					);
 				}
 				activeSubtitleUrl = subtitleDataUrl;
-				console.log(`[MediaPlayer] Set active subtitle: URL=${activeSubtitleUrl}, Lang=${activeSubtitleLang}, Label=${activeSubtitleLabel}`);
+				console.log(
+					`[MediaPlayer] Set active subtitle: URL=${activeSubtitleUrl}, Lang=${activeSubtitleLang}, Label=${activeSubtitleLabel}`,
+				);
 
-                await tick();
-                if (videoElement && videoElement.textTracks && videoElement.textTracks.length > 0) {
-                    // Enable the last added track (which should correspond to our new activeSubtitleUrl)
-                    // Or just enable all for now, or find the one matching.
-                    // Usually there's only one if we replace activeSubtitleUrl.
-                    for (let i = 0; i < videoElement.textTracks.length; i++) {
-                        videoElement.textTracks[i].mode = 'showing';
-                    }
-                }
-
+				await tick();
+				if (
+					videoElement &&
+					videoElement.textTracks &&
+					videoElement.textTracks.length > 0
+				) {
+					// Enable the last added track (which should correspond to our new activeSubtitleUrl)
+					// Or just enable all for now, or find the one matching.
+					// Usually there's only one if we replace activeSubtitleUrl.
+					for (let i = 0; i < videoElement.textTracks.length; i++) {
+						videoElement.textTracks[i].mode = "showing";
+					}
+				}
 			} catch (e) {
-				console.error('[MediaPlayer] Error processing subtitle file:', e);
-				project.update(p => ({ ...p, statusMessage: 'Error loading subtitle track.', error: String(e) }));
+				console.error(
+					"[MediaPlayer] Error processing subtitle file:",
+					e,
+				);
+				project.update((p) => ({
+					...p,
+					statusMessage: "Error loading subtitle track.",
+					error: String(e),
+				}));
 				activeSubtitleTrackPath = null;
 				activeSubtitleUrl = null;
 			}
 		} else {
-			console.log('[MediaPlayer] Disabling subtitles.');
+			console.log("[MediaPlayer] Disabling subtitles.");
 			activeSubtitleTrackPath = null;
 			activeSubtitleUrl = null; // This will trigger the #key block to remove the <track>
-			activeSubtitleLang = 'en';
-			activeSubtitleLabel = 'Subtitles';
+			activeSubtitleLang = "en";
+			activeSubtitleLabel = "Subtitles";
 		}
 	}
 
 	function handleClickOutsidePlaybackSpeedMenu(event) {
-		if (showPlaybackSpeedMenu && playbackSpeedMenuRef && !playbackSpeedMenuRef.contains(event.target) && playbackSpeedButtonElement && !playbackSpeedButtonElement.contains(event.target)) {
+		if (
+			showPlaybackSpeedMenu &&
+			playbackSpeedMenuRef &&
+			!playbackSpeedMenuRef.contains(event.target) &&
+			playbackSpeedButtonElement &&
+			!playbackSpeedButtonElement.contains(event.target)
+		) {
 			showPlaybackSpeedMenu = false;
 		}
 	}
 
-
 	async function handleScreenshot() {
-		
 		const currentProjectXmlPath = get(project)?.xmlPath;
 
 		if (!currentProjectXmlPath) {
-			project.update(p => ({ ...p, statusMessage: 'Project XML path not found.', error: 'Screenshot failed.', isLoading: false }));
-			console.error('Project XML path not found for screenshot.');
+			project.update((p) => ({
+				...p,
+				statusMessage: "Project XML path not found.",
+				error: "Screenshot failed.",
+				isLoading: false,
+			}));
+			console.error("Project XML path not found for screenshot.");
 			return;
 		}
 
-		if (!videoElement || !localMediaUrl || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
-			project.update(p => ({ ...p, statusMessage: 'Media not loaded or video dimensions unavailable.', error: 'Screenshot failed.' }));
-			console.error('Screenshot attempt failed: No videoElement, localMediaUrl, or video dimensions are zero.');
+		if (
+			!videoElement ||
+			!localMediaUrl ||
+			videoElement.videoWidth === 0 ||
+			videoElement.videoHeight === 0
+		) {
+			project.update((p) => ({
+				...p,
+				statusMessage:
+					"Media not loaded or video dimensions unavailable.",
+				error: "Screenshot failed.",
+			}));
+			console.error(
+				"Screenshot attempt failed: No videoElement, localMediaUrl, or video dimensions are zero.",
+			);
 			return;
 		}
 
@@ -455,72 +606,105 @@
 		// If strict "must be actively playing" is needed, add: if (videoElement.paused) { ... }
 		// For now, allowing screenshot from a paused frame.
 
-		
-		project.update(p => ({ ...p, statusMessage: 'Capturing screenshot...', isLoading: true, error: null }));
+		project.update((p) => ({
+			...p,
+			statusMessage: "Capturing screenshot...",
+			isLoading: true,
+			error: null,
+		}));
 
 		try {
-			const canvas = document.createElement('canvas');
+			const canvas = document.createElement("canvas");
 			canvas.width = videoElement.videoWidth;
 			canvas.height = videoElement.videoHeight;
-			const ctx = canvas.getContext('2d');
+			const ctx = canvas.getContext("2d");
 
 			if (!ctx) {
-				project.update(p => ({ ...p, statusMessage: 'Failed to get canvas context.', error: 'Screenshot failed.', isLoading: false }));
-				console.error('Failed to get canvas 2D context.');
+				project.update((p) => ({
+					...p,
+					statusMessage: "Failed to get canvas context.",
+					error: "Screenshot failed.",
+					isLoading: false,
+				}));
+				console.error("Failed to get canvas 2D context.");
 				return;
 			}
 
 			ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-			const dataUrl = canvas.toDataURL('image/png');
+			const dataUrl = canvas.toDataURL("image/png");
 			// console.log('Screenshot data URL:', dataUrl.substring(0, 100) + '...'); // Log a snippet
 
 			// For now, just log the data URL. Next step will involve sending this to Tauri.
 			// To prepare for Tauri, which will take base64 data *without* the prefix:
-			const base64ImageData = dataUrl.replace(/^data:image\/png;base64,/, '');
+			const base64ImageData = dataUrl.replace(
+				/^data:image\/png;base64,/,
+				"",
+			);
 
 			// --- Begin Tauri Invocation ---
-			console.log('Base64 image data ready. Invoking Tauri command...');
+			console.log("Base64 image data ready. Invoking Tauri command...");
 
 			// const currentProjectId = get(project)?.id; // Removed
-			if (!projectId) { // Changed to use prop
-				project.update(p => ({ ...p, statusMessage: 'Project ID (UUID) not found.', error: 'Screenshot failed.', isLoading: false })); // Clarified error
-				console.error('Project ID (UUID) not found for screenshot. This is needed by backend.');
+			if (!projectId) {
+				// Changed to use prop
+				project.update((p) => ({
+					...p,
+					statusMessage: "Project ID (UUID) not found.",
+					error: "Screenshot failed.",
+					isLoading: false,
+				})); // Clarified error
+				console.error(
+					"Project ID (UUID) not found for screenshot. This is needed by backend.",
+				);
 				return;
 			}
 
 			let mediaFileName = "unknown_media";
-			const currentSelectedMedia = get(transcriptStore)?.selectedMediaFile;
+			const currentSelectedMedia =
+				get(transcriptStore)?.selectedMediaFile;
 			if (explicitMediaPath) {
-					const pathParts = explicitMediaPath.split(/[\/]/);
-					mediaFileName = pathParts.pop() || mediaFileName;
+				const pathParts = explicitMediaPath.split(/[\/]/);
+				mediaFileName = pathParts.pop() || mediaFileName;
 			} else if (currentSelectedMedia && currentSelectedMedia.path) {
-					const pathParts = currentSelectedMedia.path.split(/[\/]/);
-					mediaFileName = pathParts.pop() || mediaFileName;
+				const pathParts = currentSelectedMedia.path.split(/[\/]/);
+				mediaFileName = pathParts.pop() || mediaFileName;
 			} else if (loadedPathFromProp) {
-					const pathParts = loadedPathFromProp.split(/[\/]/);
-					mediaFileName = pathParts.pop() || mediaFileName;
+				const pathParts = loadedPathFromProp.split(/[\/]/);
+				mediaFileName = pathParts.pop() || mediaFileName;
 			}
 
 			// *** Actual Tauri invoke call ***
-			await invoke('save_screenshot', {
+			await invoke("save_screenshot", {
 				projectXmlPathStr: currentProjectXmlPath, // New parameter
 				projectId: projectId, // Existing prop
 				mediaFileName: mediaFileName,
 				timestamp: localCurrentTime,
-				imageDataBase64: base64ImageData
+				imageDataBase64: base64ImageData,
 			});
 
-			project.update(p => ({ ...p, statusMessage: `Screenshot saved from ${mediaFileName}!`, isLoading: false, error: null }));
-			console.log('Screenshot successfully processed by Tauri.');
+			project.update((p) => ({
+				...p,
+				statusMessage: `Screenshot saved from ${mediaFileName}!`,
+				isLoading: false,
+				error: null,
+			}));
+			console.log("Screenshot successfully processed by Tauri.");
 			await refreshProjectFiles();
-			console.log('[MediaPlayer] Project files refreshed after screenshot.');
+			console.log(
+				"[MediaPlayer] Project files refreshed after screenshot.",
+			);
 			// --- End Tauri Invocation ---
-
 		} catch (err) {
-			const errorMessage = typeof err === 'string' ? err : (err.message || 'Unknown error');
-			project.update(p => ({ ...p, statusMessage: 'Error saving screenshot.', error: `Save failed: ${errorMessage}`, isLoading: false }));
-			console.error('Error during screenshot saving via Tauri:', err);
+			const errorMessage =
+				typeof err === "string" ? err : err.message || "Unknown error";
+			project.update((p) => ({
+				...p,
+				statusMessage: "Error saving screenshot.",
+				error: `Save failed: ${errorMessage}`,
+				isLoading: false,
+			}));
+			console.error("Error during screenshot saving via Tauri:", err);
 		}
 	}
 
@@ -535,257 +719,344 @@
 		seekTo(newTime);
 	}
 
-	
-
 	let unlistenShortcutFn; // Renamed from unlistenShortcut
 
 	onMount(async () => {
 		initializeWaveformWorker();
 
-		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
-		document.addEventListener('fullscreenchange', handleFullscreenChange);
+		document.addEventListener(
+			"click",
+			handleClickOutsidePlaybackSpeedMenu,
+			true,
+		);
+		document.addEventListener("fullscreenchange", handleFullscreenChange);
 
 		const setupShortcutListener = async () => {
 			try {
-				console.log('[MediaPlayer] Setting up Tauri event listener for "shortcut-event"...');
-				unlistenShortcutFn = await listen('shortcut-event', (event) => {
+				console.log(
+					'[MediaPlayer] Setting up Tauri event listener for "shortcut-event"...',
+				);
+				unlistenShortcutFn = await listen("shortcut-event", (event) => {
 					// console.log('[MediaPlayer] Tauri "shortcut-event" received:', event); // Removed this line
-					if (event.payload === 'rewind') {
+					if (event.payload === "rewind") {
 						rewind10s();
-					} else if (event.payload === 'play-pause') {
+					} else if (event.payload === "play-pause") {
 						handleTogglePlay();
-					} else if (event.payload === 'forward') {
+					} else if (event.payload === "forward") {
 						forward10s();
-					} else if (event.payload === 'speed-up') {
-                        changeSpeed(1);
-                    } else if (event.payload === 'speed-down') {
-                        changeSpeed(-1);
-                    }
+					} else if (event.payload === "speed-up") {
+						changeSpeed(1);
+					} else if (event.payload === "speed-down") {
+						changeSpeed(-1);
+					}
 				});
-				console.log('[MediaPlayer] Tauri event listener for "shortcut-event" set up.');
+				console.log(
+					'[MediaPlayer] Tauri event listener for "shortcut-event" set up.',
+				);
 			} catch (err) {
-				console.error('[MediaPlayer] Error setting up Tauri "shortcut-event" listener:', err);
+				console.error(
+					'[MediaPlayer] Error setting up Tauri "shortcut-event" listener:',
+					err,
+				);
 			}
 		};
 		setupShortcutListener();
 
-        return () => {
+		return () => {
 			if (waveformWorker) {
 				waveformWorker.terminate();
 				waveformWorker = null;
 			}
-			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
-			if (unlistenShortcutFn) { // Use renamed variable
-				console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onMount return.');
+			document.removeEventListener(
+				"click",
+				handleClickOutsidePlaybackSpeedMenu,
+				true,
+			);
+			if (unlistenShortcutFn) {
+				// Use renamed variable
+				console.log(
+					'[MediaPlayer] Cleaning up "shortcut-event" listener in onMount return.',
+				);
 				unlistenShortcutFn();
 			}
-        };
-    });
+		};
+	});
 
 	onDestroy(() => {
 		if (waveformWorker) {
 			waveformWorker.terminate();
 			waveformWorker = null;
 		}
-		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
+		if (activeSubtitleUrl && activeSubtitleUrl.startsWith("blob:")) {
 			URL.revokeObjectURL(activeSubtitleUrl);
-			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
+			console.log(
+				"[MediaPlayer] Revoked active subtitle object URL on destroy:",
+				activeSubtitleUrl,
+			);
 		}
-		document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
-		if (unlistenShortcutFn) { // Use renamed variable
-			console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onDestroy.');
+		document.removeEventListener(
+			"click",
+			handleClickOutsidePlaybackSpeedMenu,
+			true,
+		);
+		if (unlistenShortcutFn) {
+			// Use renamed variable
+			console.log(
+				'[MediaPlayer] Cleaning up "shortcut-event" listener in onDestroy.',
+			);
 			unlistenShortcutFn();
 		}
 		clearTimeout(userActiveTimeout);
-    });
+	});
 
 	// --- File Handling & Audio Processing ---
 	function getMimeType(filePath) {
-        const extension = filePath?.split('.').pop()?.toLowerCase();
-        switch (extension) {
-            case 'wav': return 'audio/wav';
-            case 'mp3': return 'audio/mpeg';
-            case 'ogg': return 'audio/ogg';
-            case 'm4a': return 'audio/mp4';
-            case 'aac': return 'audio/aac';
-            case 'flac': return 'audio/flac';
-            case 'mp4': return 'video/mp4';
-            case 'mov': return 'video/quicktime';
-            case 'webm': return 'video/webm';
-            case 'avi': return 'video/x-msvideo';
-            case 'mkv': return 'video/x-matroska';
-            default: return '';
-        }
-    }
+		const extension = filePath?.split(".").pop()?.toLowerCase();
+		switch (extension) {
+			case "wav":
+				return "audio/wav";
+			case "mp3":
+				return "audio/mpeg";
+			case "ogg":
+				return "audio/ogg";
+			case "m4a":
+				return "audio/mp4";
+			case "aac":
+				return "audio/aac";
+			case "flac":
+				return "audio/flac";
+			case "mp4":
+				return "video/mp4";
+			case "mov":
+				return "video/quicktime";
+			case "webm":
+				return "video/webm";
+			case "avi":
+				return "video/x-msvideo";
+			case "mkv":
+				return "video/x-matroska";
+			default:
+				return "";
+		}
+	}
 
-    let isAudio = false;
-    $: isAudio = loadedPathFromProp ? getMimeType(loadedPathFromProp).startsWith('audio/') : false;
-    $: if (isAudio) isVideoMinimized = true;
+	let isAudio = false;
+	$: isAudio = loadedPathFromProp
+		? getMimeType(loadedPathFromProp).startsWith("audio/")
+		: false;
+	$: if (isAudio) isVideoMinimized = true;
 
 	// Reactive block to load media when explicitMediaPath changes or (if not explicit) when global selectedMediaFile changes
 	$: {
-        const mediaPathToLoad = explicitMediaPath || $transcriptStore.selectedMediaFile?.path;
+		const mediaPathToLoad =
+			explicitMediaPath || $transcriptStore.selectedMediaFile?.path;
 
-        const loadMedia = async (path) => {
-            if (isLoadingMedia || path === loadedPathFromProp) {
-                return;
-            }
+		const loadMedia = async (path) => {
+			if (isLoadingMedia || path === loadedPathFromProp) {
+				return;
+			}
 
-            // Aggressively terminate any ongoing worker process
-            if (waveformWorker) {
-                waveformWorker.terminate();
-                // Re-initialize the worker for the next job
-                waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
-                initializeWaveformWorker(); // Re-attach listeners
-            }
-            currentWaveformLoadId++; // Invalidate any pending messages from the old worker
+			// Aggressively terminate any ongoing worker process
+			if (waveformWorker) {
+				waveformWorker.terminate();
+				// Re-initialize the worker for the next job
+				waveformWorker = new Worker(
+					new URL("$lib/workers/waveformWorker.js", import.meta.url),
+					{ type: "module" },
+				);
+				initializeWaveformWorker(); // Re-attach listeners
+			}
+			currentWaveformLoadId++; // Invalidate any pending messages from the old worker
 
-            isLoadingMedia = true;
-            if (isTrimming && !explicitMediaPath) cancelTrimMode();
+			isLoadingMedia = true;
+			if (isTrimming && !explicitMediaPath) cancelTrimMode();
 
-            // Reset local state
-            localMediaUrl = '';
-            localAudioBuffer = null;
-            if (localAudioPeaks) console.log('[MediaPlayer] Clearing localAudioPeaks due to media load/unload.');
-            localAudioPeaks = null;
-            localDuration = 0;
-            localCurrentTime = 0;
-            localIsPlaying = false;
-            isMediaReadyForProcessing = false;
+			// Reset local state
+			localMediaUrl = "";
+			localAudioBuffer = null;
+			if (localAudioPeaks)
+				console.log(
+					"[MediaPlayer] Clearing localAudioPeaks due to media load/unload.",
+				);
+			localAudioPeaks = null;
+			localDuration = 0;
+			localCurrentTime = 0;
+			localIsPlaying = false;
+			isMediaReadyForProcessing = false;
 
-            try {
-                const assetUrl = await convertFileSrc(path);
-                console.log(`[MediaPlayer] Converted path '${path}' to asset URL: '${assetUrl}'`);
+			try {
+				const assetUrl = await convertFileSrc(path);
+				console.log(
+					`[MediaPlayer] Converted path '${path}' to asset URL: '${assetUrl}'`,
+				);
 
-                if (!assetUrl) {
-                    throw new Error(`convertFileSrc returned empty URL for path: ${path}`);
-                }
+				if (!assetUrl) {
+					throw new Error(
+						`convertFileSrc returned empty URL for path: ${path}`,
+					);
+				}
 
-                loadedPathFromProp = path;
-                localMediaUrl = assetUrl;
+				loadedPathFromProp = path;
+				localMediaUrl = assetUrl;
 
-                if (!explicitMediaPath) {
-                    setAudioBuffer(null, null);
-                }
+				if (!explicitMediaPath) {
+					setAudioBuffer(null, null);
+				}
 
-                await tick();
-                if (videoElement) {
-                    videoElement.load();
-                }
+				await tick();
+				if (videoElement) {
+					videoElement.load();
+				}
+			} catch (error) {
+				console.error(
+					`[MediaPlayer] Error getting asset URL for ${path}:`,
+					error,
+				);
+				if (!explicitMediaPath) {
+					// Only update global store error if this is the main player
+					project.update((p) => ({
+						...p,
+						error: `Failed to load media: ${error?.message || error}`,
+						statusMessage: "Error loading media.",
+					}));
+					setAudioBuffer(null, null);
+					setPlayerDuration(0);
+					updatePlayerTime(0);
+					togglePlayerPlaying(false);
+				} else {
+					dispatch("mediaLoadError", {
+						path: path,
+						error: error?.message || error,
+					});
+				}
+				localMediaUrl = "";
+				loadedPathFromProp = null;
+			} finally {
+				isLoadingMedia = false;
+			}
+		};
 
-            } catch (error) {
-                console.error(`[MediaPlayer] Error getting asset URL for ${path}:`, error);
-                if (!explicitMediaPath) { // Only update global store error if this is the main player
-                    project.update((p) => ({
-                        ...p,
-                        error: `Failed to load media: ${error?.message || error}`,
-                        statusMessage: 'Error loading media.'
-                    }));
-                    setAudioBuffer(null, null);
-                    setPlayerDuration(0);
-                    updatePlayerTime(0);
-                    togglePlayerPlaying(false);
-                } else {
-                    dispatch('mediaLoadError', { path: path, error: error?.message || error });
-                }
-                localMediaUrl = '';
-                loadedPathFromProp = null;
-            } finally {
-                isLoadingMedia = false;
-            }
-        };
+		const unloadMedia = () => {
+			if (isTrimming && !explicitMediaPath) cancelTrimMode();
+			loadedPathFromProp = null;
+			if (localMediaUrl !== "") {
+				localMediaUrl = "";
+				localDuration = 0;
+				localCurrentTime = 0;
+				localIsPlaying = false;
+			}
+			if (localAudioBuffer) {
+				localAudioBuffer = null;
+			}
+			if (localAudioPeaks) {
+				console.log(
+					"[MediaPlayer] Clearing localAudioPeaks due to unload.",
+				);
+				localAudioPeaks = null;
+			}
+			if (!explicitMediaPath) {
+				if ($transcriptStore.audioBuffer) setAudioBuffer(null, null);
+				if ($transcriptStore.player.duration > 0) setPlayerDuration(0);
+				if ($transcriptStore.player.currentTime > 0)
+					updatePlayerTime(0);
+				if ($transcriptStore.player.isPlaying)
+					togglePlayerPlaying(false);
+			}
+			isLoadingMedia = false;
+			isMediaReadyForProcessing = false;
+		};
 
-        const unloadMedia = () => {
-            if (isTrimming && !explicitMediaPath) cancelTrimMode();
-            loadedPathFromProp = null;
-            if (localMediaUrl !== '') {
-                localMediaUrl = '';
-                localDuration = 0;
-                localCurrentTime = 0;
-                localIsPlaying = false;
-            }
-            if (localAudioBuffer) {
-                localAudioBuffer = null;
-            }
-            if (localAudioPeaks) {
-                console.log('[MediaPlayer] Clearing localAudioPeaks due to unload.');
-                localAudioPeaks = null;
-            }
-            if (!explicitMediaPath) {
-                if ($transcriptStore.audioBuffer) setAudioBuffer(null, null);
-                if ($transcriptStore.player.duration > 0) setPlayerDuration(0);
-                if ($transcriptStore.player.currentTime > 0) updatePlayerTime(0);
-                if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false);
-            }
-            isLoadingMedia = false;
-            isMediaReadyForProcessing = false;
-        };
-
-        if (mediaPathToLoad) {
-            if (mediaPathToLoad !== loadedPathFromProp) {
-                 loadMedia(mediaPathToLoad);
-            }
-        } else {
-            if (loadedPathFromProp) {
-                unloadMedia();
-            }
-        }
-    }
-
+		if (mediaPathToLoad) {
+			if (mediaPathToLoad !== loadedPathFromProp) {
+				loadMedia(mediaPathToLoad);
+			}
+		} else {
+			if (loadedPathFromProp) {
+				unloadMedia();
+			}
+		}
+	}
 
 	// --- Player Controls ---
 	export function handleTogglePlay() {
-        if (!videoElement || !localMediaUrl || isLoadingMedia) return;
-        if (videoElement.paused || videoElement.ended) {
-            videoElement.play().catch(console.error);
-        } else {
-            videoElement.pause();
-        }
-    }
+		if (!videoElement || !localMediaUrl || isLoadingMedia) return;
+		if (videoElement.paused || videoElement.ended) {
+			videoElement.play().catch(console.error);
+		} else {
+			videoElement.pause();
+		}
+	}
 
 	// --- Video Element Event Handlers ---
-	function onPlay()  {
-        localIsPlaying = true;
-        if (!explicitMediaPath) togglePlayerPlaying(true);
-    }
+	function onPlay() {
+		localIsPlaying = true;
+		if (!explicitMediaPath) togglePlayerPlaying(true);
+	}
 	function onPause() {
-        localIsPlaying = false;
-        if (!explicitMediaPath) togglePlayerPlaying(false);
+		localIsPlaying = false;
+		if (!explicitMediaPath) togglePlayerPlaying(false);
 		segmentPlayEndTime = null;
-    }
+	}
 	function onTimeUpdate(event) {
 		if (isLoadingMedia || !localDuration) return;
 		const video = event.target;
 		let currentTime = video.currentTime;
 		const duration = video.duration;
 
-		if (typeof currentTime === 'number' && !isNaN(currentTime) && duration > 0) {
+		if (
+			typeof currentTime === "number" &&
+			!isNaN(currentTime) &&
+			duration > 0
+		) {
 			// Segment playback auto-pause logic
-			if (segmentPlayEndTime !== null && currentTime >= segmentPlayEndTime) {
+			if (
+				segmentPlayEndTime !== null &&
+				currentTime >= segmentPlayEndTime
+			) {
 				video.pause();
 				segmentPlayEndTime = null;
 			}
 
-			// Loop logic specific to main transcriptions view's trim/edit modes
+			// Loop logic specific to main transcription view's trim/edit modes
 			if (!explicitMediaPath) {
-				if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
-					if (currentTime < editSegmentStartTime || currentTime >= editSegmentEndTime) {
+				if (
+					isEditingSegment &&
+					editSegmentEndTime > editSegmentStartTime
+				) {
+					if (
+						currentTime < editSegmentStartTime ||
+						currentTime >= editSegmentEndTime
+					) {
 						video.currentTime = editSegmentStartTime;
 						currentTime = editSegmentStartTime;
-						if(video.paused && video.currentTime === editSegmentStartTime) video.play().catch(console.error);
+						if (
+							video.paused &&
+							video.currentTime === editSegmentStartTime
+						)
+							video.play().catch(console.error);
 					}
 				} else if (isTrimming && trimEndTime > trimStartTime) {
-					if (currentTime < trimStartTime || currentTime >= trimEndTime) {
+					if (
+						currentTime < trimStartTime ||
+						currentTime >= trimEndTime
+					) {
 						video.currentTime = trimStartTime;
 						currentTime = trimStartTime;
-						if(video.paused && video.currentTime === trimStartTime) video.play().catch(console.error);
+						if (video.paused && video.currentTime === trimStartTime)
+							video.play().catch(console.error);
 					}
 				}
-			} else if (enableLooping && loopEndTime > loopStartTime && explicitMediaPath) { // Added for inline trim looping
+			} else if (
+				enableLooping &&
+				loopEndTime > loopStartTime &&
+				explicitMediaPath
+			) {
+				// Added for inline trim looping
 				if (currentTime < loopStartTime || currentTime >= loopEndTime) {
 					video.currentTime = loopStartTime;
 					currentTime = loopStartTime;
-					if (video.paused && video.currentTime === loopStartTime) video.play().catch(console.error);
+					if (video.paused && video.currentTime === loopStartTime)
+						video.play().catch(console.error);
 				}
 			}
 			localCurrentTime = currentTime;
@@ -800,201 +1071,277 @@
 		videoElement.play().catch(console.error);
 	}
 	async function onLoadedMetadata(event) {
-        if (event.target && typeof event.target.duration === 'number' && !isNaN(event.target.duration)) {
-            const duration = event.target.duration;
-            isMediaReadyForProcessing = true;
-            localDuration = duration;
-            localCurrentTime = 0;
-            if (videoElement) videoElement.currentTime = 0;
-            if (progressBarElement) progressBarElement.value = '0'; // Ensure progress bar visually resets
+		if (
+			event.target &&
+			typeof event.target.duration === "number" &&
+			!isNaN(event.target.duration)
+		) {
+			const duration = event.target.duration;
+			isMediaReadyForProcessing = true;
+			localDuration = duration;
+			localCurrentTime = 0;
+			if (videoElement) videoElement.currentTime = 0;
+			if (progressBarElement) progressBarElement.value = "0"; // Ensure progress bar visually resets
 
-            if (!explicitMediaPath) {
-                setPlayerDuration(duration);
-                updatePlayerTime(0);
-            }
-            // Asynchronously decode audio for waveform
-            decodeAudioForWaveform();
-        } else {
-            localDuration = 0;
-            localCurrentTime = 0;
-            if (videoElement) videoElement.currentTime = 0;
-            if (progressBarElement) progressBarElement.value = '0'; // Ensure progress bar visually resets
+			if (!explicitMediaPath) {
+				setPlayerDuration(duration);
+				updatePlayerTime(0);
+			}
+			// Asynchronously decode audio for waveform
+			decodeAudioForWaveform();
+		} else {
+			localDuration = 0;
+			localCurrentTime = 0;
+			if (videoElement) videoElement.currentTime = 0;
+			if (progressBarElement) progressBarElement.value = "0"; // Ensure progress bar visually resets
 
-            if (!explicitMediaPath) {
-                setPlayerDuration(0);
-                updatePlayerTime(0);
-            }
-        }
-        if (videoElement) {
-            if (autoPlay) {
-                videoElement.play().catch(e => console.warn("[MediaPlayer] Auto-play failed:", e));
-            }
-            localIsPlaying = !videoElement.paused;
-            if (!explicitMediaPath) togglePlayerPlaying(!videoElement.paused);
-            videoElement.playbackRate = selectedPlaybackRate;
-            videoElement.volume = currentVolume; // Initialize volume
+			if (!explicitMediaPath) {
+				setPlayerDuration(0);
+				updatePlayerTime(0);
+			}
+		}
+		if (videoElement) {
+			if (autoPlay) {
+				videoElement
+					.play()
+					.catch((e) =>
+						console.warn("[MediaPlayer] Auto-play failed:", e),
+					);
+			}
+			localIsPlaying = !videoElement.paused;
+			if (!explicitMediaPath) togglePlayerPlaying(!videoElement.paused);
+			videoElement.playbackRate = selectedPlaybackRate;
+			videoElement.volume = currentVolume; // Initialize volume
 			videoElement.muted = isMuted;
-        }
-    }
+		}
+	}
 	function onSeeked() {
-        if (videoElement && !isLoadingMedia) {
-            localCurrentTime = videoElement.currentTime;
-            if (!explicitMediaPath) updatePlayerTime(localCurrentTime);
-        }
-    }
+		if (videoElement && !isLoadingMedia) {
+			localCurrentTime = videoElement.currentTime;
+			if (!explicitMediaPath) updatePlayerTime(localCurrentTime);
+		}
+	}
 	function onEnded() {
 		localIsPlaying = false;
 		if (!explicitMediaPath) togglePlayerPlaying(false);
 
-        const duration = localDuration;
-		if (!explicitMediaPath && isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
+		const duration = localDuration;
+		if (
+			!explicitMediaPath &&
+			isEditingSegment &&
+			editSegmentEndTime > editSegmentStartTime
+		) {
 			localCurrentTime = editSegmentStartTime;
-            if (videoElement) videoElement.currentTime = editSegmentStartTime;
+			if (videoElement) videoElement.currentTime = editSegmentStartTime;
 			updatePlayerTime(editSegmentStartTime);
-		} else if (!explicitMediaPath && isTrimming && trimEndTime > trimStartTime) {
+		} else if (
+			!explicitMediaPath &&
+			isTrimming &&
+			trimEndTime > trimStartTime
+		) {
 			localCurrentTime = trimStartTime;
-            if (videoElement) videoElement.currentTime = trimStartTime;
+			if (videoElement) videoElement.currentTime = trimStartTime;
 			updatePlayerTime(trimStartTime);
 		} else {
-            localCurrentTime = duration || 0;
+			localCurrentTime = duration || 0;
 			if (!explicitMediaPath) updatePlayerTime(duration || 0);
 		}
-	 }
+	}
 
-    async function decodeAudioForWaveform() {
-        if (!loadedPathFromProp) {
-            return;
-        }
+	async function decodeAudioForWaveform() {
+		if (!loadedPathFromProp) {
+			return;
+		}
 
-        const loadId = currentWaveformLoadId;
-        const currentProject = get(project);
-        const projectId = currentProject.id;
+		const loadId = currentWaveformLoadId;
+		const currentProject = get(project);
+		const projectId = currentProject.id;
 
-        let assetRelativePath = null;
-        if (explicitMediaPath && currentProject.baseDirectory) {
-            // If explicit path is used (Data tab), we need to derive the relative path
-            // We can try to use the selectedMediaFile if it matches, but it's safer to calculate it
-            // However, loadedPathFromProp is an absolute path (or asset URL)
-            // Wait, loadedPathFromProp is usually the absolute path before conversion? No, it sets it to path passed to loadMedia.
-            // Check usage: loadMedia(mediaPathToLoad) sets loadedPathFromProp = path.
-            // mediaPathToLoad is explicitMediaPath (absolute path).
+		let assetRelativePath = null;
+		if (explicitMediaPath && currentProject.baseDirectory) {
+			// If explicit path is used (Data tab), we need to derive the relative path
+			// We can try to use the selectedMediaFile if it matches, but it's safer to calculate it
+			// However, loadedPathFromProp is an absolute path (or asset URL)
+			// Wait, loadedPathFromProp is usually the absolute path before conversion? No, it sets it to path passed to loadMedia.
+			// Check usage: loadMedia(mediaPathToLoad) sets loadedPathFromProp = path.
+			// mediaPathToLoad is explicitMediaPath (absolute path).
 
-            const normalizedBase = currentProject.baseDirectory.replace(/\\/g, '/');
-            const normalizedPath = explicitMediaPath.replace(/\\/g, '/');
+			const normalizedBase = currentProject.baseDirectory.replace(
+				/\\/g,
+				"/",
+			);
+			const normalizedPath = explicitMediaPath.replace(/\\/g, "/");
 
-            if (normalizedPath.startsWith(normalizedBase)) {
-                // Strip base dir
-                let rel = normalizedPath.substring(normalizedBase.length);
-                if (rel.startsWith('/')) rel = rel.substring(1);
-                assetRelativePath = rel;
-            } else {
-                // Fallback: If we can't derive it easily (e.g. symlinks or weird paths), we might miss cache.
-                // But usually explicitMediaPath in Data tab comes from the project structure.
-                console.warn("[MediaPlayer] Could not derive relative path for cache lookup from explicit path:", explicitMediaPath);
-            }
-        } else {
-            // Default behavior for Transcription tab
-            assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
-        }
+			if (normalizedPath.startsWith(normalizedBase)) {
+				// Strip base dir
+				let rel = normalizedPath.substring(normalizedBase.length);
+				if (rel.startsWith("/")) rel = rel.substring(1);
+				assetRelativePath = rel;
+			} else {
+				// Fallback: If we can't derive it easily (e.g. symlinks or weird paths), we might miss cache.
+				// But usually explicitMediaPath in Data tab comes from the project structure.
+				console.warn(
+					"[MediaPlayer] Could not derive relative path for cache lookup from explicit path:",
+					explicitMediaPath,
+				);
+			}
+		} else {
+			// Default behavior for Transcription tab
+			assetRelativePath =
+				$transcriptStore.selectedMediaFile?.relative_path;
+		}
 
-        // 1. Check for cached waveform data first
-        if (projectId && assetRelativePath) {
-            try {
-                console.log(`[MediaPlayer] Checking for cached waveform data for ${assetRelativePath}...`);
-                const metadata = await getAssetMetadata(assetRelativePath);
-                if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
-                    console.log('[MediaPlayer] Cached waveform data found.');
-                    const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
-                    // Set the peaks, but not the audio buffer. The buffer will be loaded on demand.
-                    setAudioBuffer(null, cachedPeaks);
-                    if (metadata.duration_seconds) {
-                        setPlayerDuration(metadata.duration_seconds);
-                    }
-                    console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
-                    return; // Exit early
-                } else {
-                    console.log('[MediaPlayer] No cached waveform data found.');
-                }
-            } catch (e) {
-                console.log('[MediaPlayer] Error fetching metadata for waveform:', e);
-                console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
-            }
-        }
+		// 1. Check for cached waveform data first
+		if (projectId && assetRelativePath) {
+			try {
+				console.log(
+					`[MediaPlayer] Checking for cached waveform data for ${assetRelativePath}...`,
+				);
+				const metadata = await getAssetMetadata(assetRelativePath);
+				if (
+					metadata &&
+					metadata.waveform_data &&
+					metadata.waveform_data.length > 0
+				) {
+					console.log("[MediaPlayer] Cached waveform data found.");
+					const cachedPeaks = new Float32Array(
+						new Uint8Array(metadata.waveform_data).buffer,
+					);
+					// Set the peaks, but not the audio buffer. The buffer will be loaded on demand.
+					setAudioBuffer(null, cachedPeaks);
+					if (metadata.duration_seconds) {
+						setPlayerDuration(metadata.duration_seconds);
+					}
+					console.log(
+						`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`,
+					);
+					return; // Exit early
+				} else {
+					console.log("[MediaPlayer] No cached waveform data found.");
+				}
+			} catch (e) {
+				console.log(
+					"[MediaPlayer] Error fetching metadata for waveform:",
+					e,
+				);
+				console.warn(
+					`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`,
+					e,
+				);
+			}
+		}
 
-        // 2. If no cached data, proceed with decoding
-        try {
-            const fileData = await readFile(loadedPathFromProp);
-            const arrayBuffer = fileData.buffer; // Get the underlying ArrayBuffer
+		// 2. If no cached data, proceed with decoding
+		try {
+			const fileData = await readFile(loadedPathFromProp);
+			const arrayBuffer = fileData.buffer; // Get the underlying ArrayBuffer
 
-            // Always decode audio on the main thread to get the AudioBuffer for playback
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+			// Always decode audio on the main thread to get the AudioBuffer for playback
+			const audioContext = new (window.AudioContext ||
+				window.webkitAudioContext)();
+			const decodedAudioBuffer =
+				await audioContext.decodeAudioData(arrayBuffer);
 
-            // If no cached data, proceed with generating peaks using the worker
-            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath || 'unknown path'}. Sending to worker for peak generation.`);
-            const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
-            const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
-            waveformWorker.postMessage({
-                type: 'GENERATE_PEAKS',
-                payload: {
-                    channelData: transferableChannelData,
-                    sampleRate: decodedAudioBuffer.sampleRate,
-                    filePath: loadedPathFromProp
-                },
-                id: loadId
-            }, [transferableChannelData.buffer]); // Transfer the buffer of the new Float32Array
+			// If no cached data, proceed with generating peaks using the worker
+			console.log(
+				`[MediaPlayer] No cached waveform data found for ${assetRelativePath || "unknown path"}. Sending to worker for peak generation.`,
+			);
+			const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
+			const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
+			waveformWorker.postMessage(
+				{
+					type: "GENERATE_PEAKS",
+					payload: {
+						channelData: transferableChannelData,
+						sampleRate: decodedAudioBuffer.sampleRate,
+						filePath: loadedPathFromProp,
+					},
+					id: loadId,
+				},
+				[transferableChannelData.buffer],
+			); // Transfer the buffer of the new Float32Array
 
-            // Store decodedAudioBuffer locally for use in onmessage handler when worker responds
-            waveformLoadData.set(loadId, decodedAudioBuffer);
-
-        } catch (error) {
-            waveformLoadData.delete(loadId);
-            console.error(`[MediaPlayer] Error reading or decoding audio file for waveform:`, error);
-            if (!explicitMediaPath) {
-                setAudioBuffer(null, null);
-            }
-        }
-    }
+			// Store decodedAudioBuffer locally for use in onmessage handler when worker responds
+			waveformLoadData.set(loadId, decodedAudioBuffer);
+		} catch (error) {
+			waveformLoadData.delete(loadId);
+			console.error(
+				`[MediaPlayer] Error reading or decoding audio file for waveform:`,
+				error,
+			);
+			if (!explicitMediaPath) {
+				setAudioBuffer(null, null);
+			}
+		}
+	}
 	function onError(event) {
-        console.error('[MediaPlayer] onError event', event, event?.target?.error);
+		console.error(
+			"[MediaPlayer] onError event",
+			event,
+			event?.target?.error,
+		);
 
-        let errorMsg = 'Unknown video error';
-        const errorCode = event.target?.error?.code;
-        const errorDetails = event.target?.error?.message || '';
+		let errorMsg = "Unknown video error";
+		const errorCode = event.target?.error?.code;
+		const errorDetails = event.target?.error?.message || "";
 
-        if (errorCode) {
-            switch (errorCode) {
-                case MediaError.MEDIA_ERR_ABORTED: errorMsg = 'Playback aborted by user.'; break;
-                case MediaError.MEDIA_ERR_NETWORK: errorMsg = 'Network error caused playback failure (e.g. 403 Forbidden). Check file permissions.'; break;
-                case MediaError.MEDIA_ERR_DECODE: errorMsg = 'Media decoding error.'; break;
-                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg = 'Media format not supported.'; break;
-                default: errorMsg = `An unknown error occurred (Code: ${errorCode}).`; break;
-            }
-        }
+		if (errorCode) {
+			switch (errorCode) {
+				case MediaError.MEDIA_ERR_ABORTED:
+					errorMsg = "Playback aborted by user.";
+					break;
+				case MediaError.MEDIA_ERR_NETWORK:
+					errorMsg =
+						"Network error caused playback failure (e.g. 403 Forbidden). Check file permissions.";
+					break;
+				case MediaError.MEDIA_ERR_DECODE:
+					errorMsg = "Media decoding error.";
+					break;
+				case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+					errorMsg = "Media format not supported.";
+					break;
+				default:
+					errorMsg = `An unknown error occurred (Code: ${errorCode}).`;
+					break;
+			}
+		}
 
-        if (errorDetails) {
-            errorMsg += ` Details: ${errorDetails}`;
-        }
+		if (errorDetails) {
+			errorMsg += ` Details: ${errorDetails}`;
+		}
 
-        console.error(`[MediaPlayer] Playback Error for ${localMediaUrl}: ${errorMsg}`);
+		console.error(
+			`[MediaPlayer] Playback Error for ${localMediaUrl}: ${errorMsg}`,
+		);
 
-        if (!explicitMediaPath) { // Global player error
-            project.update((p) => ({ ...p, error: `Media Error: ${errorMsg}`, statusMessage: 'Error playing media.' }));
-            togglePlayerPlaying(false);
-            setPlayerDuration(0);
-            updatePlayerTime(0);
-            setAudioBuffer(null, null);
-        } else { // Local player error
-            dispatch('mediaPlayError', { path: explicitMediaPath, error: errorMsg });
-        }
-        localIsPlaying = false;
-        localDuration = 0;
-        localCurrentTime = 0;
-        localAudioBuffer = null;
-        localAudioPeaks = null;
-        isMediaReadyForProcessing = false; // Ensure it's false on error too
-        console.log(`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || 'unknown media'}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`);
-    }
+		if (!explicitMediaPath) {
+			// Global player error
+			project.update((p) => ({
+				...p,
+				error: `Media Error: ${errorMsg}`,
+				statusMessage: "Error playing media.",
+			}));
+			togglePlayerPlaying(false);
+			setPlayerDuration(0);
+			updatePlayerTime(0);
+			setAudioBuffer(null, null);
+		} else {
+			// Local player error
+			dispatch("mediaPlayError", {
+				path: explicitMediaPath,
+				error: errorMsg,
+			});
+		}
+		localIsPlaying = false;
+		localDuration = 0;
+		localCurrentTime = 0;
+		localAudioBuffer = null;
+		localAudioPeaks = null;
+		isMediaReadyForProcessing = false; // Ensure it's false on error too
+		console.log(
+			`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || "unknown media"}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`,
+		);
+	}
 
 	function portal(node) {
 		document.body.appendChild(node);
@@ -1003,35 +1350,39 @@
 				if (node.parentNode) {
 					node.parentNode.removeChild(node);
 				}
-			}
+			},
 		};
 	}
 
 	// --- Utility Functions ---
 	function formatTime(totalSeconds) {
-        if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00';
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = Math.floor(totalSeconds % 60);
-        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }
+		if (isNaN(totalSeconds) || totalSeconds < 0) return "00:00";
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = Math.floor(totalSeconds % 60);
+		return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+	}
 
 	function formatTimeWithHours(totalSeconds) {
-		if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00:00';
+		if (isNaN(totalSeconds) || totalSeconds < 0) return "00:00:00";
 		const hours = Math.floor(totalSeconds / 3600);
 		const minutes = Math.floor((totalSeconds % 3600) / 60);
 		const seconds = Math.floor(totalSeconds % 60);
-		return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+		return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 	}
 
 	// --- Progress Bar Tooltip Handlers ---
 	function handleMouseMoveOnProgressBar(event) {
-		if (!localDuration || !progressBarElement || !progressTooltipElement) return;
+		if (!localDuration || !progressBarElement || !progressTooltipElement)
+			return;
 
 		const progressBarRect = progressBarElement.getBoundingClientRect();
 		const mouseX_relative = event.clientX - progressBarRect.left; // Cursor's X relative to progress bar's start
 
 		// Calculate hover time based on the true mouse position
-		const percent = Math.max(0, Math.min(1, mouseX_relative / progressBarRect.width));
+		const percent = Math.max(
+			0,
+			Math.min(1, mouseX_relative / progressBarRect.width),
+		);
 		const hoverTime = percent * localDuration;
 		progressTooltipText = formatTimeWithHours(hoverTime);
 
@@ -1041,17 +1392,21 @@
 		// Adjust idealTooltipCenter to prevent tooltip edges from going outside progressBarElement
 		const tooltipWidth = progressTooltipElement.offsetWidth;
 		const minAllowedCenter = tooltipWidth / 2;
-		const maxAllowedCenter = progressBarRect.width - (tooltipWidth / 2);
+		const maxAllowedCenter = progressBarRect.width - tooltipWidth / 2;
 
 		let clampedTooltipCenter;
-		if (progressBarRect.width < tooltipWidth) { // Tooltip wider than bar
+		if (progressBarRect.width < tooltipWidth) {
+			// Tooltip wider than bar
 			clampedTooltipCenter = progressBarRect.width / 2; // Center tooltip on the bar
 		} else {
-			clampedTooltipCenter = Math.max(minAllowedCenter, Math.min(idealTooltipCenter, maxAllowedCenter));
+			clampedTooltipCenter = Math.max(
+				minAllowedCenter,
+				Math.min(idealTooltipCenter, maxAllowedCenter),
+			);
 		}
 
 		progressTooltipLeft = `${progressBarRect.left + clampedTooltipCenter}px`;
-        progressTooltipTop = `${progressBarRect.top - 10}px`;
+		progressTooltipTop = `${progressBarRect.top - 10}px`;
 		showProgressTooltip = true;
 	}
 
@@ -1061,96 +1416,164 @@
 
 	// --- Trim Mode Functions (mostly for main player, can be called via ref) ---
 	export function enterTrimMode() {
-		if (isEditingSegment && !explicitMediaPath) { // Only relevant for main player
+		if (isEditingSegment && !explicitMediaPath) {
+			// Only relevant for main player
 			alert("Cannot enter trim mode while editing a segment.");
 			return;
 		}
 		const currentProj = get(project); // Still needed for other project properties if any
 		const currentTs = get(transcriptStore);
-		const currentTimeToUse = explicitMediaPath ? localCurrentTime : currentTs.player.currentTime;
+		const currentTimeToUse = explicitMediaPath
+			? localCurrentTime
+			: currentTs.player.currentTime;
 		const segmentsToUse = explicitMediaPath ? [] : currentTs.segments;
-		const durationToUse = explicitMediaPath ? localDuration : currentTs.player.duration;
-        const audioBufferToUse = explicitMediaPath ? localAudioBuffer : currentTs.audioBuffer;
+		const durationToUse = explicitMediaPath
+			? localDuration
+			: currentTs.player.duration;
+		const audioBufferToUse = explicitMediaPath
+			? localAudioBuffer
+			: currentTs.audioBuffer;
 
-
-		if (!durationToUse || isLoadingMedia || !audioBufferToUse || isTrimming) return;
+		if (!durationToUse || isLoadingMedia || !audioBufferToUse || isTrimming)
+			return;
 
 		let segmentStartTime = 0;
 		let segmentEndTime = durationToUse;
-        if (!explicitMediaPath) { // Segment-based trim init only for main player
-            const currentSegment = segmentsToUse.find(s => currentTimeToUse >= s.start_time && currentTimeToUse < s.end_time);
-            if (currentSegment) {
-                segmentStartTime = currentSegment.start_time;
-                segmentEndTime = currentSegment.end_time;
-            }
-        }
+		if (!explicitMediaPath) {
+			// Segment-based trim init only for main player
+			const currentSegment = segmentsToUse.find(
+				(s) =>
+					currentTimeToUse >= s.start_time &&
+					currentTimeToUse < s.end_time,
+			);
+			if (currentSegment) {
+				segmentStartTime = currentSegment.start_time;
+				segmentEndTime = currentSegment.end_time;
+			}
+		}
 
 		isTrimming = true; // This prop is passed in, so setting it here makes it an output effectively
 		trimStartTime = segmentStartTime; // This prop is passed in
-		trimEndTime = segmentEndTime;   // This prop is passed in
+		trimEndTime = segmentEndTime; // This prop is passed in
 
-        // Notify parent that trim mode has been entered with these times
-        dispatch('trimModeEntered', { startTime: trimStartTime, endTime: trimEndTime });
+		// Notify parent that trim mode has been entered with these times
+		dispatch("trimModeEntered", {
+			startTime: trimStartTime,
+			endTime: trimEndTime,
+		});
 
-
-		if ((explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying) && videoElement) {
-			 if (videoElement.currentTime < trimStartTime || videoElement.currentTime >= trimEndTime) {
-				 videoElement.currentTime = trimStartTime;
-                 localCurrentTime = trimStartTime;
-				 if (!explicitMediaPath) updatePlayerTime(trimStartTime);
-			 }
+		if (
+			(explicitMediaPath
+				? localIsPlaying
+				: $transcriptStore.player.isPlaying) &&
+			videoElement
+		) {
+			if (
+				videoElement.currentTime < trimStartTime ||
+				videoElement.currentTime >= trimEndTime
+			) {
+				videoElement.currentTime = trimStartTime;
+				localCurrentTime = trimStartTime;
+				if (!explicitMediaPath) updatePlayerTime(trimStartTime);
+			}
 		}
 	}
 
-	export function cancelTrimMode() { // Can be called via ref
-        isTrimming = false;
-        trimStartTime = 0;
-        trimEndTime = 0;
-        dispatch('trimModeCancelled');
-    }
+	export function cancelTrimMode() {
+		// Can be called via ref
+		isTrimming = false;
+		trimStartTime = 0;
+		trimEndTime = 0;
+		dispatch("trimModeCancelled");
+	}
 
-	async function confirmTrim() { // For main player context usually
-		if (!isTrimming || !(loadedPathFromProp || get(transcriptStore).selectedMediaFile?.path)) return;
-        const pathToTrim = loadedPathFromProp || get(transcriptStore).selectedMediaFile?.path;
-		console.log(`[MediaPlayer] Confirming trim for ${pathToTrim} from ${trimStartTime.toFixed(3)}s to ${trimEndTime.toFixed(3)}s.`);
+	async function confirmTrim() {
+		// For main player context usually
+		if (
+			!isTrimming ||
+			!(
+				loadedPathFromProp ||
+				get(transcriptStore).selectedMediaFile?.path
+			)
+		)
+			return;
+		const pathToTrim =
+			loadedPathFromProp || get(transcriptStore).selectedMediaFile?.path;
+		console.log(
+			`[MediaPlayer] Confirming trim for ${pathToTrim} from ${trimStartTime.toFixed(3)}s to ${trimEndTime.toFixed(3)}s.`,
+		);
 
 		try {
-			project.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media...' }));
-			await handleTrimMediaConfirm(pathToTrim, trimStartTime, trimEndTime);
-			project.update(p => ({ ...p, isLoading: false, statusMessage: 'Trim complete.' }));
-			alert('Media trimmed successfully!');
+			project.update((p) => ({
+				...p,
+				isLoading: true,
+				statusMessage: "Trimming media...",
+			}));
+			await handleTrimMediaConfirm(
+				pathToTrim,
+				trimStartTime,
+				trimEndTime,
+			);
+			project.update((p) => ({
+				...p,
+				isLoading: false,
+				statusMessage: "Trim complete.",
+			}));
+			alert("Media trimmed successfully!");
 		} catch (error) {
-			console.error('[MediaPlayer] Trim failed:', error);
-			project.update(p => ({ ...p, isLoading: false, error: `Trim failed: ${error.message || error}`, statusMessage: 'Trim failed.' }));
+			console.error("[MediaPlayer] Trim failed:", error);
+			project.update((p) => ({
+				...p,
+				isLoading: false,
+				error: `Trim failed: ${error.message || error}`,
+				statusMessage: "Trim failed.",
+			}));
 			alert(`Failed to trim media: ${error.message || error}`);
 		} finally {
 			cancelTrimMode();
 		}
 	}
 
-	export function updateTrimTimes(newStartTime, newEndTime) { // Can be called via ref
-        if (isTrimming && typeof newStartTime === 'number' && typeof newEndTime === 'number') {
-            trimStartTime = newStartTime;
-            trimEndTime = newEndTime;
-        }
-    }
+	export function updateTrimTimes(newStartTime, newEndTime) {
+		// Can be called via ref
+		if (
+			isTrimming &&
+			typeof newStartTime === "number" &&
+			typeof newEndTime === "number"
+		) {
+			trimStartTime = newStartTime;
+			trimEndTime = newEndTime;
+		}
+	}
 
-	$: isTrimDisabled = isTrimming || !localMediaUrl || isLoadingMedia || !localAudioBuffer || (isEditingSegment && !explicitMediaPath);
-
+	$: isTrimDisabled =
+		isTrimming ||
+		!localMediaUrl ||
+		isLoadingMedia ||
+		!localAudioBuffer ||
+		(isEditingSegment && !explicitMediaPath);
 
 	export function seekTo(seconds) {
-		if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return;
+		if (typeof seconds !== "number" || isNaN(seconds) || seconds < 0)
+			return;
 		if (!videoElement) return;
 		const duration = videoElement.duration || 0;
 		let clamped = Math.max(0, Math.min(seconds, duration));
 
-        if (!explicitMediaPath) { // Only apply trim/edit clamping for main player
-            if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
-                 clamped = Math.max(editSegmentStartTime, Math.min(clamped, editSegmentEndTime - 0.001));
-            } else if (isTrimming && trimEndTime > trimStartTime) {
-                 clamped = Math.max(trimStartTime, Math.min(clamped, trimEndTime - 0.001));
-            }
-        }
+		if (!explicitMediaPath) {
+			// Only apply trim/edit clamping for main player
+			if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
+				clamped = Math.max(
+					editSegmentStartTime,
+					Math.min(clamped, editSegmentEndTime - 0.001),
+				);
+			} else if (isTrimming && trimEndTime > trimStartTime) {
+				clamped = Math.max(
+					trimStartTime,
+					Math.min(clamped, trimEndTime - 0.001),
+				);
+			}
+		}
 
 		// cancelAnimationFrame(seekRafId); // No longer using rAF for seekTo
 		// seekRafId = requestAnimationFrame(() => { // No longer using rAF for seekTo
@@ -1161,102 +1584,136 @@
 	}
 	// let seekRafId = null; // No longer using rAF for seekTo
 
-    // Button handlers for Data context
-    function handleDataTranscribeClick() {
-        dispatch('requestDataTranscribe', { mediaPath: explicitMediaPath });
-    }
-    async function handleDataTrimClick() {
-        console.log(`[MediaPlayer] Handle Trim Click. localAudioPeaks present: ${!!localAudioPeaks}, localAudioBuffer present: ${!!localAudioBuffer}`);
-        // Dispatch immediately with whatever we have (peaks might be available from cache)
-        dispatch('requestDataTrim', {
-            mediaPath: explicitMediaPath,
-            duration: localDuration,
-            audioBuffer: localAudioBuffer,
-            peaks: localAudioPeaks,
-            isReady: isMediaReadyForProcessing
-        });
+	// Button handlers for Data context
+	function handleDataTranscribeClick() {
+		dispatch("requestDataTranscribe", { mediaPath: explicitMediaPath });
+	}
+	async function handleDataTrimClick() {
+		console.log(
+			`[MediaPlayer] Handle Trim Click. localAudioPeaks present: ${!!localAudioPeaks}, localAudioBuffer present: ${!!localAudioBuffer}`,
+		);
+		// Dispatch immediately with whatever we have (peaks might be available from cache)
+		dispatch("requestDataTrim", {
+			mediaPath: explicitMediaPath,
+			duration: localDuration,
+			audioBuffer: localAudioBuffer,
+			peaks: localAudioPeaks,
+			isReady: isMediaReadyForProcessing,
+		});
 
-        if (!localAudioBuffer) {
-            
-            if (!loadedPathFromProp) {
-                dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Cannot process audio for trimming.' });
-                return;
-            }
-            try {
-                // Do NOT set isLoadingMedia to true here, to avoid blocking the video player UI.
-                // isLoadingMedia = true;
+		if (!localAudioBuffer) {
+			if (!loadedPathFromProp) {
+				dispatch("mediaLoadError", {
+					path: explicitMediaPath,
+					error: "Cannot process audio for trimming.",
+				});
+				return;
+			}
+			try {
+				// Do NOT set isLoadingMedia to true here, to avoid blocking the video player UI.
+				// isLoadingMedia = true;
 
-                // Post message to worker to decode audio for trimming
-                currentWaveformLoadId++;
-                const loadId = currentWaveformLoadId;
-                const fileData = await readFile(loadedPathFromProp);
-                const arrayBuffer = fileData.buffer;
+				// Post message to worker to decode audio for trimming
+				currentWaveformLoadId++;
+				const loadId = currentWaveformLoadId;
+				const fileData = await readFile(loadedPathFromProp);
+				const arrayBuffer = fileData.buffer;
 
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
-                const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
+				const audioContext = new (window.AudioContext ||
+					window.webkitAudioContext)();
+				const decodedAudioBuffer =
+					await audioContext.decodeAudioData(arrayBuffer);
+				const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
+				const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
 
-                // Store decodedAudioBuffer locally for use in onmessage handler when worker responds
-                waveformLoadData.set(loadId, decodedAudioBuffer);
+				// Store decodedAudioBuffer locally for use in onmessage handler when worker responds
+				waveformLoadData.set(loadId, decodedAudioBuffer);
 
-                waveformWorker.postMessage({
-                    type: 'GENERATE_PEAKS',
-                    payload: {
-                        channelData: transferableChannelData,
-                        sampleRate: decodedAudioBuffer.sampleRate,
-                        filePath: loadedPathFromProp
-                    },
-                    id: loadId
-                }, [transferableChannelData.buffer]);
+				waveformWorker.postMessage(
+					{
+						type: "GENERATE_PEAKS",
+						payload: {
+							channelData: transferableChannelData,
+							sampleRate: decodedAudioBuffer.sampleRate,
+							filePath: loadedPathFromProp,
+						},
+						id: loadId,
+					},
+					[transferableChannelData.buffer],
+				);
 
-                const workerResponse = await new Promise((resolve, reject) => {
-                    const handleWorkerMessage = (event) => {
-                        if (event.data.id === loadId) {
-                            waveformWorker.removeEventListener('message', handleWorkerMessage);
-                            if (event.data.type === 'DECODE_AUDIO_COMPLETE') {
-                                // The worker now sends back null for audioBuffer, as it doesn't have the full AudioBuffer
-                                // We need to use the decodedAudioBuffer from the main thread.
-                                resolve(decodedAudioBuffer);
-                            } else {
-                                reject(new Error(event.data.payload.error || 'Worker decoding failed'));
-                            }
-                        }
-                    };
-                    waveformWorker.addEventListener('message', handleWorkerMessage);
-                });
+				const workerResponse = await new Promise((resolve, reject) => {
+					const handleWorkerMessage = (event) => {
+						if (event.data.id === loadId) {
+							waveformWorker.removeEventListener(
+								"message",
+								handleWorkerMessage,
+							);
+							if (event.data.type === "DECODE_AUDIO_COMPLETE") {
+								// The worker now sends back null for audioBuffer, as it doesn't have the full AudioBuffer
+								// We need to use the decodedAudioBuffer from the main thread.
+								resolve(decodedAudioBuffer);
+							} else {
+								reject(
+									new Error(
+										event.data.payload.error ||
+											"Worker decoding failed",
+									),
+								);
+							}
+						}
+					};
+					waveformWorker.addEventListener(
+						"message",
+						handleWorkerMessage,
+					);
+				});
 
-                localAudioBuffer = workerResponse;
-                isMediaReadyForProcessing = true;
-                
-                // Notify parent that the full buffer is ready
-                dispatch('mediaDataTrimBufferReady', {
-                    audioBuffer: localAudioBuffer
-                });
+				localAudioBuffer = workerResponse;
+				isMediaReadyForProcessing = true;
 
-            } catch (error) {
-                console.error(`[MediaPlayer] Lazy decode for trim failed:`, error);
-                dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Failed to decode audio for trimming.' });
-            } finally {
-                // isLoadingMedia = false;
-            }
-        }
-    }
+				// Notify parent that the full buffer is ready
+				dispatch("mediaDataTrimBufferReady", {
+					audioBuffer: localAudioBuffer,
+				});
+			} catch (error) {
+				console.error(
+					`[MediaPlayer] Lazy decode for trim failed:`,
+					error,
+				);
+				dispatch("mediaLoadError", {
+					path: explicitMediaPath,
+					error: "Failed to decode audio for trimming.",
+				});
+			} finally {
+				// isLoadingMedia = false;
+			}
+		}
+	}
 
-    // Determine which player state to display
-    $: displayTime = explicitMediaPath ? localCurrentTime : ($transcriptStore.player.currentTime || 0);
-    $: displayDuration = explicitMediaPath ? localDuration : ($transcriptStore.player.duration || 0);
-    $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying;
-
-    
-
+	// Determine which player state to display
+	$: displayTime = explicitMediaPath
+		? localCurrentTime
+		: $transcriptStore.player.currentTime || 0;
+	$: displayDuration = explicitMediaPath
+		? localDuration
+		: $transcriptStore.player.duration || 0;
+	$: displayIsPlaying = explicitMediaPath
+		? localIsPlaying
+		: $transcriptStore.player.isPlaying;
 </script>
 
-<div id="media-player-root" 
+<div
+	id="media-player-root"
 	class="p-1 flex flex-col bg-gray-50 dark:bg-gray-900 h-full relative"
 	class:fullscreen-mode={isFullscreen}
-	on:mouseenter={() => { isHoveringPlayer = true; handleUserActivity(); }}
-	on:mouseleave={() => { isHoveringPlayer = false; }}
+	on:mouseenter={() => {
+		isHoveringPlayer = true;
+		handleUserActivity();
+	}}
+	on:mouseleave={() => {
+		isHoveringPlayer = false;
+	}}
 	on:mousemove={handleUserActivity}
 >
 	<div
@@ -1267,11 +1724,17 @@
 		on:click={handleTogglePlay}
 		role="button"
 		aria-label="Play or pause video"
-		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTogglePlay(); }}
+		on:keydown={(e) => {
+			if (e.key === "Enter" || e.key === " ") handleTogglePlay();
+		}}
 		tabindex="0"
 	>
 		{#if isLoadingMedia}
-			<div class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"><span>Loading media...</span></div>
+			<div
+				class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"
+			>
+				<span>Loading media...</span>
+			</div>
 		{:else if localMediaUrl}
 			{#key localMediaUrl}
 				<video
@@ -1291,14 +1754,24 @@
 					crossorigin="anonymous"
 				>
 					{#if activeSubtitleUrl}
-						<track kind="subtitles" src={activeSubtitleUrl} srclang={activeSubtitleLang} label={activeSubtitleLabel} default />
+						<track
+							kind="subtitles"
+							src={activeSubtitleUrl}
+							srclang={activeSubtitleLang}
+							label={activeSubtitleLabel}
+							default
+						/>
 					{/if}
 				</video>
 			{/key}
 			<!-- Overlay Icon Div -->
 			<div
 				class="absolute inset-0 flex items-center justify-center pointer-events-none"
-				style="color: white; opacity: { ((isHoveringPlayer && userActive) || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
+				style="color: white; opacity: {(isHoveringPlayer &&
+					userActive) ||
+				(!displayIsPlaying && !isLoadingMedia && localMediaUrl)
+					? 0.85
+					: 0}; transition: opacity 0.2s ease-in-out;"
 			>
 				{#if displayIsPlaying}
 					<Pause class="w-16 h-16 fill-current drop-shadow-lg" />
@@ -1310,7 +1783,9 @@
 			<!-- Fullscreen Button -->
 			<button
 				class="absolute bottom-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-md transition-opacity duration-200 z-10"
-				style="opacity: {userActive ? 1 : 0}; pointer-events: {userActive ? 'auto' : 'none'};"
+				style="opacity: {userActive
+					? 1
+					: 0}; pointer-events: {userActive ? 'auto' : 'none'};"
 				on:click|stopPropagation={toggleFullscreen}
 				title={isFullscreen ? "Exit Fullscreen" : "Toggle Fullscreen"}
 			>
@@ -1321,7 +1796,9 @@
 				{/if}
 			</button>
 		{:else}
-		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600">
+			<div
+				class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600"
+			>
 				<span>No media selected or media failed to load</span>
 			</div>
 		{/if}
@@ -1331,10 +1808,17 @@
 	<div
 		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-800 rounded-b-md border border-gray-300 dark:border-gray-700 shadow-md transition-opacity duration-300"
 		class:floating-controls={isFullscreen}
-		style="position: relative; z-index: 30; opacity: {isFullscreen ? (userActive ? 1 : 0) : 1}; pointer-events: {isFullscreen && !userActive ? 'none' : 'auto'};"
+		style="position: relative; z-index: 30; opacity: {isFullscreen
+			? userActive
+				? 1
+				: 0
+			: 1}; pointer-events: {isFullscreen && !userActive
+			? 'none'
+			: 'auto'};"
 	>
 		<!-- Timeline with Tooltip -->
-		<div class="relative w-full" style="z-index: 20;"> <!-- Stacking for timeline within control bar -->
+		<div class="relative w-full" style="z-index: 20;">
+			<!-- Stacking for timeline within control bar -->
 			<input
 				type="range"
 				bind:this={progressBarElement}
@@ -1345,9 +1829,13 @@
 				on:input={(e) => seekTo(parseFloat(e.target.value))}
 				on:mousemove={handleMouseMoveOnProgressBar}
 				on:mouseleave={handleMouseLeaveProgressBar}
-				disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
+				disabled={!localMediaUrl ||
+					isLoadingMedia ||
+					displayDuration <= 0}
 				aria-label="Video progress bar"
-				style="--progress: {displayDuration > 0 ? displayTime / displayDuration : 0};"
+				style="--progress: {displayDuration > 0
+					? displayTime / displayDuration
+					: 0};"
 				autocomplete="off"
 				autocorrect="off"
 			/>
@@ -1355,7 +1843,9 @@
 				use:portal
 				bind:this={progressTooltipElement}
 				class="fixed bg-black text-white text-xs p-1 rounded pointer-events-none whitespace-nowrap z-[9999]"
-				style="top: {progressTooltipTop}; left: {progressTooltipLeft}; transform: translate(-50%, -100%); display: {showProgressTooltip ? 'block' : 'none'};"
+				style="top: {progressTooltipTop}; left: {progressTooltipLeft}; transform: translate(-50%, -100%); display: {showProgressTooltip
+					? 'block'
+					: 'none'};"
 			>
 				{progressTooltipText}
 			</span>
@@ -1378,7 +1868,7 @@
 				on:click={handleTogglePlay}
 				class="ui-button-icon"
 				disabled={!localMediaUrl || isLoadingMedia}
-				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
+				aria-label={displayIsPlaying ? "Pause" : "Play"}
 			>
 				{#if displayIsPlaying}
 					<Pause class="w-4 h-4 fill-current" />
@@ -1399,20 +1889,22 @@
 			</button>
 
 			<!-- Time Display -->
-			<span class="text-xs font-mono text-gray-600 dark:text-gray-600 tabular-nums whitespace-nowrap">
+			<span
+				class="text-xs font-mono text-gray-600 dark:text-gray-600 tabular-nums whitespace-nowrap"
+			>
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
 
 			<!-- Conditional Data Transcribe Button -->
 			{#if showDataTranscribeButton}
-			<button
-				on:click={handleDataTranscribeClick}
-				class="btn-action text-xs"
-				title="Transcribe this media in main Transcription tab"
-				disabled={!localMediaUrl || isLoadingMedia}
-			>
-				Transcribe
-			</button>
+				<button
+					on:click={handleDataTranscribeClick}
+					class="btn-action text-xs"
+					title="Transcribe this media in main Transcription tab"
+					disabled={!localMediaUrl || isLoadingMedia}
+				>
+					Transcribe
+				</button>
 			{/if}
 
 			<!-- Spacer 1: Pushes the middle group -->
@@ -1439,7 +1931,10 @@
 				class="ui-button-icon"
 				title="Take screenshot"
 				aria-label="Take screenshot of current video frame"
-				disabled={!localMediaUrl || isLoadingMedia || !projectId || isAudio}
+				disabled={!localMediaUrl ||
+					isLoadingMedia ||
+					!projectId ||
+					isAudio}
 			>
 				<Camera class="w-4 h-4" />
 			</button>
@@ -1457,14 +1952,24 @@
 				</button>
 			{:else if showMainTrimButton && !explicitMediaPath}
 				{#if isTrimming}
-					<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
-					<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
+					<button
+						on:click={confirmTrim}
+						class="btn-action-trim text-xs"
+						title="Confirm Trim">Trim</button
+					>
+					<button
+						on:click={cancelTrimMode}
+						class="btn-action-cancel text-xs"
+						title="Cancel Trim">Cancel</button
+					>
 				{:else}
 					<button
 						on:click={enterTrimMode}
 						class="ui-button-icon"
 						title="Trim media"
-						disabled={!localMediaUrl || isLoadingMedia || isTranscribing}
+						disabled={!localMediaUrl ||
+							isLoadingMedia ||
+							isTranscribing}
 					>
 						<Scissors class="w-4 h-4" />
 						<span class="sr-only">Trim</span>
@@ -1480,7 +1985,9 @@
 				bind:this={ccButtonElement}
 				on:click={handleSelectSubtitles}
 				on:contextmenu={handleSubtitleContextMenu}
-				class="ui-button-icon {activeSubtitleTrackPath ? 'text-blue-600 dark:text-blue-400' : ''}"
+				class="ui-button-icon {activeSubtitleTrackPath
+					? 'text-blue-600 dark:text-blue-400'
+					: ''}"
 				title="Select Subtitles (Right-click to disable)"
 				aria-label="Select Subtitles"
 				disabled={!localMediaUrl || isLoadingMedia || isAudio}
@@ -1488,13 +1995,12 @@
 				<ClosedCaption class="w-4 h-4" />
 			</button>
 
-
 			<!-- Mute Button -->
 			<button
 				on:click={toggleMute}
 				class="ui-button-icon"
 				disabled={!localMediaUrl || isLoadingMedia}
-				aria-label={isMuted ? 'Unmute' : 'Mute'}
+				aria-label={isMuted ? "Unmute" : "Mute"}
 			>
 				{#if isMuted || currentVolume === 0}
 					<VolumeX class="w-4 h-4" />
@@ -1525,8 +2031,8 @@
 			<button
 				on:click={toggleMinimizeVideo}
 				class="ui-button-icon"
-				title={isVideoMinimized ? 'Show Media' : 'Hide Media'}
-				aria-label={isVideoMinimized ? 'Show Media' : 'Hide Media'}
+				title={isVideoMinimized ? "Show Media" : "Hide Media"}
+				aria-label={isVideoMinimized ? "Show Media" : "Hide Media"}
 				disabled={!localMediaUrl || isLoadingMedia || isAudio}
 			>
 				{#if isVideoMinimized}
@@ -1555,11 +2061,12 @@
 				class:bg-blue-100={selectedPlaybackRate === rate}
 				class:dark:bg-blue-800={selectedPlaybackRate === rate}
 				role="menuitemradio"
-				aria-checked={selectedPlaybackRate === rate}
-			>{rate}x</button>
+				aria-checked={selectedPlaybackRate === rate}>{rate}x</button
+			>
 		{/each}
 	</div>
 {/if}
+
 <style>
 	#video-container-wrapper:fullscreen {
 		width: 100vw;
@@ -1600,7 +2107,9 @@
 		backdrop-filter: blur(8px);
 		border-radius: 0.75rem !important;
 		padding: 0.75rem !important;
-		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.25) !important;
+		box-shadow:
+			0 10px 15px -3px rgba(0, 0, 0, 0.5),
+			0 4px 6px -2px rgba(0, 0, 0, 0.25) !important;
 	}
 
 	:global(.dark) .floating-controls {
@@ -1620,7 +2129,8 @@
 			opacity: 0.3;
 		}
 	}
-	.sr-only { /* Screen reader only */
+	.sr-only {
+		/* Screen reader only */
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -1633,7 +2143,8 @@
 	}
 
 	/* Custom styling for range inputs */
-	.video-progress { /* Keep existing styles if they work, or adjust */
+	.video-progress {
+		/* Keep existing styles if they work, or adjust */
 		-webkit-appearance: none;
 		appearance: none;
 		width: 100%;
@@ -1642,13 +2153,17 @@
 		background: #d1d5db; /* bg-gray-300 */
 		outline: none;
 		opacity: 0.9;
-		transition: opacity .15s ease-in-out;
+		transition: opacity 0.15s ease-in-out;
 	}
 	.floating-controls .video-progress {
 		background: #9ca3af; /* Darker gray for better visibility on transparent widget */
 	}
 	.dark .video-progress {
-		background: linear-gradient(to right, #e5e5e5 calc(var(--progress, 0) * 100%), #a3a3a3 calc(var(--progress, 0) * 100%));
+		background: linear-gradient(
+			to right,
+			#e5e5e5 calc(var(--progress, 0) * 100%),
+			#a3a3a3 calc(var(--progress, 0) * 100%)
+		);
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1689,13 +2204,17 @@
 		background: #d1d5db; /* bg-gray-300 */
 		outline: none;
 		opacity: 0.9;
-		transition: opacity .15s ease-in-out;
+		transition: opacity 0.15s ease-in-out;
 	}
 	.floating-controls .volume-slider {
 		background: #9ca3af;
 	}
 	.dark .volume-slider {
-		background: linear-gradient(to right, #e5e5e5 calc(var(--progress, 0) * 100%), #a3a3a3 calc(var(--progress, 0) * 100%));
+		background: linear-gradient(
+			to right,
+			#e5e5e5 calc(var(--progress, 0) * 100%),
+			#a3a3a3 calc(var(--progress, 0) * 100%)
+		);
 	}
 	.volume-slider:hover {
 		opacity: 1;

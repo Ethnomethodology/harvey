@@ -33,7 +33,7 @@ Harvey 1.0 is designed with privacy as a priority; core AI functionalities like 
 *   **Configurable Settings**: Customize application behavior, including transcription model selection, download locations, and UI themes (light/dark/system) via `config.xml`.
 *   **Cross-Platform**: Designed to run on Windows, macOS, and Linux.
 *   **Data Export**: Export transcripts to common formats (e.g., DOCX).
-*   **Background Processing**: Handles intensive tasks like model downloads and transcriptions in the background with progress tracking and cancellation support.
+*   **Background Processing**: Handles intensive tasks like model downloads and transcription in the background with progress tracking and cancellation support.
 
 ## Data Flow and Storage
 
@@ -85,10 +85,10 @@ This is the main multi-tab interface for working within a project.
 #### Overall Structure & Navigation
 
 * **Frontend Components**:
-    * `ProjectView.svelte` (in `src/routes/projectview/`): The root component for the project workspace, likely managing the "Transcriptions" and "Data" tabs.
+    * `ProjectView.svelte` (in `src/routes/projectview/`): The root component for the project workspace, likely managing the "Transcription" and "Data" tabs.
     * `BottomBar.svelte` (in `src/lib/components/projectview/shared/`): A shared component for displaying status messages or common actions across project views.
 * **Functionality**:
-    * Provides the main tabbed interface for "Transcriptions" (media-based) and "Data" (asset management).
+    * Provides the main tabbed interface for "Transcription" (media-based) and "Data" (asset management).
     * Loads initial project data.
 * **Associated Backend**:
     * `projectview/core_commands.rs`: `load_project_data` is crucial for populating the project view.
@@ -214,21 +214,21 @@ This section handles the display and management of various project assets.
 
 ---
 
-#### Media-Based Transcriptions View (`src/lib/components/projectview/transcriptions/`)
+#### Media-Based Transcription View (`src/lib/components/projectview/transcription/`)
 
 This section handles transcripts generated *within* Harvey from audio/video media.
 
 * **Frontend Components**:
-    * `TranscriptionsView.svelte`: Main container for the media transcription interface.
+    * `TranscriptionView.svelte`: Main container for the media transcription interface.
     * `EditableTranscript.svelte`: Interactive transcript editor linked to media playback (likely Lexical-based).
     * `src/lib/components/projectview/shared/MediaPlayer.svelte`: A versatile component responsible for audio/video playback.
-        *   When used within the "Transcriptions" view (without an `explicitMediaPath` prop), it interacts heavily with `transcriptStore.js` to play the currently selected media (`$transcriptStore.selectedMediaFile`), synchronize with its player state (`$transcriptStore.player`), and manage its audio buffer (`$transcriptStore.audioBuffer`). It uses functions from `transcriptStore.js` (like `updatePlayerTime`, `togglePlayerPlaying`) to update this shared state.
-        *   It can also be instantiated with an `explicitMediaPath` prop (e.g., in the "Fieldnotes" view for media notes) to play specific media files independently of the main transcriptions view's state, managing its playback state locally in such cases.
-        *   Provides UI controls for playback and includes logic for media loading, decoding, and error handling. It also supports functionalities like media trimming when used in the main transcriptions context.
+        *   When used within the "Transcription" view (without an `explicitMediaPath` prop), it interacts heavily with `transcriptStore.js` to play the currently selected media (`$transcriptStore.selectedMediaFile`), synchronize with its player state (`$transcriptStore.player`), and manage its audio buffer (`$transcriptStore.audioBuffer`). It uses functions from `transcriptStore.js` (like `updatePlayerTime`, `togglePlayerPlaying`) to update this shared state.
+        *   It can also be instantiated with an `explicitMediaPath` prop (e.g., in the "Fieldnotes" view for media notes) to play specific media files independently of the main transcription view's state, managing its playback state locally in such cases.
+        *   Provides UI controls for playback and includes logic for media loading, decoding, and error handling. It also supports functionalities like media trimming when used in the main transcription context.
     * `src/lib/components/projectview/shared/InteractiveWaveform.svelte`: Displays an interactive audio waveform.
     * `RichTextPreview.svelte`: Displays the transcript and includes a feature to "Convert Media Transcript to Document".
     * `LeftPanel.svelte`: A panel within this view, possibly for media files or settings.
-    * `TopBar.svelte`: Toolbar specific to the transcriptions view.
+    * `TopBar.svelte`: Toolbar specific to the transcription view.
     * `TreeNode.svelte`: Likely used for displaying hierarchical data if any (e.g. file trees if media selection is part of this view directly).
 * **Functionality**:
     * Provides an interactive environment for editing transcripts generated from media files.
@@ -260,11 +260,11 @@ This section outlines key JavaScript/TypeScript modules that provide core fronte
         *   **Document and Note Management**: Tracking the state for editing non-transcript text documents, PDFs (including annotations), imported transcripts (as documents), and media-specific notes. This includes selected paths, current content, dirty states, loading states, and active editor references for these items.
         *   **General UI State**: Managing global UI states such as overall loading indicators (`isLoading`), general error messages (`error`), status messages (`statusMessage`), autosave preference (`autosaveEnabled`), and the state for UI prompts like unsaved changes (for non-transcript items) and file conversion confirmations.
         *   It no longer manages the detailed state for media-based transcript editing, media player control, or the transcription process itself; these responsibilities have been moved to `transcriptStore.js`. This Svelte store allows different components to react to changes in project data dynamically.
-    * `stores/transcriptStore.js`: This Svelte store is dedicated to managing all state related to media transcription and playback within the main "Transcriptions" view. Its key responsibilities include:
+    * `stores/transcriptStore.js`: This Svelte store is dedicated to managing all state related to media transcription and playback within the main "Transcription" view. Its key responsibilities include:
         *   **Transcript Segments**: Holding and managing the array of transcript segments, including their text content, start/end times, and speaker assignments. It supports operations like loading segments, updating individual segments, inserting new segments, and deleting segments.
         *   **Undo/Redo**: Manages undo and redo stacks specifically for changes made to transcript segments.
-        *   **Media Player State**: Controls the state of the main media player in the transcriptions view, such as current playback time, total duration, play/pause status, and the associated audio buffer for waveform display.
-        *   **Selected Media**: Tracks the currently selected media file (`selectedMediaFile`) that is active in the transcriptions view.
+        *   **Media Player State**: Controls the state of the main media player in the transcription view, such as current playback time, total duration, play/pause status, and the associated audio buffer for waveform display.
+        *   **Selected Media**: Tracks the currently selected media file (`selectedMediaFile`) that is active in the transcription view.
         *   **Speaker Configuration**: Manages the speaker count and their names for the active media's transcript.
         *   **Transcription Process State**: Handles state related to the transcription process itself, including the selected transcription model (`selectedModelName`), selected language (`selectedLanguage`), whether a transcription is currently in progress (`isTranscribing`), the progress of an ongoing transcription (`transcriptionProgress` including percent and message), the unique ID of the current transcription job (`transcriptionJobId`), and the visibility of the transcription confirmation modal (`showTranscribeModal`).
         *   **Dirty State**: Tracks whether the current transcript has unsaved changes (`transcriptDirty`).

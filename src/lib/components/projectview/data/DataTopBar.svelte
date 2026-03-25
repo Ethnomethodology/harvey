@@ -564,9 +564,17 @@
             <span>Transcribe</span>
         </Button>
 
-        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} title="Translate Transcript">
-            <Languages class="w-3.5 h-3.5" />
-            <span>Translate</span>
+        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
+            on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
+            title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
+        >
+            {#if $transcriptStore.isTranslating}
+                <Languages class="w-3.5 h-3.5 animate-spin" />
+                <span>Translating...</span>
+            {:else}
+                <Languages class="w-3.5 h-3.5" />
+                <span>Translate</span>
+            {/if}
         </Button>
         {/if}
         {#if $project.activeDocumentEditorRef}
@@ -576,9 +584,17 @@
         </Button>
         {/if}
         {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => toggleTranslateModal(true)} title="Translate Document">
-                <Languages class="w-3.5 h-3.5" />
-                <span>Translate</span>
+            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
+                on:click={() => toggleTranslateModal(true)} 
+                title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Document"}
+            >
+                {#if $transcriptStore.isTranslating}
+                    <Languages class="w-3.5 h-3.5 animate-spin" />
+                    <span>Translating...</span>
+                {:else}
+                    <Languages class="w-3.5 h-3.5" />
+                    <span>Translate</span>
+                {/if}
             </Button>
         {/if}
     </div>
@@ -770,6 +786,7 @@
     activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
     on:openConfig={() => dispatch("openConfig")}
+    on:runInBackgroundAndClose={() => toggleTranslateModal(false)}
     on:closeAndReset={() => toggleTranslateModal(false)}
 />
 

@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
+<!-- src/lib/components/projectview/transcription/RichTextPreview.svelte -->
 <script>
     import { project, prepareDocumentView } from "$lib/stores/projectStore.js";
     import {
@@ -1371,12 +1371,12 @@
             };
 
             // We need to call the store function directly because dispatch('insertnewsegment')
-            // in TranscriptionsView currently hardcodes speaker to "Unknown".
+            // in TranscriptionView currently hardcodes speaker to "Unknown".
             // To support custom speakers, we should import insertTranscriptSegment directly here.
             // But wait, insertTranscriptSegment is an exported function from transcriptStore.js.
             // I need to import it at the top of this file to use it.
-            // I'll assume I can add it to the imports in a separate step or just rely on dispatch if I update TranscriptionsView?
-            // Updating TranscriptionsView to accept 'speaker' in event detail is cleaner.
+            // I'll assume I can add it to the imports in a separate step or just rely on dispatch if I update TranscriptionView?
+            // Updating TranscriptionView to accept 'speaker' in event detail is cleaner.
 
             dispatch("insertnewsegment", {
                 index: finalIndex,
@@ -1970,7 +1970,8 @@
                         {#if seg.segmentIndex < $transcriptStore.segments.length - 1}
                             <button
                                 class="btn-icon p-0.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center justify-center absolute left-[8px]"
-                                on:click={() => handleMergeWithNext(seg.segmentIndex)}
+                                on:click={() =>
+                                    handleMergeWithNext(seg.segmentIndex)}
                                 title="Merge with next segment"
                                 aria-label="Merge with next segment"
                             >
