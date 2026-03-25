@@ -140,6 +140,9 @@
 		} else if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
 			selectedTranscript = availableTranscripts[0].relativePath;
 		}
+	} else {
+		transcriptOptions = [];
+		selectedTranscript = '';
 	}
 
 	let translationFileName = '';
@@ -149,9 +152,6 @@
 		});
 	} else {
 		translationFileName = '';
-	} else {
-		transcriptOptions = [];
-		selectedTranscript = '';
 	}
 
 	$: {
