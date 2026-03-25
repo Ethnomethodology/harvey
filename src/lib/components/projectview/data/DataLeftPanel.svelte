@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/data/DataLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, HARVEY_FILES_DIR, MEDIA_DIR_NAME, AUDIOS_DIR_NAME, VIDEOS_DIR_NAME } from '$lib/stores/projectStore.js'; 
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
@@ -941,11 +941,25 @@
 
         function findMediaFilesRecursive(nodes) {
             if (!Array.isArray(nodes)) return;
+            const legacyMediaPattern = `${HARVEY_FILES_DIR}/${MEDIA_DIR_NAME}/`;
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path) {
+                    const relativePathOriginal = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
+                    const relativePath = relativePathOriginal.replace(/\\/g, '/');
+
+                    // Filter out legacy Media files
+                    if (relativePath.includes(legacyMediaPattern)) {
+                        continue;
+                    }
+
                     const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-                    const relativePath = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
-                    const mediaData = { name: node.name, path: node.path, relativePath: relativePath.replace(/\\/g, '/'), media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
+                    const mediaData = { 
+                        name: node.name, 
+                        path: node.path, 
+                        relativePath: relativePath, 
+                        media_xml_identifier: node.media_xml_identifier || '', 
+                        file_type: 'media' 
+                    };
                     if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); } 
                     else if (AUDIO_EXTENSIONS.has(ext)) { audios.push(mediaData); }
                 }

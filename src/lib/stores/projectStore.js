@@ -10,6 +10,8 @@ export const highlightsLastUpdated = writable(null);
 
 export const HARVEY_FILES_DIR = "harvey_files";
 export const MEDIA_DIR_NAME = 'Media';
+export const AUDIOS_DIR_NAME = 'Audios';
+export const VIDEOS_DIR_NAME = 'Videos';
 const MEDIA_SUBDIR = 'media';
 const TRANSCRIPTS_SUBDIR = 'transcripts';
 

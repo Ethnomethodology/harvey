@@ -186,42 +186,31 @@ fn determine_asset_type(
         }
     }
 
-    // 3. Check for media-associated transcripts (JSON files within harvey_files/Media/STEM/transcripts/)
+    // 3. Check for media-associated transcripts (JSON files within harvey_files/Media|Audios|Videos/STEM/transcripts/)
     let path_str_lower = file_path_str.to_lowercase();
-    if path_str_lower.contains("harvey_files/media/") && path_str_lower.contains("/transcripts/") && path_str_lower.ends_with(".json") {
+    let is_media_associated = (path_str_lower.contains("harvey_files/media/") || 
+                               path_str_lower.contains("harvey_files/audios/") || 
+                               path_str_lower.contains("harvey_files/videos/")) && 
+                              path_str_lower.contains("/transcripts/") && 
+                              path_str_lower.ends_with(".json");
+
+    if is_media_associated {
         // Extract the media stem from the path
-        // Example: /Users/dipanjan/Documents/Test Project/harvey_files/Media/20130922/transcripts/20130922_1.json
-        // We need "20130922"
         let parts: Vec<&str> = file_path_str.split('/').collect();
-        if let Some(media_stem_index) = parts.iter().position(|&p| p.eq_ignore_ascii_case("media")) {
+        if let Some(media_stem_index) = parts.iter().position(|&p| p.eq_ignore_ascii_case("media") || p.eq_ignore_ascii_case("audios") || p.eq_ignore_ascii_case("videos")) {
             if parts.len() > media_stem_index + 1 {
+                let folder_name = parts[media_stem_index];
                 let media_stem = parts[media_stem_index + 1];
-                // Construct the likely relative path to the actual media file
-                // This assumes a structure like harvey_files/Media/STEM/media/STEM.ext
-                // We need to find the actual media file within the media stem directory
-                let _media_stem_dir_path = PathBuf::from(file_path_str)
-                    .parent().and_then(|p| p.parent()) // Go up from transcripts/ to STEM/
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                // Construct the relative path to the media file within the project
-                // This is tricky because the media file name might not be the same as the stem.
-                // We need to query asset_metadata for assets within this media stem directory.
-                // A more robust way would be to pass the media_xml_identifier from the frontend.
-                // For now, let's try to find the media file based on the stem.
-
-                // This is a simplified approach. A more robust solution would involve
-                // querying the asset_metadata table for the media file associated with this stem.
-                // For now, let's assume the media file is named after the stem and is in the 'media' subdirectory.
-                let media_file_relative_path_prefix = format!("harvey_files/Media/{}/media/", media_stem);
+                
+                let media_file_relative_path_prefix = format!("harvey_files/{}/{}/media/", folder_name, media_stem);
 
                 // Query the asset_metadata table for assets whose relative path starts with this prefix
                 // and whose asset_type is 'media'. Then check the extension of that media file.
                 let mut stmt = conn.prepare(
                     "SELECT asset_relative_path FROM asset_metadata
                      WHERE project_id = ?1 AND asset_relative_path LIKE ?2 || '%'
-                     AND asset_type = 'media' LIMIT 1" // Changed asset_type to 'media'
-                ).unwrap(); // TODO: Handle unwrap gracefully
+                     AND asset_type = 'media' LIMIT 1"
+                ).unwrap();
 
                 let result = stmt.query_row(
                     rusqlite::params![project_id, media_file_relative_path_prefix],
@@ -229,15 +218,15 @@ fn determine_asset_type(
                         let media_asset_relative_path: String = row.get(0)?;
                         Ok(media_asset_relative_path)
                     }
-                ).optional().unwrap(); // TODO: Handle unwrap gracefully
+                ).optional().unwrap();
 
                 if let Some(media_asset_relative_path) = result {
                     let media_path = Path::new(&media_asset_relative_path);
                     let extension = media_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                    return match extension {
-                        "mp3" | "wav" | "m4a" => "audio_transcript".to_string(),
-                        "mp4" | "mov" | "avi" => "video_transcript".to_string(),
-                        _ => "transcript".to_string(), // Fallback if media extension is unexpected
+                    return match extension.to_lowercase().as_str() {
+                        "mp3" | "wav" | "m4a" | "flac" | "ogg" => "audio_transcript".to_string(),
+                        "mp4" | "mov" | "avi" | "mkv" | "webm" => "video_transcript".to_string(),
+                        _ => "transcript".to_string(),
                     };
                 } else {
                     warn!("[Tags] Could not find associated media asset metadata for transcript: {}. Falling back to generic 'transcript'.", file_path_str);

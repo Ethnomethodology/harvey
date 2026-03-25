@@ -339,6 +339,8 @@ function findMediaPathByName(nodes, filename) {
 
 const HARVEY_FILES_DIR = 'harvey_files';
 const MEDIA_DIR_NAME = 'Media';
+const AUDIOS_DIR_NAME = 'Audios';
+const VIDEOS_DIR_NAME = 'Videos';
 const MEDIA_SUBDIR = 'media';
 const DOCS_DIR_NAME = 'Documents';
 const TRANSCRIPTS_SUBDIR_MEDIA = 'transcripts';

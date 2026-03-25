@@ -126,6 +126,8 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
     let extension = item_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
 
     let media_stem_identifier = if asset_type_dir == Some(MEDIA_DIR)
+        || asset_type_dir == Some(AUDIOS_DIR)
+        || asset_type_dir == Some(VIDEOS_DIR)
         || asset_type_dir == Some(IMAGES_DIR)
         || asset_type_dir == Some(DOCS_DIR)
         || asset_type_dir == Some(TABLES_DIR)
@@ -147,7 +149,11 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         // --- Rules for files within specific subdirectories of a MEDIA stem folder ---
         // For these, `sub_folder` (components[3]) is "media" or "transcripts".
         (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac", "mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
+        (Some(AUDIOS_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac"].contains(&ext) => "media".to_string(),
+        (Some(VIDEOS_DIR), Some(MEDIA_SUBDIR), ext) if ["mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
         (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(), // Media-associated transcript
+        (Some(AUDIOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(),
+        (Some(VIDEOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(),
 
         // --- Legacy/Fallback rules for files directly under asset type dirs (NO dedicated stem folder) ---
         // For these, `sub_folder` (components[3]) would be None.
@@ -160,12 +166,20 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         (Some(TRANSCRIPTS_DIR), None, "json") => "imported_transcript".to_string(), // Legacy standalone
 
         (Some(MEDIA_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),
+        (Some(AUDIOS_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),
+        (Some(VIDEOS_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),
         (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
+        (Some(AUDIOS_DIR), Some(MEDIA_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
+        (Some(VIDEOS_DIR), Some(MEDIA_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
         (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
+        (Some(AUDIOS_DIR), Some(TRANSCRIPTS_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
+        (Some(VIDEOS_DIR), Some(TRANSCRIPTS_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
         
         (Some(dir_name), None, _) if components.len() == 2 && item_path.is_dir() => {
             match dir_name {
                 MEDIA_DIR => "directory_asset_type".to_string(),
+                AUDIOS_DIR => "directory_asset_type".to_string(),
+                VIDEOS_DIR => "directory_asset_type".to_string(),
                 IMAGES_DIR => "directory_asset_type".to_string(),
                 TRANSCRIPTS_DIR => "directory_asset_type".to_string(),
                 DOCS_DIR => "directory_asset_type".to_string(),
@@ -203,7 +217,10 @@ pub fn save_project_xml(xml_path: &Path, project_data: &ProjectXml) -> Result<()
 
 pub fn ensure_base_asset_dirs(project_base_dir: &Path) -> Result<(), CommandError> {
     let base_path = project_base_dir.join(HARVEY_FILES_DIR);
+    // Note: We don't remove MEDIA_DIR for backward compatibility, but we primarily use AUDIOS_DIR and VIDEOS_DIR now.
     fs::create_dir_all(base_path.join(MEDIA_DIR))?;
+    fs::create_dir_all(base_path.join(AUDIOS_DIR))?;
+    fs::create_dir_all(base_path.join(VIDEOS_DIR))?;
     fs::create_dir_all(base_path.join(IMAGES_DIR))?;
     fs::create_dir_all(base_path.join(TRANSCRIPTS_DIR))?; 
     let docs_path = base_path.join(DOCS_DIR);

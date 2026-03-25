@@ -242,9 +242,9 @@ pub fn init_db() -> Result<(), CommandError> {
                   AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
                   AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
                       = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
-                  AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+                  AND (REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
             )
-            AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%';
+            AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%');
         ";
         if let Err(e) = conn.execute(correction_sql, []) {
             error!("[DB] Failed to run video-transcript correction: {}", e);
@@ -958,7 +958,11 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     conn.execute(
         "UPDATE asset_metadata SET file_type = 'audio' 
          WHERE (file_type IS NULL OR file_type = '') 
-         AND (asset_type = 'audio' OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma')",
+         AND (
+             asset_type = 'audio' 
+             OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma'
+             OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%'
+         )",
         []
     )?;
 
@@ -966,7 +970,11 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     conn.execute(
         "UPDATE asset_metadata SET file_type = 'video' 
          WHERE (file_type IS NULL OR file_type = '') 
-         AND (asset_type = 'video' OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv')",
+         AND (
+             asset_type = 'video' 
+             OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv'
+             OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%'
+         )",
         []
     )?;
 
@@ -986,8 +994,8 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
             LIMIT 1
         ), 'audio-transcript')
         WHERE (file_type IS NULL OR file_type = '') 
-        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%')
-        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%')",
+        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
+        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/transcripts/%')",
         []
     )?;
 
@@ -1005,26 +1013,38 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         "UPDATE asset_metadata SET file_type = 'transcript-attachment' 
          WHERE (file_type IS NULL OR file_type = '') 
          AND asset_type = 'attachment' 
-         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%')",
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' 
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%'
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/attachments/%'
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/attachments/%')",
         []
     )?;
 
     // 10. Correction for mislabeled Video Transcripts
     // If it's already labeled as audio-transcript but its parent media is a video, correct it.
-    conn.execute(
-        "UPDATE asset_metadata SET file_type = 'video-transcript'
-         WHERE file_type = 'audio-transcript'
-         AND EXISTS (
-            SELECT 1 FROM asset_metadata m
-            WHERE m.project_id = asset_metadata.project_id
-              AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
-              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
-                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
-              AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
-         )
-         AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'",
-        []
-    )?;
+    // We handle all three prefixes (Media, Audios, Videos)
+    for prefix in &["Media", "Audios", "Videos"] {
+        let start_idx = if *prefix == "Media" { 21 } else { 22 };
+        let pattern = format!("harvey_files/{}/%", prefix);
+        
+        conn.execute(
+            &format!(
+                "UPDATE asset_metadata SET file_type = 'video-transcript'
+                 WHERE file_type = 'audio-transcript'
+                 AND EXISTS (
+                    SELECT 1 FROM asset_metadata m
+                    WHERE m.project_id = asset_metadata.project_id
+                      AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+                      AND substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}), '/') - 1) 
+                          = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}), '/') - 1)
+                      AND REPLACE(m.asset_relative_path, '\\', '/') LIKE '{1}'
+                 )
+                 AND REPLACE(asset_relative_path, '\\', '/') LIKE '{1}'",
+                start_idx, pattern
+            ),
+            []
+        )?;
+    }
 
     info!("[DB] Finished backfilling file_type column.");
     Ok(())
