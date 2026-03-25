@@ -37,8 +37,8 @@
                 return;
             }
 
-            // Alt + Up/Down -> Cycle Speaker
-            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+            // Alt + Up/Down (without Cmd/Ctrl) -> Cycle Speaker
+            if (!modKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
                 event.preventDefault();
                 const options = speakerOptions.map(o => o.value);
                 const currentSpeakerIndex = options.indexOf(localSpeaker);
@@ -50,6 +50,21 @@
                     handleSpeakerChange();
                 }
                 return;
+            }
+
+            // Cmd/Ctrl + Alt + Arrow navigation
+            if (modKey && event.altKey) {
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    commitCurrentSegmentEdits();
+                    previous();
+                    return;
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    commitCurrentSegmentEdits();
+                    next();
+                    return;
+                }
             }
         }
 

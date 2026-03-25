@@ -593,17 +593,19 @@
         const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
         const modKey = isMac ? event.metaKey : event.ctrlKey;
+        // Using Ctrl+Alt for media controls ensures we don't hit macOS native Cmd window/tab shortcuts
+        const mediaModKey = event.ctrlKey && event.altKey && !event.metaKey;
 
-        // Playback speed adjustment shortcuts (Cmd + Shift + [ and Cmd + Shift + ])
-        if (modKey && event.shiftKey && (event.key === '[' || event.key === ']' || event.key === '{' || event.key === '}')) {
+        // Playback speed adjustment shortcuts (Ctrl + Alt + [ and Ctrl + Alt + ])
+        if (mediaModKey && (event.key === '[' || event.key === ']')) {
             const playerStoreValue = ts.player;
             if (playerStoreValue && selectedTab === 'transcriptions') {
                 event.preventDefault();
                 let currentSpeed = playerStoreValue.playbackRate || 1.0;
                 let newSpeed = currentSpeed;
-                if (event.key === '[' || event.key === '{') {
+                if (event.key === '[') {
                     newSpeed = Math.max(0.25, currentSpeed - 0.25);
-                } else if (event.key === ']' || event.key === '}') {
+                } else if (event.key === ']') {
                     newSpeed = Math.min(3.0, currentSpeed + 0.25);
                 }
 
@@ -620,9 +622,9 @@
         const isF8 = event.key === 'F8';
         const isF7 = event.key === 'F7';
         const isF9 = event.key === 'F9';
-        const isCmdOptP = modKey && event.altKey && event.key.toLowerCase() === 'p';
-        const isCmdOptLeft = modKey && event.altKey && event.key === 'ArrowLeft';
-        const isCmdOptRight = modKey && event.altKey && event.key === 'ArrowRight';
+        const isCmdOptP = mediaModKey && event.key.toLowerCase() === 'p';
+        const isCmdOptLeft = mediaModKey && event.key === 'ArrowLeft';
+        const isCmdOptRight = mediaModKey && event.key === 'ArrowRight';
 
         if ((isF8 || isCmdOptP) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
             event.preventDefault();
