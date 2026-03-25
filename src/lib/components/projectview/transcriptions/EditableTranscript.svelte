@@ -24,11 +24,13 @@
     function handleSegmentNavShortcut(event) {
         const tgt = event.target;
         const isEditingText = tgt instanceof HTMLElement && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable);
+        const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
 
         // --- Editing Shortcuts ---
         if (isEditingText && editEnabled && currentIndex >= 0) {
-            // Shift + Enter -> Insert new segment after current
-            if (event.shiftKey && event.key === 'Enter') {
+            // Cmd/Ctrl + Shift + Enter -> Insert new segment after current
+            if (modKey && event.shiftKey && event.key === 'Enter') {
                 event.preventDefault();
                 commitCurrentSegmentEdits();
                 dispatch('insertnewsegment', currentIndex);
@@ -56,8 +58,8 @@
             return; // Allow native text input navigation to work normally
         }
 
-        // Meta + Arrow navigation
-        if (event.metaKey && !event.ctrlKey && !event.altKey) {
+        // Cmd/Ctrl + Alt + Arrow navigation
+        if (modKey && event.altKey) {
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
                 commitCurrentSegmentEdits();

@@ -592,17 +592,18 @@
         const proj = get(project);
         const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
 
-        // Playback speed adjustment shortcuts (Alt + [ and Alt + ])
-        if (event.altKey && (event.key === '[' || event.key === ']')) {
+        // Playback speed adjustment shortcuts (Cmd + Shift + [ and Cmd + Shift + ])
+        if (modKey && event.shiftKey && (event.key === '[' || event.key === ']' || event.key === '{' || event.key === '}')) {
             const playerStoreValue = ts.player;
             if (playerStoreValue && selectedTab === 'transcriptions') {
                 event.preventDefault();
                 let currentSpeed = playerStoreValue.playbackRate || 1.0;
                 let newSpeed = currentSpeed;
-                if (event.key === '[') {
+                if (event.key === '[' || event.key === '{') {
                     newSpeed = Math.max(0.25, currentSpeed - 0.25);
-                } else if (event.key === ']') {
+                } else if (event.key === ']' || event.key === '}') {
                     newSpeed = Math.min(3.0, currentSpeed + 0.25);
                 }
 
@@ -615,7 +616,39 @@
             }
         }
 
-        const modKey = isMac ? event.metaKey : event.ctrlKey;
+        // Play/Pause, Rewind, Forward shortcuts
+        const isF8 = event.key === 'F8';
+        const isF7 = event.key === 'F7';
+        const isF9 = event.key === 'F9';
+        const isCmdOptP = modKey && event.altKey && event.key.toLowerCase() === 'p';
+        const isCmdOptLeft = modKey && event.altKey && event.key === 'ArrowLeft';
+        const isCmdOptRight = modKey && event.altKey && event.key === 'ArrowRight';
+
+        if ((isF8 || isCmdOptP) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+            event.preventDefault();
+            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            if (playerEl) {
+                if (playerEl.paused) playerEl.play().catch(e => console.error("Play failed:", e));
+                else playerEl.pause();
+            }
+        }
+
+        if ((isF7 || isCmdOptLeft) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+            event.preventDefault();
+            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            if (playerEl) {
+                playerEl.currentTime = Math.max(0, playerEl.currentTime - 5);
+            }
+        }
+
+        if ((isF9 || isCmdOptRight) && selectedTab === "transcriptions" && transcriptionsViewRef?.mediaPlayerRef) {
+            event.preventDefault();
+            const playerEl = transcriptionsViewRef.mediaPlayerRef.videoElement;
+            if (playerEl) {
+                playerEl.currentTime = Math.min(playerEl.duration || 0, playerEl.currentTime + 5);
+            }
+        }
+
         if (modKey && event.key.toLowerCase() === "s") {
             event.preventDefault();
             if (selectedTab === "transcriptions" && transcriptionsViewRef) {
