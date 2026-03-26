@@ -166,7 +166,7 @@ pub fn init_db() -> Result<(), CommandError> {
         info!("[DB] Added project_id column to pdf_annotations. Existing rows will have NULL project_id if not manually updated.");
     }
 
-    // Create a trigger to update `updated_at` timestamp
+    // Trigger for pdf_annotations updated_at
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_pdf_annotations_updated_at
         AFTER UPDATE ON pdf_annotations
@@ -176,6 +176,49 @@ pub fn init_db() -> Result<(), CommandError> {
         END;",
         [],
     )?;
+
+    // Migration for broken paths in multiple tables after Media -> Audios/Videos refactor
+    info!("[DB] Running correction for multiple tables' paths...");
+    let tables_and_cols = [
+        ("pdf_annotations", "pdf_document_path"),
+        ("table_styles", "table_path"),
+        ("table_schemas", "table_path"),
+        ("table_layout_preferences", "table_asset_relative_path"),
+        ("file_groups", "file_asset_path"),
+        ("attachments", "base_asset_relative_path"),
+        ("attachments", "attachment_relative_path"),
+        ("media_transcript_data", "asset_relative_path")
+    ];
+
+    for (table, col) in tables_and_cols {
+        let sql_audios = format!(
+            "UPDATE {} 
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m 
+                 WHERE m.project_id = {}.project_id 
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             );", table, col, col, col, table, table, col
+        );
+        let sql_videos = format!(
+            "UPDATE {} 
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m 
+                 WHERE m.project_id = {}.project_id 
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             );", table, col, col, col, table, table, col
+        );
+
+        if let Err(e) = conn.execute(&sql_audios, []) {
+            error!("[DB] Failed to run {} correction for Audios: {}", table, e);
+        }
+        if let Err(e) = conn.execute(&sql_videos, []) {
+            error!("[DB] Failed to run {} correction for Videos: {}", table, e);
+        }
+    }
 
     // asset_metadata table
     conn.execute(
@@ -1769,64 +1812,34 @@ pub fn rename_asset_metadata_key(
     }
 
     // 3. Update Child Tables Second (to match the new parent key)
+    // List of child tables that need manual path updates when FKs are OFF
+    let child_tables = [
+        ("pdf_annotations", "pdf_document_path"),
+        ("table_styles", "table_path"),
+        ("table_schemas", "table_path"),
+        ("table_layout_preferences", "table_asset_relative_path"),
+        ("file_groups", "file_asset_path"),
+        ("attachments", "base_asset_relative_path"),
+        ("attachments", "attachment_relative_path"),
+        ("media_transcript_data", "asset_relative_path"),
+    ];
 
-    // Update file_groups
-    match tx.execute(
-        "UPDATE file_groups SET file_asset_path = ?1 WHERE project_id = ?2 AND file_asset_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated file_groups for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => { // 0 rows affected
-            debug!("[DB TX] No entries in file_groups needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating file_groups for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+    for (table, col) in child_tables {
+        let sql = format!("UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3", table, col, col);
+        match tx.execute(&sql, params![new_relative_path, project_id, old_relative_path]) {
+            Ok(changes) if changes > 0 => {
+                info!("[DB TX] Updated child table {} for project_id {} from {} to {} ({} rows affected)", table, project_id, old_relative_path, new_relative_path, changes);
             }
-            return Err(CommandError::from(e));
-        }
-    }
-
-    // Update table_layout_preferences
-    match tx.execute(
-        "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated table_layout_preferences for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => {
-             debug!("[DB TX] No entries in table_layout_preferences needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating table_layout_preferences for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            Ok(_) => {
+                debug!("[DB TX] No entries in child table {} needed update for project_id {} and old path {}", table, project_id, old_relative_path);
             }
-            return Err(CommandError::from(e));
-        }
-    }
-
-    // Update media_transcript_data
-    match tx.execute(
-        "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated media_transcript_data for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => {
-            debug!("[DB TX] No entries in media_transcript_data needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating media_transcript_data for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            Err(e) => {
+                error!("[DB TX] Error updating child table {} for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", table, project_id, old_relative_path, new_relative_path, e);
+                if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+                    error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+                }
+                return Err(CommandError::from(e));
             }
-            return Err(CommandError::from(e));
         }
     }
 

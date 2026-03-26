@@ -694,9 +694,10 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const newlyImportedFileEntry = await invoke('import_media', { // backendResponse is now newlyImportedFileEntry
+        const newlyImportedFileEntry = await invoke('import_media', { 
             sourceFilePathStr: sourceFilePath,
-            projectXmlPathStr: projectXmlPath
+            projectXmlPathStr: projectXmlPath,
+            importType: importType // Added parameter
         });
 
         if (!newlyImportedFileEntry || typeof newlyImportedFileEntry !== 'object' || !newlyImportedFileEntry.path) {

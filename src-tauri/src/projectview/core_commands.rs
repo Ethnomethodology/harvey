@@ -1362,8 +1362,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
 
 #[tauri::command]
-pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<FileEntry, CommandError> {
-    info!("[Backend Import] Source: '{}', Project XML: '{}'", source_file_path_str, project_xml_path_str);
+pub async fn import_media(
+    app_handle: AppHandle, 
+    source_file_path_str: String, 
+    project_xml_path_str: String,
+    import_type: Option<String>
+) -> Result<FileEntry, CommandError> {
+    info!("[Backend Import] Source: '{}', Project XML: '{}', Type Hint: '{:?}'", source_file_path_str, project_xml_path_str, import_type);
     let source_path = canonicalize_path(&source_file_path_str).unwrap_or_else(|_| PathBuf::from(&source_file_path_str));
     let project_xml_path = canonicalize_path(&project_xml_path_str).unwrap_or_else(|_| PathBuf::from(&project_xml_path_str));
 
@@ -1446,17 +1451,48 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 
     let final_asset_type: String;
     let media_dir_name: &str;
-    if video_codec.is_some() {
-        final_asset_type = "video".to_string();
-        media_dir_name = VIDEOS_DIR;
-    } else if audio_codec.is_some() {
-        final_asset_type = "audio".to_string();
-        media_dir_name = AUDIOS_DIR;
+
+    // Determine target directory using import_type hint if provide, otherwise fallback to ffprobe
+    if let Some(ref hint) = import_type {
+        match hint.to_lowercase().as_str() {
+            "video" => {
+                final_asset_type = "video".to_string();
+                media_dir_name = VIDEOS_DIR;
+            },
+            "audio" => {
+                final_asset_type = "audio".to_string();
+                media_dir_name = AUDIOS_DIR;
+            },
+            _ => {
+                // If "auto" or unknown hint, use ffprobe detection
+                if video_codec.is_some() {
+                    final_asset_type = "video".to_string();
+                    media_dir_name = VIDEOS_DIR;
+                } else if audio_codec.is_some() {
+                    final_asset_type = "audio".to_string();
+                    media_dir_name = AUDIOS_DIR;
+                } else {
+                    final_asset_type = source_path.extension()
+                        .and_then(|s| s.to_str())
+                        .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+                    media_dir_name = AUDIOS_DIR;
+                }
+            }
+        }
     } else {
-        final_asset_type = source_path.extension()
-            .and_then(|s| s.to_str())
-            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
-        media_dir_name = AUDIOS_DIR; // Default to Audios as it's the most common for unknown media here
+        // Legacy behavior if no import_type is passed
+        if video_codec.is_some() {
+            final_asset_type = "video".to_string();
+            media_dir_name = VIDEOS_DIR;
+        } else if audio_codec.is_some() {
+            final_asset_type = "audio".to_string();
+            media_dir_name = AUDIOS_DIR;
+        } else {
+            final_asset_type = source_path.extension()
+                .and_then(|s| s.to_str())
+                .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+            media_dir_name = AUDIOS_DIR;
+        }
     }
 
     // Load project XML to check for conflicts
