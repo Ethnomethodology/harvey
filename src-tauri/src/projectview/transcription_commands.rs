@@ -216,10 +216,10 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
     let mut table_rows_json: Vec<JsonValue> = Vec::new();
 
     let col_widths_json: Vec<JsonValue> = vec![
-        json!(50),  
-        json!(140), 
-        json!(120), 
-        json!(450)  
+        json!("5%"),
+        json!("15%"),
+        json!("15%"),
+        json!("65%")
     ];
 
     let header_texts = ["#", "Timestamp", "Speaker", "Text"];
@@ -301,6 +301,7 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "children": [{
                 "type": "table",
                 "version": 1,
+                "colWidths": col_widths_json.clone(),
                 "children": table_rows_json,
             }, {
                 "type": "paragraph", 
