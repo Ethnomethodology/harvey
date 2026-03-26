@@ -1028,19 +1028,16 @@
 
             if (itemCategoryType) {
                 const itemCategory = displayCategories.find(c => {
-                            if (itemCategoryType === 'media_note') {
-                                return (c.type === 'audio' || c.type === 'video');
-                            }
-                            return c.type === itemCategoryType;
-                        });
+                    const typeMatches = itemCategoryType === 'media_note' ? (c.type === 'audio' || c.type === 'video') : c.type === itemCategoryType;
+                    return typeMatches && c.files.some(f => f.path === autoPath);
+                });
 
-                         if (itemCategory && itemCategory.files.some(f => f.path === autoPath)) {
-                            
-                            prevAutoOpenPath = autoPath;
-                        } else {
-                            console.warn(`[DataLeftPanel] Auto open path ${autoPath} (type ${itemCategoryType}) NOT FOUND in current displayCategories.`);
-                        }
-                    }
+                if (itemCategory) {
+                    prevAutoOpenPath = autoPath;
+                } else {
+                    console.warn(`[DataLeftPanel] Auto open path ${autoPath} (type ${itemCategoryType}) NOT FOUND in current displayCategories.`);
+                }
+            }
                 }
 
             

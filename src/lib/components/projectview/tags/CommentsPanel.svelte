@@ -172,6 +172,8 @@
                                 class="w-full p-2 text-sm border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                                 rows="2"
                                 autocomplete="off"
+                                autocorrect="off"
+                                spellcheck="false"
                             ></textarea>
                             <div class="mt-2 flex justify-end gap-2">
                                 <button on:click={handleCancelEdit} class="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors">Cancel</button>
@@ -249,6 +251,8 @@
             placeholder={replyingToCommentId ? 'Write a reply...' : 'Add a comment...'}
             rows="3"
             autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
         ></textarea>
         <div class="mt-2 flex justify-between items-center">
             <span class="text-[10px] text-gray-400 dark:text-gray-500">⌘↵ to submit</span>
