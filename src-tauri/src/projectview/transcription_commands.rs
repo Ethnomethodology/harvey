@@ -216,10 +216,10 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
     let mut table_rows_json: Vec<JsonValue> = Vec::new();
 
     let col_widths_json: Vec<JsonValue> = vec![
-        json!("5%"),
-        json!("15%"),
-        json!("15%"),
-        json!("65%")
+        json!(40),
+        json!(120),
+        json!(120),
+        json!(520)
     ];
 
     let header_texts = ["#", "Timestamp", "Speaker", "Text"];

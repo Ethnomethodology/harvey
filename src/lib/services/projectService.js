@@ -1743,25 +1743,17 @@ async function processJsonToRemoveHighlights(jsonString, isDocument = false) {
                 const numCols = firstRow ? firstRow.getChildrenSize() : 4;
                 let newWidths;
 
-                if (isDocument) {
-                    // For documents, we need pixel widths for the resizer to work.
-                    // If layout config is available, calculate pixels based on an 800px table.
-                    if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
-                        newWidths = layoutConfig.colgroup.map(pctStr => {
-                            const pct = parseFloat(pctStr.replace('%', ''));
-                            return Math.max(40, Math.floor(800 * (pct / 100)));
-                        });
-                    } else {
-                        const defaultWidth = Math.max(100, Math.floor(800 / numCols));
-                        newWidths = Array(numCols).fill(defaultWidth);
-                    }
+                // Lexical tables require explicit pixel widths to support structural consistency and resizing.
+                // We use an 800px base width, but if resizing is disabled (like in transcript panels), the browser
+                // will scale these relative sizes uniformly, maintaining the intended percentages perfectly.
+                if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
+                    newWidths = layoutConfig.colgroup.map(pctStr => {
+                        const pct = parseFloat(pctStr.replace('%', ''));
+                        return Math.max(40, Math.floor(800 * (pct / 100)));
+                    });
                 } else {
-                    // For transcripts, percentage widths keep the detailed layout intact.
-                    if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
-                        newWidths = [...layoutConfig.colgroup];
-                    } else {
-                        newWidths = Array(numCols).fill(undefined);
-                    }
+                    const defaultWidth = Math.max(100, Math.floor(800 / numCols));
+                    newWidths = Array(numCols).fill(defaultWidth);
                 }
 
                 node.setColWidths(newWidths);
