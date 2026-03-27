@@ -729,8 +729,8 @@
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
-<div class="flex flex-col h-screen w-full overflow-hidden">
-    <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
+<div class="flex flex-col h-screen w-full">
+    <div class="flex flex-col flex-grow min-h-0 w-full">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if !$panelStateStore.transcriptionPanelCollapsed}

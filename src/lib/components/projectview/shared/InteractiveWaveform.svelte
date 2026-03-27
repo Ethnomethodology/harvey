@@ -1832,7 +1832,7 @@
 				scrollOffsetPx,
 			)}
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30"
+				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editStartPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startEditDrag("edit-left", e)}
@@ -1846,13 +1846,13 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute bottom-full mb-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentStartTime)}
 				</div>
 			</div>
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30"
+				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editEndPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startEditDrag("edit-right", e)}
@@ -1866,7 +1866,7 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentEndTime)}
 				</div>
