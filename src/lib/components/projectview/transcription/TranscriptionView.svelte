@@ -729,8 +729,8 @@
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
-<div class="flex flex-col h-screen w-full overflow-hidden">
-    <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
+<div class="flex flex-col h-full w-full">
+    <div class="flex flex-col flex-grow min-h-0 w-full">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if !$panelStateStore.transcriptionPanelCollapsed}
@@ -870,7 +870,7 @@
     {#if currentWaveformLayout === "horizontal"}
         <div
             style="height: {horizontalWaveformContainerHeightPx}px;"
-            class="border-t border-gray-200 dark:border-gray-700 relative z-[50]"
+            class="border-t border-gray-200 dark:border-gray-700 relative z-[100] overflow-visible"
         >
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform

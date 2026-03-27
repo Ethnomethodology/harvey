@@ -1696,7 +1696,7 @@
 
 <div
 	bind:this={componentRootRef}
-	class="interactive-waveform-panel relative flex flex-row w-full h-full bg-white dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded"
+	class="interactive-waveform-panel relative flex flex-row w-full h-full bg-white dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded overflow-visible"
 >
 	<div
 		bind:this={waveformScrollContainerRef}
@@ -1895,7 +1895,7 @@
 
 		{#if editEndVisPx >= 0 && editEndVisPx <= visibleCanvasWidth}
 			<div
-				class="absolute top-0 -translate-x-1/2 -translate-y-full -mt-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+				class="absolute top-full -translate-x-1/2 translate-y-0 mt-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				style:left="{editEndVisPx}px"
 			>
 				{formatTimestamp(editSegmentEndTime)}

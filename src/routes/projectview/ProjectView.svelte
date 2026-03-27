@@ -1928,9 +1928,9 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="flex flex-grow w-full overflow-hidden min-h-0">
+    <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 overflow-hidden border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 border-r border-gray-300 dark:border-gray-700"
         >
             <div class="flex-grow flex flex-col space-y-2">
                 <button
@@ -2081,9 +2081,9 @@
         </div>
 
         <div
-            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 overflow-hidden min-w-0"
+            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0"
         >
-            <div class="flex flex-col flex-grow min-h-0 overflow-hidden">
+            <div class="flex flex-col flex-grow min-h-0">
                 {#if selectedTab === "transcription"}
                     <TranscriptionView
                         bind:this={transcriptionViewRef}
