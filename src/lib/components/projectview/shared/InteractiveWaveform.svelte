@@ -1872,7 +1872,7 @@
 
 		{#if trimEndVisPx >= 0 && trimEndVisPx <= visibleCanvasWidth}
 			<div
-				class="absolute bottom-0 -translate-x-1/2 translate-y-full -mb-0.5 z-[200] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+				class="absolute top-0 -translate-x-1/2 -translate-y-full -mt-0.5 z-[200] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				style:left="{trimEndVisPx}px"
 			>
 				{formatTimestamp(trimEndTime)}
@@ -1895,7 +1895,7 @@
 
 		{#if editEndVisPx >= 0 && editEndVisPx <= visibleCanvasWidth}
 			<div
-				class="absolute bottom-0 -translate-x-1/2 translate-y-full -mb-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+				class="absolute top-0 -translate-x-1/2 -translate-y-full -mt-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				style:left="{editEndVisPx}px"
 			>
 				{formatTimestamp(editSegmentEndTime)}
