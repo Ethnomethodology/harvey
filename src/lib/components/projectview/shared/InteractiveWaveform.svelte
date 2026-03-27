@@ -8,6 +8,7 @@
 	} from "$lib/stores/transcriptStore.js";
 	import { onMount, onDestroy, tick, createEventDispatcher } from "svelte";
 	import { ZoomIn, ZoomOut } from "@lucide/svelte";
+	import { Tooltip } from "flowbite-svelte";
 
 	export let isTrimming = false;
 	export let trimStartTime = 0;
@@ -1777,6 +1778,7 @@
 				style:left="{Math.min(visibleCanvasWidth, trimEndPx)}px"
 			></div>
 			<div
+				id="trim-start-handle"
 				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[10]"
 				style:left="{trimStartPx}px"
 				on:mousedown|preventDefault={(e) =>
@@ -1791,7 +1793,10 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 			</div>
+			<Tooltip triggeredBy="#trim-start-handle" placement="top" color="red" defaultClass="py-0.5 px-1.5 font-mono text-[10px] z-[9999]">{formatTimestamp(trimStartTime)}</Tooltip>
+
 			<div
+				id="trim-end-handle"
 				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[10]"
 				style:left="{trimEndPx}px"
 				on:mousedown|preventDefault={(e) =>
@@ -1806,6 +1811,7 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 			</div>
+			<Tooltip triggeredBy="#trim-end-handle" placement="bottom" color="red" defaultClass="py-0.5 px-1.5 font-mono text-[10px] z-[9999]">{formatTimestamp(trimEndTime)}</Tooltip>
 		{/if}
 
 		{#if showTrimUI && isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
@@ -1822,6 +1828,7 @@
 				scrollOffsetPx,
 			)}
 			<div
+				id="edit-start-handle"
 				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editStartPx}px"
 				on:mousedown|preventDefault={(e) =>
@@ -1836,7 +1843,10 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 			</div>
+			<Tooltip triggeredBy="#edit-start-handle" placement="top" color="blue" defaultClass="py-0.5 px-1.5 font-mono text-[10px] z-[9999]">{formatTimestamp(editSegmentStartTime)}</Tooltip>
+
 			<div
+				id="edit-end-handle"
 				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editEndPx}px"
 				on:mousedown|preventDefault={(e) =>
@@ -1851,55 +1861,9 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 			</div>
+			<Tooltip triggeredBy="#edit-end-handle" placement="bottom" color="blue" defaultClass="py-0.5 px-1.5 font-mono text-[10px] z-[9999]">{formatTimestamp(editSegmentEndTime)}</Tooltip>
 		{/if}
 	</div>
-
-	<!-- Tooltips extracted outside the scroll container to prevent clipping -->
-	{#if showTrimUI && isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
-		{@const trimStartVisPx = timeToVisiblePx(trimStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
-		{@const trimEndVisPx = timeToVisiblePx(trimEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
-
-		{#if trimStartVisPx >= 0 && trimStartVisPx <= visibleCanvasWidth}
-			<div
-				class="absolute top-0 -translate-x-1/2 -translate-y-full -mt-0.5 z-[200] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
-				style:left="{trimStartVisPx}px"
-			>
-				{formatTimestamp(trimStartTime)}
-			</div>
-		{/if}
-
-		{#if trimEndVisPx >= 0 && trimEndVisPx <= visibleCanvasWidth}
-			<div
-				class="absolute bottom-0 -translate-x-1/2 translate-y-full -mb-0.5 z-[200] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
-				style:left="{trimEndVisPx}px"
-			>
-				{formatTimestamp(trimEndTime)}
-			</div>
-		{/if}
-	{/if}
-
-	{#if showTrimUI && isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
-		{@const editStartVisPx = timeToVisiblePx(editSegmentStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
-		{@const editEndVisPx = timeToVisiblePx(editSegmentEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
-
-		{#if editStartVisPx >= 0 && editStartVisPx <= visibleCanvasWidth}
-			<div
-				class="absolute top-0 -translate-x-1/2 -translate-y-full -mt-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
-				style:left="{editStartVisPx}px"
-			>
-				{formatTimestamp(editSegmentStartTime)}
-			</div>
-		{/if}
-
-		{#if editEndVisPx >= 0 && editEndVisPx <= visibleCanvasWidth}
-			<div
-				class="absolute bottom-0 -translate-x-1/2 translate-y-full -mb-0.5 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
-				style:left="{editEndVisPx}px"
-			>
-				{formatTimestamp(editSegmentEndTime)}
-			</div>
-		{/if}
-	{/if}
 
 	<div
 		class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-[10]"
