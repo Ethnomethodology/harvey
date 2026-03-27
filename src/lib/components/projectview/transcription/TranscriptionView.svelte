@@ -48,7 +48,7 @@
     let verticalWaveformRef = null;
     let horizontalWaveformRef = null; // Added for horizontal waveform
     let verticalWaveformWidthPx = 0; // To store the actual pixel width of the vertical waveform panel
-    const HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX = 75; // Default height for the horizontal waveform container
+    const HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX = 115; // Increased height to allow tooltips to render above and below without clipping
     let horizontalWaveformContainerHeightPx =
         HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX; // Initialize with default
 

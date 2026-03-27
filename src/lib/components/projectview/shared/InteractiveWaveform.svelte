@@ -1708,7 +1708,7 @@
 		<canvas
 			bind:this={timescaleCanvas}
 			class="timescale-canvas"
-			style="height: {TIMESCALE_HEIGHT}px;"
+			style="height: {TIMESCALE_HEIGHT}px; top: 20px;"
 			aria-hidden="true"
 		/>
 		<canvas
@@ -1722,7 +1722,7 @@
 				: isPanning
 					? 'cursor-grabbing'
 					: 'cursor-default'}"
-			style="height: {waveformCanvasHeight}px; top: {TIMESCALE_HEIGHT}px;"
+			style="height: {waveformCanvasHeight - 40}px; top: {TIMESCALE_HEIGHT + 20}px;"
 			aria-label="Waveform visualization. Click to seek audio."
 			on:click|self={handleCanvasClick}
 			on:mousedown|self={handlePanStart}
@@ -1769,15 +1769,15 @@
 				scrollOffsetPx,
 			)}
 			<div
-				class="absolute top-0 bottom-0 left-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]"
+				class="absolute top-5 bottom-5 left-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]"
 				style:width="{Math.max(0, trimStartPx)}px"
 			></div>
 			<div
-				class="absolute top-0 bottom-0 right-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]"
+				class="absolute top-5 bottom-5 right-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]"
 				style:left="{Math.min(visibleCanvasWidth, trimEndPx)}px"
 			></div>
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10"
+				class="absolute top-5 bottom-5 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[10]"
 				style:left="{trimStartPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startTrimDrag("trim-left", e)}
@@ -1791,13 +1791,13 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 				<div
-					class="absolute top-0 right-full mr-1 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute bottom-full mb-0.5 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(trimStartTime)}
 				</div>
 			</div>
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10"
+				class="absolute top-5 bottom-5 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[10]"
 				style:left="{trimEndPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startTrimDrag("trim-right", e)}
@@ -1811,7 +1811,7 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 				<div
-					class="absolute bottom-0 left-full ml-1 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(trimEndTime)}
 				</div>
@@ -1832,7 +1832,7 @@
 				scrollOffsetPx,
 			)}
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
+				class="absolute top-5 bottom-5 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editStartPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startEditDrag("edit-left", e)}
@@ -1846,13 +1846,13 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute top-0 right-full mr-1 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute bottom-full mb-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentStartTime)}
 				</div>
 			</div>
 			<div
-				class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
+				class="absolute top-5 bottom-5 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-[100]"
 				style:left="{editEndPx}px"
 				on:mousedown|preventDefault={(e) =>
 					startEditDrag("edit-right", e)}
@@ -1866,7 +1866,7 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute bottom-0 left-full ml-1 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentEndTime)}
 				</div>
