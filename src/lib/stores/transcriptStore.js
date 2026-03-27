@@ -533,8 +533,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
-        const isEnglish = langCode === 'en';
-        const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        const isTranslation = langCode !== 'original';
+        const speakerNamesToUse = isTranslation ? updatedSpeakers.translatedNames : updatedSpeakers.names;
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
         // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree

@@ -657,9 +657,14 @@
     // --- Layout specific styles ---
     const columnContainerClass = 'flex flex-col mx-auto gap-y-2 mt-4';
 
+    $: isTranslation = $transcriptStore.activeTranscript?.language_code && $transcriptStore.activeTranscript.language_code !== 'original';
+    $: activeSpeakerNames = isTranslation
+        ? ($transcriptStore.speakers.translatedNames || [])
+        : ($transcriptStore.speakers.names || []);
+
     $: speakerOptions = [
         { value: 'Unknown', label: 'Unknown' },
-        ...($transcriptStore.speakers.names.map(name => ({ value: name, label: name })))
+        ...(activeSpeakerNames.map(name => ({ value: name || 'Unknown', label: name || 'Unknown' })))
     ];
 
 </script>
