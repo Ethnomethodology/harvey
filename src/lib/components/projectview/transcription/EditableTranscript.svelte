@@ -657,7 +657,7 @@
     // --- Layout specific styles ---
     const columnContainerClass = 'flex flex-col mx-auto gap-y-2 mt-4';
 
-    $: isTranslation = $transcriptStore.activeTranscript?.language_code && $transcriptStore.activeTranscript.language_code !== 'original';
+    $: isTranslation = $transcriptStore.activeTranscript?.language_code && ($transcriptStore.activeTranscript.language_code.includes('-') || $transcriptStore.activeTranscript.path?.endsWith('.en.json'));
     $: activeSpeakerNames = isTranslation
         ? ($transcriptStore.speakers.translatedNames || [])
         : ($transcriptStore.speakers.names || []);

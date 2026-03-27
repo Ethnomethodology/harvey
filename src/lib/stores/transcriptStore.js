@@ -533,7 +533,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
-        const isTranslation = langCode !== 'original';
+        const isTranslation = langCode.includes('-') || normalizedInputPath.endsWith('.en.json');
         const speakerNamesToUse = isTranslation ? updatedSpeakers.translatedNames : updatedSpeakers.names;
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
