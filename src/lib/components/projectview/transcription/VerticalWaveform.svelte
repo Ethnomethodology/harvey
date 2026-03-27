@@ -14,8 +14,22 @@
 	const BAR_THICKNESS_PX = 2;
 	const BAR_SPACING_PX = 1;
 	const BAR_UNIT_HEIGHT_PX = BAR_THICKNESS_PX + BAR_SPACING_PX;
-	const RMS_GAIN_FACTOR = 2.5;
-	const MIN_BAR_HALF_LENGTH_PX = 1;
+	const RMS_GAIN_FACTOR = 12.0;
+	const PEAK_GAIN_FACTOR = 2.5;
+	const MIN_BAR_LENGTH_PX = 1;
+
+	// Optimization: Off-screen cache canvases for the waveform
+	let baseCacheCanvas = null;
+	let highlightCacheCanvas = null;
+	let lastCacheParams = {
+		buffer: null,
+		peaks: null,
+		zoom: -1,
+		width: -1,
+		isDark: false,
+		logicalHeight: -1,
+		dpr: -1,
+	};
 
 	let waveformCanvas;
 	let timescaleCanvas;
@@ -138,103 +152,135 @@
 		return proportion * mediaDuration;
 	}
 
-	function drawVerticalWaveformFromPeaks(ctx, peaks, canvasLogicalHeight, canvasWidth, color) {
-		if (!ctx || !peaks || canvasLogicalHeight <= 0 || canvasWidth <= 0) return;
+	/**
+	 * Unified bar-style rendering for the vertical waveform.
+	 */
+	function renderWaveformBars(ctx, buffer, peaks, width, logicalHeight, color) {
+		if (!ctx || width <= 0 || logicalHeight <= 0) return;
+		if (!buffer && !peaks) return;
 
-		const midX = canvasWidth / 2;
-		ctx.strokeStyle = color;
-		ctx.lineWidth = 1;
-
-		const numPeakBlocks = peaks.length / 2;
-		const peaksPerLogicalPixel = numPeakBlocks / canvasLogicalHeight;
-
-		ctx.beginPath();
-
-		for (let y = 0; y < canvasLogicalHeight; y++) {
-			const peakBlockStartIndex = Math.floor(y * peaksPerLogicalPixel);
-			const peakBlockEndIndex = Math.floor((y + 1) * peaksPerLogicalPixel);
-
-			let minPeak = 0.0;
-			let maxPeak = 0.0;
-
-			if (peakBlockStartIndex < peakBlockEndIndex) {
-				minPeak = peaks[peakBlockStartIndex * 2];
-				maxPeak = peaks[peakBlockStartIndex * 2 + 1];
-				for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
-					if (peaks[i * 2] < minPeak) minPeak = peaks[i * 2];
-					if (peaks[i * 2 + 1] > maxPeak) maxPeak = peaks[i * 2 + 1];
-				}
-			} else {
-				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
-				if (targetBlock * 2 + 1 < peaks.length) {
-					minPeak = peaks[targetBlock * 2];
-					maxPeak = peaks[targetBlock * 2 + 1];
-				}
-			}
-
-			const xLeft = midX + minPeak * midX;
-			if (y === 0) ctx.moveTo(xLeft, y + 0.5);
-			else ctx.lineTo(xLeft, y + 0.5);
-		}
-		ctx.stroke();
-
-		ctx.beginPath();
-		for (let y = canvasLogicalHeight - 1; y >= 0; y--) {
-			const peakBlockStartIndex = Math.floor(y * peaksPerLogicalPixel);
-			const peakBlockEndIndex = Math.floor((y + 1) * peaksPerLogicalPixel);
-
-			let maxPeak = 0.0;
-
-			if (peakBlockStartIndex < peakBlockEndIndex) {
-				maxPeak = peaks[peakBlockStartIndex * 2 + 1];
-				for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
-					if (peaks[i * 2 + 1] > maxPeak) maxPeak = peaks[i * 2 + 1];
-				}
-			} else {
-				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
-				if (targetBlock * 2 + 1 < peaks.length) {
-					maxPeak = peaks[targetBlock * 2 + 1];
-				}
-			}
-
-			const xRight = midX + maxPeak * midX;
-			if (y === canvasLogicalHeight - 1) ctx.moveTo(xRight, y + 0.5);
-			else ctx.lineTo(xRight, y + 0.5);
-		}
-		ctx.stroke();
-	}
-
-	function drawVerticalWaveform(ctx, buffer, canvasLogicalHeight, canvasWidth, color) {
-		if (!ctx || canvasLogicalHeight <= 0 || canvasWidth <= 0 || !buffer) return;
-
-		const midX = canvasWidth / 2;
+		const midX = width / 2;
 		ctx.fillStyle = color;
 
-		const data = buffer.getChannelData(0);
-		const totalSamples = data.length;
-		if (totalSamples === 0) return;
+		const barThickness = BAR_THICKNESS_PX;
+		const spacing = BAR_SPACING_PX;
+		const step = barThickness + spacing;
+		
+		const gain = buffer ? RMS_GAIN_FACTOR : PEAK_GAIN_FACTOR;
 
-		const samplesPerLogicalPixel = totalSamples / canvasLogicalHeight;
+		if (buffer) {
+			const data = buffer.getChannelData(0);
+			const totalSamples = data.length;
+			const samplesPerPixel = totalSamples / logicalHeight;
 
-		for (let yPx = 0; yPx < canvasLogicalHeight; yPx += BAR_UNIT_HEIGHT_PX) {
-			const startSample = Math.floor(yPx * samplesPerLogicalPixel);
-			const endSample = Math.ceil((yPx + BAR_THICKNESS_PX) * samplesPerLogicalPixel);
-			if (startSample >= totalSamples) break;
+			for (let y = 0; y < logicalHeight; y += step) {
+				const startSample = Math.floor(y * samplesPerPixel);
+				const endSample = Math.ceil((y + barThickness) * samplesPerPixel);
+				if (startSample >= totalSamples) break;
 
-			let sumOfSquares = 0;
-			const effectiveEndSample = Math.min(endSample, totalSamples);
-			for (let i = startSample; i < effectiveEndSample; i++) {
-				sumOfSquares += data[i] * data[i];
+				let sumSquares = 0;
+				let count = 0;
+				for (let i = startSample; i < Math.min(endSample, totalSamples); i++) {
+					sumSquares += data[i] * data[i];
+					count++;
+				}
+				
+				const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+				const cappedRms = Math.min(1.0, rms * gain);
+				
+				const useableWidth = midX * 0.9;
+				const barHalfWidth = Math.max(MIN_BAR_LENGTH_PX, cappedRms * useableWidth);
+				
+				ctx.fillRect(midX - barHalfWidth, y, barHalfWidth * 2, barThickness);
 			}
+		} else if (peaks) {
+			const numPeakBlocks = peaks.length / 2;
+			const peaksPerPixel = numPeakBlocks / logicalHeight;
 
-			const numSamples = effectiveEndSample - startSample;
-			const rms = numSamples > 0 ? Math.sqrt(sumOfSquares / numSamples) : 0;
-			const cappedRms = Math.min(1.0, rms * RMS_GAIN_FACTOR);
-			const displayHalfLength = Math.max(MIN_BAR_HALF_LENGTH_PX, cappedRms * midX);
+			for (let y = 0; y < logicalHeight; y += step) {
+				const peakIdx = Math.floor(y * peaksPerPixel);
+				if (peakIdx * 2 + 1 >= peaks.length) break;
 
-			ctx.fillRect(midX - displayHalfLength, yPx, displayHalfLength * 2, BAR_THICKNESS_PX);
+				const min = peaks[peakIdx * 2];
+				const max = peaks[peakIdx * 2 + 1];
+				
+				const cappedMin = Math.max(-1.0, min * gain);
+				const cappedMax = Math.min(1.0, max * gain);
+				
+				const useableWidth = midX * 0.9;
+				const xLeft = midX + (cappedMin * useableWidth);
+				const xRight = midX + (cappedMax * useableWidth);
+				const barWidth = Math.max(MIN_BAR_LENGTH_PX, xRight - xLeft);
+				
+				ctx.fillRect(xLeft, y, barWidth, barThickness);
+			}
 		}
 	}
+
+	function updateWaveformCache() {
+		const buf = audioBuffer;
+		const peaks = externalPeaks || $transcriptStore.audioBufferPeaks;
+		const isDark = document.documentElement.classList.contains("dark");
+		const dpr = window.devicePixelRatio || 1;
+		
+		if (!buf && !peaks) return;
+
+		const logicalHeight = Math.round(visibleCanvasHeight * zoomLevel);
+		const width = Math.round(waveformCanvasWidth);
+
+		if (
+			lastCacheParams.buffer === buf &&
+			lastCacheParams.peaks === peaks &&
+			lastCacheParams.zoom === zoomLevel &&
+			lastCacheParams.width === width &&
+			lastCacheParams.isDark === isDark &&
+			lastCacheParams.logicalHeight === logicalHeight &&
+			lastCacheParams.dpr === dpr &&
+			baseCacheCanvas
+		) {
+			return;
+		}
+
+		const reqW = Math.round(width * dpr);
+		const reqH = Math.round(logicalHeight * dpr);
+
+		if (!baseCacheCanvas) baseCacheCanvas = document.createElement("canvas");
+		if (!highlightCacheCanvas) highlightCacheCanvas = document.createElement("canvas");
+
+		baseCacheCanvas.width = reqW;
+		baseCacheCanvas.height = reqH;
+		highlightCacheCanvas.width = reqW;
+		highlightCacheCanvas.height = reqH;
+
+		const baseCtx = baseCacheCanvas.getContext("2d");
+		const highlightCtx = highlightCacheCanvas.getContext("2d");
+
+		if (!baseCtx || !highlightCtx) return;
+
+		const waveColor = isDark ? "#737373" : "#9ca3af";
+		const activeWaveColor = isDark ? "#60a5fa" : "#2563eb";
+
+		baseCtx.save();
+		baseCtx.scale(dpr, dpr);
+		renderWaveformBars(baseCtx, buf, peaks, width, logicalHeight, waveColor);
+		baseCtx.restore();
+
+		highlightCtx.save();
+		highlightCtx.scale(dpr, dpr);
+		renderWaveformBars(highlightCtx, buf, peaks, width, logicalHeight, activeWaveColor);
+		highlightCtx.restore();
+
+		lastCacheParams = {
+			buffer: buf,
+			peaks: peaks,
+			zoom: zoomLevel,
+			width: width,
+			isDark: isDark,
+			logicalHeight: logicalHeight,
+			dpr: dpr,
+		};
+	}
+
 
 	function clearWaveformCanvases() {
 		[timescaleCanvas, waveformCanvas].forEach(canvas => {
@@ -328,13 +374,11 @@
 	}
 
 	function drawWaveformUI() {
-		const buf = audioBuffer;
-		const peaks = externalPeaks;
 		const mediaDur = duration;
 		const dpr = window.devicePixelRatio || 1;
 		const logicalHeight = visibleCanvasHeight * zoomLevel;
 
-		if (!waveformCanvas || (!buf && !peaks) || mediaDur <= 0 || logicalHeight <= 0 || waveformCanvasWidth <= 0) {
+		if (!waveformCanvas || mediaDur <= 0 || logicalHeight <= 0 || waveformCanvasWidth <= 0) {
 			if (waveformCanvas) { waveformCanvas.width = 0; waveformCanvas.height = 0; }
 			return;
 		}
@@ -348,15 +392,34 @@
 			waveformCanvas.height = reqH;
 		}
 
+		updateWaveformCache();
+
 		ctx.save();
 		ctx.scale(dpr, dpr);
 		ctx.clearRect(0, 0, waveformCanvasWidth, logicalHeight);
-        const isDark = document.documentElement.classList.contains('dark');
+		
+		if (baseCacheCanvas) {
+			ctx.drawImage(baseCacheCanvas, 0, 0, reqW, reqH, 0, 0, waveformCanvasWidth, logicalHeight);
+		}
 
-		if (peaks) {
-			drawVerticalWaveformFromPeaks(ctx, peaks, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
-		} else if (buf) {
-			drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
+		// Handle segment highlighting
+		if (currentSegment && highlightCacheCanvas) {
+			const segmentStartTime = Number(currentSegment.start_time);
+			const segmentEndTime = Number(currentSegment.end_time);
+			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
+				const logicalTop = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
+				const logicalBottom = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
+				const h = logicalBottom - logicalTop;
+				
+				if (h > 0) {
+					ctx.save();
+					ctx.beginPath();
+					ctx.rect(0, logicalTop, waveformCanvasWidth, h);
+					ctx.clip();
+					ctx.drawImage(highlightCacheCanvas, 0, 0, reqW, reqH, 0, 0, waveformCanvasWidth, logicalHeight);
+					ctx.restore();
+				}
+			}
 		}
 
 		ctx.restore();
@@ -416,6 +479,9 @@
 		if (resizeObserverInstance) resizeObserverInstance.disconnect();
 		if (animationFrameId) cancelAnimationFrame(animationFrameId);
 		if (userScrollTimeout) clearTimeout(userScrollTimeout);
+		
+		baseCacheCanvas = null;
+		highlightCacheCanvas = null;
 	});
 
 	function setupResizeObserver() {
