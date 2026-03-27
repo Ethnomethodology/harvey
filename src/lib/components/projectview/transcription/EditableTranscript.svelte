@@ -658,7 +658,11 @@
     const columnContainerClass = 'flex flex-col mx-auto gap-y-2 mt-4';
 
     $: isTranslation = $transcriptStore.activeTranscript?.language_code && ($transcriptStore.activeTranscript.language_code.includes('-') || $transcriptStore.activeTranscript.path?.endsWith('.en.json'));
-    $: activeSpeakerNames = isTranslation
+    
+    // --- Speaker Fallback Logic ---
+    // If it's a translation but no translated names are provided, fallback to primary names.
+    $: hasTranslatedNames = $transcriptStore.speakers.translatedNames && $transcriptStore.speakers.translatedNames.some(n => n && n.trim() !== "");
+    $: activeSpeakerNames = (isTranslation && hasTranslatedNames)
         ? ($transcriptStore.speakers.translatedNames || [])
         : ($transcriptStore.speakers.names || []);
 

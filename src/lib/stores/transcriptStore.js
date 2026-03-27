@@ -534,7 +534,12 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
         const isTranslation = langCode.includes('-') || normalizedInputPath.endsWith('.en.json');
-        const speakerNamesToUse = isTranslation ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        
+        // --- Speaker Fallback Logic ---
+        // If it's a translation but no translated names are provided, fallback to primary names.
+        const hasTranslatedNames = updatedSpeakers.translatedNames && updatedSpeakers.translatedNames.some(n => n && n.trim() !== "");
+        const speakerNamesToUse = (isTranslation && hasTranslatedNames) ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
         // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree
@@ -1052,35 +1057,47 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
         return;
     }
 
-    const speakerMap = new Map();
-    oldSpeakerConfig.names.forEach((oldName, index) => {
-        if (index < newSpeakerConfig.names.length) {
-            speakerMap.set(oldName, newSpeakerConfig.names[index]);
-            speakerMap.set(`SPEAKER_${String(index).padStart(2,'0')}`, newSpeakerConfig.names[index]);
-            speakerMap.set(`speaker_${index + 1}`, newSpeakerConfig.names[index]);
-        } else {
-            speakerMap.set(oldName, "Unknown");
-            speakerMap.set(`SPEAKER_${String(index).padStart(2,'0')}`, "Unknown");
-            speakerMap.set(`speaker_${index + 1}`, "Unknown");
-        }
-    });
-    speakerMap.set("Unknown", "Unknown");
-    newSpeakerConfig.names.forEach(newName => {
-        if (!speakerMap.has(newName)) {
-            speakerMap.set(newName, newName);
-        }
-    });
+    // Helper to determine speaker names to use for a specific transcript path
+    const getSpeakerNamesForPath = (path, langCode, config) => {
+        const isTranslation = (langCode && langCode.includes('-')) || (path && path.endsWith('.en.json'));
+        const hasTranslatedNames = config.translatedNames && config.translatedNames.some(n => n && n.trim() !== "");
+        return (isTranslation && hasTranslatedNames) ? config.translatedNames : config.names;
+    };
 
-    let segmentsChanged = false;
-    const newSegments = oldSegments.map(segment => {
-        const currentSpeaker = segment.speaker || "Unknown";
-        const mappedSpeaker = speakerMap.get(currentSpeaker) || "Unknown";
-        if (mappedSpeaker !== currentSpeaker) {
+    const currentTs = get(transcriptStore);
+    const primarySpeakerNamesToUse = getSpeakerNamesForPath(
+        currentTs.currentTranscriptPath, 
+        currentTs.activeTranscript?.language_code, 
+        newSpeakerConfig
+    );
+    
+    const newSegments = remapSegmentSpeakerNames([...oldSegments], newSpeakerConfig, primarySpeakerNamesToUse);
+    let segmentsChanged = JSON.stringify(oldSegments) !== JSON.stringify(newSegments);
+
+    let newSecondarySegments = [];
+    if (currentTs.isDualModeActive && currentTs.secondaryTranscriptSegments) {
+        const secondarySpeakerNamesToUse = getSpeakerNamesForPath(
+            currentTs.secondaryTranscriptPath,
+            null, // Secondary lang code not easily available here, but path check covers most cases
+            newSpeakerConfig
+        );
+        newSecondarySegments = remapSegmentSpeakerNames([...currentTs.secondaryTranscriptSegments], newSpeakerConfig, secondarySpeakerNamesToUse);
+        if (JSON.stringify(currentTs.secondaryTranscriptSegments) !== JSON.stringify(newSecondarySegments)) {
             segmentsChanged = true;
-            return { ...segment, speaker: mappedSpeaker };
         }
-        return segment;
-    });
+    }
+
+    if (segmentsChanged) {
+        pushToUndoStack();
+    }
+
+    transcriptStore.update((ts) => ({
+        ...ts,
+        speakers: newSpeakerConfig,
+        segments: newSegments,
+        secondaryTranscriptSegments: ts.isDualModeActive ? newSecondarySegments : ts.secondaryTranscriptSegments,
+        transcriptDirty: ts.transcriptDirty || JSON.stringify(oldSpeakerConfig) !== JSON.stringify(newSpeakerConfig) || segmentsChanged,
+    }));
 
     if (segmentsChanged) {
         pushToUndoStack();
@@ -1103,8 +1120,31 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     };
 
     invoke('save_speaker_config', { payload: innerPayload })
-        .then(() => {
+        .then(async () => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
+
+            // Sync with database metadata (rely on database tables for backend services like translation)
+            try {
+                const mediaRelativePath = currentTs.selectedMediaFile?.relative_path;
+                if (mediaRelativePath && currentProj.xmlPath) {
+                    const metadataPayload = {
+                        speaker_names: newSpeakerConfig.names || [],
+                        translated_speaker_names: newSpeakerConfig.translatedNames || [],
+                        // Only send speaker related fields to avoid overwriting technical metadata
+                    };
+                    
+                    await invoke('update_asset_metadata_command', {
+                        projectXmlPathStr: currentProj.xmlPath,
+                        assetRelativePath: mediaRelativePath,
+                        metadataPayload: metadataPayload,
+                        customFieldsPayload: null,
+                        assetType: 'media' 
+                    });
+                    console.debug(`[transcriptStore] Synchronized speaker names to DB for: ${mediaRelativePath}`);
+                }
+            } catch (syncError) {
+                console.error("[transcriptStore] Failed to synchronize speaker names to database:", syncError);
+            }
 
             projectMainStore.update(p => {
                  const updatedFiles = JSON.parse(JSON.stringify(p.files));
@@ -1410,7 +1450,17 @@ function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerN
                 newSegment.speaker = userNames[userAssignedIndex].trim();
             }
         } else {
-            if (!userNames.includes(originalSpeaker) && originalSpeaker !== "Unknown") {
+            // --- Cross-Language Fallback ---
+            // If the original name is not a match or identifier, check if it's already a remapped name from the OTHER language.
+            const sourceNames = (userNames === speakerConfig.translatedNames) ? speakerConfig.names : speakerConfig.translatedNames;
+            
+            if (sourceNames && Array.isArray(sourceNames)) {
+                const sourceIndex = sourceNames.indexOf(originalSpeaker);
+                if (sourceIndex !== -1 && sourceIndex < userNames.length) {
+                    if (userNames[sourceIndex] && userNames[sourceIndex].trim() !== "") {
+                        newSegment.speaker = userNames[sourceIndex].trim();
+                    }
+                }
             }
         }
         return newSegment;
