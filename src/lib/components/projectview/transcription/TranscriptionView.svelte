@@ -729,8 +729,8 @@
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
-<div class="flex flex-col h-screen w-full">
-    <div class="flex flex-col flex-grow min-h-0 w-full">
+<div class="flex flex-col h-screen w-full overflow-visible">
+    <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if !$panelStateStore.transcriptionPanelCollapsed}
@@ -864,48 +864,48 @@
                 />
             </div>
         </div>
-
-        <!-- Horizontal Waveform Panel (Conditional) -->
-        {#if currentWaveformLayout === "horizontal"}
-            <div
-                style="height: {horizontalWaveformContainerHeightPx}px;"
-                class="border-t border-gray-200 dark:border-gray-700"
-            >
-                {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
-                    <InteractiveWaveform
-                        bind:this={horizontalWaveformRef}
-                        externalAudioBuffer={$transcriptStore.audioBuffer}
-                        externalCurrentTime={$transcriptStore.player
-                            .currentTime}
-                        externalDuration={$transcriptStore.player.duration}
-                        externalSegments={$transcriptStore.segments}
-                        externalCurrentSegmentIndex={$transcriptStore.player
-                            .currentSegmentIndex}
-                        isEditingSegment={isSegmentEditingActive}
-                        editSegmentStartTime={currentEditSegmentStart}
-                        editSegmentEndTime={currentEditSegmentEnd}
-                        showTrimUI={panelEditModeActive}
-                        fixedHeightPx={horizontalWaveformContainerHeightPx}
-                        compactMode={false}
-                        on:navigate={handlePanelNavigate}
-                        on:segmentupdate={handleWaveformSegmentUpdate}
-                    />
-                {:else if $transcriptStore.selectedMediaFile}
-                    <div
-                        class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
-                    >
-                        Waveform still loading...
-                    </div>
-                {:else}
-                    <div
-                        class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
-                    >
-                        Select media to display waveform.
-                    </div>
-                {/if}
-            </div>
-        {/if}
     </div>
+
+    <!-- Horizontal Waveform Panel (Conditional) -->
+    {#if currentWaveformLayout === "horizontal"}
+        <div
+            style="height: {horizontalWaveformContainerHeightPx}px;"
+            class="border-t border-gray-200 dark:border-gray-700 z-[100] relative"
+        >
+            {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
+                <InteractiveWaveform
+                    bind:this={horizontalWaveformRef}
+                    externalAudioBuffer={$transcriptStore.audioBuffer}
+                    externalCurrentTime={$transcriptStore.player
+                        .currentTime}
+                    externalDuration={$transcriptStore.player.duration}
+                    externalSegments={$transcriptStore.segments}
+                    externalCurrentSegmentIndex={$transcriptStore.player
+                        .currentSegmentIndex}
+                    isEditingSegment={isSegmentEditingActive}
+                    editSegmentStartTime={currentEditSegmentStart}
+                    editSegmentEndTime={currentEditSegmentEnd}
+                    showTrimUI={panelEditModeActive}
+                    fixedHeightPx={horizontalWaveformContainerHeightPx}
+                    compactMode={false}
+                    on:navigate={handlePanelNavigate}
+                    on:segmentupdate={handleWaveformSegmentUpdate}
+                />
+            {:else if $transcriptStore.selectedMediaFile}
+                <div
+                    class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
+                >
+                    Waveform still loading...
+                </div>
+            {:else}
+                <div
+                    class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
+                >
+                    Select media to display waveform.
+                </div>
+            {/if}
+        </div>
+    {/if}
 
     {#if isManualSettingsModalOpen}
         <ManualSettingsModal
