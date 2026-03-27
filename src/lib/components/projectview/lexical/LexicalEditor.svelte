@@ -940,7 +940,7 @@
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
         table: `editor-table border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed`,
         tableCell: `editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[20px] relative overflow-hidden`,
-        tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center border border-gray-300 dark:border-gray-700 overflow-hidden',
+        tableCellHeader: 'editor-table-cell-header text-gray-900 dark:text-gray-100 px-2 py-1 align-top min-w-[20px] font-normal border border-gray-300 dark:border-gray-700 overflow-hidden relative',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
         placeholder: 'lexical-placeholder-theme-class absolute top-0 left-0 text-gray-400 dark:text-gray-500 text-sm select-none pointer-events-none opacity-50 p-2',
@@ -4059,12 +4059,12 @@ $: if (editor && activeLayout) {
       padding: 8px;
       /* min-width is managed via theme to allow per-document flexibility */
       position: relative; /* Needed for resizer positioning */
+      font-weight: normal;
   }
 
   .editor-table-cell-header {
-      background-color: #f2f2f2;
-      font-weight: bold;
-      text-align: center;
+      /* Background removed and weight normalized to match normal cells as per user request */
+      font-weight: normal;
   }
 
   .resizer-line {

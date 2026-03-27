@@ -193,7 +193,9 @@
     function getPlainTextConverter() { if (!plainTextConverterEditor) { plainTextConverterEditor = createHeadlessEditor({ namespace: 'PlainTextConverter', nodes: [RootNode, ParagraphNode, TextNode], onError: (e) => console.error("PlainTextConverter Error:", e), }); } return plainTextConverterEditor; }
     function createJsonFromPlainText(text) { const editor = getPlainTextConverter(); let jsonString = defaultEmptyJsonString; const plainText = text || ''; try { editor.update(() => { const root = getRoot(); root.clear(); const p = createParagraphNode(); p.append(createTextNode(plainText)); root.append(p); }, { discrete: true }); const editorState = editor.getEditorState(); if (!editorState.isEmpty()) { jsonString = JSON.stringify(editorState.toJSON()); } else { console.warn("[EditableTranscript] createJsonFromPlainText empty state."); } } catch (e) { console.error("Error creating JSON from plain text:", e); } return jsonString; }
     function cleanupPlainTextConverter() { plainTextConverterEditor = null; }
-    function extractPlainText(inputString) { if (!inputString || typeof inputString !== 'string') return ''; if (inputString.trim().startsWith('{') && inputString.trim().endsWith('}')) { try { JSON.parse(inputString); console.warn("[EditableTranscript] extractPlainText received likely JSON, returning empty."); return ''; } catch (e) { /* Ignore */ } } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); return doc.body.textContent || ""; } catch (e) { console.error("[EditableTranscript] Error parsing input string:", e); return inputString; } }
+    function extractPlainText(inputString) { if (!inputString || typeof inputString !== 'string') return ''; if (inputString.trim().startsWith('{') && inputString.trim().endsWith('}')) { try { const parsed = JSON.parse(inputString); if(parsed && parsed.root) return getPlainTextFromJson(parsed); } catch (e) { /* Ignore */ } } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); return doc.body.textContent || ""; } catch (e) { console.error("[EditableTranscript] Error parsing input string:", e); return inputString; } }
+    function getPlainTextFromJson(json) { if (!json || !json.root) return ''; function traverse(node) { let text = ''; if (node.text) text += node.text; if (node.children) { node.children.forEach(child => { text += traverse(child); }); } if (node.type === 'paragraph' || node.type === 'heading') text += '\n'; return text; } return traverse(json.root).trim(); }
+    function getPreviewText(segment) { if (!segment) return ''; const text = extractPlainText(segment.text); return text.split('\n')[0].substring(0, 150) + (text.length > 150 ? '...' : ''); }
     function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalSeconds = Math.floor(sec); const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0'); const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'); const seconds = String(totalSeconds % 60).padStart(2, '0'); return `${hours}:${minutes}:${seconds}.${ms}`; }
     function parseTimestamp(str) { if (!str) return null; let parts = str.match(/^(\d{2,}):(\d{2}):(\d{2})\.(\d{3})$/); if (parts) { const hours = parseInt(parts[1], 10); const minutes = parseInt(parts[2], 10); const seconds = parseInt(parts[3], 10); const milliseconds = parseInt(parts[4], 10); if (minutes < 60 && seconds < 60) { return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000; } } parts = str.match(/^(\d{1,9}):(\d{2})\.(\d{3})$/); if (parts) { const minutes = parseInt(parts[1], 10); const seconds = parseInt(parts[2], 10); const milliseconds = parseInt(parts[3], 10); if (seconds < 60) { return minutes * 60 + seconds + milliseconds / 1000; } } const floatVal = parseFloat(str); return isNaN(floatVal) ? null : floatVal; }
     function dispatchEditState() { if (!isMounted) return; if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const seg = segments[currentIndex]; const startTime = typeof seg?.start_time === 'number' ? seg.start_time : 0; const endTime = typeof seg?.end_time === 'number' ? seg.end_time : 0; dispatch('segmenteditfocus', { isEditing: true, startTime: startTime, endTime: endTime }); } else { dispatch('segmenteditfocus', { isEditing: false, startTime: 0, endTime: 0 }); } }
@@ -671,18 +673,44 @@
         {:else} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> Select a segment to start editing. </div> {/if}
     {:else}
         <div class="flex flex-col flex-grow min-h-0 h-full">
-            <div class="relative py-1 flex-shrink-0 mb-4">
-                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2 flex items-center justify-center" disabled="{currentIndex <= 0}" aria-label="Previous Segment" title="Previous Segment ({modKeyName}+Up)">
-                    <ChevronUp class="w-5 h-5" />
-                </button>
-            </div>
+            <!-- Removed fixed navigation buttons from top/bottom to move them near editor -->
             <!-- Main content area for inputs, unified layout -->
             <div class="flex-grow overflow-y-auto">
                 <div class="flex justify-center px-4 w-full">
-                    <div class="{columnContainerClass} w-full max-w-[40rem]" style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
+                    <div class="flex flex-col h-full w-full max-w-[42rem] mx-auto picker-wheel-container overflow-hidden" style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
+
+                        <!-- Previous Segment Area -->
+                        <div class="flex-1 flex flex-col justify-end min-h-0 py-2">
+                            {#if currentIndex > 0}
+                                {@const prevSeg = segments[currentIndex-1]}
+                                <button on:click="{previous}" class="segment-card segment-card-prev group">
+                                    <div class="flex items-center gap-x-3 mb-1">
+                                        <span class="text-[10pt] font-bold text-gray-400 dark:text-gray-500">{currentIndex}</span>
+                                        <div class="flex items-center gap-x-1 text-[9pt] text-gray-400 dark:text-gray-500 tabular-nums">
+                                            <span>{formatTimestamp(prevSeg.start_time)}</span>
+                                            <span class="opacity-50">–</span>
+                                            <span>{formatTimestamp(prevSeg.end_time)}</span>
+                                        </div>
+                                        <span class="text-[9pt] font-semibold text-gray-400 dark:text-gray-500 truncate max-w-[8rem]">• {prevSeg.speaker || 'Unknown'}</span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                                        <div class="text-[10pt] text-gray-400 dark:text-gray-500 line-clamp-1 text-left italic">
+                                            {getPreviewText(prevSeg)}
+                                        </div>
+                                        {#if $transcriptStore.isDualModeActive && secondarySegments[currentIndex-1]}
+                                            <div class="hidden md:block text-[10pt] text-gray-400 dark:text-gray-500 line-clamp-1 text-left italic border-l border-gray-200 dark:border-gray-800 pl-4">
+                                                {getPreviewText(secondarySegments[currentIndex-1])}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                    <div class="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-white dark:from-gray-900 to-transparent opacity-20 pointer-events-none group-hover:opacity-10 transition-opacity"></div>
+                                </button>
+                            {/if}
+                        </div>
 
                         <!-- Primary Segment Editor -->
-                        <div class="primary-segment-editor">
+                        <div class="flex-shrink-0 py-2">
+                            <div class="primary-segment-editor">
                             <!-- Row 1: Num, Time, Speaker -->
                             <div class="flex items-center gap-x-2 flex-shrink-0 mb-2">
                                 <!-- Segment Number -->
@@ -732,16 +760,44 @@
                                             <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" allowReadModeHighlights={true} enableTableCellResize="{false}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleSecondaryEditorUpdate}" enableFloatingToolbar="{false}" />
 
                                         {/if}
-                                    </div>
                                 </div>
                             </div>
+                        </div>
                         {/if}
+                    </div>
 
+                    <!-- Next Segment Area -->
+                        <div class="flex-1 flex flex-col justify-start min-h-0 py-2">
+                            {#if currentIndex < segments.length - 1}
+                                {@const nextSeg = segments[currentIndex+1]}
+                                <button on:click="{next}" class="segment-card segment-card-next group">
+                                    <div class="flex items-center gap-x-3 mb-1">
+                                        <span class="text-[10pt] font-bold text-gray-400 dark:text-gray-500">{currentIndex + 2}</span>
+                                        <div class="flex items-center gap-x-1 text-[9pt] text-gray-400 dark:text-gray-500 tabular-nums">
+                                            <span>{formatTimestamp(nextSeg.start_time)}</span>
+                                            <span class="opacity-50">–</span>
+                                            <span>{formatTimestamp(nextSeg.end_time)}</span>
+                                        </div>
+                                        <span class="text-[9pt] font-semibold text-gray-400 dark:text-gray-500 truncate max-w-[8rem]">• {nextSeg.speaker || 'Unknown'}</span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                                        <div class="text-[10pt] text-gray-400 dark:text-gray-500 line-clamp-1 text-left italic">
+                                            {getPreviewText(nextSeg)}
+                                        </div>
+                                        {#if $transcriptStore.isDualModeActive && secondarySegments[currentIndex+1]}
+                                            <div class="hidden md:block text-[10pt] text-gray-400 dark:text-gray-500 line-clamp-1 text-left italic border-l border-gray-200 dark:border-gray-800 pl-4">
+                                                {getPreviewText(secondarySegments[currentIndex+1])}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                    <div class="absolute inset-x-0 bottom-0 h-full bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-20 pointer-events-none group-hover:opacity-10 transition-opacity"></div>
+                                </button>
+                            {/if}
+                        </div>
 
                     </div>
                 </div>
             </div>
-            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical flex items-center justify-center" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" title="Next Segment ({modKeyName}+Down)"> <ChevronDown class="w-5 h-5" /> </button> </div>
         </div>
     {/if}
 </div>
@@ -758,6 +814,26 @@
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
     .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:bg-transparent dark:border dark:border-[#404040] dark:hover:bg-[#404040] focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
     .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-transparent dark:text-white dark:border dark:border-[#404040] dark:hover:bg-[#404040] rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
+
+    .picker-wheel-container {
+        @apply relative;
+        mask-image: linear-gradient(to bottom, transparent, black 5%, black 95%, transparent);
+    }
+
+    .segment-card {
+        @apply w-full p-3 rounded-lg border border-gray-200/50 dark:border-gray-800/50 hover:border-gray-200 dark:hover:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-all duration-200 text-left relative overflow-hidden flex-shrink-0;
+        cursor: pointer;
+    }
+
+    .segment-card-prev {
+        @apply scale-[0.98] opacity-80 hover:opacity-100 hover:scale-100;
+        transform-origin: bottom center;
+    }
+
+    .segment-card-next {
+        @apply scale-[0.98] opacity-80 hover:opacity-100 hover:scale-100;
+        transform-origin: top center;
+    }
 
     .lexical-editor-wrapper-style {
         display: flex;

@@ -446,20 +446,21 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
         let mut file_type = "other".to_string();
         let mut media_xml_identifier: Option<String> = None;
 
-        if relative_path_str.contains(&format!("{}/", MEDIA_DIR)) {
+        if relative_path_str.contains(&format!("{}/", MEDIA_DIR)) 
+            || relative_path_str.contains(&format!("{}/", AUDIOS_DIR))
+            || relative_path_str.contains(&format!("{}/", VIDEOS_DIR)) 
+        {
             let path_parts: Vec<&str> = relative_path_str.split('/').collect();
-            if path_parts.len() >= 4 && path_parts[0] == HARVEY_FILES_DIR && path_parts[1] == MEDIA_DIR {
-                // Example: harvey_files/Media/STEM_NAME/media/file.mp4 -> STEM_NAME
+            if path_parts.len() >= 4 && path_parts[0] == HARVEY_FILES_DIR && (path_parts[1] == MEDIA_DIR || path_parts[1] == AUDIOS_DIR || path_parts[1] == VIDEOS_DIR) {
+                // Example: harvey_files/Audios/STEM_NAME/media/file.mp3 -> STEM_NAME
                 media_xml_identifier = Some(path_parts[2].to_string());
                 let ext = PathBuf::from(&file_name).extension().unwrap_or_default().to_string_lossy().to_lowercase();
-                // Check against known extensions from shared_types if they are comprehensive
-                // For now, using simple string matching as per the provided snippet
                 if ["mp4", "mov", "avi", "mkv", "webm"].contains(&ext.as_str()) {
                     file_type = "video".to_string();
                 } else if ["mp3", "wav", "m4a", "ogg", "aac", "flac"].contains(&ext.as_str()) {
                     file_type = "audio".to_string();
                 } else {
-                    file_type = "media_other".to_string(); // Or just "media"
+                    file_type = "media_other".to_string();
                 }
             }
         } else if relative_path_str.contains(&format!("{}/", DOCS_DIR)) {
@@ -766,182 +767,126 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         &xml_path.to_string_lossy()
     ) {
         error!("[Backend Load XML] Failed to register project identity in DB: {}", e);
-        // We continue, as this might be a soft failure, but metadata loading might fail later.
     }
 
-    let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
 
-    for media_entry in &mut project_data.media_files.files {
-        let media_stem = &media_entry.name;
-        let stem_rel_path = format!("{}/{}", media_dir_rel_path, media_stem);
-        let stem_abs_path = project_base_dir.join(&stem_rel_path);
-
-        if !stem_abs_path.exists() || !stem_abs_path.is_dir() {
-            warn!("[Backend Load XML] Media stem directory listed in XML does not exist on disk (or is not a dir), skipping entry: '{}'", stem_abs_path.display());
-            continue;
-        }
-
-        let mut media_children: Vec<FileEntry> = Vec::new();
-        let mut transcript_children: Vec<FileEntry> = Vec::new();
-
-        let media_file_rel_path = &media_entry.relative_path;
-        let media_file_abs_path = project_base_dir.join(media_file_rel_path);
-
-        if media_file_abs_path.exists() && media_file_abs_path.is_file() {
-            let media_file_name = media_file_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let media_file_canonical = canonicalize_path(&media_file_abs_path)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| media_file_abs_path.to_string_lossy().to_string());
-
-            if !media_file_name.is_empty() {
-                media_children.push(FileEntry {
-                    name: media_file_name,
-                    path: media_file_canonical,
-                    relative_path: media_file_rel_path.clone().replace("\\", "/"),
-                    file_type: "media".to_string(),
-                    is_directory: false,
-                    parent_relative_path: format!("{}/{}", stem_rel_path, MEDIA_SUBDIR).replace("\\", "/"),
-                    depth: 5,
-                    speakers: media_entry.speakers.clone(),
-                    media_xml_identifier: Some(media_stem.clone()),
-                    // HERE: Ensure the actual media file's FileEntry has its associated_transcripts
-                    associated_transcripts: media_entry.transcripts.clone(), // This is the correct place for it
-                    children: Vec::new(),
-                });
-            } else {
-                warn!("[Backend Load XML] Could not determine media filename from relative path: {}", media_file_rel_path);
+    // Helper closure to process media entries from different lists
+    let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>, dir_name: &str| -> Result<(), CommandError> {
+        let dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, dir_name);
+        for media_entry in entries {
+            // Ignore legacy Media folder entries
+            if dir_name == MEDIA_DIR && media_entry.relative_path.contains(&format!("{}/", MEDIA_DIR)) {
+                warn!("[Backend Load XML] Ignoring legacy Media folder entry: {}", media_entry.name);
+                continue;
             }
-        } else {
-            warn!("[Backend Load XML] Media file listed in XML does not exist on disk: '{}'", media_file_abs_path.display());
-        }
 
-        for transcript_xml_entry in &mut media_entry.transcripts {
-            let transcript_rel_path = &transcript_xml_entry.relative_path;
-            let transcript_abs_path = project_base_dir.join(transcript_rel_path);
+            let media_stem = &media_entry.name;
+            let stem_rel_path = format!("{}/{}", dir_rel_path, media_stem);
+            let stem_abs_path = project_base_dir.join(&stem_rel_path);
 
-            if transcript_abs_path.exists() && transcript_abs_path.is_file() {
-                let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-                transcript_xml_entry.name = transcript_file_name.clone();
+            if !stem_abs_path.exists() || !stem_abs_path.is_dir() {
+                warn!("[Backend Load XML] Media stem directory '{}' listed in XML does not exist on disk, skipping.", stem_abs_path.display());
+                continue;
+            }
 
-                let file_stem = transcript_abs_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                let parts: Vec<&str> = file_stem.split('.').collect();
-                if parts.len() > 1 {
-                    let lang_code = parts.last().unwrap().to_string();
-                    if lang_code.len() == 2 {
-                        transcript_xml_entry.language_code = Some(lang_code);
-                    }
-                }
+            let mut media_children: Vec<FileEntry> = Vec::new();
+            let media_file_rel_path = &media_entry.relative_path;
+            let media_file_abs_path = project_base_dir.join(media_file_rel_path);
 
-                 let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
+            if media_file_abs_path.exists() && media_file_abs_path.is_file() {
+                let media_file_name = media_file_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                let media_file_canonical = canonicalize_path(&media_file_abs_path)
                     .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+                    .unwrap_or_else(|_| media_file_abs_path.to_string_lossy().to_string());
 
-                let media_asset_relative_path = media_entry.relative_path.clone().replace("\\", "/");
-                let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
-                let transcript_file_type = if let Some(metadata) = media_asset_metadata {
-                    match metadata.asset_type.as_str() {
-                        "audio" => "audio_transcript".to_string(),
-                        "video" => "video_transcript".to_string(),
-                        _ => "transcript".to_string(), // Fallback
-                    }
-                } else {
-                    warn!("[Backend Load XML] Could not load asset metadata for media: {}. Defaulting transcript type to 'transcript'.", media_asset_relative_path);
-                    "transcript".to_string()
-                };
-
-                 transcript_children.push(FileEntry {
-                    name: transcript_file_name,
-                    path: transcript_file_canonical,
-                    relative_path: transcript_rel_path.clone().replace("\\", "/"),
-                    file_type: transcript_file_type,
-                    is_directory: false,
-                    parent_relative_path: format!("{}/{}", stem_rel_path, TRANSCRIPTS_SUBDIR).replace("\\", "/"),
-                    depth: 5,
-                    speakers: None,
-                    media_xml_identifier: Some(media_stem.clone()),
-                    associated_transcripts: Vec::new(),
-                    children: Vec::new(),
-                });
-            } else {
-                warn!("[Backend Load XML] Transcript file listed in XML does not exist on disk: '{}'", transcript_abs_path.display());
+                if !media_file_name.is_empty() {
+                    media_children.push(FileEntry {
+                        name: media_file_name,
+                        path: media_file_canonical,
+                        relative_path: media_file_rel_path.clone().replace("\\", "/"),
+                        file_type: "media".to_string(),
+                        is_directory: false,
+                        parent_relative_path: format!("{}/{}", stem_rel_path, MEDIA_SUBDIR).replace("\\", "/"),
+                        depth: 5,
+                        speakers: media_entry.speakers.clone(),
+                        media_xml_identifier: Some(media_stem.clone()),
+                        associated_transcripts: media_entry.transcripts.clone(),
+                        children: Vec::new(),
+                    });
+                }
             }
-        }
 
-        media_children.sort_by(|a, b| a.name.cmp(&b.name));
-        transcript_children.sort_by(|a, b| a.name.cmp(&b.name));
+            for transcript_xml_entry in &mut media_entry.transcripts {
+                let transcript_rel_path = &transcript_xml_entry.relative_path;
+                let transcript_abs_path = project_base_dir.join(transcript_rel_path);
 
-        let mut sub_folders: Vec<FileEntry> = Vec::new();
-        let media_subdir_rel_path = format!("{}/{}", stem_rel_path, MEDIA_SUBDIR).replace("\\", "/");
-        sub_folders.push(FileEntry {
-            name: MEDIA_SUBDIR.to_string(),
-            path: project_base_dir.join(&media_subdir_rel_path).to_string_lossy().to_string(),
-            relative_path: media_subdir_rel_path,
-            file_type: "directory".to_string(),
-            is_directory: true,
-            parent_relative_path: stem_rel_path.clone().replace("\\", "/"),
-            depth: 4,
-            speakers: None,
-            media_xml_identifier: Some(media_stem.clone()),
-            associated_transcripts: Vec::new(),
-            children: media_children,
-        });
-        let transcripts_subdir_rel_path = format!("{}/{}", stem_rel_path, TRANSCRIPTS_SUBDIR).replace("\\", "/");
-        sub_folders.push(FileEntry {
-            name: TRANSCRIPTS_SUBDIR.to_string(),
-            path: project_base_dir.join(&transcripts_subdir_rel_path).to_string_lossy().to_string(),
-            relative_path: transcripts_subdir_rel_path,
-            file_type: "directory".to_string(),
-            is_directory: true,
-            parent_relative_path: stem_rel_path.clone().replace("\\", "/"),
-            depth: 4,
-            speakers: None,
-            media_xml_identifier: Some(media_stem.clone()),
-            associated_transcripts: Vec::new(),
-            children: transcript_children,
-        });
+                if transcript_abs_path.exists() && transcript_abs_path.is_file() {
+                    let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                    transcript_xml_entry.name = transcript_file_name.clone();
 
-        file_entries.push(FileEntry {
-            name: media_stem.clone(),
-            path: stem_abs_path.to_string_lossy().to_string(),
-            relative_path: stem_rel_path.clone().replace("\\", "/"),
-            file_type: "directory_media_stem".to_string(),
-            is_directory: true,
-            parent_relative_path: media_dir_rel_path.clone().replace("\\", "/"),
-            depth: 3,
-            speakers: media_entry.speakers.clone(),
-            media_xml_identifier: Some(media_stem.clone()),
-            associated_transcripts: media_entry.transcripts.clone(), // Populate with transcripts from XML
-            children: sub_folders,
-        });
-    }
-    // Add imported transcript files to the main file_entries tree
-    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
-        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+                    let file_stem = transcript_abs_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    let parts: Vec<&str> = file_stem.split('.').collect();
+                    if parts.len() > 1 {
+                        let lang_code = parts.last().unwrap().to_string();
+                        if lang_code.len() == 2 {
+                            transcript_xml_entry.language_code = Some(lang_code);
+                        }
+                    }
 
-        if transcript_abs_path.exists() && transcript_abs_path.is_file() {
-            let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+                    let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+
+                    let media_asset_relative_path = media_entry.relative_path.clone().replace("\\", "/");
+                    let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
+                    let transcript_file_type = if let Some(metadata) = media_asset_metadata {
+                        match metadata.asset_type.as_str() {
+                            "audio" => "audio-transcript".to_string(),
+                            "video" => "video-transcript".to_string(),
+                            _ => "transcript".to_string(),
+                        }
+                    } else {
+                        "transcript".to_string()
+                    };
+
+                    media_children.push(FileEntry {
+                        name: transcript_file_name,
+                        path: transcript_file_canonical,
+                        relative_path: transcript_rel_path.clone().replace("\\", "/"),
+                        file_type: transcript_file_type,
+                        is_directory: false,
+                        parent_relative_path: format!("{}/{}", stem_rel_path, TRANSCRIPTS_SUBDIR).replace("\\", "/"),
+                        depth: 5,
+                        speakers: None,
+                        media_xml_identifier: Some(media_stem.clone()),
+                        associated_transcripts: Vec::new(),
+                        children: Vec::new(),
+                    });
+                }
+            }
 
             file_entries.push(FileEntry {
-                name: transcript_file_name,
-                path: transcript_file_canonical,
-                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
-                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
-                is_directory: false,
-                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
-                depth: 3, // Assuming it's at the same level as media stems
+                name: media_stem.clone(),
+                path: stem_abs_path.to_string_lossy().to_string(),
+                relative_path: stem_rel_path.replace("\\", "/"),
+                file_type: "directory_media_stem".to_string(),
+                is_directory: true,
+                parent_relative_path: dir_rel_path.replace("\\", "/"),
+                depth: 4,
                 speakers: None,
-                media_xml_identifier: None,
+                media_xml_identifier: Some(media_stem.clone()),
                 associated_transcripts: Vec::new(),
-                children: Vec::new(),
+                children: media_children,
             });
-        } else {
-            warn!("[Backend Load XML] Imported transcript file listed in XML does not exist on disk: '{}'", transcript_abs_path.display());
         }
-    }
+        Ok(())
+    };
+
+    process_media_list(&mut project_data.audio_files.files, AUDIOS_DIR)?;
+    process_media_list(&mut project_data.video_files.files, VIDEOS_DIR)?;
+    process_media_list(&mut project_data.media_files.files, MEDIA_DIR)?;
+
     // Add imported transcript files to the main file_entries tree
     for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
         let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
@@ -1089,96 +1034,80 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     file_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
     log::debug!(
-        "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}",
-            file_entries.len(),
+        "[Backend Load XML] Assets: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}",
+        file_entries.len(),
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
-        project_data.imported_transcript_files.files.len(),
-        project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
+        project_data.imported_transcript_files.files.len()
     );
 
     // --- SYNC & SELF-HEALING: Ensure DB has metadata for all XML assets ---
     let project_id_sync = project_data.project_uuid.clone();
     let mut current_xml_relative_paths = std::collections::HashSet::new();
 
-    // 1. Sync Media Files
-    for media_entry in &project_data.media_files.files {
-        let rel_path = media_entry.relative_path.clone().replace("\\", "/");
-        current_xml_relative_paths.insert(rel_path.clone());
+    // Helper closure to sync media entries
+    let mut sync_media_list = |entries: &Vec<MediaFileEntryXml>| -> Result<(), CommandError> {
+        for media_entry in entries {
+            let rel_path = media_entry.relative_path.clone().replace("\\", "/");
+            current_xml_relative_paths.insert(rel_path.clone());
 
-        if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
-            info!("[Backend Sync] Creating missing metadata for media: {}", rel_path);
-            let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
-            let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            
-            // Determine if audio or video based on extension
-            let ext = Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-            let (asset_type, file_type) = match ext.as_str() {
-                "mp4" | "mov" | "avi" | "mkv" | "webm" => ("video", "video"),
-                _ => ("audio", "audio"),
-            };
-
-            let file_meta = FileMetadata {
-                file_name,
-                file_path: abs_path,
-                last_modified: Utc::now().to_rfc3339(),
-                title: "".to_string(),
-                description: "".to_string(),
-                summary: "".to_string(),
-                duration_seconds: None,
-                width: None, height: None, frame_rate: None, bit_rate: None,
-                audio_codec: None, video_codec: None,
-                created_at: Some(Utc::now().to_rfc3339()),
-                original_import_path: None,
-                speaker_names: None,
-                waveform_data: None,
-                language_code: None,
-                properties: None,
-                file_type: file_type.to_string(),
-            };
-            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, asset_type, None);
-        }
-
-        // Sync associated transcripts
-        for transcript_entry in &media_entry.transcripts {
-            let t_rel_path = transcript_entry.relative_path.clone().replace("\\", "/");
-            current_xml_relative_paths.insert(t_rel_path.clone());
-
-            if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &t_rel_path) {
-                info!("[Backend Sync] Creating missing metadata for generated transcript: {}", t_rel_path);
-                let t_abs_path = project_base_dir.join(&t_rel_path).to_string_lossy().to_string();
-                let t_file_name = Path::new(&t_abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
+                info!("[Backend Sync] Creating missing metadata for media: {}", rel_path);
+                let abs_path = project_base_dir.join(&rel_path).to_string_lossy().to_string();
+                let file_name = Path::new(&abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
                 
-                // Determine transcript type based on parent media
-                let media_rel_path = media_entry.relative_path.clone().replace("\\", "/");
-                let t_file_type = if let Ok(Some(m_meta)) = db_handler::load_asset_metadata(&project_id_sync, &media_rel_path) {
-                    let is_video = m_meta.asset_type == "video" || m_meta.file_type.as_deref() == Some("video");
-                    if is_video { "video-transcript" } else { "audio-transcript" }
-                } else { "audio-transcript" };
-
-                let t_file_meta = FileMetadata {
-                    file_name: t_file_name,
-                    file_path: t_abs_path,
-                    last_modified: Utc::now().to_rfc3339(),
-                    title: "".to_string(),
-                    description: "".to_string(),
-                    summary: "".to_string(),
-                    duration_seconds: None,
-                    width: None, height: None, frame_rate: None, bit_rate: None,
-                    audio_codec: None, video_codec: None,
-                    created_at: Some(Utc::now().to_rfc3339()),
-                    original_import_path: None,
-                    speaker_names: None,
-                    waveform_data: None,
-                    language_code: transcript_entry.language_code.clone(),
-                    properties: None,
-                    file_type: t_file_type.to_string(),
+                let ext = Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                let (asset_type, file_type) = match ext.as_str() {
+                    "mp4" | "mov" | "avi" | "mkv" | "webm" => ("video", "video"),
+                    _ => ("audio", "audio"),
                 };
-                let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, "transcript", None);
+
+                let file_meta = FileMetadata {
+                    file_name,
+                    file_path: abs_path,
+                    last_modified: Utc::now().to_rfc3339(),
+                    created_at: Some(Utc::now().to_rfc3339()),
+                    file_type: file_type.to_string(),
+                    ..FileMetadata::default()
+                };
+                let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, asset_type, None);
+            }
+
+            for transcript_entry in &media_entry.transcripts {
+                let t_rel_path = transcript_entry.relative_path.clone().replace("\\", "/");
+                current_xml_relative_paths.insert(t_rel_path.clone());
+
+                if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &t_rel_path) {
+                    info!("[Backend Sync] Creating missing metadata for generated transcript: {}", t_rel_path);
+                    let t_abs_path = project_base_dir.join(&t_rel_path).to_string_lossy().to_string();
+                    let t_file_name = Path::new(&t_abs_path).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                    
+                    let media_rel_path = media_entry.relative_path.clone().replace("\\", "/");
+                    let t_file_type = if let Ok(Some(m_meta)) = db_handler::load_asset_metadata(&project_id_sync, &media_rel_path) {
+                        if m_meta.asset_type == "video" { "video-transcript" } else { "audio-transcript" }
+                    } else { "audio-transcript" };
+
+                    let t_file_meta = FileMetadata {
+                        file_name: t_file_name,
+                        file_path: t_abs_path,
+                        last_modified: Utc::now().to_rfc3339(),
+                        created_at: Some(Utc::now().to_rfc3339()),
+                        language_code: transcript_entry.language_code.clone(),
+                        file_type: t_file_type.to_string(),
+                        ..FileMetadata::default()
+                    };
+                    let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, "transcript", None);
+                }
             }
         }
-    }
+        Ok(())
+    };
+
+    sync_media_list(&project_data.audio_files.files)?;
+    sync_media_list(&project_data.video_files.files)?;
+    sync_media_list(&project_data.media_files.files)?;
+    info!("[DB SYNC] Finished syncing media items.");
 
     // 2. Sync Document Files
     for doc in &project_data.document_files.files {
@@ -1433,8 +1362,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
 
 #[tauri::command]
-pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<FileEntry, CommandError> {
-    info!("[Backend Import] Source: '{}', Project XML: '{}'", source_file_path_str, project_xml_path_str);
+pub async fn import_media(
+    app_handle: AppHandle, 
+    source_file_path_str: String, 
+    project_xml_path_str: String,
+    import_type: Option<String>
+) -> Result<FileEntry, CommandError> {
+    info!("[Backend Import] Source: '{}', Project XML: '{}', Type Hint: '{:?}'", source_file_path_str, project_xml_path_str, import_type);
     let source_path = canonicalize_path(&source_file_path_str).unwrap_or_else(|_| PathBuf::from(&source_file_path_str));
     let project_xml_path = canonicalize_path(&project_xml_path_str).unwrap_or_else(|_| PathBuf::from(&project_xml_path_str));
 
@@ -1461,32 +1395,124 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         .file_stem().unwrap_or_default().to_string_lossy().into_owned();
     info!("[Backend Import] Original media stem: '{}', Truncated media stem: '{}'", original_media_stem, media_stem_truncated);
 
-    let xml_content_check = fs::read_to_string(&project_xml_path)?;
-    let project_data_check: ProjectXml = quick_xml::de::from_str(&xml_content_check)?;
+    // --- Detect file type early using ffprobe on source ---
+    let ffprobe_args = vec![
+        "-v".to_string(), "quiet".to_string(),
+        "-print_format".to_string(), "json".to_string(),
+        "-show_format".to_string(),
+        "-show_streams".to_string(),
+        source_path.to_string_lossy().to_string(),
+    ];
 
-    let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR);
+    info!("[Backend Import] Running ffprobe early for: {}", source_path.display());
+    let mut duration_seconds: Option<f64> = None;
+    let mut width: Option<i32> = None;
+    let mut height: Option<i32> = None;
+    let mut frame_rate: Option<f32> = None;
+    let mut bit_rate_overall: Option<i64> = None;
+    let mut audio_codec: Option<String> = None;
+    let mut video_codec: Option<String> = None;
+
+    match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured in tauri.conf.json").args(ffprobe_args).output().await {
+        Ok(output) => {
+            if output.status.success() {
+                let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
+                if let Ok(parsed_ffprobe_output) = serde_json::from_str::<FFProbeOutput>(&ffprobe_json_str) {
+                    duration_seconds = parse_duration_str_to_seconds(parsed_ffprobe_output.format.duration.clone())
+                        .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
+                    bit_rate_overall = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                    for stream in parsed_ffprobe_output.streams {
+                        if duration_seconds.is_none() {
+                             duration_seconds = parse_duration_str_to_seconds(stream.tags.duration.clone());
+                        }
+                        match stream.codec_type.as_deref() {
+                            Some("video") if width.is_none() => {
+                                width = stream.width;
+                                height = stream.height;
+                                video_codec = stream.codec_name;
+                                frame_rate = parse_frame_rate_str(stream.avg_frame_rate.clone())
+                                    .or_else(|| parse_frame_rate_str(stream.r_frame_rate.clone()));
+                                if bit_rate_overall.is_none() { bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok()); }
+                            }
+                            Some("audio") if audio_codec.is_none() => {
+                                audio_codec = stream.codec_name;
+                                if bit_rate_overall.is_none() && stream.bit_rate.is_some() {
+                                     bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => { error!("[Backend Import] Early ffprobe execution error: {}", e); }
+    }
+
+    let final_asset_type: String;
+    let media_dir_name: &str;
+
+    // Determine target directory using import_type hint if provide, otherwise fallback to ffprobe
+    if let Some(ref hint) = import_type {
+        match hint.to_lowercase().as_str() {
+            "video" => {
+                final_asset_type = "video".to_string();
+                media_dir_name = VIDEOS_DIR;
+            },
+            "audio" => {
+                final_asset_type = "audio".to_string();
+                media_dir_name = AUDIOS_DIR;
+            },
+            _ => {
+                // If "auto" or unknown hint, use ffprobe detection
+                if video_codec.is_some() {
+                    final_asset_type = "video".to_string();
+                    media_dir_name = VIDEOS_DIR;
+                } else if audio_codec.is_some() {
+                    final_asset_type = "audio".to_string();
+                    media_dir_name = AUDIOS_DIR;
+                } else {
+                    final_asset_type = source_path.extension()
+                        .and_then(|s| s.to_str())
+                        .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+                    media_dir_name = AUDIOS_DIR;
+                }
+            }
+        }
+    } else {
+        // Legacy behavior if no import_type is passed
+        if video_codec.is_some() {
+            final_asset_type = "video".to_string();
+            media_dir_name = VIDEOS_DIR;
+        } else if audio_codec.is_some() {
+            final_asset_type = "audio".to_string();
+            media_dir_name = AUDIOS_DIR;
+        } else {
+            final_asset_type = source_path.extension()
+                .and_then(|s| s.to_str())
+                .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+            media_dir_name = AUDIOS_DIR;
+        }
+    }
+
+    // Load project XML to check for conflicts
+    let xml_content = fs::read_to_string(&project_xml_path)?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+
+    let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(media_dir_name);
+    fs::create_dir_all(&media_asset_dir)?;
 
     let mut folder_counter = 0;
     let (media_stem_identifier, truncated_source_filename) = loop {
-        let current_stem = if folder_counter == 0 {
-            media_stem_truncated.clone()
-        } else {
-            format!("{}_{}", media_stem_truncated, folder_counter)
-        };
-
+        let current_stem = if folder_counter == 0 { media_stem_truncated.clone() } else { format!("{}_{}", media_stem_truncated, folder_counter) };
         let candidate_folder = media_asset_dir.join(&current_stem);
         
-        // Check if this stem is already used in project_data_check.media_files.files
-        let name_conflict = project_data_check.media_files.files.iter().any(|f| {
-            f.name == current_stem
-        });
+        let name_conflict = project_data.find_media(&current_stem).is_some();
 
         if !candidate_folder.exists() && !name_conflict {
             let file_name = format!("{}.{}", current_stem, source_path.extension().and_then(|e| e.to_str()).unwrap_or(""));
-            debug!("[Backend Import] Found unique media stem identifier: {} and filename: {}", current_stem, file_name);
             break (current_stem, file_name);
         }
-
         folder_counter += 1;
         if folder_counter > 1000 {
             return Err(CommandError::from(format!("Could not find unique folder for media stem '{}' after 1000 attempts.", media_stem_truncated)));
@@ -1507,109 +1533,22 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let canonical_dest_path = canonicalize_path(&destination_media_path)
         .map_err(|e| CommandError::Io(format!("Failed to canonicalize destination media path {}: {:?}", destination_media_path.display(), e)))?;
 
-    let mut duration_seconds: Option<f64> = None;
-    let mut width: Option<i32> = None;
-    let mut height: Option<i32> = None;
-    let mut frame_rate: Option<f32> = None;
-    let mut bit_rate_overall: Option<i64> = None;
-    let mut audio_codec: Option<String> = None;
-    let mut video_codec: Option<String> = None;
-    // let mut creation_time_tag: Option<String> = None; // Removed
-
-    let ffprobe_args = vec![
-        "-v".to_string(), "quiet".to_string(),
-        "-print_format".to_string(), "json".to_string(),
-        "-show_format".to_string(),
-        "-show_streams".to_string(),
-        destination_media_path.to_string_lossy().to_string(),
-    ];
-
-    info!("[Backend Import] Running ffprobe for: {}", destination_media_path.display());
-    match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured in tauri.conf.json").args(ffprobe_args).output().await {
-        Ok(output) => {
-            if output.status.success() {
-                let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
-                debug!("[Backend Import] ffprobe output JSON for {}: {}", destination_media_path.display(), ffprobe_json_str);
-                match serde_json::from_str::<FFProbeOutput>(&ffprobe_json_str) {
-                    Ok(parsed_ffprobe_output) => {
-                        duration_seconds = parse_duration_str_to_seconds(parsed_ffprobe_output.format.duration.clone())
-                            .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
-
-                        bit_rate_overall = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
-                        // if let Some(tags) = parsed_ffprobe_output.format.tags { // Removed
-                        //     creation_time_tag = tags.creation_time; // Removed
-                        // } // Removed
-
-                        for stream in parsed_ffprobe_output.streams {
-                            if duration_seconds.is_none() {
-                                 duration_seconds = parse_duration_str_to_seconds(stream.tags.duration.clone());
-                            }
-                            match stream.codec_type.as_deref() {
-                                Some("video") if width.is_none() => {
-                                    width = stream.width;
-                                    height = stream.height;
-                                    video_codec = stream.codec_name;
-                                    frame_rate = parse_frame_rate_str(stream.avg_frame_rate.clone())
-                                        .or_else(|| parse_frame_rate_str(stream.r_frame_rate.clone()));
-                                    if bit_rate_overall.is_none() {
-                                        bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
-                                    }
-                                }
-                                Some("audio") if audio_codec.is_none() => {
-                                    audio_codec = stream.codec_name;
-                                    if bit_rate_overall.is_none() && stream.bit_rate.is_some() {
-                                         bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        info!("[Backend Import] Successfully parsed ffprobe output for {}", destination_media_path.display());
-                    }
-                    Err(e) => {
-                        error!("[Backend Import] Failed to parse ffprobe JSON for {}: {}. JSON: '{}'", destination_media_path.display(), e, ffprobe_json_str);
-                    }
-                }
-            } else {
-                let stderr_str = String::from_utf8_lossy(&output.stderr);
-                error!("[Backend Import] ffprobe failed for {}. Code: {:?}, Stderr: {}", destination_media_path.display(), output.status.code(), stderr_str);
-            }
-        }
-        Err(e) => {
-            error!("[Backend Import] ffprobe execution error for {}: {}", destination_media_path.display(), e);
-        }
-    }
-
-    // --- Remove old .metadata.json file creation logic ---
-    // The entire 'match get_media_metadata_path(...){...}' block has been removed.
-
-    let final_asset_type: String;
-    if video_codec.is_some() {
-        final_asset_type = "video".to_string();
-    } else if audio_codec.is_some() {
-        final_asset_type = "audio".to_string();
-    } else {
-        final_asset_type = source_path.extension()
-            .and_then(|s| s.to_str())
-            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
-    }
-
-    // --- Prepare and save metadata to SQLite database ---
+    // Prepare and save metadata to SQLite database
     let file_metadata_for_db = FileMetadata {
-        file_name: truncated_source_filename.clone(), // Use truncated filename
-        file_path: destination_media_path.to_string_lossy().into_owned(), // Absolute path uses truncated filename
-        last_modified: Utc::now().to_rfc3339(), // For new assets, set current time
+        file_name: truncated_source_filename.clone(),
+        file_path: destination_media_path.to_string_lossy().into_owned(),
+        last_modified: Utc::now().to_rfc3339(),
         title: String::new(),
         description: String::new(),
         summary: String::new(),
-        duration_seconds, // From ffprobe
-        width,            // From ffprobe
-        height,           // From ffprobe
-        frame_rate,       // From ffprobe
-        bit_rate: bit_rate_overall, // From ffprobe
-        audio_codec: audio_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
-        video_codec: video_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
-        created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
+        duration_seconds,
+        width,
+        height,
+        frame_rate,
+        bit_rate: bit_rate_overall,
+        audio_codec: audio_codec.clone(),
+        video_codec: video_codec.clone(),
+        created_at: Some(Utc::now().to_rfc3339()),
         original_import_path: Some(source_file_path_str.clone()),
         speaker_names: None,
         waveform_data: None,
@@ -1618,89 +1557,72 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         file_type: final_asset_type.clone(),
     };
 
-    // destination_relative_path_for_xml is calculated before this block for XML update, use it as DB key
-    // db_key_relative_path should use the truncated stem and truncated filename
     let db_key_relative_path = Path::new(HARVEY_FILES_DIR)
-        .join(MEDIA_DIR)
-        .join(&media_stem_identifier) // Use truncated stem identifier
+        .join(media_dir_name)
+        .join(&media_stem_identifier)
         .join(MEDIA_SUBDIR)
-        .join(&truncated_source_filename) // Use truncated filename
+        .join(&truncated_source_filename)
         .to_string_lossy()
         .replace("\\", "/");
 
-    // project_id_for_db is project_data_check.project_uuid, parsed earlier
-    info!("[Backend Import] Media FileMetadata before save: created_at={:?}", file_metadata_for_db.created_at);
     match db_handler::save_asset_metadata(
-        &project_data_check.project_uuid, // Added: project_id (UUID of the project)
+        &project_data.project_uuid,
         &file_metadata_for_db,
         &db_key_relative_path,
         &final_asset_type,
-        None, // custom_fields_json (None for initial import)
+        None,
     ) {
-        Ok(_) => info!("[Backend Import] Successfully saved media metadata to DB for: {} with project_id {}", db_key_relative_path, project_data_check.project_uuid),
-        Err(e) => {
-            warn!("[Backend Import] Failed to save media metadata to DB for {} (project_id {}): {}. Proceeding with XML update.", db_key_relative_path, project_data_check.project_uuid, e);
-        }
+        Ok(_) => info!("[Backend Import] Successfully saved media metadata to DB for: {}", db_key_relative_path),
+        Err(e) => warn!("[Backend Import] Failed to save media metadata to DB: {}", e),
     }
 
-    // After save_asset_metadata result is handled, save media_transcript_data
-    // project_data_check.project_uuid, db_key_relative_path, and source_file_path_str should be in scope.
     if let Err(e) = db_handler::save_media_transcript_data(
-        &project_data_check.project_uuid,
+        &project_data.project_uuid,
         &db_key_relative_path,
-        Some(source_file_path_str.as_str()), // Pass as &str
-        None, // No speaker names known at initial import by this function
-        None, // language_code: Option<&str> - Not known at initial import
-        None, // initial_prompt
-        None, // hotwords
+        Some(source_file_path_str.as_str()),
+        None,
+        None,
+        None,
+        None,
     ) {
-        warn!(
-            "[Backend Import] Failed to save media_transcript_data for project_id {}: {}. Error: {}",
-            project_data_check.project_uuid, db_key_relative_path, e
-        );
-    } else {
-        info!(
-            "[Backend Import] Successfully saved media_transcript_data for project_id {}: {}",
-            project_data_check.project_uuid, db_key_relative_path
-        );
+        warn!("[Backend Import] Failed to save media_transcript_data: {}", e);
     }
-
-    let xml_content = fs::read_to_string(&project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
-
-    // destination_relative_path_for_xml should be same as db_key_relative_path, using truncated names
-    let destination_relative_path_for_xml = db_key_relative_path.clone();
 
     let new_media_entry = MediaFileEntryXml {
-        name: media_stem_identifier.to_string(), // XML entry name is the (truncated) stem
-        original_path: Some(source_file_path_str.clone()), // Keep original source path for reference
-        relative_path: destination_relative_path_for_xml.clone(), // Path to the (potentially truncated) media file
+        name: media_stem_identifier.clone(),
+        original_path: Some(source_file_path_str.clone()),
+        relative_path: db_key_relative_path.clone(),
         speakers: Some(SpeakersXml::default()),
         transcripts: Vec::new(),
     };
 
-    project_data.media_files.files.push(new_media_entry);
-    project_data.media_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+    if final_asset_type == "video" {
+        project_data.video_files.files.push(new_media_entry);
+        project_data.video_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    } else {
+        project_data.audio_files.files.push(new_media_entry);
+        project_data.audio_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    }
 
     save_project_xml(&project_xml_path, &project_data)?;
     info!("[Backend Import] XML updated with entry '{}'.", media_stem_identifier);
 
     // Construct the FileEntry for the newly imported media
     let final_file_entry = FileEntry {
-        name: truncated_source_filename.clone(), // Use truncated filename for display name in file tree
-        path: canonical_dest_path.to_string_lossy().to_string(), // Absolute path to the (truncated) copied file
-        relative_path: destination_relative_path_for_xml, // Relative path using truncated names
+        name: truncated_source_filename.clone(),
+        path: canonical_dest_path.to_string_lossy().to_string(),
+        relative_path: db_key_relative_path.clone(),
         file_type: "media".to_string(),
         is_directory: false,
         parent_relative_path: Path::new(HARVEY_FILES_DIR)
-            .join(MEDIA_DIR)
-            .join(&media_stem_identifier) // Use truncated stem
+            .join(media_dir_name)
+            .join(&media_stem_identifier)
             .join(MEDIA_SUBDIR)
             .to_string_lossy()
             .replace("\\", "/"),
         depth: 5,
         speakers: Some(SpeakersXml::default()),
-        media_xml_identifier: Some(media_stem_identifier.to_string()), // Store truncated stem as identifier
+        media_xml_identifier: Some(media_stem_identifier.clone()),
         associated_transcripts: Vec::new(),
         children: Vec::new(),
     };
@@ -1761,9 +1683,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         match item_type_guess.as_str() {
             "media" | "directory_media_stem" => {
                 if let Some(media_stem) = media_stem_opt_guess {
-                    let initial_len = project_data.media_files.files.len();
-                    project_data.media_files.files.retain(|entry| entry.name != media_stem);
-                    if project_data.media_files.files.len() < initial_len {
+                    if project_data.remove_media(&media_stem) {
                         info!("[Backend Delete] Cleaned up XML media entry for non-existent '{}'.", media_stem);
                         xml_changed = true;
                     }
@@ -1771,7 +1691,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             },
             "transcript" => {
                 if let Some(media_stem) = media_stem_opt_guess {
-                    if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_stem) {
+                    if let Some(media_entry) = project_data.find_media_mut(&media_stem) {
                         let initial_transcript_len = media_entry.transcripts.len();
                         media_entry.transcripts.retain(|t| t.relative_path != item_relative_path_guess);
                         if media_entry.transcripts.len() < initial_transcript_len {
@@ -1880,11 +1800,27 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
     match item_type.as_str() {
         "media" => {
              if let Some(media_stem) = media_stem_opt.as_deref() {
-                let media_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(media_stem);
+                let (media_stem_dir_path, media_entry_rel_path) = {
+                    let mut path = None;
+                    let mut rel = None;
+                    if let Ok(xml_content) = fs::read_to_string(&xml_path_buf) {
+                        if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                            if let Some(entry) = project_data.find_media(&media_stem) {
+                                // Extract the folder from relative_path, e.g. "harvey_files/Audios/Stem/media/file.wav" -> "harvey_files/Audios/Stem"
+                                let rel_path = Path::new(&entry.relative_path);
+                                if let Some(parent) = rel_path.parent().and_then(|p| p.parent()) {
+                                    path = Some(project_base_dir.join(parent));
+                                    rel = Some(entry.relative_path.clone());
+                                }
+                            }
+                        }
+                    }
+                    (path.unwrap_or_else(|| project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(media_stem)), rel)
+                };
 
                 // Cleanup highlights for all associated transcripts before deleting
                 if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&fs::read_to_string(&xml_path_buf).unwrap_or_default()) {
-                    if let Some(media_entry) = project_data.media_files.files.iter().find(|f| f.name == media_stem) {
+                    if let Some(media_entry) = project_data.find_media(&media_stem) {
                         for transcript in &media_entry.transcripts {
                             if let Err(e) = delete_annotations_from_db(&project_id_for_db, &transcript.relative_path, "lexical") {
                                 warn!("[Backend Delete] Failed to delete highlights for transcript {} during media deletion: {}", transcript.relative_path, e);
@@ -1905,9 +1841,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
                     info!("[Backend Delete] Updating XML to remove entry for '{}'", media_stem);
                     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-                    let initial_len = project_data.media_files.files.len();
-                    project_data.media_files.files.retain(|entry| entry.name != media_stem);
-                    if project_data.media_files.files.len() < initial_len {
+                    if project_data.remove_media(media_stem) {
                         save_project_xml(&xml_path_buf, &project_data)?;
                         info!("[Backend Delete] XML media entry removed.");
                     } else {
@@ -1916,9 +1850,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 } else {
                     warn!("[Backend Delete] Media stem directory {} not found. Assuming already deleted. Cleaning up XML.", media_stem_dir_path.display());
                      let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-                     let initial_len = project_data.media_files.files.len();
-                     project_data.media_files.files.retain(|entry| entry.name != media_stem);
-                     if project_data.media_files.files.len() < initial_len {
+                     if project_data.remove_media(&media_stem) {
                          save_project_xml(&xml_path_buf, &project_data)?;
                          info!("[Backend Delete] XML media entry removed during cleanup.");
                      }
@@ -1948,7 +1880,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete] Updating XML to remove transcript link for '{}' with path '{}'", media_stem, item_relative_path);
                 let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
                 let mut xml_changed = false;
-                if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_stem) {
+                if let Some(media_entry) = project_data.find_media_mut(media_stem) {
                     let initial_transcript_len = media_entry.transcripts.len();
                     media_entry.transcripts.retain(|t| t.relative_path != item_relative_path);
                     if media_entry.transcripts.len() < initial_transcript_len {
@@ -2299,7 +2231,7 @@ fn rename_asset_with_folder(
             }
         },
         "media" => {
-            if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem_name) {
+            if let Some(entry) = project_data.find_media_mut(old_stem_name) {
                 entry.name = new_name.to_string(); // Update XML entry name to new stem (truncated)
                 entry.relative_path = new_relative_path.clone(); // Update XML entry relative_path to new media file path (truncated)
 
@@ -2446,7 +2378,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut xml_changed = false;
 
-            if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
+            if let Some(media_entry) = project_data.find_media_mut(&media_identifier) {
                 if let Some(transcript_entry) = media_entry.transcripts.iter_mut().find(|t| t.relative_path == item_relative_path) {
                     transcript_entry.name = new_filename_with_ext.to_string();
                     transcript_entry.relative_path = new_relative_path;

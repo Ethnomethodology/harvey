@@ -664,7 +664,8 @@
             loadNotePath,
             viewType,
             originalDocType,
-            attachmentToOpen
+            attachmentToOpen,
+            highlightId: highlight.id
         });
     }
 

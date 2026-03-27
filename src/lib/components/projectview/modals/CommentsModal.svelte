@@ -220,6 +220,7 @@
             rows="3"
             class="bg-white dark:bg-gray-800"
             autocomplete="off"
+            autocorrect="off"
             spellcheck="false"
         />
         </div>

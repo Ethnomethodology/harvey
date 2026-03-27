@@ -166,7 +166,7 @@ pub fn init_db() -> Result<(), CommandError> {
         info!("[DB] Added project_id column to pdf_annotations. Existing rows will have NULL project_id if not manually updated.");
     }
 
-    // Create a trigger to update `updated_at` timestamp
+    // Trigger for pdf_annotations updated_at
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_pdf_annotations_updated_at
         AFTER UPDATE ON pdf_annotations
@@ -176,6 +176,49 @@ pub fn init_db() -> Result<(), CommandError> {
         END;",
         [],
     )?;
+
+    // Migration for broken paths in multiple tables after Media -> Audios/Videos refactor
+    info!("[DB] Running correction for multiple tables' paths...");
+    let tables_and_cols = [
+        ("pdf_annotations", "pdf_document_path"),
+        ("table_styles", "table_path"),
+        ("table_schemas", "table_path"),
+        ("table_layout_preferences", "table_asset_relative_path"),
+        ("file_groups", "file_asset_path"),
+        ("attachments", "base_asset_relative_path"),
+        ("attachments", "attachment_relative_path"),
+        ("media_transcript_data", "asset_relative_path")
+    ];
+
+    for (table, col) in tables_and_cols {
+        let sql_audios = format!(
+            "UPDATE {} 
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m 
+                 WHERE m.project_id = {}.project_id 
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             );", table, col, col, col, table, table, col
+        );
+        let sql_videos = format!(
+            "UPDATE {} 
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m 
+                 WHERE m.project_id = {}.project_id 
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             );", table, col, col, col, table, table, col
+        );
+
+        if let Err(e) = conn.execute(&sql_audios, []) {
+            error!("[DB] Failed to run {} correction for Audios: {}", table, e);
+        }
+        if let Err(e) = conn.execute(&sql_videos, []) {
+            error!("[DB] Failed to run {} correction for Videos: {}", table, e);
+        }
+    }
 
     // asset_metadata table
     conn.execute(
@@ -242,9 +285,9 @@ pub fn init_db() -> Result<(), CommandError> {
                   AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
                   AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
                       = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
-                  AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
+                  AND (REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
             )
-            AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%';
+            AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%');
         ";
         if let Err(e) = conn.execute(correction_sql, []) {
             error!("[DB] Failed to run video-transcript correction: {}", e);
@@ -958,7 +1001,11 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     conn.execute(
         "UPDATE asset_metadata SET file_type = 'audio' 
          WHERE (file_type IS NULL OR file_type = '') 
-         AND (asset_type = 'audio' OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma')",
+         AND (
+             asset_type = 'audio' 
+             OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma'
+             OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%'
+         )",
         []
     )?;
 
@@ -966,7 +1013,11 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     conn.execute(
         "UPDATE asset_metadata SET file_type = 'video' 
          WHERE (file_type IS NULL OR file_type = '') 
-         AND (asset_type = 'video' OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv')",
+         AND (
+             asset_type = 'video' 
+             OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv'
+             OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%'
+         )",
         []
     )?;
 
@@ -986,8 +1037,8 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
             LIMIT 1
         ), 'audio-transcript')
         WHERE (file_type IS NULL OR file_type = '') 
-        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%')
-        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%')",
+        AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
+        AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/transcripts/%')",
         []
     )?;
 
@@ -1005,26 +1056,38 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         "UPDATE asset_metadata SET file_type = 'transcript-attachment' 
          WHERE (file_type IS NULL OR file_type = '') 
          AND asset_type = 'attachment' 
-         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%')",
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' 
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%'
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/attachments/%'
+              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/attachments/%')",
         []
     )?;
 
     // 10. Correction for mislabeled Video Transcripts
     // If it's already labeled as audio-transcript but its parent media is a video, correct it.
-    conn.execute(
-        "UPDATE asset_metadata SET file_type = 'video-transcript'
-         WHERE file_type = 'audio-transcript'
-         AND EXISTS (
-            SELECT 1 FROM asset_metadata m
-            WHERE m.project_id = asset_metadata.project_id
-              AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
-              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
-                  = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
-              AND REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'
-         )
-         AND REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%'",
-        []
-    )?;
+    // We handle all three prefixes (Media, Audios, Videos)
+    for prefix in &["Media", "Audios", "Videos"] {
+        let start_idx = if *prefix == "Media" { 21 } else { 22 };
+        let pattern = format!("harvey_files/{}/%", prefix);
+        
+        conn.execute(
+            &format!(
+                "UPDATE asset_metadata SET file_type = 'video-transcript'
+                 WHERE file_type = 'audio-transcript'
+                 AND EXISTS (
+                    SELECT 1 FROM asset_metadata m
+                    WHERE m.project_id = asset_metadata.project_id
+                      AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
+                      AND substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}), '/') - 1) 
+                          = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}), '/') - 1)
+                      AND REPLACE(m.asset_relative_path, '\\', '/') LIKE '{1}'
+                 )
+                 AND REPLACE(asset_relative_path, '\\', '/') LIKE '{1}'",
+                start_idx, pattern
+            ),
+            []
+        )?;
+    }
 
     info!("[DB] Finished backfilling file_type column.");
     Ok(())
@@ -1749,64 +1812,34 @@ pub fn rename_asset_metadata_key(
     }
 
     // 3. Update Child Tables Second (to match the new parent key)
+    // List of child tables that need manual path updates when FKs are OFF
+    let child_tables = [
+        ("pdf_annotations", "pdf_document_path"),
+        ("table_styles", "table_path"),
+        ("table_schemas", "table_path"),
+        ("table_layout_preferences", "table_asset_relative_path"),
+        ("file_groups", "file_asset_path"),
+        ("attachments", "base_asset_relative_path"),
+        ("attachments", "attachment_relative_path"),
+        ("media_transcript_data", "asset_relative_path"),
+    ];
 
-    // Update file_groups
-    match tx.execute(
-        "UPDATE file_groups SET file_asset_path = ?1 WHERE project_id = ?2 AND file_asset_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated file_groups for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => { // 0 rows affected
-            debug!("[DB TX] No entries in file_groups needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating file_groups for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+    for (table, col) in child_tables {
+        let sql = format!("UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3", table, col, col);
+        match tx.execute(&sql, params![new_relative_path, project_id, old_relative_path]) {
+            Ok(changes) if changes > 0 => {
+                info!("[DB TX] Updated child table {} for project_id {} from {} to {} ({} rows affected)", table, project_id, old_relative_path, new_relative_path, changes);
             }
-            return Err(CommandError::from(e));
-        }
-    }
-
-    // Update table_layout_preferences
-    match tx.execute(
-        "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated table_layout_preferences for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => {
-             debug!("[DB TX] No entries in table_layout_preferences needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating table_layout_preferences for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            Ok(_) => {
+                debug!("[DB TX] No entries in child table {} needed update for project_id {} and old path {}", table, project_id, old_relative_path);
             }
-            return Err(CommandError::from(e));
-        }
-    }
-
-    // Update media_transcript_data
-    match tx.execute(
-        "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
-        params![new_relative_path, project_id, old_relative_path],
-    ) {
-        Ok(changes) if changes > 0 => {
-            info!("[DB TX] Updated media_transcript_data for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
-        }
-        Ok(_) => {
-            debug!("[DB TX] No entries in media_transcript_data needed update for project_id {} and old path {}", project_id, old_relative_path);
-        }
-        Err(e) => {
-            error!("[DB TX] Error updating media_transcript_data for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
-            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            Err(e) => {
+                error!("[DB TX] Error updating child table {} for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", table, project_id, old_relative_path, new_relative_path, e);
+                if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+                    error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+                }
+                return Err(CommandError::from(e));
             }
-            return Err(CommandError::from(e));
         }
     }
 

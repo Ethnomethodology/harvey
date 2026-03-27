@@ -5,6 +5,8 @@ use chrono::Utc; // DateTime removed
 // --- Constants ---
 pub const HARVEY_FILES_DIR: &str = "harvey_files";
 pub const MEDIA_DIR: &str = "Media";
+pub const AUDIOS_DIR: &str = "Audios";
+pub const VIDEOS_DIR: &str = "Videos";
 pub const IMAGES_DIR: &str = "Images";
 pub const TRANSCRIPTS_DIR: &str = "Transcripts";
 pub const DOCS_DIR: &str = "Documents";
@@ -400,13 +402,29 @@ pub struct MediaFiles {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
+pub struct AudioFiles {
+    #[serde(rename = "audioFile", default)]
+    pub files: Vec<MediaFileEntryXml>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct VideoFiles {
+    #[serde(rename = "videoFile", default)]
+    pub files: Vec<MediaFileEntryXml>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename = "project")]
 pub struct ProjectXml {
     #[serde(rename = "name")]
     pub name: String,
     #[serde(default)] // If project_uuid is missing in XML, it defaults to String::new()
     pub project_uuid: String,
-    #[serde(rename = "mediaFiles", default)]
+    #[serde(rename = "audioFiles", default)]
+    pub audio_files: AudioFiles,
+    #[serde(rename = "videoFiles", default)]
+    pub video_files: VideoFiles,
+    #[serde(rename = "mediaFiles", default, skip_serializing)]
     pub media_files: MediaFiles,
     #[serde(rename = "documentFiles", default)]
     pub document_files: DocumentFiles,
@@ -418,6 +436,43 @@ pub struct ProjectXml {
     pub imported_transcript_files: ImportedTranscriptFiles,
     #[serde(rename = "documentMetadataFiles", default)]
     pub document_metadata_files: DocumentMetadataFiles,
+}
+
+impl ProjectXml {
+    pub fn find_media_mut(&mut self, name: &str) -> Option<&mut MediaFileEntryXml> {
+        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.name == name) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.name == name) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.name == name) {
+            return Some(f);
+        }
+        None
+    }
+
+    pub fn find_media(&self, name: &str) -> Option<&MediaFileEntryXml> {
+        if let Some(f) = self.audio_files.files.iter().find(|f| f.name == name) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter().find(|f| f.name == name) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter().find(|f| f.name == name) {
+            return Some(f);
+        }
+        None
+    }
+
+    pub fn remove_media(&mut self, name: &str) -> bool {
+        let old_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        self.audio_files.files.retain(|f| f.name != name);
+        self.video_files.files.retain(|f| f.name != name);
+        self.media_files.files.retain(|f| f.name != name);
+        let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        new_len < old_len
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

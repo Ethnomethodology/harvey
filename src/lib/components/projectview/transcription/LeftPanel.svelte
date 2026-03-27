@@ -5,6 +5,8 @@
 		project,
 		HARVEY_FILES_DIR,
 		MEDIA_DIR_NAME,
+		AUDIOS_DIR_NAME,
+		VIDEOS_DIR_NAME,
 	} from "$lib/stores/projectStore.js";
 	import {
 		transcriptStore,
@@ -58,6 +60,12 @@
 
 	$: uniqueProjectFileTree = (() => {
 		const normalizedBaseDirectory = normalizePath($project.baseDirectory);
+		const audioPathPrefix = normalizePath(
+			`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${AUDIOS_DIR_NAME}`,
+		);
+		const videoPathPrefix = normalizePath(
+			`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${VIDEOS_DIR_NAME}`,
+		);
 		const mediaPathPrefix = normalizePath(
 			`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`,
 		);
@@ -73,17 +81,33 @@
 			seen.add(key);
 
 			const isMediaFileOrDirectory =
+				node.file_type === "audio" ||
+				node.file_type === "video" ||
 				node.file_type === "media" ||
 				node.file_type === "directory_media_stem" ||
 				node.file_type === "transcript";
-			const isWithinMediaPath =
+			const isWithinAudioPath =
+				normalizedNodePath &&
+				normalizedNodePath.startsWith(audioPathPrefix);
+			const isWithinVideoPath =
+				normalizedNodePath &&
+				normalizedNodePath.startsWith(videoPathPrefix);
+			const isRootAudioDirectory = normalizedNodePath === audioPathPrefix;
+			const isRootVideoDirectory = normalizedNodePath === videoPathPrefix;
+
+			// Do NOT return true if it's within the legacy Media path
+			const isWithinLegacyMediaPath =
 				normalizedNodePath &&
 				normalizedNodePath.startsWith(mediaPathPrefix);
-			const isRootMediaDirectory = normalizedNodePath === mediaPathPrefix;
+
+			if (isWithinLegacyMediaPath) {
+				return false;
+			}
 
 			return (
-				isRootMediaDirectory ||
-				(isWithinMediaPath && isMediaFileOrDirectory)
+				isRootAudioDirectory ||
+				isRootVideoDirectory ||
+				((isWithinAudioPath || isWithinVideoPath) && isMediaFileOrDirectory)
 			);
 		});
 

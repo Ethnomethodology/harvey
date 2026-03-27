@@ -44,6 +44,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
+import { activeLayout } from '$lib/stores/layoutStore.js';
+import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
+
 import {
     project,
     prepareDocumentView,
@@ -339,6 +342,8 @@ function findMediaPathByName(nodes, filename) {
 
 const HARVEY_FILES_DIR = 'harvey_files';
 const MEDIA_DIR_NAME = 'Media';
+const AUDIOS_DIR_NAME = 'Audios';
+const VIDEOS_DIR_NAME = 'Videos';
 const MEDIA_SUBDIR = 'media';
 const DOCS_DIR_NAME = 'Documents';
 const TRANSCRIPTS_SUBDIR_MEDIA = 'transcripts';
@@ -692,9 +697,10 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const newlyImportedFileEntry = await invoke('import_media', { // backendResponse is now newlyImportedFileEntry
+        const newlyImportedFileEntry = await invoke('import_media', { 
             sourceFilePathStr: sourceFilePath,
-            projectXmlPathStr: projectXmlPath
+            projectXmlPathStr: projectXmlPath,
+            importType: importType // Added parameter
         });
 
         if (!newlyImportedFileEntry || typeof newlyImportedFileEntry !== 'object' || !newlyImportedFileEntry.path) {
@@ -1688,7 +1694,7 @@ export function cleanupProgressListener() { if (progressUnlistenFn) { progressUn
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
-async function processJsonToRemoveHighlights(jsonString) {
+async function processJsonToRemoveHighlights(jsonString, isDocument = false) {
     if (!jsonString) return jsonString;
     const editor = createHeadlessEditor({
         nodes: ALL_EDITOR_NODES,
@@ -1705,6 +1711,9 @@ async function processJsonToRemoveHighlights(jsonString) {
     }
 
     editor.setEditorState(parsedState);
+
+    const currentLayoutKey = get(activeLayout) || 'Layout1';
+    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[currentLayoutKey];
 
     await editor.update(() => {
         const root = _getRoot();
@@ -1730,12 +1739,24 @@ async function processJsonToRemoveHighlights(jsonString) {
                 }
             }
             if (node.getType() === 'table' && typeof node.setColWidths === 'function') {
-                // When saving as document, clear the percentage-based fixed column widths
-                // and assign default pixel widths so the TableCellResizer works properly.
                 const firstRow = node.getFirstChild();
                 const numCols = firstRow ? firstRow.getChildrenSize() : 4;
-                const defaultWidth = Math.max(100, Math.floor(800 / numCols));
-                node.setColWidths(Array(numCols).fill(defaultWidth));
+                let newWidths;
+
+                // Lexical tables require explicit pixel widths to support structural consistency and resizing.
+                // We use an 800px base width, but if resizing is disabled (like in transcript panels), the browser
+                // will scale these relative sizes uniformly, maintaining the intended percentages perfectly.
+                if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
+                    newWidths = layoutConfig.colgroup.map(pctStr => {
+                        const pct = parseFloat(pctStr.replace('%', ''));
+                        return Math.max(40, Math.floor(800 * (pct / 100)));
+                    });
+                } else {
+                    const defaultWidth = Math.max(100, Math.floor(800 / numCols));
+                    newWidths = Array(numCols).fill(defaultWidth);
+                }
+
+                node.setColWidths(newWidths);
             }
         });
     });
@@ -1760,7 +1781,7 @@ export async function convertAndSaveTranscriptAsDoc() {
     try {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
-        finalLexicalJsonString = await processJsonToRemoveHighlights(fullLexicalTableString);
+        finalLexicalJsonString = await processJsonToRemoveHighlights(fullLexicalTableString, true);
 
         const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
         console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
@@ -1845,7 +1866,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
     try {
         const rawLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!rawLexicalTableString) throw new Error("Transcript file content is empty.");
-        const fullLexicalTableString = await processJsonToRemoveHighlights(rawLexicalTableString);
+        const fullLexicalTableString = await processJsonToRemoveHighlights(rawLexicalTableString, false);
 
         const originalTranscriptFilename = await basename(transcriptPath);
         const originalTranscriptStem = originalTranscriptFilename.includes('.')

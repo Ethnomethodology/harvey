@@ -650,6 +650,11 @@
     function scrollToHighlight(id) {
         if (!id || !tabulatorInstance) return;
         
+        // Only handle specific highlight formats intended for the base table
+        if (!id.startsWith('row-') && !id.startsWith('rows-') && !id.startsWith('cell-')) {
+            return;
+        }
+
         // Clear immediately to prevent infinite loops
         project.update(p => ({ ...p, requestedHighlightId: null }));
 
@@ -666,6 +671,11 @@
 
         if (id.startsWith('row-')) {
             rowIndex = parseInt(id.substring(4), 10);
+        } else if (id.startsWith('rows-')) {
+            let h = get(project).currentTableHighlights?.find(h => h.id === id);
+            if (h && h.rowIndices && h.rowIndices.length > 0) {
+                rowIndex = h.rowIndices[0]; // Scroll to the first row of the group
+            }
         } else if (id.startsWith('cell-')) {
             // ID format: cell-{rowIndex}-{fieldName}
             const parts = id.split('-');
@@ -3520,6 +3530,19 @@
                 detectDuplicates();
                 checkValidationErrors();
                 addFloatingAddRowButton();
+
+                if (activeSubItemType === 'doc' && activeSubItemPath && typeof activeSubItemPath === 'string') {
+                    openLexicalDocument(activeSubItemPath);
+                } else if (activeSubItemType === 'view' && activeSubItemPath?.view_name) {
+                    const viewToRestore = availableViews.find(v => v.view_name === activeSubItemPath.view_name);
+                    if (viewToRestore) {
+                        try {
+                            applyViewToTable(viewToRestore.view_name, viewToRestore.view_type, JSON.parse(viewToRestore.view_config_json));
+                        } catch(e) {
+                            console.error("Failed to restore view:", e);
+                        }
+                    }
+                }
             });
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;

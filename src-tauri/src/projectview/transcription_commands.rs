@@ -216,10 +216,10 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
     let mut table_rows_json: Vec<JsonValue> = Vec::new();
 
     let col_widths_json: Vec<JsonValue> = vec![
-        json!(50),  
-        json!(140), 
-        json!(120), 
-        json!(450)  
+        json!(40),
+        json!(120),
+        json!(120),
+        json!(520)
     ];
 
     let header_texts = ["#", "Timestamp", "Speaker", "Text"];
@@ -301,6 +301,7 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "children": [{
                 "type": "table",
                 "version": 1,
+                "colWidths": col_widths_json.clone(),
                 "children": table_rows_json,
             }, {
                 "type": "paragraph", 
@@ -452,17 +453,26 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
 
-    let original_entry = project_data.media_files.files.iter().find(|f| f.name == original_media_identifier).cloned();
-    let (original_speakers, _original_transcripts) = match original_entry {
-        Some(entry) => (entry.speakers, entry.transcripts),
+    let original_entry = project_data.find_media(&original_media_identifier).cloned();
+    let (original_speakers, _original_transcripts, is_video_source) = match original_entry {
+        Some(entry) => {
+            let path_lower = entry.relative_path.to_lowercase();
+            let is_video = path_lower.contains("/videos/") || 
+                           path_lower.ends_with(".mp4") || 
+                           path_lower.ends_with(".mov") || 
+                           path_lower.ends_with(".avi");
+            (entry.speakers, entry.transcripts, is_video)
+        },
         None => {
             warn!("[Trim Backend] Original XML entry '{}' not found when trying to copy metadata.", original_media_identifier);
-            (None, Vec::new())
+            (None, Vec::new(), false)
         }
     };
 
+    let target_dir = if is_video_source { VIDEOS_DIR } else { AUDIOS_DIR };
+
     let new_relative_path_for_xml = Path::new(HARVEY_FILES_DIR)
-        .join(MEDIA_DIR)
+        .join(target_dir)
         .join(&output_stem_dir_name)
         .join(MEDIA_SUBDIR)
         .join(&output_filename)
@@ -477,10 +487,15 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
         transcripts: Vec::new(),
     };
 
-    if !project_data.media_files.files.iter().any(|f| f.name == new_media_entry.name) {
+    if project_data.find_media(&new_media_entry.name).is_none() {
         info!("[Trim Backend] Adding new media entry to XML: {}", new_media_entry.name);
-        project_data.media_files.files.push(new_media_entry);
-        project_data.media_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+        if is_video_source {
+            project_data.video_files.files.push(new_media_entry);
+            project_data.video_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+        } else {
+            project_data.audio_files.files.push(new_media_entry);
+            project_data.audio_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+        }
         save_project_xml(&project_xml_path, &project_data)?;
         log::info!("[Trim Backend] XML updated.");
     } else {
@@ -729,7 +744,7 @@ pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<()
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_and_updated = false;
 
-    if let Some(media_file) = project_data.media_files.files.iter_mut().find(|f| f.name == payload.media_identifier) {
+    if let Some(media_file) = project_data.find_media_mut(&payload.media_identifier) {
         info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", payload.media_identifier);
 
         let mut validated_count = payload.count;
@@ -861,7 +876,7 @@ pub async fn save_transcript_json(
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_media = false;
 
-    if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
+    if let Some(media_entry) = project_data.find_media_mut(&media_identifier) {
         found_media = true;
         debug!("[Backend Save Full Transcript JSON] Found media entry '{}' in XML.", media_identifier);
 
@@ -899,7 +914,7 @@ pub async fn save_transcript_json(
 
     // Get media entry relative path before closing the mutable borrow if needed, 
     // but we need it for metadata lookup.
-    let media_entry_relative_path = project_data.media_files.files.iter().find(|f| f.name == media_identifier).unwrap().relative_path.clone();
+    let media_entry_relative_path = project_data.find_media(&media_identifier).unwrap().relative_path.clone();
     let project_uuid_for_db = project_data.project_uuid.clone();
 
     save_project_xml(&normalized_project_xml_path_buf, &project_data)?;

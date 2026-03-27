@@ -10,6 +10,8 @@ export const highlightsLastUpdated = writable(null);
 
 export const HARVEY_FILES_DIR = "harvey_files";
 export const MEDIA_DIR_NAME = 'Media';
+export const AUDIOS_DIR_NAME = 'Audios';
+export const VIDEOS_DIR_NAME = 'Videos';
 const MEDIA_SUBDIR = 'media';
 const TRANSCRIPTS_SUBDIR = 'transcripts';
 
@@ -344,6 +346,7 @@ export function setDocumentHighlights(highlights, markDirty = true) {
 export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
+        let isMediaNoteActive = false;
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -365,6 +368,7 @@ export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
             dirtyFlag = 'isDocumentMetadataDirty';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
         }
 
         const newHighlights = highlights.map(h => {
@@ -375,13 +379,19 @@ export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
             return h;
         });
 
-        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
     });
 }
 
 export function updateComment(highlightId, commentId, newText, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
+        let isMediaNoteActive = false;
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -403,6 +413,7 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
             dirtyFlag = 'isDocumentMetadataDirty';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
         }
 
         const newHighlights = highlights.map(h => {
@@ -418,24 +429,36 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
             return h;
         });
 
-        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
     });
 }
 
 export function removeTagFromHighlightLocal(highlightId, tagName, docType, filePath) {
     project.update(p => {
         let highlights, key, dirtyFlag, pathKey;
+        let isMediaNoteActive = false;
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
             pathKey = 'selectedDocumentPath';
-        } else if (docType === 'imported_transcript' || docType === 'transcript' || docType === 'audio_transcript' || docType === 'video_transcript') {
+        } else if (docType === 'imported_transcript') {
             highlights = p.currentImportedTranscriptHighlights;
             key = 'currentImportedTranscriptHighlights';
             dirtyFlag = 'isImportedTranscriptMetadataDirty';
             pathKey = 'currentImportedTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript' || docType === 'transcript') {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'activeTranscriptPathInDataTab';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab === filePath;
         } else if (docType === 'image') {
             highlights = p.currentImageAnnotations;
             key = 'currentImageAnnotations';
@@ -467,24 +490,36 @@ export function removeTagFromHighlightLocal(highlightId, tagName, docType, fileP
             return h;
         });
 
-        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
     });
 }
 
 export function manageCommentInHighlightLocal(highlightId, action, commentObj, commentId, text, docType, filePath) {
     project.update(p => {
         let highlights, key, dirtyFlag, pathKey;
+        let isMediaNoteActive = false;
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
             pathKey = 'selectedDocumentPath';
-        } else if (docType === 'imported_transcript' || docType === 'transcript' || docType === 'audio_transcript' || docType === 'video_transcript') {
+        } else if (docType === 'imported_transcript') {
             highlights = p.currentImportedTranscriptHighlights;
             key = 'currentImportedTranscriptHighlights';
             dirtyFlag = 'isImportedTranscriptMetadataDirty';
             pathKey = 'currentImportedTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript' || docType === 'transcript') {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'activeTranscriptPathInDataTab';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab === filePath;
         } else if (docType === 'image') {
             highlights = p.currentImageAnnotations;
             key = 'currentImageAnnotations';
@@ -530,13 +565,19 @@ export function manageCommentInHighlightLocal(highlightId, action, commentObj, c
             return h;
         });
 
-        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
     });
 }
 
 export function deleteComment(highlightId, commentId, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
+        let isMediaNoteActive = false;
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -558,6 +599,7 @@ export function deleteComment(highlightId, commentId, docType = 'doc') {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
             dirtyFlag = 'isDocumentMetadataDirty';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
         }
 
         const newHighlights = highlights.map(h => {
@@ -568,7 +610,12 @@ export function deleteComment(highlightId, commentId, docType = 'doc') {
             return h;
         });
 
-        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
     });
 }
 

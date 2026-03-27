@@ -124,7 +124,7 @@
 
     // Adjust position to keep dialog within viewport (basic implementation)
     let dialogElement;
-    let dialogWidth = 500; // Increased width for Lexical toolbar
+    let dialogWidth = 550; // Increased width for Lexical toolbar and per user request
     let dialogHeight = 200;
 
     $: if (dialogElement && panelBounds) {
@@ -254,31 +254,6 @@
                 {/if}
             {/if}
 
-            {#if selectedShape === 'rectangle' || initialShape === 'speech-bubble-rect'}
-                <div class="mb-3">
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                            bind:checked={rounded}
-                        />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Rounded Corners</span>
-                    </label>
-                </div>
-            {/if}
-
-            {#if selectedShape === 'circle' || initialShape === 'speech-bubble-circle'}
-                <div class="mb-3">
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                            bind:checked={isOval}
-                        />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Oval Shape</span>
-                    </label>
-                </div>
-            {/if}
         {:else}
             <div class="mb-3">
                 <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
@@ -311,16 +286,16 @@
         {/if}
     {/if}
 
-    {#if isCensoredMode}
+    {#if isCensoredMode || (initialText !== null && !initialShape?.startsWith('speech-bubble'))}
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shape</label>
             <div class="flex space-x-2">
                 <button
                     class="flex-1 flex justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                    class:bg-blue-600={selectedShape === 'rectangle'}
-                    class:text-white={selectedShape === 'rectangle'}
-                    class:bg-gray-100={selectedShape !== 'rectangle'}
-                    class:dark:bg-gray-700={selectedShape !== 'rectangle'}
+                    class:bg-blue-600={selectedShape === 'rectangle' || selectedShape === 'text-area' || selectedShape === 'censored' || selectedShape === 'speech-bubble-rect'}
+                    class:text-white={selectedShape === 'rectangle' || selectedShape === 'text-area' || selectedShape === 'censored' || selectedShape === 'speech-bubble-rect'}
+                    class:bg-gray-100={!(selectedShape === 'rectangle' || selectedShape === 'text-area' || selectedShape === 'censored' || selectedShape === 'speech-bubble-rect')}
+                    class:dark:bg-gray-700={!(selectedShape === 'rectangle' || selectedShape === 'text-area' || selectedShape === 'censored' || selectedShape === 'speech-bubble-rect')}
                     title="Rectangle"
                     on:click={() => (selectedShape = 'rectangle')}
                 >
@@ -328,10 +303,10 @@
                 </button>
                 <button
                     class="flex-1 flex justify-center py-1.5 text-xs font-medium border rounded transition-colors"
-                    class:bg-blue-600={selectedShape === 'circle'}
-                    class:text-white={selectedShape === 'circle'}
-                    class:bg-gray-100={selectedShape !== 'circle'}
-                    class:dark:bg-gray-700={selectedShape !== 'circle'}
+                    class:bg-blue-600={selectedShape === 'circle' || selectedShape === 'text-area-circle' || selectedShape === 'censored-circle' || selectedShape === 'speech-bubble-circle'}
+                    class:text-white={selectedShape === 'circle' || selectedShape === 'text-area-circle' || selectedShape === 'censored-circle' || selectedShape === 'speech-bubble-circle'}
+                    class:bg-gray-100={!(selectedShape === 'circle' || selectedShape === 'text-area-circle' || selectedShape === 'censored-circle' || selectedShape === 'speech-bubble-circle')}
+                    class:dark:bg-gray-700={!(selectedShape === 'circle' || selectedShape === 'text-area-circle' || selectedShape === 'censored-circle' || selectedShape === 'speech-bubble-circle')}
                     title="Circle"
                     on:click={() => (selectedShape = 'circle')}
                 >
@@ -340,6 +315,32 @@
             </div>
         </div>
     {/if}
+
+        {#if (selectedShape === 'rectangle' || selectedShape === 'text-area' || initialShape === 'speech-bubble-rect') && !isCensoredMode}
+            <div class="mb-4">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                        bind:checked={rounded}
+                    />
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Rounded Corners</span>
+                </label>
+            </div>
+        {/if}
+
+        {#if (selectedShape === 'circle' || selectedShape === 'text-area-circle' || initialShape === 'speech-bubble-circle') && !isCensoredMode}
+            <div class="mb-4">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                        bind:checked={isOval}
+                    />
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Oval Shape</span>
+                </label>
+            </div>
+        {/if}
 
     <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{isCensoredMode ? 'Anonymise Style' : 'Background Color'}</label>
