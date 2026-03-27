@@ -1696,11 +1696,11 @@
 
 <div
 	bind:this={componentRootRef}
-	class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded"
+	class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded overflow-hidden"
 >
 	<div
 		bind:this={waveformScrollContainerRef}
-		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-800 relative overflow-x-auto overflow-y-visible h-full"
+		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-800 relative overflow-x-auto overflow-y-hidden h-full"
 		role="region"
 		aria-label="Interactive Waveform Timeline"
 		on:scroll={handleScroll}
@@ -1791,7 +1791,7 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 				<div
-					class="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute top-0 right-full mr-1 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(trimStartTime)}
 				</div>
@@ -1811,7 +1811,7 @@
 					class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"
 				></div>
 				<div
-					class="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute bottom-0 left-full ml-1 z-[60] px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(trimEndTime)}
 				</div>
@@ -1846,7 +1846,7 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute bottom-full mb-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute top-0 right-full mr-1 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentStartTime)}
 				</div>
@@ -1866,7 +1866,7 @@
 					class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"
 				></div>
 				<div
-					class="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
+					class="absolute bottom-0 left-full ml-1 z-[200] px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"
 				>
 					{formatTimestamp(editSegmentEndTime)}
 				</div>
