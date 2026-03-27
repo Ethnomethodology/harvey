@@ -870,7 +870,7 @@
     {#if currentWaveformLayout === "horizontal"}
         <div
             style="height: {horizontalWaveformContainerHeightPx}px;"
-            class="border-t border-gray-200 dark:border-gray-700 relative z-[100] overflow-visible"
+            class="border-t border-gray-200 dark:border-gray-700 relative z-10 overflow-visible"
         >
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform
