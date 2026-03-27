@@ -1344,6 +1344,7 @@
                 if (oldShape === 'censored-circle' || oldShape === 'censored') updatedSelector.shape = 'censored';
                 else if (oldShape === 'text-area-circle' || oldShape === 'text-area') updatedSelector.shape = 'text-area';
                 else if (oldShape === 'speech-bubble-circle') updatedSelector.shape = 'speech-bubble-rect';
+                else if (oldShape === 'circle') updatedSelector.shape = 'rectangle';
                 else updatedSelector.shape = 'rectangle';
             }
         }
@@ -1712,6 +1713,8 @@
                         y={shapeData.y * S}
                         width={shapeData.width * S}
                         height={shapeData.height * S}
+                        rx={shapeData.rounded ? 0.012 * S : 0}
+                        ry={shapeData.rounded ? 0.012 * S : 0}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
                         stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
@@ -1738,6 +1741,8 @@
                         y={shapeData.y * S}
                         width={shapeData.width * S}
                         height={shapeData.height * S}
+                        rx={shapeData.rounded ? 0.012 * S : 0}
+                        ry={shapeData.rounded ? 0.012 * S : 0}
                         fill={fillColor}
                         stroke={strokeColor}
                         stroke-width={strokeWidth}
@@ -1805,10 +1810,11 @@
                         <circle cx={shapeData.cx * S} cy={(shapeData.cy - shapeData.r) * S} r={handleRadius * S} fill="white" stroke="blue" stroke-width="1" class="pointer-events-auto cursor-ns-resize" on:pointerdown={(e) => startResizeDrag(e, annotation.id, 'r')} />
                     {/if}
                 {:else if shapeData.shape === 'text-area-circle'}
-                    <circle
+                    <ellipse
                         cx={shapeData.cx * S}
                         cy={shapeData.cy * S}
-                        r={shapeData.r * S}
+                        rx={(shapeData.isOval ? shapeData.r * 1.5 : shapeData.r) * S}
+                        ry={shapeData.r * S}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
                         stroke-width={strokeWidth}
@@ -1865,10 +1871,11 @@
                     {/if}
 
                 {:else if shapeData.shape === 'circle'}
-                    <circle
+                    <ellipse
                         cx={shapeData.cx * S}
                         cy={shapeData.cy * S}
-                        r={shapeData.r * S}
+                        rx={(shapeData.isOval ? shapeData.r * 1.5 : shapeData.r) * S}
+                        ry={shapeData.r * S}
                         fill={fillColor}
                         stroke={selectedAnnotationId === annotation.id ? 'blue' : strokeColor}
                         stroke-width={selectedAnnotationId === annotation.id ? '2' : '1'}
@@ -2047,7 +2054,7 @@
                     x={dialogX}
                     y={dialogY}
                     initialText={annotationBeingEdited?.body?.find(b => b.type === 'TextualBody' && b.purpose === 'content')?.value || 
-                        ((annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape === 'text-area') 
+                        ((annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape?.startsWith('text-area')) 
                         ? '' : null)}
                     initialHtml={annotationBeingEdited?.body?.find(b => b.type === 'HtmlBody' && b.purpose === 'rendering')?.value || null}
                     initialTextColor={annotationBeingEdited?.body?.find(b => b.type === 'TextColor' && b.purpose === 'rendering')?.value || 'black'}
