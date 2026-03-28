@@ -644,40 +644,38 @@
         });
     }
 
-    // Helper function to find media by associated transcript path
-    function findMediaByTranscriptPath(transcriptPath, projectFiles) {
+    // Helper function to extract the stem directory path
+    function getStemRelPath(relPath) {
+        if (!relPath) return "";
+        const parts = relPath.replace(/\\/g, '/').split('/');
+        if (parts.length >= 3) {
+            // e.g. "harvey_files/Videos/input_videos/transcripts/file.json"
+            // extracts the parent stem -> "harvey_files/Videos/input_videos"
+            return parts.slice(0, parts.length - 2).join('/');
+        }
+        return "";
+    }
+
+    // Helper function to find media by associated transcript relative path
+    function findMediaByTranscriptRelativePath(transcriptRelativePath, projectFiles) {
         console.log(
-            "[TranscriptionView] findMediaByTranscriptPath: Searching for transcriptPath:",
-            transcriptPath,
-        );
-        console.log(
-            "[TranscriptionView] findMediaByTranscriptPath: projectFiles structure:",
-            JSON.stringify(projectFiles, null, 2),
+            "[TranscriptionView] findMediaByTranscriptRelativePath: Searching for transcriptRelativePath:",
+            transcriptRelativePath,
         );
 
-        if (!projectFiles) return null;
+        if (!projectFiles || !transcriptRelativePath) return null;
+        
+        const targetStemPath = getStemRelPath(transcriptRelativePath);
+        if (!targetStemPath) return null;
 
         function recurse(nodes) {
             for (const node of nodes) {
-                console.log(
-                    "[TranscriptionView] findMediaByTranscriptPath: Checking node:",
-                    node.name,
-                    "file_type:",
-                    node.file_type,
-                );
-                if (node.file_type === "media" && node.associated_transcripts) {
-                    console.log(
-                        "[TranscriptionView] findMediaByTranscriptPath: Media node found, checking associated_transcripts:",
-                        node.associated_transcripts,
-                    );
-                    if (
-                        node.associated_transcripts.some(
-                            (t) => t.path === transcriptPath,
-                        )
-                    ) {
+                if (node.file_type === "media" && node.relative_path) {
+                    const mediaStemPath = getStemRelPath(node.relative_path);
+                    if (mediaStemPath && mediaStemPath === targetStemPath) {
                         console.log(
-                            "[TranscriptionView] findMediaByTranscriptPath: Match found for transcriptPath:",
-                            transcriptPath,
+                            "[TranscriptionView] findMediaByTranscriptRelativePath: Match found for targetStemPath:",
+                            targetStemPath,
                             "in media node:",
                             node.name,
                         );
@@ -739,11 +737,11 @@
 
             const currentProjectFiles = get(project).files;
             console.log(
-                "[TranscriptionView] Calling findMediaByTranscriptPath with transcript path:",
-                item.path,
+                "[TranscriptionView] Calling findMediaByTranscriptRelativePath with transcript relative path:",
+                item.relative_path,
             );
-            const associatedMedia = findMediaByTranscriptPath(
-                item.path,
+            const associatedMedia = findMediaByTranscriptRelativePath(
+                item.relative_path,
                 currentProjectFiles,
             );
 

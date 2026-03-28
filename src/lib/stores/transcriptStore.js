@@ -1042,12 +1042,12 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     const oldSpeakerConfig = currentTranscriptData.speakers;
     const currentMediaFile = currentTranscriptData.selectedMediaFile;
     const projectXmlPath = projectData.xmlPath;
-    const mediaIdentifier = currentMediaFile?.media_xml_identifier;
+    const mediaRelativePath = currentMediaFile?.relative_path || currentMediaFile?.relativePath;
 
-    if (!mediaIdentifier) {
-        console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media XML Identifier.");
-        updateProjectStoreState({ error: "Save Error: Missing media identifier."});
-        message("Error: Missing media identifier.", {title: "Save Error", type:"error"});
+    if (!mediaRelativePath) {
+        console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media Relative Path.");
+        updateProjectStoreState({ error: "Save Error: Missing media relative path."});
+        message("Error: Missing media relative path.", {title: "Save Error", type:"error"});
         return;
     }
     if (!projectXmlPath) {
@@ -1113,7 +1113,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
     const innerPayload = {
         project_xml_path: projectXmlPath,
-        media_identifier: mediaIdentifier,
+        media_relative_path: mediaRelativePath,
         count: newSpeakerConfig.count,
         names: newSpeakerConfig.names,
         translated_names: newSpeakerConfig.translatedNames

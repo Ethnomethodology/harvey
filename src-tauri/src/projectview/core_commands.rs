@@ -770,9 +770,10 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     }
 
     let mut file_entries: Vec<FileEntry> = Vec::new();
+    let mut was_xml_healed = false;
 
     // Helper closure to process media entries from different lists
-    let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>, dir_name: &str| -> Result<(), CommandError> {
+    let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>, dir_name: &str, was_healed: &mut bool| -> Result<(), CommandError> {
         let dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, dir_name);
         for media_entry in entries {
             // Ignore legacy Media folder entries
@@ -814,6 +815,54 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                         associated_transcripts: media_entry.transcripts.clone(),
                         children: Vec::new(),
                     });
+                }
+            }
+
+            let transcripts_dir_abs = project_base_dir.join(&stem_rel_path).join(TRANSCRIPTS_SUBDIR);
+            
+            // Auto-Healing: 1. Remove corrupted/cross-pollinated transcripts
+            let mut valid_transcripts = Vec::new();
+            for transcript_xml_entry in media_entry.transcripts.drain(..) {
+                if transcript_xml_entry.relative_path.starts_with(&stem_rel_path) {
+                    valid_transcripts.push(transcript_xml_entry);
+                } else {
+                    warn!("[Auto-Heal] Purging mismatched transcript '{}' from media stem '{}'", transcript_xml_entry.relative_path, stem_rel_path);
+                    *was_healed = true;
+                }
+            }
+            media_entry.transcripts = valid_transcripts;
+
+            // Auto-Healing: 2. Re-discover orphaned transcripts physically present on disk
+            if transcripts_dir_abs.exists() && transcripts_dir_abs.is_dir() {
+                if let Ok(entries) = fs::read_dir(&transcripts_dir_abs) {
+                    for entry in entries.filter_map(Result::ok) {
+                        let path = entry.path();
+                        if path.is_file() && path.extension().unwrap_or_default() == "json" {
+                            if let Ok(rel_path_buf) = path.strip_prefix(&project_base_dir) {
+                                let rel_path_str = rel_path_buf.to_string_lossy().replace("\\", "/");
+                                if !media_entry.transcripts.iter().any(|t| t.relative_path == rel_path_str) {
+                                    info!("[Auto-Heal] Adopting orphaned transcript '{}' into media stem '{}'", rel_path_str, stem_rel_path);
+                                    
+                                    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                    let mut lang_code = None;
+                                    let parts: Vec<&str> = file_stem.split('.').collect();
+                                    if parts.len() > 1 {
+                                        let code = parts.last().unwrap().to_string();
+                                        if code.len() == 2 {
+                                            lang_code = Some(code);
+                                        }
+                                    }
+
+                                    media_entry.transcripts.push(TranscriptEntryXml {
+                                        name: path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                                        relative_path: rel_path_str,
+                                        language_code: lang_code,
+                                    });
+                                    *was_healed = true;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -883,9 +932,9 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         Ok(())
     };
 
-    process_media_list(&mut project_data.audio_files.files, AUDIOS_DIR)?;
-    process_media_list(&mut project_data.video_files.files, VIDEOS_DIR)?;
-    process_media_list(&mut project_data.media_files.files, MEDIA_DIR)?;
+    process_media_list(&mut project_data.audio_files.files, AUDIOS_DIR, &mut was_xml_healed)?;
+    process_media_list(&mut project_data.video_files.files, VIDEOS_DIR, &mut was_xml_healed)?;
+    process_media_list(&mut project_data.media_files.files, MEDIA_DIR, &mut was_xml_healed)?;
 
     // Add imported transcript files to the main file_entries tree
     for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
@@ -1339,10 +1388,11 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         }
     }
 
-    if was_uuid_generated {
+    if was_uuid_generated || was_xml_healed {
+        let save_reason = if was_xml_healed { "healed data" } else { "new UUID" };
         match save_project_xml(&xml_path, &project_data) {
-            Ok(_) => info!("[Backend Load XML] Successfully saved updated project XML with new UUID to {}", xml_path.display()),
-            Err(e) => warn!("[Backend Load XML] Failed to save updated project XML with new UUID to {}: {}. The new UUID will be used for this session, but not persisted.", xml_path.display(), e),
+            Ok(_) => info!("[Backend Load XML] Successfully saved updated project XML with {} to {}", save_reason, xml_path.display()),
+            Err(e) => warn!("[Backend Load XML] Failed to save updated project XML with {} to {}: {}", save_reason, xml_path.display(), e),
         }
     }
 
@@ -1682,16 +1732,18 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
         match item_type_guess.as_str() {
             "media" | "directory_media_stem" => {
-                if let Some(media_stem) = media_stem_opt_guess {
-                    if project_data.remove_media(&media_stem) {
-                        info!("[Backend Delete] Cleaned up XML media entry for non-existent '{}'.", media_stem);
+                let stem_dir_rel_path = std::path::Path::new(&item_relative_path_guess).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
+                if !stem_dir_rel_path.is_empty() {
+                    if project_data.remove_media_by_stem_dir(&stem_dir_rel_path) {
+                        info!("[Backend Delete] Cleaned up XML media entry for non-existent stem dir '{}'.", stem_dir_rel_path);
                         xml_changed = true;
                     }
                 }
             },
             "transcript" => {
-                if let Some(media_stem) = media_stem_opt_guess {
-                    if let Some(media_entry) = project_data.find_media_mut(&media_stem) {
+                let stem_dir_rel_path = std::path::Path::new(&item_relative_path_guess).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
+                if !stem_dir_rel_path.is_empty() {
+                    if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_dir_rel_path) {
                         let initial_transcript_len = media_entry.transcripts.len();
                         media_entry.transcripts.retain(|t| t.relative_path != item_relative_path_guess);
                         if media_entry.transcripts.len() < initial_transcript_len {
@@ -1877,21 +1929,26 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     info!("[Backend Delete] Deleted asset metadata from DB for project_id {}, transcript {}", project_id_for_db, item_relative_path);
                 }
 
-                info!("[Backend Delete] Updating XML to remove transcript link for '{}' with path '{}'", media_stem, item_relative_path);
+                info!("[Backend Delete] Updating XML to remove transcript link for stem name '{}' with path '{}'", media_stem, item_relative_path);
                 let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
                 let mut xml_changed = false;
-                if let Some(media_entry) = project_data.find_media_mut(media_stem) {
-                    let initial_transcript_len = media_entry.transcripts.len();
-                    media_entry.transcripts.retain(|t| t.relative_path != item_relative_path);
-                    if media_entry.transcripts.len() < initial_transcript_len {
-                        info!("[Backend Delete] Transcript entry removed from XML for media '{}'.", media_stem);
-                        xml_changed = true;
+                let stem_dir_rel_path = std::path::Path::new(&item_relative_path).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
+                
+                if !stem_dir_rel_path.is_empty() {
+                    if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_dir_rel_path) {
+                        let initial_transcript_len = media_entry.transcripts.len();
+                        media_entry.transcripts.retain(|t| t.relative_path != item_relative_path);
+                        if media_entry.transcripts.len() < initial_transcript_len {
+                            info!("[Backend Delete] Transcript entry removed from XML for stem dir '{}'.", stem_dir_rel_path);
+                            xml_changed = true;
+                        } else {
+                            warn!("[Backend Delete] Deleted transcript file, but no matching entry found in XML for path '{}' under stem dir '{}'.", item_relative_path, stem_dir_rel_path);
+                        }
                     } else {
-                        warn!("[Backend Delete] Deleted transcript file, but no matching entry found in XML for path '{}' under media '{}'.", item_relative_path, media_stem);
+                        warn!("[Backend Delete] Deleted transcript file, but stem dir '{}' not found in XML.", stem_dir_rel_path);
                     }
-                } else {
-                    warn!("[Backend Delete] Deleted transcript file, but media identifier '{}' not found in XML.", media_stem);
                 }
+                
                 if xml_changed {
                     save_project_xml(&xml_path_buf, &project_data)?;
                     info!("[Backend Delete] XML updated.");
@@ -2241,7 +2298,7 @@ fn rename_asset_with_folder(
             }
         },
         "media" => {
-            if let Some(entry) = project_data.find_media_mut(old_stem_name) {
+            if let Some(entry) = project_data.find_media_by_relative_path_mut(&old_relative_path) {
                 entry.name = new_name.to_string(); // Update XML entry name to new stem (truncated)
                 entry.relative_path = new_relative_path.clone(); // Update XML entry relative_path to new media file path (truncated)
 
@@ -2380,26 +2437,28 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             info!("[Backend Rename] Renaming transcript file {} -> {}", item_path_buf.display(), new_path.display());
             fs::rename(&item_path_buf, &new_path).map_err(|e| CommandError::from(format!("Failed to rename file: {}", e)))?;
 
-            let media_identifier = media_stem_opt.ok_or_else(|| CommandError::from("Could not determine media stem for transcript rename."))?;
             let new_relative_path_buf = new_path.strip_prefix(project_base_dir)?;
             let new_relative_path = new_relative_path_buf.to_string_lossy().replace("\\", "/");
+            let stem_dir_rel_path = std::path::Path::new(&item_relative_path).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
 
-            info!("[Backend Rename] Updating XML for media '{}': Path '{}' -> '{}', name -> '{}'", media_identifier, item_relative_path, new_relative_path, new_filename_with_ext);
+            info!("[Backend Rename] Updating XML for stem '{}': Path '{}' -> '{}', name -> '{}'", stem_dir_rel_path, item_relative_path, new_relative_path, new_filename_with_ext);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut xml_changed = false;
 
-            if let Some(media_entry) = project_data.find_media_mut(&media_identifier) {
-                if let Some(transcript_entry) = media_entry.transcripts.iter_mut().find(|t| t.relative_path == item_relative_path) {
-                    transcript_entry.name = new_filename_with_ext.to_string();
-                    transcript_entry.relative_path = new_relative_path;
-                    media_entry.transcripts.sort_by(|a,b| a.name.cmp(&b.name));
-                    xml_changed = true;
-                    info!("[Backend Rename] XML transcript entry updated.");
+            if !stem_dir_rel_path.is_empty() {
+                if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_dir_rel_path) {
+                    if let Some(transcript_entry) = media_entry.transcripts.iter_mut().find(|t| t.relative_path == item_relative_path) {
+                        transcript_entry.name = new_filename_with_ext.to_string();
+                        transcript_entry.relative_path = new_relative_path;
+                        media_entry.transcripts.sort_by(|a,b| a.name.cmp(&b.name));
+                        xml_changed = true;
+                        info!("[Backend Rename] XML transcript entry updated.");
+                    } else {
+                        warn!("[Backend Rename] Renamed transcript file, but could not find matching path '{}' in XML under stem '{}'.", item_relative_path, stem_dir_rel_path);
+                    }
                 } else {
-                    warn!("[Backend Rename] Renamed transcript file, but could not find matching path '{}' in XML under media '{}'.", item_relative_path, media_identifier);
+                    warn!("[Backend Rename] Renamed transcript file, but could not find stem dir '{}' in XML.", stem_dir_rel_path);
                 }
-            } else {
-                warn!("[Backend Rename] Renamed transcript file, but could not find media ID '{}' in XML.", media_identifier);
             }
 
             if xml_changed {

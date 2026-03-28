@@ -155,7 +155,7 @@
 			console.log(
 				"[LeftPanel] Double-clicked media, calling selectMedia.",
 			);
-			selectMedia(item, item.path);
+			selectMedia(item);
 		} else if (!item.is_directory && item.file_type === "data") {
 			console.log(
 				"[LeftPanel] Double-clicked data, calling handleOpenData.",

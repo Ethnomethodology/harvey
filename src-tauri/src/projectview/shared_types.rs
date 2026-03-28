@@ -452,6 +452,37 @@ impl ProjectXml {
         None
     }
 
+    pub fn find_media_by_relative_path_mut(&mut self, relative_path: &str) -> Option<&mut MediaFileEntryXml> {
+        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        None
+    }
+
+    pub fn find_media_by_stem_dir_mut(&mut self, stem_rel_path: &str) -> Option<&mut MediaFileEntryXml> {
+        // Media relative path usually looks like `harvey_files/Audios/input_videos/media/input_videos.mp3`
+        // We want to match `harvey_files/Audios/input_videos` part
+        let matcher = |f: &&mut MediaFileEntryXml| -> bool {
+            f.relative_path.starts_with(stem_rel_path)
+        };
+        if let Some(f) = self.audio_files.files.iter_mut().find(&matcher) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter_mut().find(&matcher) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter_mut().find(&matcher) {
+            return Some(f);
+        }
+        None
+    }
+
     pub fn find_media(&self, name: &str) -> Option<&MediaFileEntryXml> {
         if let Some(f) = self.audio_files.files.iter().find(|f| f.name == name) {
             return Some(f);
@@ -470,6 +501,18 @@ impl ProjectXml {
         self.audio_files.files.retain(|f| f.name != name);
         self.video_files.files.retain(|f| f.name != name);
         self.media_files.files.retain(|f| f.name != name);
+        let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        new_len < old_len
+    }
+
+    pub fn remove_media_by_stem_dir(&mut self, stem_rel_path: &str) -> bool {
+        let old_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        let matcher = |f: &MediaFileEntryXml| -> bool {
+            f.relative_path.starts_with(stem_rel_path)
+        };
+        self.audio_files.files.retain(|f| !matcher(f));
+        self.video_files.files.retain(|f| !matcher(f));
+        self.media_files.files.retain(|f| !matcher(f));
         let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
         new_len < old_len
     }

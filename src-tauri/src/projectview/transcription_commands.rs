@@ -724,7 +724,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 #[derive(serde::Deserialize, Debug)]
 pub struct SaveSpeakerConfigPayload {
     project_xml_path: String,
-    media_identifier: String,
+    media_relative_path: String,
     count: usize,
     names: Vec<String>,
     translated_names: Option<Vec<String>>,
@@ -732,8 +732,8 @@ pub struct SaveSpeakerConfigPayload {
 
 #[tauri::command]
 pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<(), CommandError> {
-    info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}, TranslatedNames={:?}",
-        payload.project_xml_path, payload.media_identifier, payload.count, payload.names, payload.translated_names);
+    info!("[Backend SaveSpeakers] Request: Project='{}', MediaRelPath='{}', Count={}, Names={:?}, TranslatedNames={:?}",
+        payload.project_xml_path, payload.media_relative_path, payload.count, payload.names, payload.translated_names);
 
     let xml_path = PathBuf::from(&payload.project_xml_path);
     if !xml_path.exists() || !xml_path.is_file() {
@@ -744,8 +744,8 @@ pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<()
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_and_updated = false;
 
-    if let Some(media_file) = project_data.find_media_mut(&payload.media_identifier) {
-        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", payload.media_identifier);
+    if let Some(media_file) = project_data.find_media_by_relative_path_mut(&payload.media_relative_path) {
+        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", payload.media_relative_path);
 
         let mut validated_count = payload.count;
         let mut validated_names = payload.names.clone();
@@ -780,11 +780,11 @@ pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<()
     }
 
     if !found_and_updated {
-        return Err(CommandError::from(format!("Media ID '{}' not found in XML.", payload.media_identifier)));
+        return Err(CommandError::from(format!("Media Rel Path '{}' not found in XML.", payload.media_relative_path)));
     }
 
     save_project_xml(&xml_path, &project_data)?;
-    info!("[Backend SaveSpeakers] Success for '{}'.", payload.media_identifier);
+    info!("[Backend SaveSpeakers] Success for '{}'.", payload.media_relative_path);
     Ok(())
 }
 
@@ -869,16 +869,18 @@ pub async fn save_transcript_json(
     let (_item_type, media_identifier_opt, transcript_relative_path_buf) = shared_utils::get_item_details(&normalized_transcript_path_buf, project_base_dir)?;
     let media_identifier = media_identifier_opt.ok_or_else(|| CommandError::from(format!("Could not determine media identifier for transcript path: {}", transcript_path)))?;
     let transcript_relative_path = transcript_relative_path_buf.to_string_lossy().replace("\\", "/");
+    let stem_rel_path = transcript_relative_path_buf.parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/"))
+        .unwrap_or_else(|| String::new());
 
-    info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path);
+    info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}', Stem Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path, stem_rel_path);
 
     let xml_content = fs::read_to_string(&normalized_project_xml_path_buf)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_media = false;
 
-    if let Some(media_entry) = project_data.find_media_mut(&media_identifier) {
+    if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_rel_path) {
         found_media = true;
-        debug!("[Backend Save Full Transcript JSON] Found media entry '{}' in XML.", media_identifier);
+        debug!("[Backend Save Full Transcript JSON] Found media entry for stem '{}' in XML.", stem_rel_path);
 
         let mut found_transcript_xml_entry = false;
         for transcript_xml_entry_instance in media_entry.transcripts.iter_mut() {
