@@ -430,7 +430,7 @@ pub fn run() {
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,
             projectview::translation_commands::translate_document_command,
-            projectview::translation_commands::translate_imported_transcript_command,
+            projectview::translation_commands::translate_standalone_transcript_command,
             projectview::translation_commands::cancel_translation_command,
 
 
@@ -500,7 +500,7 @@ pub fn run() {
 
             // --- Project view TRANSCRIPT IMPORT command ---
             projectview::transcription_handler::import_word_transcript,
-            projectview::transcription_handler::save_imported_transcript_and_update_xml
+            projectview::transcription_handler::save_standalone_transcript_and_update_xml
 
         ])
         .run(tauri::generate_context!())

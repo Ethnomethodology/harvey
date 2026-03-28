@@ -948,7 +948,7 @@ pub async fn save_transcript_json(
         &project_uuid_for_db,
         &transcript_metadata,
         &transcript_relative_path,
-        "transcript",
+        &file_type,
         None
     )?;
 

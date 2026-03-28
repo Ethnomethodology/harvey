@@ -988,7 +988,7 @@ mod tests {
             document_files: Default::default(),
             table_files: Default::default(),
             image_files: Default::default(),
-            imported_transcript_files: Default::default(),
+            standalone_transcript_files: Default::default(),
             document_metadata_files: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&project_data).unwrap();

@@ -622,7 +622,7 @@
         } else if (category === 'Transcripts') {
             // Standalone transcripts (imported)
             viewType = 'transcript';
-            originalDocType = 'imported_transcript';
+            originalDocType = 'standalone_transcript';
         } else if (category === 'Tables') {
             viewType = 'table';
             originalDocType = 'csv';

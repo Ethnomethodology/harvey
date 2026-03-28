@@ -56,7 +56,7 @@ pub struct TranslationProgressPayload {
 enum TranslationMode {
     Document,
     Transcript,
-    ImportedTranscript,
+    StandaloneTranscript,
 }
 
 impl std::fmt::Display for TranslationMode {
@@ -64,7 +64,7 @@ impl std::fmt::Display for TranslationMode {
         match self {
             TranslationMode::Document => write!(f, "document"),
             TranslationMode::Transcript => write!(f, "transcript"),
-            TranslationMode::ImportedTranscript => write!(f, "imported_transcript"),
+            TranslationMode::StandaloneTranscript => write!(f, "standalone_transcript"),
         }
     }
 }
@@ -202,7 +202,7 @@ pub async fn translate_document_command<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn translate_imported_transcript_command<R: Runtime>(
+pub async fn translate_standalone_transcript_command<R: Runtime>(
     app_handle: AppHandle<R>,
     project_xml_path: String,
     transcript_path: String,
@@ -211,7 +211,7 @@ pub async fn translate_imported_transcript_command<R: Runtime>(
     source_language: Option<String>,
     cancel_state: tauri::State<'_, TranslationCancellationState>,
 ) -> Result<TranslationInitiatedPayload, String> {
-    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, source_language, cancel_state, TranslationMode::ImportedTranscript).await
+    translate_file_command(app_handle, project_xml_path, transcript_path, model_name, target_language, source_language, cancel_state, TranslationMode::StandaloneTranscript).await
 }
 
 async fn translate_file_command<R: Runtime>(
@@ -400,7 +400,7 @@ async fn run_translation_process<R: Runtime>(
                 }).collect();
             }
         }
-    } else if mode == TranslationMode::ImportedTranscript {
+    } else if mode == TranslationMode::StandaloneTranscript {
         // Imported Transcript: Extract Col 3 (Speaker) and Col 4 (Text)
         if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
             if let Some(rows) = table_node.get("children").and_then(|c| c.as_array()) {
@@ -426,7 +426,7 @@ async fn run_translation_process<R: Runtime>(
     emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
 
     let engine = PythonTranslationEngine::new(app_handle.clone());
-    let mode_str = if mode == TranslationMode::Document { "document" } else { "transcript" };
+    let mode_str = if mode == TranslationMode::Document { "document" } else { "transcript" }; // "transcript" used here for the python script switch, ok to leave it
     let translated_texts = engine.translate(
         texts_to_translate.clone(),
         &model_path,
@@ -535,7 +535,7 @@ async fn run_translation_process<R: Runtime>(
             }
         }
 
-    } else if mode == TranslationMode::ImportedTranscript {
+    } else if mode == TranslationMode::StandaloneTranscript {
         // Imported Transcript update logic (Col 3 & 4)
         if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
             if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
@@ -625,9 +625,9 @@ async fn run_translation_process<R: Runtime>(
                 Some(format!("{}-{}", source_lang_code, target_lang_code))
             ).await?;
         },
-        TranslationMode::ImportedTranscript => {
-            use crate::projectview::transcription_handler::save_imported_transcript_and_update_xml;
-            save_imported_transcript_and_update_xml(
+        TranslationMode::StandaloneTranscript => {
+            use crate::projectview::transcription_handler::save_standalone_transcript_and_update_xml;
+            save_standalone_transcript_and_update_xml(
                 normalized_project_xml_path,
                 new_path.clone(),
                 new_filename,

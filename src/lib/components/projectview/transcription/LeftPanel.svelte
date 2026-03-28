@@ -94,7 +94,7 @@
 				node.file_type === "video" ||
 				node.file_type === "media" ||
 				node.file_type === "directory_media_stem" ||
-				node.file_type === "transcript";
+				node.file_type === "audio_transcript" || node.file_type === "video_transcript";
 			const isWithinAudioPath =
 				normalizedNodePath &&
 				normalizedNodePath.startsWith(audioPathPrefix);
@@ -284,7 +284,7 @@
 							? item.name.substring(0, item.name.lastIndexOf("."))
 							: item.name);
 					confirmMsg = `Are you sure you want to delete "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
-				} else if (item.file_type === "transcript") {
+				} else if (item.file_type === "audio_transcript" || item.file_type === "video_transcript") {
 					confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
 				} else if (item.file_type === "data") {
 					confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
@@ -367,7 +367,7 @@
 				itemToRename = null;
 				return;
 			}
-		} else if (item.file_type === "transcript") {
+		} else if (item.file_type === "audio_transcript" || item.file_type === "video_transcript") {
 			const mediaStem = item.media_xml_identifier;
 			const primaryTranscriptName = mediaStem
 				? `${mediaStem}.json`

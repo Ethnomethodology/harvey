@@ -144,16 +144,16 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         (Some(DOCS_DIR), Some(_), ext) if ["pdf", "md", "txt"].contains(&ext) => "doc".to_string(),
         (Some(IMAGES_DIR), Some(_), ext) if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"].contains(&ext) => "image".to_string(),
         (Some(TABLES_DIR), Some(_), ext) if ["csv", "xlsx"].contains(&ext) => "table".to_string(),
-        (Some(TRANSCRIPTS_DIR), Some(_), "json") => "imported_transcript".to_string(), // Standalone imported transcripts
+        (Some(TRANSCRIPTS_DIR), Some(_), "json") => "standalone_transcript".to_string(), // Standalone imported transcripts
 
         // --- Rules for files within specific subdirectories of a MEDIA stem folder ---
         // For these, `sub_folder` (components[3]) is "media" or "transcripts".
         (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac", "mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
         (Some(AUDIOS_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac"].contains(&ext) => "media".to_string(),
         (Some(VIDEOS_DIR), Some(MEDIA_SUBDIR), ext) if ["mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
-        (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(), // Media-associated transcript
-        (Some(AUDIOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(),
-        (Some(VIDEOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(),
+        (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "audio_transcript".to_string(), // Legacy fallback
+        (Some(AUDIOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "audio_transcript".to_string(),
+        (Some(VIDEOS_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "video_transcript".to_string(),
 
         // --- Legacy/Fallback rules for files directly under asset type dirs (NO dedicated stem folder) ---
         // For these, `sub_folder` (components[3]) would be None.
@@ -163,7 +163,7 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         (Some(DOCS_DIR), None, "txt") => "doc".to_string(),
         (Some(TABLES_DIR), None, "csv") => "table".to_string(),
         (Some(TABLES_DIR), None, "xlsx") => "table".to_string(),
-        (Some(TRANSCRIPTS_DIR), None, "json") => "imported_transcript".to_string(), // Legacy standalone
+        (Some(TRANSCRIPTS_DIR), None, "json") => "standalone_transcript".to_string(), // Legacy standalone
 
         (Some(MEDIA_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),
         (Some(AUDIOS_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),

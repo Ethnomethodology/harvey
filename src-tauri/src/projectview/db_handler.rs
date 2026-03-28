@@ -983,7 +983,7 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         "UPDATE asset_metadata SET file_type = 'transcript' 
          WHERE (file_type IS NULL OR file_type = '') 
          AND (
-             asset_type IN ('transcript', 'imported_transcript') 
+             asset_type IN ('transcript', 'standalone_transcript')
              OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
          )",
         []

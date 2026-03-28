@@ -132,7 +132,7 @@
                             .pop()
                             ?.toLowerCase() ?? "")}
                     <Film class="w-4 h-4" />
-                {:else if node.file_type === "transcript" || node.file_type === "imported_transcript"}
+                {:else if node.file_type === "audio_transcript" || node.file_type === "video_transcript" || node.file_type === "standalone_transcript"}
                     <MessageSquareText class="w-4 h-4" />
                 {:else if node.file_type === "note"}
                     <FileText class="w-4 h-4" />

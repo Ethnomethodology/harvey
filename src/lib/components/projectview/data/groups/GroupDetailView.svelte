@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
@@ -50,7 +50,7 @@
         documents: [],
         images: [],
         tables: [],
-        imported_transcripts: [],
+        standalone_transcripts: [],
         videos: [],
         others: [] // For any files that don't fit predefined categories
     };
@@ -115,7 +115,7 @@
         { key: 'documents', name: 'Documents', singularName: 'Document', icon: FileText },
         { key: 'images', name: 'Images', singularName: 'Image', icon: ImageIcon },
         { key: 'tables', name: 'Tables', singularName: 'Table', icon: Sheet },
-        { key: 'imported_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
+        { key: 'standalone_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
         { key: 'videos', name: 'Videos', singularName: 'Video', icon: Film },
         { key: 'others', name: 'Others', singularName: 'Other', icon: File }
     ];
@@ -127,7 +127,7 @@
             case 'document': return CATEGORY_ORDER.find(c => c.key === 'documents');
             case 'image': return CATEGORY_ORDER.find(c => c.key === 'images');
             case 'table': return CATEGORY_ORDER.find(c => c.key === 'tables');
-            case 'imported_transcript': return CATEGORY_ORDER.find(c => c.key === 'imported_transcripts');
+            case 'standalone_transcript': return CATEGORY_ORDER.find(c => c.key === 'standalone_transcripts');
             default: return CATEGORY_ORDER.find(c => c.key === 'others');
         }
     }
@@ -148,7 +148,7 @@
                 groupId: groupData.id
             });
 
-            const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+            const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], standalone_transcripts: [], videos: [], others: [] };
             allFiles = files || [];
             (files || []).forEach(file => { // Ensure files is an array
                 switch (file.file_type) {
@@ -157,7 +157,7 @@
                     case 'document': newCategorizedFiles.documents.push(file); break;
                     case 'image': newCategorizedFiles.images.push(file); break;
                     case 'table': newCategorizedFiles.tables.push(file); break;
-                    case 'imported_transcript': newCategorizedFiles.imported_transcripts.push(file); break;
+                    case 'standalone_transcript': newCategorizedFiles.standalone_transcripts.push(file); break;
                     default: newCategorizedFiles.others.push(file); break;
                 }
             });
@@ -182,8 +182,8 @@
             prepareDocumentView(filePathToOpen, 'tables');
         } else if (file.file_type === 'image') {
             prepareDocumentView(filePathToOpen, 'images');
-        } else if (file.file_type === 'imported_transcript') {
-            prepareImportedTranscriptView(filePathToOpen);
+        } else if (file.file_type === 'standalone_transcript') {
+            prepareStandaloneTranscriptView(filePathToOpen);
         } else if (file.file_type === 'audio' || file.file_type === 'video' || file.file_type === 'media_other') {
             prepareMediaNoteView(filePathToOpen);
         } else {
@@ -255,7 +255,7 @@
     $: if (groupData && groupData.id && $projectStore.id && $projectStore.xmlPath) {
         fetchGroupContents();
     } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) { // Added condition to clear if context is lost
-        categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+        categorizedFiles = { audios: [], documents: [], images: [], tables: [], standalone_transcripts: [], videos: [], others: [] };
         allFiles = [];
         isLoading = false;
         errorMessage = null;

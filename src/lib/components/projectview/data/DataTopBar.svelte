@@ -6,7 +6,7 @@
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { invoke } from '@tauri-apps/api/core';
-    import { project, switchTranscriptInDataTab, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
+    import { project, switchTranscriptInDataTab, clearStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen, isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
@@ -26,7 +26,7 @@
     import TableExportModal from '../modals/TableExportModal.svelte';
     import SplitTranscriptModal from '../modals/SplitTranscriptModal.svelte';
     import TopBarTableViewsDropdown from './TopBarTableViewsDropdown.svelte';
-    import { requestDocumentTranslation, requestImportedTranscriptTranslation } from '$lib/services/projectService.js';
+    import { requestDocumentTranslation, requestStandaloneTranscriptTranslation } from '$lib/services/projectService.js';
 
     const dispatch = createEventDispatcher();
     export let dataViewRef = null; // Still keep it for potential external usage if any, but adding getExportData
@@ -46,22 +46,22 @@
     let showDocumentExportModal = false;
     let showTableExportModal = false;
     let isLexicalDocument = false;
-    let isImportedTranscript = false;
+    let isStandaloneTranscript = false;
     let isImage = false;
     let isTable = false;
     let isGroup = false;
     let pathForExportModal = '';
 
-    $: currentTranscriptPathForSplit = isImportedTranscript ? $project.currentImportedTranscriptPath : $project.activeTranscriptPathInDataTab;
-    $: splitState = currentTranscriptPathForSplit && $project.importedTranscriptSplits ? $project.importedTranscriptSplits[currentTranscriptPathForSplit] : null;
+    $: currentTranscriptPathForSplit = isStandaloneTranscript ? $project.currentStandaloneTranscriptPath : $project.activeTranscriptPathInDataTab;
+    $: splitState = currentTranscriptPathForSplit && $project.standaloneTranscriptSplits ? $project.standaloneTranscriptSplits[currentTranscriptPathForSplit] : null;
     $: isHorizontalSplitActive = splitState?.orientation === 'horizontal';
     $: isVerticalSplitActive = splitState?.orientation === 'vertical';
 
     function handleSplitToggle(orientation) {
         if (orientation === 'horizontal' && isHorizontalSplitActive) {
-            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+            clearStandaloneTranscriptSplit(currentTranscriptPathForSplit);
         } else if (orientation === 'vertical' && isVerticalSplitActive) {
-            clearImportedTranscriptSplit(currentTranscriptPathForSplit);
+            clearStandaloneTranscriptSplit(currentTranscriptPathForSplit);
         } else {
             project.update(p => ({ ...p, showSplitTranscriptModal: true, pendingSplitOrientation: orientation }));
         }
@@ -74,15 +74,15 @@
 
         // Reset all export flags
         isLexicalDocument = false;
-        isImportedTranscript = false;
+        isStandaloneTranscript = false;
         isImage = false;
         isTable = false;
 
         if (p.selectedMediaNotePath) {
             // Audio/Video is open. Export is handled by the media transcript dropdown.
-        } else if (p.currentImportedTranscriptPath) {
+        } else if (p.currentStandaloneTranscriptPath) {
             isLexicalDocument = true;
-            isImportedTranscript = true;
+            isStandaloneTranscript = true;
         } else if (p.selectedDocumentPath) {
             if (p.selectedDocumentType === 'images' || p.selectedDocumentType === 'image' || /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath)) {
                  isImage = true;
@@ -90,7 +90,7 @@
                  isTable = true;
             } else if (p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
                  isLexicalDocument = true;
-                 isImportedTranscript = false;
+                 isStandaloneTranscript = false;
             }
         } else if (p.selectedGroupId) {
             // Group view, no export button
@@ -101,8 +101,8 @@
 
     function handleDocumentTranslateConfirm(event) {
         const { documentPath, model, targetLanguage, sourceLanguage } = event.detail;
-        if (isImportedTranscript) {
-            requestImportedTranscriptTranslation(documentPath, model, targetLanguage, sourceLanguage);
+        if (isStandaloneTranscript) {
+            requestStandaloneTranscriptTranslation(documentPath, model, targetLanguage, sourceLanguage);
         } else {
             requestDocumentTranslation(documentPath, model, targetLanguage, sourceLanguage);
         }
@@ -173,11 +173,11 @@
     $: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
 
     let isDocumentDirty = false;
-    let isImportedTranscriptDirty = false;
+    let isStandaloneTranscriptDirty = false;
     let isMediaNoteTranscriptDirty = false; // New state for media note
     let isPdfAnnotationsDirty = false;
     let activeDocumentEditorRef = null;
-    let activeImportedTranscriptEditorRef = null;
+    let activeStandaloneTranscriptEditorRef = null;
     let activeMediaNoteEditorRef = null; // New ref
     let isAnythingDirty = false;
     let showDirtyIndicator = false;
@@ -190,15 +190,15 @@
     $: { // This is the existing reactive block for autosave related logic
         const p = $project;
         isDocumentDirty = p.isDocumentDirty || p.isDocumentMetadataDirty; // Combine content and metadata dirty for documents
-        isImportedTranscriptDirty = p.isImportedTranscriptDirty;
+        isStandaloneTranscriptDirty = p.isStandaloneTranscriptDirty;
         isMediaNoteTranscriptDirty = p.isMediaNoteTranscriptDirty; // Read from store
         isPdfAnnotationsDirty = p.isPdfAnnotationsDirty;
 
         activeDocumentEditorRef = p.activeDocumentEditorRef;
-        activeImportedTranscriptEditorRef = p.activeImportedTranscriptEditorRef;
+        activeStandaloneTranscriptEditorRef = p.activeStandaloneTranscriptEditorRef;
         activeMediaNoteEditorRef = p.activeMediaNoteEditorRef; // Read from store
 
-        isAnythingDirty = isDocumentDirty || isImportedTranscriptDirty || isMediaNoteTranscriptDirty || isPdfAnnotationsDirty;
+        isAnythingDirty = isDocumentDirty || isStandaloneTranscriptDirty || isMediaNoteTranscriptDirty || isPdfAnnotationsDirty;
         showDirtyIndicator = isAnythingDirty;
     }
 
@@ -208,7 +208,7 @@
             let currentFileName = null;
             let activePath = $project.selectedDocumentPath ||
                              $project.selectedMediaNotePath ||
-                             $project.currentImportedTranscriptPath ||
+                             $project.currentStandaloneTranscriptPath ||
                              $project.selectedTablePath ||
                              $project.selectedImagePath;
 
@@ -236,7 +236,7 @@
     $: {
         const newActivePath = $project.selectedDocumentPath ||
                              $project.selectedMediaNotePath ||
-                             $project.currentImportedTranscriptPath ||
+                             $project.currentStandaloneTranscriptPath ||
                              $project.selectedTablePath ||
                              $project.selectedImagePath;
 
@@ -290,11 +290,11 @@
                 // No direct editorRef.save() for PDF annotations usually, service call is direct
                 saveAction = 'pdfAnnotations';
                 console.log(`[DataTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
-            } else if ((p.isImportedTranscriptDirty || p.isImportedTranscriptMetadataDirty) && p.currentImportedTranscriptPath && p.activeImportedTranscriptEditorRef?.ref) {
+            } else if ((p.isStandaloneTranscriptDirty || p.isStandaloneTranscriptMetadataDirty) && p.currentStandaloneTranscriptPath && p.activeStandaloneTranscriptEditorRef?.ref) {
                 shouldAutosave = true;
-                activeEditorRefToSave = p.activeImportedTranscriptEditorRef.ref;
-                saveAction = 'importedTranscript';
-                 console.log(`[DataTopBar Autosave Watch] Imported Transcript ${p.currentImportedTranscriptPath} is dirty.`);
+                activeEditorRefToSave = p.activeStandaloneTranscriptEditorRef.ref;
+                saveAction = 'standaloneTranscript';
+                 console.log(`[DataTopBar Autosave Watch] Imported Transcript ${p.currentStandaloneTranscriptPath} is dirty.`);
             } else if (p.isMediaNoteTranscriptDirty && p.selectedMediaNotePath && p.activeMediaNoteEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeMediaNoteEditorRef.ref;
@@ -322,8 +322,8 @@
                     editorStillActiveAndDirty = currentProjState.activeDocumentEditorRef?.ref === activeEditorRefToSave && (currentProjState.isDocumentDirty || currentProjState.isDocumentMetadataDirty);
                 } else if (saveAction === 'pdfAnnotations') {
                     editorStillActiveAndDirty = currentProjState.selectedDocumentPath?.toLowerCase().endsWith('.pdf') && currentProjState.isPdfAnnotationsDirty;
-                } else if (saveAction === 'importedTranscript' && activeEditorRefToSave) {
-                    editorStillActiveAndDirty = currentProjState.activeImportedTranscriptEditorRef?.ref === activeEditorRefToSave && (currentProjState.isImportedTranscriptDirty || currentProjState.isImportedTranscriptMetadataDirty);
+                } else if (saveAction === 'standaloneTranscript' && activeEditorRefToSave) {
+                    editorStillActiveAndDirty = currentProjState.activeStandaloneTranscriptEditorRef?.ref === activeEditorRefToSave && (currentProjState.isStandaloneTranscriptDirty || currentProjState.isStandaloneTranscriptMetadataDirty);
                 } else if (saveAction === 'mediaNoteTranscript' && activeEditorRefToSave) {
                     editorStillActiveAndDirty = currentProjState.activeMediaNoteEditorRef?.ref === activeEditorRefToSave && currentProjState.isMediaNoteTranscriptDirty;
                 } else if (saveAction === 'table' && activeEditorRefToSave) {
@@ -456,8 +456,8 @@
             // Find the correct active editor
             if (p.activeDocumentEditorRef) {
                 editorRef = p.activeDocumentEditorRef;
-            } else if (p.activeImportedTranscriptEditorRef) {
-                editorRef = p.activeImportedTranscriptEditorRef;
+            } else if (p.activeStandaloneTranscriptEditorRef) {
+                editorRef = p.activeStandaloneTranscriptEditorRef;
             }
             // Removed activeMediaNoteEditorRef from live transcription updates
 
@@ -628,13 +628,13 @@
         {/if}
         {#if isLexicalDocument}
             <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => {
-                    if (isImportedTranscript) {
-                        pathForExportModal = $project.currentImportedTranscriptPath;
+                    if (isStandaloneTranscript) {
+                        pathForExportModal = $project.currentStandaloneTranscriptPath;
                         isExportModalOpen = true;
                     } else {
                         showDocumentExportModal = true;
                     }
-                }} title={isImportedTranscript ? "Export Transcript" : "Export Document"}>
+                }} title={isStandaloneTranscript ? "Export Transcript" : "Export Document"}>
                 <Share class="w-3.5 h-3.5" />
                 <span>Export</span>
             </Button>
@@ -663,7 +663,7 @@
         {#if $activeMediaFile || isLexicalDocument || isTable || isImage}
             <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
         {/if}
-        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
+        {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
             <button
                 on:click={() => handleSplitToggle('horizontal')}
                 class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
@@ -709,7 +709,7 @@
                 </button>
             </div>
         {/if}
-        {#if $isMediaEditorOpen || isImportedTranscript || $activeMediaFile || isLexicalDocument}
+        {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile || isLexicalDocument}
             <button
                 on:click="{() => openLayoutSettingsModal()}"
                 class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
@@ -719,7 +719,7 @@
             </button>
         {/if}
 
-        {#if isImportedTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
+        {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
             <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
         {/if}
         <button
@@ -783,7 +783,7 @@
 
 <TranslateDocumentModal
     bind:showModal={showTranslateDocumentModal}
-    activeDocumentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
+    activeDocumentPath={isStandaloneTranscript ? $project.currentStandaloneTranscriptPath : $project.selectedDocumentPath}
     on:confirm={handleDocumentTranslateConfirm}
     on:openConfig={() => dispatch("openConfig")}
     on:runInBackgroundAndClose={() => toggleTranslateModal(false)}
@@ -792,7 +792,7 @@
 
 <DocumentExportModal 
     bind:showModal={showDocumentExportModal} 
-    documentPath={isImportedTranscript ? $project.currentImportedTranscriptPath : $project.selectedDocumentPath}
+    documentPath={isStandaloneTranscript ? $project.currentStandaloneTranscriptPath : $project.selectedDocumentPath}
     on:confirm={() => message('Document exported successfully.', { title: 'Success', type: 'info' })}
     on:close={() => showDocumentExportModal = false}
 />

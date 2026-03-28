@@ -1,6 +1,6 @@
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
-    import { project, clearImportedTranscriptSplit } from '$lib/stores/projectStore.js';
+    import { project, clearStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import TranscriptEditorPanel from './TranscriptEditorPanel.svelte';
@@ -56,7 +56,7 @@
     }
 
     function attemptSetupSync() {
-        console.log('[ImportedTranscriptView] attemptSetupSync called. splitPartnerPath:', splitPartnerPath);
+        console.log('[StandaloneTranscriptView] attemptSetupSync called. splitPartnerPath:', splitPartnerPath);
         cleanupSync();
         let attempts = 0;
         const interval = setInterval(() => {
@@ -65,13 +65,13 @@
                 const el1 = primaryPanel.getScrollElement();
                 const el2 = secondaryPanel.getScrollElement();
                 if (el1 && el2) {
-                    console.log('[ImportedTranscriptView] Both scroll elements found. Starting sync.');
+                    console.log('[StandaloneTranscriptView] Both scroll elements found. Starting sync.');
                     clearInterval(interval);
                     startSync(el1, el2);
                 }
             }
             if (attempts > 20) {
-                console.warn('[ImportedTranscriptView] Sync setup timed out after 20 attempts.');
+                console.warn('[StandaloneTranscriptView] Sync setup timed out after 20 attempts.');
                 clearInterval(interval);
             }
         }, 100);
@@ -131,7 +131,7 @@
         el2.addEventListener('keyup', handleInteraction);
 
         cleanupSync = () => {
-            console.log('[ImportedTranscriptView] Cleaning up sync listeners.');
+            console.log('[StandaloneTranscriptView] Cleaning up sync listeners.');
             el1.removeEventListener('scroll', onScroll);
             el2.removeEventListener('scroll', onScroll);
             el1.removeEventListener('pointerover', handleInteraction);
@@ -146,12 +146,12 @@
         };
     }
 
-    $: splitInfo = $project.importedTranscriptSplits[itemPath];
+    $: splitInfo = $project.standaloneTranscriptSplits[itemPath];
     $: splitPartnerPath = splitInfo?.partner;
     $: orientation = splitInfo?.orientation || 'horizontal';
 
     function forwardEvent(event) {
-        console.log(`[ImportedTranscriptView] Forwarding event: ${event.type}`);
+        console.log(`[StandaloneTranscriptView] Forwarding event: ${event.type}`);
 		dispatch(event.type, event.detail);
 	}
 
@@ -186,7 +186,7 @@
                 const attachmentsField = customFields.find(f => f.key === 'attachments');
                 if (attachmentsField && attachmentsField.value) {
                     attachments = JSON.parse(attachmentsField.value);
-                    console.log("[ImportedTranscriptView] Loaded attachments:", attachments);
+                    console.log("[StandaloneTranscriptView] Loaded attachments:", attachments);
                     // Do not auto-load mediaPath. Wait for user request.
                     // if (attachments.length > 0) {
                     //    mediaPath = convertFileSrc(attachments[0]);
@@ -207,7 +207,7 @@
                 // mediaPath = null;
             }
         } catch (error) {
-            console.error(`[ImportedTranscriptView] Error loading attachments:`, error);
+            console.error(`[StandaloneTranscriptView] Error loading attachments:`, error);
             attachments = [];
             mediaPath = null;
         }
@@ -236,7 +236,7 @@
     }
 
     onMount(() => {
-		console.log('[ImportedTranscriptView] Component container mounted. Transcript path:', itemPath);
+		console.log('[StandaloneTranscriptView] Component container mounted. Transcript path:', itemPath);
         if (itemPath) loadAttachments(itemPath);
 	});
 
@@ -313,7 +313,7 @@
                         <button 
                             class="hover:text-red-500 ml-2 flex-shrink-0" 
                             title="Close Split"
-                            on:click={() => clearImportedTranscriptSplit(itemPath)}
+                            on:click={() => clearStandaloneTranscriptSplit(itemPath)}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
                                 <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
@@ -355,7 +355,7 @@
                     </div>
                 {:else}
                     <div class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500">
-                        <span>No transcript path provided to ImportedTranscriptView.</span>
+                        <span>No transcript path provided to StandaloneTranscriptView.</span>
                     </div>
                 {/if}
             {/key}

@@ -457,7 +457,7 @@ mod tests {
             image_files: Default::default(), // Initialize as empty
             document_files: Default::default(),
             table_files: Default::default(),
-            imported_transcript_files: Default::default(),
+            standalone_transcript_files: Default::default(),
             document_metadata_files: Default::default(), // Should remain empty for image metadata
         };
         let xml_string = quick_xml::se::to_string(&project_data).unwrap();

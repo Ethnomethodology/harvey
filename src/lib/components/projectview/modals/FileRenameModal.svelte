@@ -17,13 +17,13 @@
 
 	// Determines if the user should only input a base name (stem).
 	// 'transcript' here refers to media-associated transcripts which become .json.
-	$: isStemInputMode = ['media', 'doc', 'table', 'image', 'imported_transcript', 'note', 'transcript'].includes(itemType);
+	$: isStemInputMode = ['media', 'doc', 'table', 'image', 'standalone_transcript', 'note', 'transcript'].includes(itemType);
 
 	let currentBaseName = '';
 	let currentExtension = '';
     let currentDisplayName = '';
 
-	$: titleType = itemType === 'imported_transcript' ? 'Transcript' : (itemType === 'survey view' ? 'Survey View' : (itemType ? itemType.charAt(0).toUpperCase() + itemType.slice(1) : 'Item'));
+	$: titleType = itemType === 'standalone_transcript' ? 'Transcript' : (itemType === 'survey view' ? 'Survey View' : (itemType ? itemType.charAt(0).toUpperCase() + itemType.slice(1) : 'Item'));
 
 	function updateNameParts() {
 		if (currentName) {
@@ -99,12 +99,12 @@
 		let nameToSend = '';
 		let isSameName = false;
 
-		if (itemType === 'media' || itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript') {
+		if (itemType === 'media' || itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'standalone_transcript') {
 			nameToSend = baseNameInput; // Send stem
 			if (nameToSend === currentBaseName) {
 				isSameName = true;
 			}
-		} else if (itemType === 'note' || itemType === 'transcript') { // 'transcript' here is media-associated
+		} else if (itemType === 'note' || itemType === 'audio_transcript' || itemType === 'video_transcript') { // 'transcript' here is media-associated
 			// These types have a fixed .json extension added to the stem.
 			nameToSend = `${baseNameInput}.json`;
 			if (nameToSend === currentName) {
@@ -195,9 +195,9 @@
 				<Helper class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 					{#if (itemType === 'doc' || itemType === 'table' || itemType === 'image') && currentExtension}
 						Enter the new file name.
-					{:else if itemType === 'note' || itemType === 'transcript'}
+					{:else if itemType === 'note' || itemType === 'audio_transcript' || itemType === 'video_transcript'}
 						Enter the new file name.
-					{:else if itemType === 'media' || itemType === 'imported_transcript'}
+					{:else if itemType === 'media' || itemType === 'standalone_transcript'}
 						Enter the new file name.
 					{:else}
 						Enter just the file name. The original extension '<code>{currentExtension || '.ext'}</code>' will be used.

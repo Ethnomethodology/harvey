@@ -1,9 +1,9 @@
 <!-- src/lib/components/projectview/data/DataLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, HARVEY_FILES_DIR, MEDIA_DIR_NAME, AUDIOS_DIR_NAME, VIDEOS_DIR_NAME } from '$lib/stores/projectStore.js'; 
+	import { project, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, HARVEY_FILES_DIR, MEDIA_DIR_NAME, AUDIOS_DIR_NAME, VIDEOS_DIR_NAME } from '$lib/stores/projectStore.js';
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
+	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteStandaloneTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
     
     import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
 
@@ -244,14 +244,14 @@
                 case 'Delete': const confirmImageMsg = `Delete image "${item.name}"? This cannot be undone.`; const imageOptions = { title: 'Confirm Image Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmImageMsg, imageOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { await message(`Error deleting image: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Image deletion cancelled.' })); } } catch (e) { await message(`Error deleting image: ${e}`, { title: "Delete Error", type: "error" }); } break;
                 default: console.warn(`[DataLeftPanel] Unknown action for image: ${action}`);
             }
-        } else if (itemType === 'imported_transcript') { 
+        } else if (itemType === 'standalone_transcript') {
             switch (action) {
                 case 'Open': 
-                    dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
+                    dispatch('requestviewchange', { viewType: 'standalone_transcript', itemPath: item.path });
                     break;
                 case 'Rename': 
                     const nameWithoutExt = item.name.toLowerCase().endsWith('.json') ? item.name.slice(0, -5) : item.name;
-                    itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
+                    itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'standalone_transcript', media_xml_identifier: null };
                     showRenameModal = true; 
                     break;
                 case 'Delete':
@@ -260,7 +260,7 @@
                     try {
                         const confirmed = await confirm(confirmTranscriptMsg, transcriptOptions);
                         if (confirmed) {
-                            try { await deleteImportedTranscript(item.path); project.update(p => ({ ...p, currentImportedTranscriptPath: null })); } 
+                            try { await deleteStandaloneTranscript(item.path); project.update(p => ({ ...p, currentStandaloneTranscriptPath: null })); }
                             catch (err) { await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' }); }
                         } else { project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' })); }
                     } catch (e) { await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });}
@@ -357,7 +357,7 @@
             handleTableImport();
         } else if (categoryType === 'image') {
             try { await importImageFile(); } catch (e) { console.error(`[DataLeftPanel] Error importImageFile:`, e); }
-        } else if (categoryType === 'imported_transcript') { 
+        } else if (categoryType === 'standalone_transcript') {
             showImportTranscriptModal = true;
         } else {
             message(`Specific import for ${categoryInfo.name} not implemented.`, { title: 'Coming Soon', type: 'info' });
@@ -640,7 +640,7 @@
             if (!allowedImageExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original image file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[DataLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
-        } else if (item.file_type === 'imported_transcript') { 
+        } else if (item.file_type === 'standalone_transcript') {
             const nameForBackend = finalNewNameFromModal.endsWith('.json') ? finalNewNameFromModal : `${finalNewNameFromModal}.json`;
             try { await renameProjectItem(item.path, nameForBackend, item.file_type); }
             catch (err) { console.error(`[DataLeftPanel] Rename failed for imported transcript ${item.name}:`, err); } 
@@ -813,7 +813,7 @@
 
     async function handleItemClick(item) {
         console.log(`[DataLeftPanel] handleItemClick: Clicked item path: ${item.path}`);
-        if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript' || item.file_type === 'media') { 
+        if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'standalone_transcript' || item.file_type === 'media') {
             let viewType = item.file_type; 
             if (item.file_type === 'doc') viewType = 'documents';
             else if (item.file_type === 'table') viewType = 'tables';
@@ -876,7 +876,7 @@
         { name: 'Documents', type: 'document', iconComponent: FileText, importEnabled: true },
         { name: 'Images', type: 'image', iconComponent: ImageIcon, importEnabled: true },
         { name: 'Tables', type: 'table', iconComponent: Sheet, importEnabled: true },
-        { name: 'Transcripts', type: 'imported_transcript', iconComponent: MessageSquareText, importEnabled: true },
+        { name: 'Transcripts', type: 'standalone_transcript', iconComponent: MessageSquareText, importEnabled: true },
         { name: 'Videos', type: 'video', iconComponent: Film, importEnabled: true },
     ];
     const IMPORT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"><path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/></svg>`;
@@ -912,7 +912,7 @@
         const projectDocumentFiles = $project.documentFiles || [];
         const projectTableFiles = $project.tableFiles || [];
         const projectImageFiles = $project.imageFiles || [];
-        const projectImportedTranscriptFiles = $project.importedTranscriptFiles || []; 
+        const projectStandaloneTranscriptFiles = $project.standaloneTranscriptFiles || [];
 
         let videos = [];
         let audios = [];
@@ -933,9 +933,9 @@
             return { name: imageXml.name, path: fullPath, relativePath: imageXml.relativePath, file_type: 'image', assetUrl };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
-        let importedTranscripts = projectImportedTranscriptFiles.map(tsXml => {
+        let standaloneTranscripts = projectStandaloneTranscriptFiles.map(tsXml => {
             const fullPath = $project.baseDirectory ? normalizePath(`${$project.baseDirectory}/${tsXml.relativePath}`) : tsXml.relativePath;
-            return { name: tsXml.name, path: fullPath, relativePath: tsXml.relativePath, file_type: 'imported_transcript' };
+            return { name: tsXml.name, path: fullPath, relativePath: tsXml.relativePath, file_type: 'standalone_transcript' };
         }).sort((a,b) => a.name.localeCompare(b.name));
 
 
@@ -983,7 +983,7 @@
             else if (cat.type === 'document') { return { ...cat, files: documents }; }
             else if (cat.type === 'table') { return { ...cat, files: tables }; }
             else if (cat.type === 'image') { return { ...cat, files: images }; }
-            else if (cat.type === 'imported_transcript') { return { ...cat, files: importedTranscripts }; } 
+            else if (cat.type === 'standalone_transcript') { return { ...cat, files: standaloneTranscripts }; }
             else { return { ...cat, files: [] }; }
         });
     })();
@@ -997,7 +997,7 @@
       }));
     })();
 
-    $: selectedItemPathInStore = $project.selectedMediaNotePath || $project.selectedDocumentPath || $project.selectedTablePath || $project.selectedImagePath || $project.currentImportedTranscriptPath || null;
+    $: selectedItemPathInStore = $project.selectedMediaNotePath || $project.selectedDocumentPath || $project.selectedTablePath || $project.selectedImagePath || $project.currentStandaloneTranscriptPath || null;
 
     $: {
         let autoPath = null;
@@ -1005,8 +1005,8 @@
             autoPath = $project.selectedMediaNotePath;
         } else if ($project.selectedDocumentPath) {
             autoPath = $project.selectedDocumentPath;
-        } else if ($project.currentImportedTranscriptPath) {
-            autoPath = $project.currentImportedTranscriptPath;
+        } else if ($project.currentStandaloneTranscriptPath) {
+            autoPath = $project.currentStandaloneTranscriptPath;
         }
 
         if (autoPath && autoPath !== prevAutoOpenPath) {
@@ -1016,8 +1016,8 @@
 
             if (AUDIO_EXTENSIONS.has(extension) || VIDEO_EXTENSIONS.has(extension)) {
                 itemCategoryType = 'media_note'; 
-            } else if ($project.importedTranscriptFiles?.some(f => f.relativePath && normalizePath(`${$project.baseDirectory}/${f.relativePath}`) === autoPath)) {
-                itemCategoryType = 'imported_transcript';
+            } else if ($project.standaloneTranscriptFiles?.some(f => f.relativePath && normalizePath(`${$project.baseDirectory}/${f.relativePath}`) === autoPath)) {
+                itemCategoryType = 'standalone_transcript';
             } else if (lowerPath.endsWith('.pdf') || (lowerPath.endsWith('.json') && !itemCategoryType) || lowerPath.endsWith('.txt') || lowerPath.endsWith('.md')) {
                 itemCategoryType = 'document';
             } else if (lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
@@ -1055,7 +1055,7 @@
                     const DOC_JSON_EXTENSIONS = new Set(['json']);
                     const TRANSCRIPT_EXTENSIONS = new Set(['json']);
                     const projectFileListsForOthers = [
-                        { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
+                        { files: $project.standaloneTranscriptFiles, type: 'standalone_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
                         { files: $project.imageFiles, type: 'image', isRelative: true, exts: IMAGE_EXTENSIONS },
                         { files: $project.tableFiles, type: 'table', isRelative: true, exts: TABLE_EXTENSIONS },
                         { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) }
@@ -1195,7 +1195,7 @@
 
                                 {#if categoryOpenState[category.type]}
                                     <div id={`category-content-${category.type}`} role="region">
-                                        {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
+                                        {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'standalone_transcript') && category.files.length > 0}
                                             <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-700">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
@@ -1215,7 +1215,7 @@
                                                     </li>
                                                 {/each}
                                             </ul>
-                                        {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
+                                        {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'standalone_transcript')}
                                             <p class="ml-9 text-xs text-gray-400 dark:text-gray-700 italic py-1">No {category.name.toLowerCase()} found.</p>
                                         {:else}
                                              <p class="ml-9 text-xs text-gray-400 dark:text-gray-700 italic py-1">No files in this category.</p>
@@ -1489,7 +1489,7 @@
                  <hr class="my-1 border-gray-200 dark:border-gray-800" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
-            {:else if contextMenuItem.file_type === 'imported_transcript'}
+            {:else if contextMenuItem.file_type === 'standalone_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Open</button>
                 <button
                     on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}

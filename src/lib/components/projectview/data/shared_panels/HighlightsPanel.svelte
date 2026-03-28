@@ -5,7 +5,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { refresher } from '$lib/stores/refresherStore.js';
 
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setStandaloneTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations, saveTableHighlights, loadHighlightsForFile } from '$lib/services/projectService.js';
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
@@ -86,9 +86,9 @@
         if (p.selectedMediaNotePath) {
             effectiveType = 'doc'; // Media transcripts are handled like docs
             activeHighlights = p.currentDocumentHighlights || [];
-        } else if (p.currentImportedTranscriptPath) {
-            effectiveType = 'imported_transcript';
-            activeHighlights = p.currentImportedTranscriptHighlights || [];
+        } else if (p.currentStandaloneTranscriptPath) {
+            effectiveType = 'standalone_transcript';
+            activeHighlights = p.currentStandaloneTranscriptHighlights || [];
         } else if (currentPath?.toLowerCase().endsWith('.pdf') || (itemPath && itemPath.toLowerCase().endsWith('.pdf'))) {
             effectiveType = 'pdf';
             activeHighlights = p.currentPdfAnnotations || [];
@@ -142,7 +142,7 @@
                 tags: h.tags || [],
                 comments: h.comments || []
             }));
-        } else { // Handles 'doc', 'pdf', 'imported_transcript'
+        } else { // Handles 'doc', 'pdf', 'standalone_transcript'
             const isPdf = type === 'pdf';
             const map = new Map();
             for (const highlight of highlights) {
@@ -185,8 +185,8 @@
     $: processedHighlights = processHighlights(activeHighlights, effectiveType);
 
     async function handleHighlightsUpdate(newHighlights) {
-        if (effectiveType === 'imported_transcript') {
-            setImportedTranscriptHighlights(newHighlights);
+        if (effectiveType === 'standalone_transcript') {
+            setStandaloneTranscriptHighlights(newHighlights);
         } else if (effectiveType === 'pdf') {
             updatePdfAnnotations(newHighlights, true);
         } else if (effectiveType === 'image') {
@@ -386,7 +386,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if effectiveType === 'doc' || effectiveType === 'media' || effectiveType === 'imported_transcript' || effectiveType === 'image' || effectiveType === 'table' || effectiveType === 'pdf'}
+        {:else if effectiveType === 'doc' || effectiveType === 'media' || effectiveType === 'standalone_transcript' || effectiveType === 'image' || effectiveType === 'table' || effectiveType === 'pdf'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>

@@ -269,13 +269,13 @@
             let nameToSend;
             if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
                 nameToSend = editedFileNameStem;
-            } else if (itemType === 'imported_transcript') {
+            } else if (itemType === 'standalone_transcript') {
                 nameToSend = editedFileNameStem.endsWith('.json') ? editedFileNameStem : `${editedFileNameStem}.json`;
             } else {
                 nameToSend = currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem;
             }
 
-            let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'imported_transcript' : itemType);
+            let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'standalone_transcript' ? 'standalone_transcript' : itemType);
 
             try {
                 await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
@@ -485,7 +485,7 @@
     // Always clear dirty flags since we don't have manual saves anymore
     $: {
         const currentProjectState = get(project);
-        if (itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript') {
+        if (itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'standalone_transcript') {
             if (currentProjectState.isDocumentMetadataDirty) project.update(p => ({ ...p, isDocumentMetadataDirty: false }));
         } else if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
             if (currentProjectState.isMediaNoteMetadataDirty) project.update(p => ({ ...p, isMediaNoteMetadataDirty: false }));
@@ -553,7 +553,7 @@
                 </div>
 
                 <!-- Attachments Section -->
-                {#if (itemType === 'doc' || itemType === 'imported_transcript') && currentFileMetadata?.customFields && Array.isArray(currentFileMetadata.customFields)}
+                {#if (itemType === 'doc' || itemType === 'standalone_transcript') && currentFileMetadata?.customFields && Array.isArray(currentFileMetadata.customFields)}
                     {@const attachmentsField = currentFileMetadata.customFields.find(f => f.key === 'attachments')}
                     {#if attachmentsField && attachmentsField.value}
                         {@const attachments = JSON.parse(attachmentsField.value)}

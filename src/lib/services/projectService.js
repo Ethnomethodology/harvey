@@ -59,8 +59,8 @@ import {
     markDocumentMetadataAsSaved,
     markPdfAnnotationsAsSaved,
 
-    prepareImportedTranscriptView,
-    markImportedTranscriptChangesDiscarded,
+    prepareStandaloneTranscriptView,
+    markStandaloneTranscriptChangesDiscarded,
 
     showUnsavedChangesPrompt,
     hideUnsavedChangesPrompt,
@@ -143,10 +143,10 @@ export async function loadHighlightsForFile(filePath, itemType) {
         await loadImageAnnotations(filePath);
     } else if (itemType === 'tables' || itemType === 'table' || lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
         await loadTableHighlights(filePath);
-    } else if (itemType === 'imported_transcript') {
+    } else if (itemType === 'standalone_transcript') {
         // Assuming there's a function to load highlights for imported transcripts
         // If not, this part needs to be implemented. For now, let's log it.
-        console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
+        console.log(`[ProjectService] Highlight loading for 'standalone_transcript' is not yet implemented.`);
     } else { // 'doc' (non-PDF), etc.
         const metadata = await loadDocumentMetadata(filePath);
         if (metadata && metadata.highlights) {
@@ -458,7 +458,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
             imageFiles: loadedData.image_files || [],
-            importedTranscriptFiles: loadedData.imported_transcript_files || [],
+            standaloneTranscriptFiles: loadedData.standalone_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
             isLoading: false,
             error: null,
@@ -638,7 +638,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
             imageFiles: loadedData.image_files || [],
-            importedTranscriptFiles: loadedData.imported_transcript_files || [],
+            standaloneTranscriptFiles: loadedData.standalone_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
             isLoading: false,
             error: null,
@@ -900,9 +900,9 @@ export async function importTranscriptFile(sourceType = 'msWord') {
             setAssetImportStatus(true, `Importing transcript from ${sourceFilename}...`);
             const newTranscriptJsonPath = await invoke('import_word_transcript', { sourceDocxPathStr: sourceDocxPath, projectXmlPathStr: projectXmlPath });
             await refreshProjectFiles();
-            const importedTranscriptName = await basename(newTranscriptJsonPath);
-            setAssetImportStatus(false, `Transcript "${importedTranscriptName}" imported successfully.`);
-            prepareImportedTranscriptView(newTranscriptJsonPath);
+            const standaloneTranscriptName = await basename(newTranscriptJsonPath);
+            setAssetImportStatus(false, `Transcript "${standaloneTranscriptName}" imported successfully.`);
+            prepareStandaloneTranscriptView(newTranscriptJsonPath);
             return newTranscriptJsonPath;
         } else {
             throw new Error(`Unsupported transcript source type: ${sourceType}`);
@@ -914,7 +914,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
     }
 }
 
-export async function deleteImportedTranscript(transcriptAbsolutePath) {
+export async function deleteStandaloneTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
 
@@ -1480,14 +1480,14 @@ export async function deleteProjectItem(itemPath) {
         const wasSelectedMedia = currentTs.selectedMediaFile?.path === itemPath;
         const wasCurrentTranscript = currentTs.currentTranscriptPath === itemPath;
         const wasSelectedDocument = currentProj.selectedDocumentPath === itemPath;
-        const wasSelectedImportedTranscript = currentProj.currentImportedTranscriptPath === itemPath;
+        const wasSelectedStandaloneTranscript = currentProj.currentStandaloneTranscriptPath === itemPath;
         const wasSelectedMediaNote = currentProj.selectedMediaNotePath === itemPath;
         const wasActiveTranscriptInDataTab = currentProj.activeTranscriptPathInDataTab === itemPath;
 
         if (wasSelectedMedia) selectMedia(null);
         else if (wasCurrentTranscript) clearTranscriptState();
         else if (wasSelectedDocument) prepareDocumentView(null);
-        else if (wasSelectedImportedTranscript) prepareImportedTranscriptView(null);
+        else if (wasSelectedStandaloneTranscript) prepareStandaloneTranscriptView(null);
         else if (wasSelectedMediaNote) prepareMediaNoteView(null);
 
         // Clear the data tab's active transcript if it was deleted, so it can correctly fall back or show "No Transcription Yet"
@@ -1939,7 +1939,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
 
         const transcriptFilename = await basename(targetFullPath);
 
-        await invoke('save_imported_transcript_and_update_xml', {
+        await invoke('save_standalone_transcript_and_update_xml', {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             transcriptName: transcriptFilename,
@@ -1982,7 +1982,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
             assetRelativePath: relativePath,
             metadataPayload: fileMetadata,
             customFieldsPayload: null,
-            assetType: 'imported_transcript',
+            assetType: 'standalone_transcript',
         });
 
         // Attach the original media file to the new transcript
@@ -2212,11 +2212,11 @@ export async function saveHighlightChanges(highlight) {
     }
 }
 
-export async function saveImportedTranscriptContent(filePath, jsonContent, highlightsJson = null) {
+export async function saveStandaloneTranscriptContent(filePath, jsonContent, highlightsJson = null) {
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.' }));
+        project.update(p => ({ ...p, standaloneTranscriptError: errorMsg, statusMessage: 'Save failed.' }));
         throw new Error(errorMsg);
     }
     try {
@@ -2225,7 +2225,7 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     } catch (e) {
         const errorMsg = `Cannot save transcript: Content not valid JSON or invalid structure. ${e.message}`;
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
+        project.update(p => ({ ...p, standaloneTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
         throw new Error(errorMsg);
     }
 
@@ -2236,8 +2236,8 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     try {
         let finalHighlightsJson = highlightsJson;
         if (finalHighlightsJson === null) {
-            finalHighlightsJson = projState.isImportedTranscriptMetadataDirty
-                ? JSON.stringify(projState.currentImportedTranscriptHighlights || [])
+            finalHighlightsJson = projState.isStandaloneTranscriptMetadataDirty
+                ? JSON.stringify(projState.currentStandaloneTranscriptHighlights || [])
                 : null;
         }
 
@@ -2247,12 +2247,12 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
             highlightsJson: finalHighlightsJson,
         });
 
-        const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
-        markImportedTranscriptAsSaved(filePath, jsonContent);
+        const { markStandaloneTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+        markStandaloneTranscriptAsSaved(filePath, jsonContent);
 
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
-        project.update(p => ({ ...p, importedTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+        project.update(p => ({ ...p, standaloneTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
         await message(`Error saving transcript '${filename}': ${errorMessage}`, { title: 'Save Transcript Error', type: 'error' });
         throw error;
     }
@@ -2513,17 +2513,17 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialDocumentJson;
         resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
-    } else if (projState.currentImportedTranscriptPath && (projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty)) {
+    } else if (projState.currentStandaloneTranscriptPath && (projState.isStandaloneTranscriptDirty || projState.isStandaloneTranscriptMetadataDirty)) {
         itemIsDirty = true;
-        itemPath = projState.currentImportedTranscriptPath;
+        itemPath = projState.currentStandaloneTranscriptPath;
         itemTypeForPrompt = 'imported transcript';
-        if (projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
-            saveFunction = projState.activeImportedTranscriptEditorRef.ref.save;
-            discardFunction = () => markImportedTranscriptChangesDiscarded(itemPath);
-            initialContentForReset = projState.initialImportedTranscriptLexicalJson;
-            resetEditorFunction = projState.activeImportedTranscriptEditorRef.ref.resetEditorState;
+        if (projState.activeStandaloneTranscriptEditorRef?.ref && typeof projState.activeStandaloneTranscriptEditorRef.ref.save === 'function') {
+            saveFunction = projState.activeStandaloneTranscriptEditorRef.ref.save;
+            discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
+            initialContentForReset = projState.initialStandaloneTranscriptLexicalJson;
+            resetEditorFunction = projState.activeStandaloneTranscriptEditorRef.ref.resetEditorState;
         } else {
-            discardFunction = () => markImportedTranscriptChangesDiscarded(itemPath);
+            discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
         }
     } else if (tsState.currentTranscriptPath && tsState.transcriptDirty) {
         itemIsDirty = true;
@@ -2798,7 +2798,7 @@ export async function requestDocumentTranslation(documentPath, modelName, target
     }
 }
 
-export async function requestImportedTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
+export async function requestStandaloneTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2815,7 +2815,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
     setTranslationStatus(true, null, { status: 'initiating', sourcePath: transcriptPath });
 
     try {
-        const initiatedPayload = await invoke('translate_imported_transcript_command', {
+        const initiatedPayload = await invoke('translate_standalone_transcript_command', {
             projectXmlPath: currentProject.xmlPath,
             transcriptPath,
             modelName: modelName,
@@ -2831,7 +2831,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
     } catch (error) {
         const errorMessage = error.message || String(error);
         setTranslationStatus(false, null, { status: 'error', errorMessage });
-        console.error(`[ProjectService] Error during translate_imported_transcript_command invocation:`, error);
+        console.error(`[ProjectService] Error during translate_standalone_transcript_command invocation:`, error);
     }
 }
 
@@ -3039,7 +3039,7 @@ export async function getProjectAssetsForLink(projectId) {
             'audio-transcript': 'Audio Transcripts',
             'video-transcript': 'Video Transcripts',
             'transcript': 'Transcripts',
-            'imported_transcript': 'Transcripts',
+            'standalone_transcript': 'Transcripts',
             'document': 'Documents',
             'doc': 'Documents',
             'pdf': 'Documents',

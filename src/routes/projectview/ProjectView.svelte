@@ -39,7 +39,7 @@
         hideUnsavedChangesPrompt,
         hideConversionPrompt,
         prepareDocumentView,
-        prepareImportedTranscriptView,
+        prepareStandaloneTranscriptView,
         prepareMediaNoteView,
     } from "$lib/stores/projectStore.js";
     import { fetchAllTags } from "$lib/stores/tagStore.js";
@@ -677,7 +677,7 @@
             } else if (selectedTab === "data") {
                 const activeDocEditor = proj.activeDocumentEditorRef?.ref;
                 const activeImpTsEditor =
-                    proj.activeImportedTranscriptEditorRef?.ref;
+                    proj.activeStandaloneTranscriptEditorRef?.ref;
                 const activeMediaNoteEditor =
                     proj.activeMediaNoteEditorRef?.ref;
 
@@ -697,7 +697,7 @@
                                 ),
                             );
                     } else if (
-                        proj.isImportedTranscriptDirty &&
+                        proj.isStandaloneTranscriptDirty &&
                         activeImpTsEditor &&
                         typeof activeImpTsEditor.save === "function"
                     ) {
@@ -1103,14 +1103,14 @@
         project.update((p) => ({
             ...p,
             isDocumentLoading: false,
-            isImportedTranscriptLoading: false,
+            isStandaloneTranscriptLoading: false,
             isMediaNoteTranscriptLoading: false,
         }));
 
         if (selectedTab === "data") {
             if (
                 !get(project).selectedDocumentPath &&
-                !get(project).currentImportedTranscriptPath &&
+                !get(project).currentStandaloneTranscriptPath &&
                 !get(project).selectedMediaNotePath
             ) {
                 prepareDocumentView(null);
@@ -1214,7 +1214,7 @@
         // Determine if we are already viewing this path
         const isAlreadyViewing =
             normalizePath(proj.selectedDocumentPath) === path ||
-            normalizePath(proj.currentImportedTranscriptPath) === path ||
+            normalizePath(proj.currentStandaloneTranscriptPath) === path ||
             normalizePath(proj.selectedMediaNotePath) === path;
 
         if (isAlreadyViewing) {
@@ -1245,10 +1245,10 @@
 
         // Determine type and prepare view
         if (tabName === "data") {
-            const isImportedTranscript =
-                viewType === "transcript" ||
-                originalDocType === "imported_transcript" ||
-                proj.importedTranscriptFiles?.some(
+            const isStandaloneTranscript =
+                viewType === "audio_transcript" || viewType === "video_transcript" ||
+                originalDocType === "standalone_transcript" ||
+                proj.standaloneTranscriptFiles?.some(
                     (f) =>
                         normalizePath(
                             `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
@@ -1259,8 +1259,8 @@
                 originalDocType === "audio_transcript" ||
                 originalDocType === "video_transcript";
 
-            if (isImportedTranscript) {
-                prepareImportedTranscriptView(path);
+            if (isStandaloneTranscript) {
+                prepareStandaloneTranscriptView(path);
             } else if (isMediaTranscript) {
                 function findMediaByTranscriptPathRecursive(
                     nodes,
@@ -1356,7 +1356,7 @@
         const projState = get(project);
         const stillLoading =
             projState.isDocumentLoading ||
-            projState.isImportedTranscriptLoading ||
+            projState.isStandaloneTranscriptLoading ||
             projState.isMediaNoteTranscriptLoading;
         if (
             !stillLoading &&
@@ -1778,7 +1778,7 @@
                         prepareDocumentView(importedPath, "images");
                     }
                 }
-            } else if (actionType === "transcript") {
+            } else if (actionType === "transcript") { // this actionType refers to "transcript" import context menu item, keep it.
                 showImportTranscriptSourceModal = true;
                 project.update((p) => ({ ...p, isLoading: false }));
             } else {
@@ -1807,7 +1807,7 @@
                 const newTranscriptPath = await importTranscriptFile("msWord");
                 if (newTranscriptPath) {
                     if (await ensureTab("data")) {
-                        prepareImportedTranscriptView(newTranscriptPath);
+                        prepareStandaloneTranscriptView(newTranscriptPath);
                     }
                 }
             } catch (e) {
@@ -1874,8 +1874,8 @@
             (get(transcriptStore)?.isTranscribing ?? false)) ||
         $project.isImportingAsset ||
         ($project.selectedDocumentPath && $project.isDocumentLoading) ||
-        ($project.currentImportedTranscriptPath &&
-            $project.isImportedTranscriptLoading) ||
+        ($project.currentStandaloneTranscriptPath &&
+            $project.isStandaloneTranscriptLoading) ||
         ($project.selectedMediaNotePath &&
             $project.isMediaNoteTranscriptLoading);
 </script>

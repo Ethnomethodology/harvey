@@ -474,7 +474,7 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             // Assuming TRANSCRIPTS_DIR implies it's an imported transcript if not under a media stem.
             // The logic in load_project_data for FileEntry might be more robust here.
             // For now, following the provided snippet's logic.
-            file_type = "imported_transcript".to_string();
+            file_type = "standalone_transcript".to_string();
         }
         // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
         // or use/enhance shared_utils::determine_asset_type if applicable.
@@ -891,12 +891,12 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
                     let transcript_file_type = if let Some(metadata) = media_asset_metadata {
                         match metadata.asset_type.as_str() {
-                            "audio" => "audio-transcript".to_string(),
-                            "video" => "video-transcript".to_string(),
-                            _ => "transcript".to_string(),
+                            "audio" => "audio_transcript".to_string(),
+                            "video" => "video_transcript".to_string(),
+                            _ => "audio_transcript".to_string(),
                         }
                     } else {
-                        "transcript".to_string()
+                        "audio_transcript".to_string()
                     };
 
                     media_children.push(FileEntry {
@@ -937,8 +937,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     process_media_list(&mut project_data.media_files.files, MEDIA_DIR, &mut was_xml_healed)?;
 
     // Add imported transcript files to the main file_entries tree
-    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
-        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+    for standalone_transcript_entry in project_data.standalone_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&standalone_transcript_entry.relative_path);
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
@@ -949,8 +949,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             file_entries.push(FileEntry {
                 name: transcript_file_name,
                 path: transcript_file_canonical,
-                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
-                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                relative_path: standalone_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "standalone_transcript".to_string(), // Explicitly set to standalone_transcript
                 is_directory: false,
                 parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
                 depth: 3, // Assuming it's at the same level as media stems
@@ -964,8 +964,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         }
     }
     // Add imported transcript files to the main file_entries tree
-    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
-        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+    for standalone_transcript_entry in project_data.standalone_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&standalone_transcript_entry.relative_path);
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
@@ -976,8 +976,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             file_entries.push(FileEntry {
                 name: transcript_file_name,
                 path: transcript_file_canonical,
-                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
-                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                relative_path: standalone_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "standalone_transcript".to_string(), // Explicitly set to standalone_transcript
                 is_directory: false,
                 parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
                 depth: 3, // Assuming it's at the same level as media stems
@@ -1088,7 +1088,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
-        project_data.imported_transcript_files.files.len()
+        project_data.standalone_transcript_files.files.len()
     );
 
     // --- SYNC & SELF-HEALING: Ensure DB has metadata for all XML assets ---
@@ -1146,7 +1146,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                         file_type: t_file_type.to_string(),
                         ..FileMetadata::default()
                     };
-                    let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, "transcript", None);
+                    let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, &t_file_type, None);
                 }
             }
         }
@@ -1306,7 +1306,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     }
 
     // 4. Sync Imported Transcripts
-    for transcript in &project_data.imported_transcript_files.files {
+    for transcript in &project_data.standalone_transcript_files.files {
         let rel_path = transcript.relative_path.clone().replace("\\", "/");
         current_xml_relative_paths.insert(rel_path.clone());
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
@@ -1330,9 +1330,9 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 waveform_data: None,
                 language_code: None,
                 properties: None,
-                file_type: "transcript".to_string(),
+                file_type: "standalone_transcript".to_string(),
             };
-            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "imported_transcript", None);
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "standalone_transcript", None);
         }
     }
 
@@ -1405,7 +1405,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         document_files: project_data.document_files.files,
         table_files: project_data.table_files.files,
         image_files: project_data.image_files.files,
-        imported_transcript_files: project_data.imported_transcript_files.files,
+        standalone_transcript_files: project_data.standalone_transcript_files.files,
         document_metadata_files: project_data.document_metadata_files.files,
     })
 }
@@ -1720,7 +1720,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             let tables_folder = format!("{}/", TABLES_DIR.to_lowercase());
             let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if item_type_guess == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
-                "imported_transcript".to_string()
+                "standalone_transcript".to_string()
             } else if item_type_guess == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
                 "table".to_string()
             } else {
@@ -1740,7 +1740,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 }
             },
-            "transcript" => {
+            "audio_transcript" | "video_transcript" => {
                 let stem_dir_rel_path = std::path::Path::new(&item_relative_path_guess).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
                 if !stem_dir_rel_path.is_empty() {
                     if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_dir_rel_path) {
@@ -1753,10 +1753,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 }
             },
-            "imported_transcript" => {
-                let initial_len = project_data.imported_transcript_files.files.len();
-                project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path_guess);
-                if project_data.imported_transcript_files.files.len() < initial_len {
+            "standalone_transcript" => {
+                let initial_len = project_data.standalone_transcript_files.files.len();
+                project_data.standalone_transcript_files.files.retain(|t| t.relative_path != item_relative_path_guess);
+                if project_data.standalone_transcript_files.files.len() < initial_len {
                     info!("[Backend Delete] Cleaned up XML imported transcript entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
                 }
@@ -1836,7 +1836,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         let images_folder = format!("{}/", IMAGES_DIR.to_lowercase());
         let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
         if item_type == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
-            "imported_transcript".to_string()
+            "standalone_transcript".to_string()
         } else if item_type == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
             "table".to_string()
         } else if item_type == "other" && path_lower.contains(&images_folder)
@@ -1911,7 +1911,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 return Err(CommandError::from(format!("Could not determine media stem for media file deletion: {}", item_path)));
             }
         },
-        "transcript" => {
+        "audio_transcript" | "video_transcript" => {
              if let Some(media_stem) = media_stem_opt.as_deref() {
                 info!("[Backend Delete] Deleting media-associated transcript file: {}", item_path_buf.display());
                 fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete file {}: {}", item_path_buf.display(), e)))?;
@@ -1957,7 +1957,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 return Err(CommandError::from(format!("Could not determine media stem for transcript: {}", item_path)));
             }
         },
-        "imported_transcript" => {
+        "standalone_transcript" => {
             info!("[Backend Delete] Deleting standalone imported transcript file: {}", item_path_buf.display());
             fs::remove_file(&item_path_buf)
                 .map_err(|e| CommandError::from(format!("Failed to delete imported transcript file {}: {}", item_path_buf.display(), e)))?;
@@ -1988,12 +1988,12 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let initial_entries = project_data.imported_transcript_files.files.len();
-            project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
+            let initial_entries = project_data.standalone_transcript_files.files.len();
+            project_data.standalone_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
 
             // document_metadata_files list in XML is no longer managed for imported transcript metadata
 
-            if project_data.imported_transcript_files.files.len() < initial_entries {
+            if project_data.standalone_transcript_files.files.len() < initial_entries {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Delete] XML updated for imported transcript.");
             } else {
@@ -2413,7 +2413,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The original extension will be re-applied by rename_asset_with_folder.
             final_new_path = rename_asset_with_folder(&app_handle, &item_path_buf, new_stem_from_input, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
         },
-        "transcript" => {
+        "audio_transcript" | "video_transcript" => {
             let new_filename_with_ext = new_name_trimmed;
             let new_path = parent_dir.join(new_filename_with_ext);
             final_new_path = new_path.clone();
@@ -2469,16 +2469,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     old_path: item_path_buf.to_string_lossy().into_owned(),
                     new_path: new_path.to_string_lossy().into_owned(),
                     new_name: new_filename_with_ext.to_string(),
-                    item_type: "transcript".to_string(),
+                    item_type: item_type.to_string(),
                     project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
                     base_directory: project_base_dir.to_string_lossy().into_owned(),
                 };
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
-                    warn!("[Backend Rename] Failed to emit item_renamed event for transcript: {}", e);
+                    warn!("[Backend Rename] Failed to emit item_renamed event for media-associated transcript: {}", e);
                 }
             }
         },
-        "imported_transcript" => {
+        "standalone_transcript" => {
             let old_transcript_file_abs_path = &item_path_buf;
             let old_transcript_folder_abs_path = parent_dir;
             let old_transcript_relative_path = &item_relative_path; // This is key for DB
@@ -2577,13 +2577,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
             info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            // Removed: let mut xml_actually_changed_for_imported_transcript = false;
+            // Removed: let mut xml_actually_changed_for_standalone_transcript = false;
 
-            if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
+            if let Some(entry) = project_data.standalone_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.to_string();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
-                project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                // xml_actually_changed_for_imported_transcript = true; // Variable removed
+                project_data.standalone_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+                // xml_actually_changed_for_standalone_transcript = true; // Variable removed
                 info!("[Backend Rename] XML imported transcript entry updated. Saving XML.");
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
@@ -2592,12 +2592,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     old_path: item_path_buf.to_string_lossy().into_owned(),
                     new_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
                     new_name: new_transcript_filename_with_ext_str.to_string(),
-                    item_type: "imported_transcript".to_string(),
+                    item_type: "standalone_transcript".to_string(),
                     project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
                     base_directory: project_base_dir.to_string_lossy().into_owned(),
                 };
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
-                    warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
+                    warn!("[Backend Rename] Failed to emit item_renamed event for standalone_transcript: {}", e);
                 }
             } else {
                 // This should ideally not happen if DB update was successful, as it means XML was out of sync.
@@ -2636,7 +2636,7 @@ mod tests {
                 <documentFiles/>
                 <tableFiles/>
                 <imageFiles/>
-                <importedTranscriptFiles/>
+                <standaloneTranscriptFiles/>
                 <documentMetadataFiles/>
             </project>"#,
             project_name_test, test_uuid
