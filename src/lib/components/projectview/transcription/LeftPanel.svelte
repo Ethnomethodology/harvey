@@ -170,10 +170,25 @@
 	let contextMenuY = 0;
 	let contextMenuItem = null;
 	let closeContextMenuListener = null;
+	function findMediaFileInStem(stemNode) {
+		if (!stemNode || !stemNode.children) return null;
+		const search = (nodes) => {
+			for (const node of nodes) {
+				if (node.file_type === "media") return node;
+				if (node.children) {
+					const found = search(node.children);
+					if (found) return found;
+				}
+			}
+			return null;
+		};
+		return search(stemNode.children);
+	}
 
 	function handleContextMenu(event) {
 		const { event: mouseEvent, item } = event.detail;
-		if (item.is_directory) return; // Only allow on files
+		if (item.is_directory && item.file_type !== "directory_media_stem")
+			return; // Only allow on files or media stem folders
 		if (contextMenuVisible) closeContextMenu();
 		mouseEvent.preventDefault();
 		mouseEvent.stopPropagation();
@@ -215,11 +230,15 @@
 		closeContextMenu();
 		switch (action) {
 			case "Load":
-				if (!item.is_directory && item.file_type === "media")
-					selectMedia(item);
+				const mediaNode =
+					item.file_type === "directory_media_stem"
+						? findMediaFileInStem(item)
+						: item;
+				if (mediaNode && mediaNode.file_type === "media")
+					selectMedia(mediaNode);
 				else
 					console.warn(
-						"[LeftPanel] 'Load' action called on non-media item:",
+						"[LeftPanel] 'Load' action failed. No media file resolved for:",
 						item,
 					);
 				break;
@@ -233,38 +252,27 @@
 					);
 				break;
 			case "Rename":
-				if (!item.is_directory) {
-					itemToRename = {
-						path: item.path,
-						name: item.name,
-						file_type: item.file_type,
-						media_xml_identifier: item.media_xml_identifier,
-					};
-					showRenameModal = true;
-				} else
-					console.warn(
-						"[LeftPanel] Rename requested on directory (not allowed):",
-						item,
-					);
+				itemToRename = {
+					path: item.path,
+					name: item.name,
+					file_type: item.file_type,
+					media_xml_identifier: item.media_xml_identifier,
+				};
+				showRenameModal = true;
 				break;
 			case "Delete": {
-				if (item.is_directory) {
-					console.warn(
-						"[LeftPanel] Delete requested on directory (not allowed via context menu):",
-						item,
-					);
-					break;
-				}
-
 				let confirmMsg = "";
 
-				if (item.file_type === "media") {
+				if (
+					item.file_type === "media" ||
+					item.file_type === "directory_media_stem"
+				) {
 					const stemName =
 						item.media_xml_identifier ||
 						(item.name.includes(".")
 							? item.name.substring(0, item.name.lastIndexOf("."))
 							: item.name);
-					confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
+					confirmMsg = `Are you sure you want to delete "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
 				} else if (item.file_type === "transcript") {
 					confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
 				} else if (item.file_type === "data") {
@@ -551,8 +559,8 @@
 			style="left: {contextMenuX}px; top: {contextMenuY}px;"
 			on:click|stopPropagation
 		>
-			{#if !contextMenuItem.is_directory}
-				{#if contextMenuItem.file_type === "media"}
+			{#if !contextMenuItem.is_directory || contextMenuItem.file_type === "directory_media_stem"}
+				{#if contextMenuItem.file_type === "media" || contextMenuItem.file_type === "directory_media_stem"}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Load")}
@@ -570,7 +578,7 @@
 					>
 					<hr class="my-1 border-gray-200 dark:border-gray-600" />
 				{/if}
-				{#if ["media", "transcript", "data", "other"].includes(contextMenuItem.file_type)}
+				{#if ["media", "transcript", "data", "directory_media_stem", "other"].includes(contextMenuItem.file_type)}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Rename")}
