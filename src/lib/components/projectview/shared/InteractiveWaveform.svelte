@@ -1054,7 +1054,6 @@
 		const dur = actualMediaDuration;
 		if (
 			isTrimming ||
-			isEditingSegment ||
 			!segmentWaveformCanvas ||
 			dur <= 0 ||
 			!waveformScrollContainerRef ||

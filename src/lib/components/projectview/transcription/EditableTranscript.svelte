@@ -386,18 +386,21 @@
                 // This ensures the editor reflects the latest state after a structural modification.
                 renderSegmentUI(currentStoreIndex);
             }
-            // Scenario 2: Player seeking while NOT in edit mode, and the segment index has changed.
-            // This is for navigation through the transcript without explicit editing.
-            else if (!editEnabled && currentStoreIndex !== currentIndex) {
+            // Scenario 2: Player seeking or progressing, and the segment index has changed.
+            // This is for navigation through the transcript.
+            else if (currentStoreIndex !== currentIndex) {
                 if (currentStoreIndex >= 0 && currentStoreIndex < segments.length) {
-                    // Load the new segment silently (without dispatching navigation events)
+                    // If we are in edit mode, commit any pending changes before switching focus
+                    if (editEnabled) {
+                        commitCurrentSegmentEdits();
+                    }
+                    // Load the new segment silently (without dispatching redundant navigation events back to the player)
                     loadSegmentSilent(currentStoreIndex);
                 } else if (segments.length === 0) {
                     // If no segments, ensure UI is cleared
                     renderSegmentUI(-1);
                 }
                 // If currentStoreIndex is -1 but segments exist, we keep the last displayed segment.
-                // This is a design choice to not clear the editor if the player is between segments or at the end.
             }
             // Scenario 3: Content of the *currently active* segment might have changed (e.g., external update, speaker remapping)
             // This is a more granular check for the specific segment being displayed.

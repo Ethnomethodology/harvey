@@ -542,6 +542,36 @@
         }
     }
 
+    let lastCenterScrollIndex = -1;
+    $: {
+        const curIdx = $transcriptStore.player.currentSegmentIndex;
+        const totalSegs = $transcriptStore.segments?.length || 0;
+
+        if (
+            curIdx !== lastCenterScrollIndex &&
+            curIdx >= 0 &&
+            curIdx < totalSegs
+        ) {
+            const isPlaying = $transcriptStore.player.isPlaying;
+            // Only jump-scroll to center if we are NOT playing (manual seek while paused)
+            // or if the jump is significant (seeking while playing)
+            const isSignificantJump =
+                lastCenterScrollIndex !== -1 &&
+                Math.abs(curIdx - lastCenterScrollIndex) > 1;
+
+            if (!isPlaying || isSignificantJump) {
+                const segment = $transcriptStore.segments[curIdx];
+                if (segment) {
+                    verticalWaveformRef?.scrollToTime(segment.start_time);
+                    horizontalWaveformRef?.scrollToTime(segment.start_time);
+                }
+            }
+            lastCenterScrollIndex = curIdx;
+        } else if (curIdx === -1) {
+            lastCenterScrollIndex = -1;
+        }
+    }
+
     $: if (mediaPlayerRef && mediaPlayerRef.videoElement) {
         const video = mediaPlayerRef.videoElement;
         if (isSegmentEditingActive) {
