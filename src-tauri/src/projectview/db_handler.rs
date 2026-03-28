@@ -865,6 +865,7 @@ pub fn init_db() -> Result<(), CommandError> {
             project_id TEXT NOT NULL,
             name TEXT NOT NULL,
             color TEXT,
+            description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -873,6 +874,17 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized tags table.");
+
+    // Check and add description column to tags table if missing (migration)
+    let mut stmt_check_tag_desc = conn.prepare("PRAGMA table_info(tags)")?;
+    let tag_desc_col_exists = stmt_check_tag_desc
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "description"));
+
+    if !tag_desc_col_exists {
+        info!("[DB] Adding description column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN description TEXT", [])?;
+    }
 
     // Trigger for tags updated_at
     conn.execute(

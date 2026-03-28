@@ -1125,6 +1125,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
             // Sync with database metadata (rely on database tables for backend services like translation)
             try {
+                const currentProj = get(project);
                 const mediaRelativePath = currentTs.selectedMediaFile?.relative_path;
                 if (mediaRelativePath && currentProj.xmlPath) {
                     const metadataPayload = {
@@ -1179,7 +1180,9 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
         })
         .catch((error) => {
-            console.error(`[TranscriptStore updateSpeakerConfig] Failed persist config for ${mediaIdentifier}:`, error);
+            const currentTs = get(transcriptStore);
+            const mediaId = currentTs.selectedMediaFile?.media_xml_identifier || currentTs.selectedMediaFile?.name;
+            console.error(`[TranscriptStore updateSpeakerConfig] Failed persist config for ${mediaId}:`, error);
             const errorMessage = error?.message || String(error);
             updateProjectStoreState({ error: `Failed save speaker config: ${errorMessage}`, statusMessage: 'Error saving speaker config.'});
             if (typeof message !== 'undefined') {

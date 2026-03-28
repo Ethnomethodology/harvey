@@ -238,7 +238,7 @@ pub async fn import_document<R: Runtime>(
                 source_path.to_string_lossy().to_string(),
                 temp_html_path.to_string_lossy().to_string(),
                 "html".to_string(),
-                source_format_arg.to_string(),
+                format!("--from={}", source_format_arg),
             ];
             
             info!("[import_document] Running pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
