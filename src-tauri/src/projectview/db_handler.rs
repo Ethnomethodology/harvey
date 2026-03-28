@@ -1825,6 +1825,19 @@ pub fn rename_asset_metadata_key(
     ];
 
     for (table, col) in child_tables {
+        // Safe check: Only attempt update if the table exists in the current DB schema.
+        // This avoids RusqliteError: no such table: ... for optional/legacy tables like 'attachments'.
+        let table_exists: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+            params![table],
+            |row| row.get(0),
+        ).unwrap_or(false);
+
+        if !table_exists {
+            debug!("[DB TX] Skipping rename update for child table '{}' as it does not exist in this database.", table);
+            continue;
+        }
+
         let sql = format!("UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3", table, col, col);
         match tx.execute(&sql, params![new_relative_path, project_id, old_relative_path]) {
             Ok(changes) if changes > 0 => {
