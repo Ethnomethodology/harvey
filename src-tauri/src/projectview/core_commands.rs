@@ -2103,6 +2103,7 @@ fn rename_asset_with_folder(
     let old_relative_path;
     let new_relative_path;
     let new_filename;
+    let mut category_dir_name = String::new(); // Declare here for use in multiple blocks
 
     // Apply truncation to the new name input for consistency with import
     let new_name = truncate_filename_stem(new_name_input, MAX_FILENAME_STEM_LENGTH); // NEW LINE
@@ -2110,7 +2111,17 @@ fn rename_asset_with_folder(
     // Determine old_stem_name and construct new_item_path based on item_type
     match item_type {
         "media" => {
-            // For media, item_path is like .../HARVEY_FILES_DIR/MEDIA_DIR/OLD_STEM/MEDIA_SUBDIR/file.ext
+            // For media, item_path is like .../HARVEY_FILES_DIR/CATEGORY_DIR/OLD_STEM/MEDIA_SUBDIR/file.ext
+            // Resolve the category directory (e.g., Audios, Videos, or Media) from the item_path
+            category_dir_name = item_path
+                .parent() // .../OLD_STEM/MEDIA_SUBDIR
+                .and_then(|p| p.parent()) // .../OLD_STEM
+                .and_then(|p| p.parent()) // .../Audios or .../Videos or .../Media
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from("Could not get category directory name from item path"))?
+                .to_string();
+
             old_stem_name = item_path.parent() // .../OLD_STEM/MEDIA_SUBDIR
                                 .and_then(|p| p.parent()) // .../OLD_STEM
                                 .and_then(|p| p.file_name())
@@ -2126,8 +2137,7 @@ fn rename_asset_with_folder(
             let extension = item_path.extension().and_then(|s| s.to_str()).unwrap_or("");
             new_filename = format!("{}.{}", new_name, extension); // Use the now truncated 'new_name'
 
-            // Construct the new full path for the media file
-            let new_stem_base_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(&new_name); // Use the now truncated 'new_name'
+            let new_stem_base_path = project_base_dir.join(HARVEY_FILES_DIR).join(&category_dir_name).join(&new_name);
             let new_media_subfolder_path = new_stem_base_path.join(media_sub_dir_name); // Re-use "media"
             new_item_path = new_media_subfolder_path.join(&new_filename);
 
@@ -2136,14 +2146,14 @@ fn rename_asset_with_folder(
             new_relative_path = new_item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
             // Perform folder rename (renaming the STEM directory)
-            let old_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(old_stem_name);
-            let new_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(&new_name); // Use the now truncated 'new_name'
+            let old_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(&category_dir_name).join(old_stem_name);
+            let new_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(&category_dir_name).join(&new_name);
 
             if old_stem_dir_path == new_stem_dir_path {
                 info!("[Backend Rename] Old and new media stem paths are identical. No folder rename needed.");
             } else {
                 if new_stem_dir_path.exists() {
-                    return Err(CommandError::from(format!("A folder named '{}' already exists for media.", new_name))); // Use the now truncated 'new_name'
+                    return Err(CommandError::from(format!("A folder named '{}' already exists for media.", new_name)));
                 }
                 fs::rename(&old_stem_dir_path, &new_stem_dir_path)?;
                 info!("[Backend Rename] Renamed media stem directory from {} to {}", old_stem_dir_path.display(), new_stem_dir_path.display());
@@ -2244,9 +2254,9 @@ fn rename_asset_with_folder(
                         .unwrap_or("")
                         .to_string();
                     
-                    // Construct new relative path for transcript
+                    // Construct new relative path for transcript using the detected category directory
                     let new_transcript_relative_path = Path::new(HARVEY_FILES_DIR)
-                        .join(MEDIA_DIR)
+                        .join(&category_dir_name)
                         .join(&new_name) // Use new media stem (truncated)
                         .join(TRANSCRIPTS_SUBDIR)
                         .join(&transcript_filename)
