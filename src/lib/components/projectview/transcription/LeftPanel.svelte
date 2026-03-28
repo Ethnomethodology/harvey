@@ -252,13 +252,24 @@
 					);
 				break;
 			case "Rename":
-				itemToRename = {
-					path: item.path,
-					name: item.name,
-					file_type: item.file_type,
-					media_xml_identifier: item.media_xml_identifier,
-				};
-				showRenameModal = true;
+				const renameTarget =
+					item.file_type === "directory_media_stem"
+						? findMediaFileInStem(item)
+						: item;
+				if (renameTarget) {
+					itemToRename = {
+						path: renameTarget.path,
+						name: renameTarget.name,
+						file_type: renameTarget.file_type,
+						media_xml_identifier: renameTarget.media_xml_identifier,
+					};
+					showRenameModal = true;
+				} else {
+					console.warn(
+						"[LeftPanel] Rename failed: could not resolve media file for:",
+						item,
+					);
+				}
 				break;
 			case "Delete": {
 				let confirmMsg = "";
