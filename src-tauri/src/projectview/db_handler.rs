@@ -866,9 +866,11 @@ pub fn init_db() -> Result<(), CommandError> {
             name TEXT NOT NULL,
             color TEXT,
             description TEXT,
+            tag_group_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_group_id) REFERENCES tag_groups(id) ON DELETE SET NULL,
             UNIQUE (project_id, name)
         )",
         [],
@@ -884,6 +886,17 @@ pub fn init_db() -> Result<(), CommandError> {
     if !tag_desc_col_exists {
         info!("[DB] Adding description column to tags table.");
         conn.execute("ALTER TABLE tags ADD COLUMN description TEXT", [])?;
+    }
+
+    // Check and add tag_group_id column to tags table if missing (migration)
+    let mut stmt_check_tag_group_id = conn.prepare("PRAGMA table_info(tags)")?;
+    let tag_group_id_col_exists = stmt_check_tag_group_id
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "tag_group_id"));
+
+    if !tag_group_id_col_exists {
+        info!("[DB] Adding tag_group_id column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN tag_group_id INTEGER REFERENCES tag_groups(id) ON DELETE SET NULL", [])?;
     }
 
     // Trigger for tags updated_at
