@@ -17,33 +17,53 @@ def download_model(model_name, cache_dir, token):
     # e.g., cache_dir/models--Helsinki-NLP--opus-mt-en-hi
     folder_name = f"models--{model_name.replace('/', '--')}"
     final_model_dir = os.path.join(cache_dir, folder_name)
-
     print(f"Downloading model {model_name} to {final_model_dir}", flush=True)
     try:
+        from huggingface_hub import list_repo_files, hf_hub_url
+        import requests
+
         # Check if the model is gated (requires authentication)
         is_gated = False
-        # Known gated models or organizations can be added here
-        # For now, we assume Helsinki-NLP and NLLB (facebook) are public.
 
         if is_gated and token:
+            from huggingface_hub import login
             print("Model is gated. Logging in with token...", flush=True)
             login(token=token)
         else:
             print("Model is public. Skipping authentication.", flush=True)
 
-        # Download the full repository snapshot
-        # local_dir_use_symlinks=False ensures the files are actually moved into the dir
-        # rather than just being symlinked from the HF cache.
-        # We use local_dir to download directly to the target folder structure
-        # This avoids symlinks which can be problematic on some Windows setups without Developer Mode
-        # Explicitly disable symlinks to avoid WinError 1314
-        snapshot_download(
-            repo_id=model_name,
-            local_dir=final_model_dir, # Use final_model_dir to match expected structure
-            local_dir_use_symlinks=False,
-            resume_download=True,
-            token=False # Explicitly disable token for public models
-        )
+        # Get list of files in repo
+        files = list_repo_files(repo_id=model_name, token=False)
+        print(f"Found {len(files)} files to download.", flush=True)
+
+        for filename in files:
+            # Construct target path
+            dest_path = os.path.join(final_model_dir, filename)
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            
+            url = hf_hub_url(repo_id=model_name, filename=filename)
+            print(f"Downloading {filename}...", flush=True)
+            
+            # Simple chunked download with progress reporting
+            response = requests.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded_size = 0
+            last_percent = -1
+            
+            with open(dest_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024): # 1MB chunks
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        
+                        if total_size > 0:
+                            percent = int((downloaded_size / total_size) * 100)
+                            if percent > last_percent:
+                                # Format: PROGRESS:PERCENT:FILENAME
+                                print(f"PROGRESS:{percent}:{filename}", flush=True)
+                                last_percent = percent
 
         print("Download complete.", flush=True)
     except Exception as e:

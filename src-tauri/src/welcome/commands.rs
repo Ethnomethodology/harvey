@@ -455,7 +455,6 @@ pub async fn download_translation_model_command(
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
         .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
-        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
@@ -466,13 +465,41 @@ pub async fn download_translation_model_command(
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                log::info!("[Python] {}", &line_str);
-                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                if line_str.starts_with("PROGRESS:") {
+                    let parts: Vec<&str> = line_str.split(':').collect();
+                    if let Some(percent_str) = parts.get(1) {
+                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
+                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                            window.emit("translation-download-progress", serde_json::json!({ 
+                                "model_name": &model_name, 
+                                "percent": percent,
+                                "file_name": file_name
+                            })).unwrap();
+                        }
+                    }
+                } else {
+                    log::info!("[Python] {}", &line_str);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                }
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                log::error!("[Python] {}", &line_str);
-                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                if line_str.starts_with("PROGRESS:") {
+                    let parts: Vec<&str> = line_str.split(':').collect();
+                    if let Some(percent_str) = parts.get(1) {
+                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
+                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                            window.emit("translation-download-progress", serde_json::json!({ 
+                                "model_name": &model_name, 
+                                "percent": percent,
+                                "file_name": file_name
+                            })).unwrap();
+                        }
+                    }
+                } else {
+                    log::error!("[Python] {}", &line_str);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                }
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);

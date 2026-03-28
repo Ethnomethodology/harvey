@@ -204,6 +204,9 @@
 	let unlistenComplete = null;
 	let unlistenError = null;
     let unlistenFinished = null;
+    let unlistenProgress = null;
+    let progressPercent = 0;
+    let currentDownloadFile = "";
 
 	function handleOptionChange() {
 		if (selectedOption === 'selectLanguages' && modelName.trim() !== '') {
@@ -253,6 +256,8 @@
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
                 isInstallingDependencies = false;
+				progressPercent = 0;
+				currentDownloadFile = "";
 				showLogModal = true;
 			});
 			unlistenLog = await listen('translation-download-log', (event) => {
@@ -291,6 +296,11 @@
 					modelName = '';
 				}
 			});
+			unlistenProgress = await listen('translation-download-progress', (event) => {
+				const { percent, file_name } = event.payload;
+				progressPercent = percent;
+				if (file_name) currentDownloadFile = file_name;
+			});
 			unlistenError = await listen('translation-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
 				let finalStatus;
@@ -324,6 +334,7 @@
 		if (unlistenComplete) unlistenComplete();
 		if (unlistenError) unlistenError();
 		if (unlistenFinished) unlistenFinished();
+		if (unlistenProgress) unlistenProgress();
 	});
 
 	async function handleDownload(targetModelId) {
@@ -492,7 +503,7 @@
 		</div>
 	</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
+	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} progress={progressPercent} currentFile={currentDownloadFile} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">

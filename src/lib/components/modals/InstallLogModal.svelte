@@ -6,6 +6,8 @@
     export let logs = [];
     export let isInstalling = true;
     export let isChecking = false;
+    export let progress = 0;
+    export let currentFile = "";
     export let title = "Installation Logs";
     export let inProgressText = "Downloading...";
     export let buttonInProgressText = "Installing...";
@@ -49,14 +51,31 @@
             <p class="whitespace-pre-wrap">{log.message}</p>
         {/each}
         {#if isInstalling}
-            <div class="flex items-center mt-2">
-                <div class="spinner animate-spin"></div>
-                <p class="ml-2 text-gray-700 dark:text-gray-300">{inProgressText}</p>
-            </div>
+            {#if progress > 0}
+                <div class="mt-4 px-1">
+                    <div class="flex justify-between items-end mb-1.5">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider leading-none mb-1">{inProgressText}</span>
+                            {#if currentFile}
+                                <span class="text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={currentFile}>{currentFile}</span>
+                            {/if}
+                        </div>
+                        <span class="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">{progress}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-300/30 dark:border-gray-700/30">
+                        <div class="bg-blue-500 dark:bg-blue-400 h-full rounded-full transition-all duration-300 ease-out shadow-[0_0_8px_rgba(59,130,246,0.5)]" style="width: {progress}%"></div>
+                    </div>
+                </div>
+            {:else}
+                <div class="flex items-center mt-3 ml-1">
+                    <div class="spinner animate-spin"></div>
+                    <p class="ml-2.5 text-gray-600 dark:text-gray-400 font-medium">{inProgressText}</p>
+                </div>
+            {/if}
         {:else if isChecking}
-            <div class="flex items-center mt-2">
+            <div class="flex items-center mt-3 ml-1">
                 <div class="spinner animate-spin"></div>
-                <p class="ml-2 text-gray-700 dark:text-gray-300">{checkingText}</p>
+                <p class="ml-2.5 text-gray-600 dark:text-gray-400 font-medium">{checkingText}</p>
             </div>
         {/if}
     </div>
