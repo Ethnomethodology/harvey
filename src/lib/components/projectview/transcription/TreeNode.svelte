@@ -116,7 +116,9 @@
         {:else}
             <!-- File Icon -->
             <span
-                class="px-1 flex-shrink-0 flex items-center justify-center text-gray-600 dark:text-gray-400"
+                class="px-1 flex-shrink-0 flex items-center justify-center"
+                class:text-gray-600={!shouldHighlight}
+                class:dark:text-gray-400={!shouldHighlight}
                 class:text-blue-600={shouldHighlight}
                 class:dark:text-blue-400={shouldHighlight}
             >
