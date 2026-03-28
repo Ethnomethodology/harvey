@@ -1,1 +1,1 @@
-sed -n '2760,2775p' src-tauri/src/projectview/core_commands.rs
+sed -n '1110,1135p' src-tauri/src/welcome/commands.rs
