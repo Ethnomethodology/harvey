@@ -231,23 +231,29 @@
         if (detail && typeof detail.time === "number") {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === "number") {
-            const segment = get(transcriptStore).segments?.[detail.index];
-            if (segment && mediaPlayerRef) {
-                const seekTime = isSegmentEditingActive
-                    ? Math.max(
-                          currentEditSegmentStart,
-                          Math.min(
-                              segment.start_time,
-                              currentEditSegmentEnd - 0.001,
-                          ),
-                      )
-                    : segment.start_time;
-                mediaPlayerRef.seekTo(seekTime);
-                if (verticalWaveformRef) {
-                    verticalWaveformRef.scrollToTime(seekTime);
-                }
-                if (horizontalWaveformRef) {
-                    horizontalWaveformRef.scrollToTime(seekTime);
+            const index = detail.index;
+            const segment = get(transcriptStore).segments?.[index];
+            if (segment) {
+                // Ensure store index is synced on navigation (e.g., Next/Prev buttons)
+                updatePlayerCurrentSegmentIndex(index);
+
+                if (mediaPlayerRef) {
+                    const seekTime = isSegmentEditingActive
+                        ? Math.max(
+                              currentEditSegmentStart,
+                              Math.min(
+                                  segment.start_time,
+                                  currentEditSegmentEnd - 0.001,
+                              ),
+                          )
+                        : segment.start_time;
+                    mediaPlayerRef.seekTo(seekTime);
+                    if (verticalWaveformRef) {
+                        verticalWaveformRef.scrollToTime(seekTime);
+                    }
+                    if (horizontalWaveformRef) {
+                        horizontalWaveformRef.scrollToTime(seekTime);
+                    }
                 }
             }
         } else {
