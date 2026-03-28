@@ -40,7 +40,7 @@ fn register_project_image(
     info!("[register_project_image] Registering image '{}' (from media '{}', folder name for XML '{}') for project at '{}'", image_filename_with_ext, original_media_stem_for_metadata, image_folder_name_for_xml, project_base_dir.display());
 
     let xml_content = fs::read_to_string(project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let images_dir_name = IMAGES_DIR;
     // let image_folder_name = media_file_name_stem; // Old logic
@@ -98,7 +98,7 @@ fn register_project_image(
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(project_xml_path) // project_xml_path is already a &Path
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
@@ -262,7 +262,7 @@ pub async fn import_image_file(
 
     // Read project_data to check for name conflicts in XML
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     // Create folder under Images named after the truncated file stem
     let images_base = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
@@ -308,7 +308,7 @@ pub async fn import_image_file(
     // Update the project XML
     info!("[import_image_file] Updating project XML to include image: {}", final_image_name);
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     // Calculate the relative path for XML storage
     let relative_path_for_xml = final_image_path // Path uses (potentially suffixed) truncated name
@@ -364,7 +364,7 @@ pub async fn import_image_file(
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path) // project_xml_path is already a PathBuf
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
@@ -520,7 +520,7 @@ mod tests {
 
         // XML Assertions
         let updated_xml_content = fs::read_to_string(&project_xml_path)?;
-        let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_xml_content)?;
+        let updated_project_data: ProjectXml = serde_json::from_str(&updated_xml_content)?;
 
         let expected_image_name = final_image_abs_path.file_name().unwrap().to_str().unwrap();
         let expected_relative_path = final_image_abs_path.strip_prefix(&project_dir)?.to_string_lossy().replace("\\", "/");

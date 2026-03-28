@@ -125,7 +125,7 @@ pub struct HighlightInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quick_xml::de::from_str;
+    use serde_json::from_str;
     use quick_xml::se::to_string;
 
     // Helper function to wrap SpeakersXml for top-level element serialization/deserialization

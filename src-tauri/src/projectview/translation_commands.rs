@@ -477,7 +477,7 @@ async fn run_translation_process<R: Runtime>(
             if let Ok((_type, media_id_opt, _rel)) = shared_utils::get_item_details(&normalized_file_path_buf, project_base_dir) {
                 if let Some(media_id) = media_id_opt {
                     if let Ok(xml_content) = fs::read_to_string(&normalized_project_xml_path_buf) {
-                        if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                        if let Ok(project_data) = serde_json::from_str::<ProjectXml>(&xml_content) {
                             if let Some(media_entry) = project_data.find_media(&media_id) {
                                 if let Some(speakers) = &media_entry.speakers {
                                     let mut translated_names_to_use = &speakers.names;

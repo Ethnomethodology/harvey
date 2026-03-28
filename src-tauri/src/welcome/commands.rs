@@ -9,7 +9,7 @@ use crate::DownloadCancellationState;
 use chrono::{Utc, DateTime};
 use log; // Use log crate
 use quick_xml::{Reader, Writer, events::{Event, BytesText}};
-use quick_xml::de::from_str;
+use serde_json::from_str;
 use serde::{Deserialize};
 use std::{
     collections::HashSet,
@@ -1121,7 +1121,7 @@ pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError
     if xml_path.exists() && xml_path.is_file() {
         match fs::read_to_string(&xml_path) {
             Ok(xml_content) => {
-                match quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                match serde_json::from_str::<ProjectXml>(&xml_content) {
                     Ok(project_data) => {
                         if !project_data.project_uuid.is_empty() {
                             project_uuid_for_db_deletion = Some(project_data.project_uuid);

@@ -256,7 +256,7 @@ pub async fn import_word_transcript<R: Runtime>(
 
     // Read project_data to check for name conflicts in XML
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let transcripts_root = project_base_dir.join(HARVEY_FILES_DIR).join(TRANSCRIPTS_DIR);
 
@@ -449,7 +449,7 @@ pub async fn import_word_transcript<R: Runtime>(
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID: {}", e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
@@ -523,7 +523,7 @@ pub async fn import_word_transcript<R: Runtime>(
     // --- End of DB metadata saving ---
 
     // Update Project XML
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
     
     // The relative_transcript_path_for_xml is the same as asset_relative_path_for_db used above
     let relative_transcript_path_for_xml = asset_relative_path_for_db; // Path uses final (potentially suffixed) truncated name
@@ -586,7 +586,7 @@ pub async fn save_standalone_transcript_and_update_xml(
         .map_err(|e| CommandError::from(format!("Failed write transcript file: {}", e)))?;
 
     // Update XML
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path_buf)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path_buf)?)?;
     
     let relative_path = target_path_buf
         .strip_prefix(project_base_dir)?
@@ -784,7 +784,7 @@ mod tests {
         }
 
         // 3. Simulate updating Project XML
-        let mut current_project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        let mut current_project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
         let new_standalone_transcript_entry_obj = StandaloneTranscriptEntryXml {
             name: new_transcript_filename.clone(),
             relative_path: asset_relative_path_for_db_str.clone(),
@@ -832,7 +832,7 @@ mod tests {
         }
 
         // Verify XML Data
-        let updated_project_data_from_xml_check: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        let updated_project_data_from_xml_check: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
         assert_eq!(updated_project_data_from_xml_check.standalone_transcript_files.files.len(), 1);
         assert_eq!(updated_project_data_from_xml_check.standalone_transcript_files.files[0].name, new_standalone_transcript_entry_obj.name);
         assert!(updated_project_data_from_xml_check.document_metadata_files.files.is_empty(), "Document metadata files list in XML should be empty regarding this transcript.");

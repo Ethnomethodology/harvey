@@ -82,7 +82,7 @@ pub async fn update_asset_metadata_command(
     let project_xml_path = PathBuf::from(project_xml_path_str); // PathBuf is now directly available
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path) // fs is now directly available
         .map_err(|e| format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid) // ProjectXml is now directly available
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid) // ProjectXml is now directly available
         .map_err(|e| format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;

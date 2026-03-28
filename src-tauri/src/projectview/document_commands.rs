@@ -38,7 +38,7 @@ pub async fn save_note_json(
         let project_data: ProjectXml = {
             let xml_content = fs::read_to_string(&project_xml_path)
                 .map_err(|e| format!("Failed to read project xml: {}", e))?;
-            quick_xml::de::from_str(&xml_content)
+            serde_json::from_str(&xml_content)
                 .map_err(|e| format!("Failed to parse project xml: {}", e))?
         };
         let project_id = project_data.project_uuid;
@@ -117,7 +117,7 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     info!( "[Backend Save Doc] Saved document content to: {}", target_path_buf.display() );
 
     let xml_content = fs::read_to_string(&project_xml_path_buf)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let relative_path_for_doc_xml = target_path_buf
         .strip_prefix(project_base_dir)?
@@ -205,7 +205,7 @@ pub async fn load_document_metadata(
     let project_xml_path = PathBuf::from(&project_xml_path_str);
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
     let project_base_dir = project_xml_path.parent().unwrap();

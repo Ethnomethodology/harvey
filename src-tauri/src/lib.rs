@@ -364,6 +364,7 @@ pub fn run() {
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
             projectview::core_commands::reveal_in_file_explorer,
+            projectview::core_commands::export_project_manifest,
             // --- Project view GROUP commands (added) ---
             projectview::core_commands::create_new_group,
             projectview::core_commands::get_project_groups,

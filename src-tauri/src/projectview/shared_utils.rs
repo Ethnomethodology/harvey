@@ -59,14 +59,14 @@ pub fn get_project_xml_path_from_item(item_path: &Path) -> Result<PathBuf, Comma
                         CommandError::from(format!( "Could not get project base name from {}", project_base_dir.display() ))
                     })?;
                 info!( "[get_project_xml_path] Project base name guess: {}", project_base_name );
-                let xml_name = format!("{}.harvey.xml", project_base_name);
+                let xml_name = format!("{}.harvey", project_base_name);
                 let xml_path = project_base_dir.join(&xml_name);
-                info!( "[get_project_xml_path] Checking for XML file at: {}", xml_path.display() );
+                info!( "[get_project_xml_path] Checking for manifest file at: {}", xml_path.display() );
                 if xml_path.exists() && xml_path.is_file() {
-                    info!( "[get_project_xml_path] SUCCESS: Found project XML file: {}", xml_path.display() );
+                    info!( "[get_project_xml_path] SUCCESS: Found project manifest file: {}", xml_path.display() );
                     return Ok(xml_path);
                 } else {
-                    warn!( "[get_project_xml_path] Inferred XML path not found: {}. Searching directory for any .harvey.xml file...", xml_path.display() );
+                    warn!( "[get_project_xml_path] Inferred manifest path not found: {}. Searching directory for any .harvey file...", xml_path.display() );
                     
                     let mut candidates = Vec::new();
                     if let Ok(entries) = fs::read_dir(project_base_dir) {
@@ -74,7 +74,7 @@ pub fn get_project_xml_path_from_item(item_path: &Path) -> Result<PathBuf, Comma
                             let path = entry.path();
                             if path.is_file() {
                                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                    if name.ends_with(".harvey.xml") {
+                                    if name.ends_with(".harvey") {
                                         candidates.push(path);
                                     }
                                 }
@@ -84,15 +84,15 @@ pub fn get_project_xml_path_from_item(item_path: &Path) -> Result<PathBuf, Comma
                     
                     if candidates.len() == 1 {
                         let found_path = candidates.remove(0);
-                        info!( "[get_project_xml_path] SUCCESS: Found single alternative XML file: {}", found_path.display() );
+                        info!( "[get_project_xml_path] SUCCESS: Found single alternative manifest file: {}", found_path.display() );
                         return Ok(found_path);
                     } else if candidates.len() > 1 {
-                         error!( "[get_project_xml_path] Multiple .harvey.xml files found in {}. Ambiguous which one to use. Candidates: {:?}", project_base_dir.display(), candidates );
-                         return Err(CommandError::from(format!( "Ambiguous project XML: Multiple .harvey.xml files found in {}. Please ensure only one project file exists or rename the folder to match.", project_base_dir.display() )));
+                         error!( "[get_project_xml_path] Multiple .harvey files found in {}. Ambiguous which one to use. Candidates: {:?}", project_base_dir.display(), candidates );
+                         return Err(CommandError::from(format!( "Ambiguous project manifest: Multiple .harvey files found in {}. Please ensure only one project file exists or rename the folder to match.", project_base_dir.display() )));
                     }
 
-                    error!( "[get_project_xml_path] XML file NOT found or not a file at inferred path: {}", xml_path.display() );
-                     return Err(CommandError::from(format!( "Inferred project XML path not found: {}", xml_path.display() )));
+                    error!( "[get_project_xml_path] Manifest file NOT found or not a file at inferred path: {}", xml_path.display() );
+                     return Err(CommandError::from(format!( "Inferred project manifest path not found: {}", xml_path.display() )));
                 }
             } else {
                  error!( "[get_project_xml_path] Found '{}' but it has no parent directory. Stopping.", HARVEY_FILES_DIR );
@@ -201,16 +201,15 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
 
 
 pub fn save_project_xml(xml_path: &Path, project_data: &ProjectXml) -> Result<(), CommandError> {
-    debug!("[Save XML] Saving to: {:?}", xml_path);
-    let xml_string = quick_xml::se::to_string_with_root("project", project_data)
-        .map_err(|e| CommandError::from(format!("XML Serialization error: {}", e)))?;
-    let final_xml_string = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}", xml_string);
-    info!("[Save XML] XML content being saved to {}:\n{}", xml_path.display(), final_xml_string);
-    let file = File::create(xml_path).map_err(|e| CommandError::from(format!("Failed to create/truncate XML file {}: {}", xml_path.display(), e)))?;
+    debug!("[Save Manifest] Saving to: {:?}", xml_path);
+    let json_string = serde_json::to_string_pretty(project_data)
+        .map_err(|e| CommandError::from(format!("JSON Serialization error: {}", e)))?;
+    info!("[Save Manifest] JSON content being saved to {}:\n{}", xml_path.display(), json_string);
+    let file = File::create(xml_path).map_err(|e| CommandError::from(format!("Failed to create/truncate Manifest file {}: {}", xml_path.display(), e)))?;
     let mut writer = BufWriter::new(file);
-    writer.write_all(final_xml_string.as_bytes()).map_err(|e| CommandError::from(format!("Failed to write XML content to {}: {}", xml_path.display(), e)))?;
-    writer.flush().map_err(|e| CommandError::from(format!("Failed to flush XML writer for {}: {}", xml_path.display(), e)))?;
-    debug!("[Save XML] Success.");
+    writer.write_all(json_string.as_bytes()).map_err(|e| CommandError::from(format!("Failed to write Manifest content to {}: {}", xml_path.display(), e)))?;
+    writer.flush().map_err(|e| CommandError::from(format!("Failed to flush Manifest writer for {}: {}", xml_path.display(), e)))?;
+    debug!("[Save Manifest] Success.");
     Ok(())
 }
 
