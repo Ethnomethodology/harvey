@@ -94,7 +94,7 @@
         <!-- Base depth is 3 (stem folder). Subtract 3 to get nesting level (0 for stem, 1 for subdirs, 2 for files) -->
         <span
             class="flex-shrink-0"
-            style:width="{(node.depth > 3 ? node.depth - 3 : 0) * 1.25}rem;"
+            style:width="{(node.depth > 4 ? node.depth - 4 : 0) * 0.6}rem;"
         ></span>
 
         <!-- Folder Toggle Icon OR File Icon -->
