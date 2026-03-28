@@ -330,12 +330,14 @@
         }
     }
 
-    // Reactive declaration for config issues
+    // Enhanced logic for critical issues: includes missing libraries for the selected engine 
+    // OR if Python libraries are completely missing which impacts most features.
     $: hasCriticalConfigIssues =
         ($configStatus.selected_transcription_engine === "faster-whisper" &&
             !$configStatus.python_libraries_installed) ||
         ($configStatus.selected_transcription_engine === "whisper-cpp" &&
-            !$configStatus.whisper_cpp_installed);
+            !$configStatus.whisper_cpp_installed) ||
+        !$configStatus.python_libraries_installed;
 
     $: hasNonCriticalConfigIssues =
         !hasCriticalConfigIssues &&
@@ -349,8 +351,7 @@
                 !$configStatus.whisper_cpp_models_downloaded) ||
             ($configStatus.selected_transcription_engine === "faster-whisper" &&
                 (!$configStatus.faster_whisper_models_downloaded ||
-                    !$configStatus.faster_whisper_dependencies_installed ||
-                    !$configStatus.python_libraries_installed)));
+                    !$configStatus.faster_whisper_dependencies_installed)));
 
     $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
@@ -2060,16 +2061,15 @@
                     title="Configure"
                     aria-label="Configure"
                     on:click={() => (showConfigurationModal = true)}
-                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center transition-colors hover:bg-gray-300 dark:hover:bg-gray-800 focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400 
+                    {!hasConfigIssues ? 'text-gray-700 dark:text-gray-300' : ''}
+                    {hasCriticalConfigIssues ? 'text-red-500' : ''}
+                    {!hasCriticalConfigIssues && hasNonCriticalConfigIssues ? 'text-yellow-500' : ''}"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="currentColor"
-                        class="w-6 h-6 bi bi-gear-wide-connected {hasCriticalConfigIssues
-                            ? 'text-red-500'
-                            : hasNonCriticalConfigIssues
-                              ? 'text-yellow-500'
-                              : ''}"
+                        class="w-6 h-6 bi bi-gear-wide-connected"
                         viewBox="0 0 16 16"
                     >
                         <path
