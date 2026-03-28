@@ -69,11 +69,15 @@
     const NOTE_EXTENSIONS = new Set(["json", "md", "txt"]); // Adjusted to include json
 
     /* ---------- Highlighting Logic ---------- */
-    $: shouldHighlight =
+    $: isMediaHighlighted =
         !node.is_directory &&
-        ((node.file_type === "media" && node.path === selectedMediaPath) ||
-            (node.file_type === "transcript" &&
-                node.path === currentTranscriptPath));
+        node.file_type === "media" &&
+        node.path === selectedMediaPath;
+    $: isTranscriptHighlighted =
+        !node.is_directory &&
+        node.file_type.includes("transcript") &&
+        node.path === currentTranscriptPath;
+    $: shouldHighlight = isMediaHighlighted || isTranscriptHighlighted;
 </script>
 
 <!-- List Item Structure -->
@@ -83,8 +87,8 @@
         class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-gray-800"
         class:cursor-pointer={!node.is_directory}
         class:cursor-default={node.is_directory}
-        class:bg-blue-100={shouldHighlight}
-        class:dark:bg-blue-900={shouldHighlight}
+        class:bg-blue-100={isTranscriptHighlighted}
+        class:dark:bg-blue-900={isTranscriptHighlighted}
         on:click={handleRowClick}
         on:dblclick={handleRowDoubleClick}
         on:contextmenu={handleRowContextMenu}
@@ -113,6 +117,8 @@
             <!-- File Icon -->
             <span
                 class="px-1 flex-shrink-0 flex items-center justify-center text-gray-600 dark:text-gray-400"
+                class:text-blue-600={shouldHighlight}
+                class:dark:text-blue-400={shouldHighlight}
             >
                 {#if node.file_type === "media" && AUDIO_EXTENSIONS.has(node.name
                             .split(".")
