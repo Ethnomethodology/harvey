@@ -28,7 +28,8 @@
 	const dispatch = createEventDispatcher();
 
 	// --- State for Accordion Sections ---
-	let openSection = "files";
+	let filesOpen = true;
+	let shortcutsOpen = false;
 
 	// --- State for Rename Modal ---
 	let showRenameModal = false;
@@ -36,7 +37,15 @@
 
 	// --- Accordion Click Handlers ---
 	function toggleSection(sectionName) {
-		openSection = openSection === sectionName ? null : sectionName;
+		if (sectionName === "files") {
+			if (!filesOpen || shortcutsOpen) {
+				filesOpen = !filesOpen;
+			}
+		} else if (sectionName === "shortcuts") {
+			if (!shortcutsOpen || filesOpen) {
+				shortcutsOpen = !shortcutsOpen;
+			}
+		}
 	}
 
 	// Determine platform-specific modifier key name
@@ -388,7 +397,7 @@
 	<h2
 		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
 		on:click={() => toggleSection("files")}
-		aria-expanded={openSection === "files"}
+		aria-expanded={filesOpen}
 		aria-controls="files-content"
 		role="button"
 		tabindex="0"
@@ -402,12 +411,12 @@
 			<span class="pl-2">Media Files</span>
 		</div>
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
-			{@html openSection === "files" ? CHEVRON_DOWN : CHEVRON_RIGHT}
+			{@html filesOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
 	</h2>
 
 	<!-- Media Files Content (Tree) -->
-	{#if openSection === "files"}
+	{#if filesOpen}
 		<div
 			id="files-content"
 			class="flex-grow overflow-y-auto min-h-0 pb-1 pt-1 px-1 mb-3 text-xs"
@@ -445,12 +454,11 @@
 
 	<!-- Shortcuts Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {openSection !==
-		'files'
-			? ''
-			: 'border-t'}"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {filesOpen
+			? 'border-t'
+			: ''}"
 		on:click={() => toggleSection("shortcuts")}
-		aria-expanded={openSection === "shortcuts"}
+		aria-expanded={shortcutsOpen}
 		aria-controls="shortcuts-content"
 		role="button"
 		tabindex="0"
@@ -464,12 +472,12 @@
 			<span class="pl-2">Shortcuts</span>
 		</div>
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
-			{@html openSection === "shortcuts" ? CHEVRON_DOWN : CHEVRON_RIGHT}
+			{@html shortcutsOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
 	</h2>
 
 	<!-- Shortcuts Content -->
-	{#if openSection === "shortcuts"}
+	{#if shortcutsOpen}
 		<div
 			id="shortcuts-content"
 			class="flex-grow overflow-y-auto min-h-0 p-3 text-xs"
