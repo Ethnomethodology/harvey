@@ -726,9 +726,9 @@ export async function importMediaFile(importType = null) {
 
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
-        const errorMessage = error.message || String(error);
+        const errorMessage = getErrorMessage(error);
         await message(`Error importing media: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-        setAssetImportStatus(false, `Error importing media.`);
+        setAssetImportStatus(false, `Error importing media: ${errorMessage}`);
         // Ensure loading states are reset on error
         project.update(p => ({
             ...p,
@@ -1420,17 +1420,50 @@ async function performReplaceAllInLexicalJson(json, find, replace, options) {
     return JSON.stringify(editor.getEditorState().toJSON());
 }
 
-export async function refreshProjectFiles(targetPathToSelect = null, targetTranscriptPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect, targetTranscriptPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
+export async function refreshProjectFiles(targetPathToSelect = null, targetTranscriptPathToSelect = null) {
+    const currentProj = get(project);
+    const projectXmlPath = currentProj.xmlPath;
+    if (!projectXmlPath) return;
+    project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true }));
+    try {
+        await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect, targetTranscriptPathToSelect);
+        project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false }));
+    } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false }));
+    }
+}
 export async function renameProjectItem(itemPath, newName, itemType) {
     const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
         const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
         await refreshProjectFiles(); // Refresh the file list after rename
         project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.`, fileRenamed: { oldPath: itemPath, newPath: newPath } }));
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' });
         project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false }));
         throw error;
+    }
+}
+
+function getErrorMessage(error) {
+    if (!error) return 'Unknown error';
+    if (typeof error === 'string') return error;
+    if (typeof error.payload === 'string') return error.payload;
+    if (typeof error.message === 'string') return error.message;
+    if (typeof error.error === 'string') return error.error;
+    if (typeof error.err === 'string') return error.err;
+
+    // Recursive check for nested payloads (Tauri sometimes nests them)
+    if (error.payload && typeof error.payload === 'object') {
+        return getErrorMessage(error.payload);
+    }
+
+    try {
+        const stringified = JSON.stringify(error);
+        return stringified === '{}' ? String(error) : stringified;
+    } catch (e) {
+        return String(error);
     }
 }
 export async function deleteProjectItem(itemPath) {
@@ -1488,9 +1521,19 @@ export async function deleteProjectItem(itemPath) {
         }
 
         project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`, isLoading: false }));
-    } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; }
+    } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' });
+        project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false }));
+        throw error;
+    }
 }
-export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false })); throw new Error(`Trim failed: ${errorMessage}`); } }
+export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); }     } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false }));
+        throw new Error(`Trim failed: ${errorMessage}`);
+    }
+}
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
 export async function requestTranscription() {
@@ -1843,7 +1886,8 @@ export async function convertAndSaveTranscriptAsDoc() {
         await refreshProjectFiles();
         return targetFullPath;
     } catch (error) {
-        project.update(p => ({ ...p, statusMessage: `Error converting transcript: ${error.message || error}` }));
+        const errorMessage = getErrorMessage(error);
+        project.update(p => ({ ...p, statusMessage: `Error converting transcript: ${errorMessage}` }));
         throw error;
     }
 }
@@ -1963,12 +2007,36 @@ export async function convertAndSaveTranscriptAsTranscript() {
         return targetFullPath;
 
     } catch (error) {
-        project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${error.message || error}` }));
+        const errorMessage = getErrorMessage(error);
+        project.update(p => ({ ...p, statusMessage: `Error saving transcript as imported: ${errorMessage}` }));
         throw error;
     }
 }
 
-export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({ ...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
+export async function loadActiveDocumentContent() {
+    const currentProj = get(project);
+    const filePath = currentProj.selectedDocumentPath;
+    if (!filePath) {
+        project.update(p => ({ ...p, isDocumentLoading: false, documentError: null }));
+        return;
+    }
+    const filename = await basename(filePath);
+    project.update(p => ({ ...p, isDocumentLoading: true, documentError: null }));
+    try {
+        const jsonContent = await invoke('load_note_json', { filePath });
+        if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid.");
+        try {
+            JSON.parse(jsonContent);
+        } catch (e) {
+            throw new Error(`Loaded document content not valid JSON.`);
+        }
+        setLoadedDocumentData(filePath, jsonContent);
+    } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        setDocumentLoadFailed(filePath, errorMessage);
+        await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' });
+    }
+}
 export async function saveCurrentPdfAnnotations() {
     const projState = get(project);
     if (!projState.selectedDocumentPath || !projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) return;
@@ -2009,7 +2077,8 @@ export async function saveCurrentPdfAnnotations() {
         console.log(`[ProjectService] PDF annotations saved for ${relativePdfPath} in project ${projectId}`);
     } catch (error) {
         console.error(`[ProjectService] Error saving PDF annotations for ${relativePdfPath} in project ${projectId}:`, error);
-        notificationStore.add(`Error saving PDF annotations: ${error.message || error}`, 'error');
+        const errorMessage = getErrorMessage(error);
+        notificationStore.add(`Error saving PDF annotations: ${errorMessage}`, 'error');
         // Do not throw here to avoid unhandled promise rejections if the caller doesn't catch.
     }
 }
