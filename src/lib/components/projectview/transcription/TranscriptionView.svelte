@@ -119,18 +119,31 @@
 
     let isMediaPlayerHidden = false; // New state variable
 
-    // Logic to show media player by default if the new media is a video
-    $: {
+    // Reactive media type detection
+    $: isVideoMedia = (() => {
         const selectedMedia = $transcriptStore.selectedMediaFile;
         if (selectedMedia && selectedMedia.path) {
-            const extension = selectedMedia.path
-                .split(".")
-                .pop()
-                ?.toLowerCase();
+            const extension = selectedMedia.path.split(".").pop()?.toLowerCase();
             const videoExtensions = ["mp4", "mov", "webm", "avi", "mkv"];
-            if (videoExtensions.includes(extension)) {
-                isMediaPlayerHidden = false;
-            }
+            return videoExtensions.includes(extension);
+        }
+        return false;
+    })();
+
+    $: isAudioMedia = (() => {
+        const selectedMedia = $transcriptStore.selectedMediaFile;
+        if (selectedMedia && selectedMedia.path) {
+            const extension = selectedMedia.path.split(".").pop()?.toLowerCase();
+            const audioExtensions = ["mp3", "wav", "m4a", "ogg", "flac", "aac"];
+            return audioExtensions.includes(extension);
+        }
+        return false;
+    })();
+
+    // Logic to show media player by default if the new media is a video
+    $: {
+        if (isVideoMedia) {
+            isMediaPlayerHidden = false;
         }
     }
 
@@ -752,14 +765,16 @@
                 class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700"
             >
                 <div
-                    class="{isMediaPlayerHidden
-                        ? ''
-                        : $transcriptStore.englishSegments &&
-                            $transcriptStore.englishSegments.length > 0 &&
-                            $transcriptStore.originalSegments &&
-                            $transcriptStore.originalSegments.length > 0
-                          ? 'h-[calc(50%-1.75rem)]'
-                          : 'h-1/2'} bg-white dark:bg-gray-950 flex flex-col"
+                    class="bg-white dark:bg-gray-950 flex flex-col flex-shrink-0 {
+                        (isVideoMedia && !isMediaPlayerHidden)
+                            ? ($transcriptStore.englishSegments &&
+                                $transcriptStore.englishSegments.length > 0 &&
+                                $transcriptStore.originalSegments &&
+                                $transcriptStore.originalSegments.length > 0)
+                                ? 'h-[calc(50%-1.75rem)]'
+                                : 'h-1/2'
+                            : 'h-[64px]'
+                    }"
                 >
                     <MediaPlayer
                         bind:this={mediaPlayerRef}
