@@ -243,6 +243,12 @@
                       )
                     : segment.start_time;
                 mediaPlayerRef.seekTo(seekTime);
+                if (verticalWaveformRef) {
+                    verticalWaveformRef.scrollToTime(seekTime);
+                }
+                if (horizontalWaveformRef) {
+                    horizontalWaveformRef.scrollToTime(seekTime);
+                }
             }
         } else {
             console.warn(
