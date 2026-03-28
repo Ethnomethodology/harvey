@@ -692,7 +692,7 @@
                         <div class="flex-1 flex flex-col justify-end min-h-0 py-2">
                             {#if currentIndex > 0}
                                 {@const prevSeg = segments[currentIndex-1]}
-                                <button on:click="{previous}" class="segment-card segment-card-prev group">
+                                <button on:click="{previous}" class="segment-card segment-card-prev group" title="Previous Segment">
                                     <div class="flex items-center gap-x-3 mb-1">
                                         <span class="text-[10pt] font-bold text-gray-400 dark:text-gray-500">{currentIndex}</span>
                                         <div class="flex items-center gap-x-1 text-[9pt] text-gray-400 dark:text-gray-500 tabular-nums">
@@ -712,8 +712,11 @@
                                             </div>
                                         {/if}
                                     </div>
-                                    <div class="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-white dark:from-gray-900 to-transparent opacity-20 pointer-events-none group-hover:opacity-10 transition-opacity"></div>
                                 </button>
+                            {:else}
+                                <div class="segment-card segment-card-prev opacity-20 cursor-default border-gray-200/50 dark:border-gray-800/50 flex items-center justify-center text-[10pt] italic text-gray-400 dark:text-gray-500" title="No Previous Segment">
+                                    No Previous Segment
+                                </div>
                             {/if}
                         </div>
 
@@ -779,7 +782,7 @@
                         <div class="flex-1 flex flex-col justify-start min-h-0 py-2">
                             {#if currentIndex < segments.length - 1}
                                 {@const nextSeg = segments[currentIndex+1]}
-                                <button on:click="{next}" class="segment-card segment-card-next group">
+                                <button on:click="{next}" class="segment-card segment-card-next group" title="Next Segment">
                                     <div class="flex items-center gap-x-3 mb-1">
                                         <span class="text-[10pt] font-bold text-gray-400 dark:text-gray-500">{currentIndex + 2}</span>
                                         <div class="flex items-center gap-x-1 text-[9pt] text-gray-400 dark:text-gray-500 tabular-nums">
@@ -799,8 +802,11 @@
                                             </div>
                                         {/if}
                                     </div>
-                                    <div class="absolute inset-x-0 bottom-0 h-full bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-20 pointer-events-none group-hover:opacity-10 transition-opacity"></div>
                                 </button>
+                            {:else}
+                                <div class="segment-card segment-card-next opacity-20 cursor-default border-gray-200/50 dark:border-gray-800/50 flex items-center justify-center text-[10pt] italic text-gray-400 dark:text-gray-500" title="No Next Segment">
+                                    No Next Segment
+                                </div>
                             {/if}
                         </div>
 
@@ -820,18 +826,16 @@
 		@apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded;
 	}
 
-    .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
-    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:bg-transparent dark:border dark:border-[#404040] dark:hover:bg-[#404040] focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
-    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-transparent dark:text-white dark:border dark:border-[#404040] dark:hover:bg-[#404040] rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
+
 
     .picker-wheel-container {
         @apply relative;
-        mask-image: linear-gradient(to bottom, transparent, black 5%, black 95%, transparent);
     }
 
     .segment-card {
-        @apply w-full p-3 rounded-lg border border-gray-200/50 dark:border-gray-800/50 hover:border-gray-200 dark:hover:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-all duration-200 text-left relative overflow-hidden flex-shrink-0;
+        @apply w-full p-3 rounded-lg border border-gray-200/50 dark:border-gray-800/50 hover:border-gray-200 dark:hover:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-all duration-200 text-left relative overflow-hidden flex-shrink-0 flex flex-col justify-center;
         cursor: pointer;
+        height: 68px;
     }
 
     .segment-card-prev {
