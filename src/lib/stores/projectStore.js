@@ -12,6 +12,9 @@ export const HARVEY_FILES_DIR = "harvey_files";
 export const MEDIA_DIR_NAME = 'Media';
 export const AUDIOS_DIR_NAME = 'Audios';
 export const VIDEOS_DIR_NAME = 'Videos';
+export const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac']);
+export const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
+
 const MEDIA_SUBDIR = 'media';
 const TRANSCRIPTS_SUBDIR = 'transcripts';
 

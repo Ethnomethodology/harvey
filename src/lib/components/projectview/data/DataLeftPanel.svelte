@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/data/DataLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, HARVEY_FILES_DIR, MEDIA_DIR_NAME, AUDIOS_DIR_NAME, VIDEOS_DIR_NAME } from '$lib/stores/projectStore.js';
+	import { project, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, HARVEY_FILES_DIR, MEDIA_DIR_NAME, AUDIOS_DIR_NAME, VIDEOS_DIR_NAME, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
+
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importTableSheet, importImageFile, importTranscriptFile, deleteStandaloneTranscript, refreshProjectFiles, normalizePath, saveTableSchema } from '$lib/services/projectService.js';
@@ -881,8 +882,7 @@
     ];
     const IMPORT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"><path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/></svg>`;
     const CONTEXT_MENU_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical w-4 h-4" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/></svg>`;
-    const AUDIO_EXTENSIONS = new Set(['mp3','wav','m4a','ogg','aac','flac']);
-	const VIDEO_EXTENSIONS = new Set(['mp4','mov','avi','mkv','webm']);
+
     const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
 	const CHEVRON_DOWN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>`;

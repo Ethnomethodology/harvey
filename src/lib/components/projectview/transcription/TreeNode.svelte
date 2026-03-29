@@ -10,6 +10,8 @@
         CircleHelp,
         FileText,
     } from "@lucide/svelte";
+    import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "$lib/stores/projectStore.js";
+
     // Use relative path for recursive import within the same directory (if this file is TreeNode.svelte)
     // If TreeNode is imported elsewhere, this might need adjustment, but assuming it's self-recursive
     import TreeNode from "./TreeNode.svelte";
@@ -56,15 +58,7 @@
     }
 
     /* ---------- helpers ---------- */
-    const AUDIO_EXTENSIONS = new Set([
-        "mp3",
-        "wav",
-        "m4a",
-        "ogg",
-        "aac",
-        "flac",
-    ]);
-    const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "avi", "mkv", "webm"]);
+
     // Define extensions for note types for icon matching
     const NOTE_EXTENSIONS = new Set(["json", "md", "txt"]); // Adjusted to include json
 
