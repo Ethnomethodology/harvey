@@ -18,6 +18,7 @@
 	let dropdownY = 0;
 	let dropdownWidth = 0;
 	let placement = 'bottom';
+	let dropdownElement: HTMLElement;
 
 	const dispatch = createEventDispatcher();
 
@@ -74,9 +75,21 @@
 	function updateDropdownPosition() {
 		if (rootElement) {
 			const rect = rootElement.getBoundingClientRect();
-			const dropdownHeight = 240; // max-h-60 = 240px
+
+			// Calculate the actual or estimated height of the dropdown
+			let currentDropdownHeight = 240; // Default max height
+			if (dropdownElement) {
+				currentDropdownHeight = dropdownElement.offsetHeight;
+			} else {
+				// Estimate if not yet mounted (search input ~42px, padding ~8px, items ~28px each)
+				const estimatedItemCount = groupedOptions ?
+					(searchTerm ? filteredAvailableOptions.length : availableOptions.length + groupedOptions.length) :
+					filteredAvailableOptions.length;
+				currentDropdownHeight = Math.min(240, 50 + (estimatedItemCount * 28));
+			}
+
 			const margin = 5;
-            
+
             // Document-relative coordinates (allows for absolute positioning attached to body)
             const scrollX = window.scrollX || window.pageXOffset;
             const scrollY = window.scrollY || window.pageYOffset;
@@ -88,7 +101,7 @@
 			placement = 'bottom';
 
             // Flip logic: if it overflows viewport bottom, check if there's more space above
-            if (rect.bottom + dropdownHeight > window.innerHeight) {
+            if (rect.bottom + currentDropdownHeight > window.innerHeight) {
                 const spaceAbove = rect.top;
                 const spaceBelow = window.innerHeight - rect.bottom;
                 
@@ -145,8 +158,8 @@
     });
 
     // Reactive trigger for position update when showDropdown becomes true
-    $: if (showDropdown && rootElement) {
-        // Use a small timeout or tick if needed, but usually works directly
+    // Also re-calculate if the number of options changes significantly (e.g. typing)
+    $: if (showDropdown && rootElement && (filteredAvailableOptions || true)) {
         setTimeout(updateDropdownPosition, 0);
     }
 </script>
@@ -192,6 +205,7 @@
 	{#if showDropdown}
 		<div
 			use:portal
+			bind:this={dropdownElement}
 			class="absolute z-[999999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
 			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px; {placement === 'top' ? 'transform: translateY(-100%);' : ''}"
 		>
