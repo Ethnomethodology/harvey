@@ -27,32 +27,41 @@
                 return;
             }
             if (itemPath) {
-                console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
-
+                console.log('[HighlightsPanel] Global refresher triggered, forcing re-load for', itemPath);
                 let pathForHighlights = itemPath;
                 const p = get(project);
                 if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
                      pathForHighlights = p.activeTranscriptPathInDataTab;
                 }
-
+                
+                // For the global refresher, we DO want a hard reload from disk/DB to allow external sync
                 await loadHighlightsForFile(pathForHighlights, itemType);
-                await fetchAllTags(); // Also refresh the list of all available tags
+                await fetchAllTags();
             }
         });
     });
 
-	$: if (refreshKey) {
-		if (itemPath) {
-            let pathForHighlights = itemPath;
-            const p = get(project);
-            if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
-                 pathForHighlights = p.activeTranscriptPathInDataTab;
-            }
+    $: if (refreshKey && itemPath) {
+        let pathForHighlights = itemPath;
+        const p = get(project);
+        if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
+             pathForHighlights = p.activeTranscriptPathInDataTab;
+        }
 
-			loadHighlightsForFile(pathForHighlights, itemType);
-			fetchAllTags();
-		}
-	}
+        // Logic to prevent overwriting active local edits:
+        // If the path matches what is already open in the store AND the store is not empty, 
+        // skip the redundant load when the panel mounts or when a local "save" just happened.
+        const currentHighlightsInStore = p.currentDocumentHighlights || p.currentStandaloneTranscriptHighlights || p.currentTableHighlights || p.currentPdfAnnotations || p.currentImageAnnotations || [];
+        const currentActivePath = p.selectedDocumentPath || p.currentStandaloneTranscriptPath || (p.selectedMediaNotePath === itemPath ? p.activeTranscriptPathInDataTab : null);
+
+        if (pathForHighlights === currentActivePath && currentHighlightsInStore.length > 0) {
+            console.log('[HighlightsPanel] Active document already has highlights in store, skipping redundant refresh for', pathForHighlights);
+        } else {
+            console.log('[HighlightsPanel] Loading highlights for', pathForHighlights);
+            loadHighlightsForFile(pathForHighlights, itemType);
+            fetchAllTags();
+        }
+    }
 
     onDestroy(() => {
         if (unsubscribeRefresher) {
@@ -137,7 +146,7 @@
         } else if (type === 'table') {
             return highlights.map(h => ({
                 id: h.id,
-                color: h.color,
+                color: h.color || 'rgba(255, 242, 117, 0.5)',
                 text: h.text,
                 tags: h.tags || [],
                 comments: h.comments || []
@@ -149,7 +158,7 @@
                 if (!map.has(highlight.id)) {
                     map.set(highlight.id, {
                         id: highlight.id,
-                        color: highlight.color,
+                        color: highlight.color || 'rgba(255, 242, 117, 0.5)',
                         textParts: [],
                         tags: highlight.tags || [],
                         comments: highlight.comments || [],
