@@ -88,9 +88,10 @@
       </Button>
     {/each}
     <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
-    <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:!ring-0 focus:!outline-none">
+    <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
       <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
-      <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
+    </button>
+    <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
         <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1">
           <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
         </div>
@@ -110,7 +111,7 @@
           <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
             {#if (groupedTagsMap[group.id] || []).length > 0}
               {#each groupedTagsMap[group.id] as tag}
-                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
                   <Checkbox
                     checked={activeTags.includes(tag.name)}
                     on:change={() => handleTagToggle(tag.name)}
@@ -121,7 +122,7 @@
                 </li>
               {/each}
             {:else}
-              <li class="p-2 text-gray-500 italic text-xs">No tags in group</li>
+              <li class="p-2 text-gray-500 italic text-xs list-none">No tags in group</li>
             {/if}
           </Dropdown>
         {/each}
@@ -131,7 +132,7 @@
              <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
           {/if}
           {#each ungroupedTags as tag}
-            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
               <Checkbox
                 checked={activeTags.includes(tag.name)}
                 on:change={() => handleTagToggle(tag.name)}
@@ -147,7 +148,6 @@
           <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
         {/if}
       </Dropdown>
-    </Button>
     <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" on:click={handleDelete}>
       <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
     </Button>

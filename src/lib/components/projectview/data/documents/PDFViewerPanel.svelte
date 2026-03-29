@@ -2373,7 +2373,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <div class="relative" bind:this={highlightDropdownRef}>
-      <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
+      <button type="button" class="mini-toolbar-button flex items-center focus:outline-none focus:ring-0 outline-none" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
         <Highlighter class="w-4 h-4" />
         <ChevronDown class="ml-1 h-3 w-3" />
       </button>
@@ -2460,7 +2460,7 @@ function updateHighlightOverlayColor(id, color) {
                                 <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
                                     {#if (groupedTagsMap[group.id] || []).length > 0}
                                         {#each groupedTagsMap[group.id] as tag}
-                                            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+                                                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
                                                 <Checkbox
                                                     checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
                                                     on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
@@ -2471,7 +2471,7 @@ function updateHighlightOverlayColor(id, color) {
                                             </li>
                                         {/each}
                                     {:else}
-                                        <li class="p-2 text-gray-500 italic text-xs">No tags in group</li>
+                                                <li class="p-2 text-gray-500 italic text-xs list-none">No tags in group</li>
                                     {/if}
                                 </Dropdown>
                             {/each}
@@ -2481,7 +2481,7 @@ function updateHighlightOverlayColor(id, color) {
                                     <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
                                 {/if}
                                 {#each ungroupedTags as tag}
-                                    <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+                                            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
                                         <Checkbox
                                             checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
                                             on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
