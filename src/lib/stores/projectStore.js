@@ -475,7 +475,13 @@ export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePat
         } else {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
-            dirtyFlag = 'isDocumentMetadataDirty';
+
+            // For survey docs or sub-documents, avoid marking the global document dirty
+            const isSubDocument = (docType === 'doc' || p.selectedDocumentType === 'tables') &&
+                                  filePath &&
+                                  (filePath.includes('/attachments/') || filePath.includes('.attachments'));
+
+            dirtyFlag = isSubDocument ? null : 'isDocumentMetadataDirty';
             pathKey = 'selectedDocumentPath';
         }
 
@@ -500,7 +506,10 @@ export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePat
             return h;
         });
 
-        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights };
+        if (dirtyFlag) {
+            updatedState[dirtyFlag] = true;
+        }
         if (isMediaNoteActive) {
             updatedState.isMediaNoteTranscriptDirty = true;
         }
@@ -544,7 +553,12 @@ export function removeTagFromHighlightLocal(highlightId, tagName, docType, fileP
         } else {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
-            dirtyFlag = 'isDocumentMetadataDirty';
+
+            const isSubDocument = (docType === 'doc' || p.selectedDocumentType === 'tables') &&
+                                  filePath &&
+                                  (filePath.includes('/attachments/') || filePath.includes('.attachments'));
+
+            dirtyFlag = isSubDocument ? null : 'isDocumentMetadataDirty';
             pathKey = 'selectedDocumentPath';
         }
 
@@ -562,7 +576,10 @@ export function removeTagFromHighlightLocal(highlightId, tagName, docType, fileP
             return h;
         });
 
-        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        const updatedState = { ...p, [key]: newHighlights };
+        if (dirtyFlag) {
+            updatedState[dirtyFlag] = true;
+        }
         if (isMediaNoteActive) {
             updatedState.isMediaNoteTranscriptDirty = true;
         }

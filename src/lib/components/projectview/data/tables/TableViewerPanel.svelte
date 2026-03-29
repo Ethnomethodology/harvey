@@ -2802,6 +2802,12 @@
         debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
     }
 
+    // Reactive watcher to capture tags/comments added to base tables
+    // via floating toolbar or HighlightsPanel sidebar
+    $: if (!isViewingDocument && tableReady && $project.isTableHighlightsDirty) {
+        saveTableHighlights();
+    }
+
     export async function openLexicalDocument(docPath) {
         if (!docPath) return;
         try {
