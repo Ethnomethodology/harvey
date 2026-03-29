@@ -221,8 +221,6 @@
     bind:this={dialogElement}
     class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; width: {dialogWidth}px; overflow: visible;"
-    on:click|stopPropagation
-    on:pointerdown|stopPropagation
 >
     {#if !isCensoredMode}
         {#if initialText !== null}
