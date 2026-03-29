@@ -1248,11 +1248,11 @@
                         </div>
                         <button
                             type="button"
-                            class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-700 hover:text-gray-600 dark:hover:text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${categoryContextMenuVisible && categoryContextMenuType === 'groups' ? 'opacity-100' : ''}"
-                            title="Options"
-                            on:click|stopPropagation={(e) => handleCategoryContextMenu(e, 'groups')}
+                            class="ml-2 flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                            title="Create New Group"
+                            on:click|stopPropagation={() => handleNewGroupClick()}
                         >
-                            {@html CONTEXT_MENU_ICON_SVG}
+                            <Plus class="w-4 h-4" />
                         </button>
                     </h3>
                     <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-700 text-xs">

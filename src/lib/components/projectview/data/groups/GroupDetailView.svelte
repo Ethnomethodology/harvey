@@ -11,13 +11,13 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
-    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown, Columns3Cog } from '@lucide/svelte';
     import DocumentThumbnail from './DocumentThumbnail.svelte';
     import TableThumbnail from './TableThumbnail.svelte';
     import AudioThumbnail from './AudioThumbnail.svelte';
     import PdfThumbnail from './PdfThumbnail.svelte'; // NEW
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button, Badge } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -700,9 +700,11 @@
         {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
             <div class="mb-4 flex justify-between items-center">
                 <div class="relative inline-block text-left">
-                    <Button color="alternative" size="sm" class="flex items-center space-x-1">
-                        <span>{visibleColumnsCount} Columns</span>
-                        <ChevronDown class="w-4 h-4" />
+                    <Button color="alternative" size="sm" class="flex items-center space-x-1 px-3 py-1.5 focus:ring-0 group">
+                        <div class="flex items-center text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <Columns3Cog class="w-4 h-4" />
+                        </div>
+                        <ChevronDown class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors" />
                     </Button>
                     <Dropdown class="w-48 p-3 space-y-2">
                         {#each columns as col}
