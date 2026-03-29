@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project as projectStore, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
@@ -14,6 +14,7 @@
     import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
     import DocumentThumbnail from './DocumentThumbnail.svelte';
     import TableThumbnail from './TableThumbnail.svelte';
+    import AudioThumbnail from './AudioThumbnail.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
@@ -120,10 +121,17 @@
         { key: 'others', name: 'Others', singularName: 'Other', icon: File }
     ];
 
-    function getCategoryInfo(fileType) {
-        switch (fileType) {
+    function getCategoryInfo(file) {
+        switch (file.file_type) {
             case 'audio': return CATEGORY_ORDER.find(c => c.key === 'audios');
             case 'video': return CATEGORY_ORDER.find(c => c.key === 'videos');
+            case 'media':
+                if (AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                    return CATEGORY_ORDER.find(c => c.key === 'audios');
+                } else if (VIDEO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                    return CATEGORY_ORDER.find(c => c.key === 'videos');
+                }
+                return CATEGORY_ORDER.find(c => c.key === 'others');
             case 'document': return CATEGORY_ORDER.find(c => c.key === 'documents');
             case 'image': return CATEGORY_ORDER.find(c => c.key === 'images');
             case 'table': return CATEGORY_ORDER.find(c => c.key === 'tables');
@@ -154,6 +162,15 @@
                 switch (file.file_type) {
                     case 'audio': newCategorizedFiles.audios.push(file); break;
                     case 'video': newCategorizedFiles.videos.push(file); break; // Added video to switch
+                    case 'media':
+                        if (AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                            newCategorizedFiles.audios.push(file);
+                        } else if (VIDEO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                            newCategorizedFiles.videos.push(file);
+                        } else {
+                            newCategorizedFiles.others.push(file);
+                        }
+                        break;
                     case 'document': newCategorizedFiles.documents.push(file); break;
                     case 'image': newCategorizedFiles.images.push(file); break;
                     case 'table': newCategorizedFiles.tables.push(file); break;
@@ -744,6 +761,8 @@
                                                 <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
                                             {:else if file.file_type === 'table' && file.full_path}
                                                 <TableThumbnail {file} />
+                                            {:else if file.file_type === 'audio' || (file.file_type === 'media' && AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? ''))}
+                                                <AudioThumbnail {file} />
                                             {:else}
                                                 <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
                                                     <svelte:component this={category.icon} class="w-12 h-12" />
@@ -797,10 +816,10 @@
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                     >
                                         {#if columns.find(c => c.key === 'type').visible}
-                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file.file_type)?.singularName || 'Unknown'}>
+                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file)?.singularName || 'Unknown'}>
                                                 <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
-                                                    <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
-                                                    <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
+                                                    <svelte:component this={getCategoryInfo(file)?.icon || File} class="w-4 h-4" />
+                                                    <span>{getCategoryInfo(file)?.singularName || 'Unknown'}</span>
                                                 </div>
                                             </TableBodyCell>
                                         {/if}

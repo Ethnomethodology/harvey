@@ -455,7 +455,7 @@
 					Import a media file to begin.
 				</p>
 			{:else}
-				<ul class="space-y-0.5">
+				<ul class="space-y-0.5 px-1.5">
 					{#each uniqueProjectFileTree as node (node.path || node.relativePath)}
 						<TreeNode
 							{node}
