@@ -122,6 +122,12 @@
         }
     }
 
+    function isHighlightAnnotation(annotation) {
+        if (!annotation) return false;
+        const shapeType = annotation.target?.selector?.value?.shape;
+        return ['rectangle', 'circle', 'polygon'].includes(shapeType);
+    }
+
     async function handleExportImage(event) {
         const { filePath, includeAnnotations } = event.detail;
         if (!osdViewer || !currentAssetUrl) return;
@@ -1287,7 +1293,7 @@
     }
 
     function handleAnnotationDoubleClick(event, annotation) {
-        if (!get(isLexicalEditMode)) return;
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         event.stopPropagation(); // Prevent OSD zoom
         console.log("Annotation double-clicked:", annotation);
         annotationBeingEdited = annotation;
@@ -1409,7 +1415,8 @@
     }
 
     function startShapeDrag(event, annotationId) {
-        if (!get(isLexicalEditMode)) return;
+        const annotation = $currentAnnotations.find(a => a.id === annotationId);
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         // Do not stop propagation, so OSD 'canvas-press' fires
         event.preventDefault();
         isDraggingShape = true;
@@ -1424,7 +1431,8 @@
     }
 
     function startResizeDrag(event, annotationId, handleType) {
-        if (!get(isLexicalEditMode)) return;
+        const annotation = $currentAnnotations.find(a => a.id === annotationId);
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         event.preventDefault();
         // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
         // event.stopPropagation();
