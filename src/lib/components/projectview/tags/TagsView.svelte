@@ -27,7 +27,7 @@
     import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { get } from 'svelte/store';
-    import { MoreVertical, SquarePen, View, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp } from '@lucide/svelte';
+    import { MoreVertical, SquarePen, View, MessageCircle, Sheet, Music, Film, FileText, Image as ImageIcon, MessageSquareText, CircleHelp, Plus } from '@lucide/svelte';
 
     let unsubscribePanelState;
     let unsubscribeRefresher;
