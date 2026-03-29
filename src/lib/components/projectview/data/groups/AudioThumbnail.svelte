@@ -1,7 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
-    import { Music } from 'lucide-svelte';
+    import { Music } from '@lucide/svelte';
 
     export let file;
 

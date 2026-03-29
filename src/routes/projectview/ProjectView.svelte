@@ -1246,7 +1246,7 @@
         // Determine type and prepare view
         if (tabName === "data") {
             const isStandaloneTranscript =
-                viewType === "audio_transcript" || viewType === "video_transcript" ||
+                viewType === "standalone_transcript" ||
                 originalDocType === "standalone_transcript" ||
                 proj.standaloneTranscriptFiles?.some(
                     (f) =>
@@ -1256,6 +1256,8 @@
                 );
 
             const isMediaTranscript =
+                viewType === "audio_transcript" ||
+                viewType === "video_transcript" ||
                 originalDocType === "audio_transcript" ||
                 originalDocType === "video_transcript";
 
