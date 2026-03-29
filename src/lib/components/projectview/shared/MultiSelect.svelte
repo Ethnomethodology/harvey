@@ -76,25 +76,29 @@
 			const dropdownHeight = 240; // max-h-60 = 240px
 			const margin = 5;
             
+            // Document-relative coordinates (allows for absolute positioning attached to body)
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.scrollY || window.pageYOffset;
+            
             // Default position: below
-			dropdownX = rect.left;
-			dropdownY = rect.bottom + margin;
+			dropdownX = rect.left + scrollX;
+			dropdownY = rect.bottom + scrollY + margin;
 			dropdownWidth = rect.width;
 
-            // Flip logic: if it overflows bottom, check if there's more space above
-            if (dropdownY + dropdownHeight > window.innerHeight) {
+            // Flip logic: if it overflows viewport bottom, check if there's more space above
+            if (rect.bottom + dropdownHeight > window.innerHeight) {
                 const spaceAbove = rect.top;
                 const spaceBelow = window.innerHeight - rect.bottom;
                 
                 if (spaceAbove > spaceBelow && spaceAbove > 100) {
                     // Position above
-                    dropdownY = rect.top - Math.min(dropdownHeight, spaceAbove - margin) - margin;
+                    dropdownY = rect.top + scrollY - Math.min(dropdownHeight, spaceAbove - margin) - margin;
                 }
             }
             
-            // Horizontal shift to stay within viewport
-            if (dropdownX + dropdownWidth > window.innerWidth) {
-                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin);
+            // Horizontal shift to stay within viewport (still relative to document width)
+            if (rect.left + dropdownWidth > window.innerWidth) {
+                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin) + scrollX;
             }
 		}
 	}
@@ -185,7 +189,7 @@
 	{#if showDropdown}
 		<div
 			use:portal
-			class="fixed z-[999999] mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
+			class="absolute z-[999999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
 			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px;"
 		>
 			<div class="p-2">
