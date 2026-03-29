@@ -2,7 +2,7 @@
   import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
   import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
   import { Toolbar, Button, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
-  import { Trash2, Tag, ChevronRight, Check } from '@lucide/svelte';
+  import { Trash2, Tag, ChevronRight, SquareCheck } from '@lucide/svelte';
 
   export let showToolbar;
   export let toolbarPosition;
@@ -92,15 +92,13 @@
 
         {#each $allTagGroups as group}
           <DropdownItem class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
-            <div class="flex items-center gap-2 truncate">
+            <span class="truncate">{group.name}</span>
+            <div class="flex items-center gap-2 shrink-0">
               {#if isGroupChecked(group.id)}
-                <Check class="w-3.5 h-3.5 text-blue-500 shrink-0" />
-              {:else}
-                <div class="w-3.5 h-3.5 shrink-0"></div>
+                <SquareCheck class="w-4 h-4 text-blue-500" />
               {/if}
-              <span class="truncate">{group.name}</span>
+              <ChevronRight class="w-4 h-4 text-gray-400" />
             </div>
-            <ChevronRight class="w-4 h-4 text-gray-400 shrink-0" />
           </DropdownItem>
           <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
             {#if (groupedTagsMap[group.id] || []).length > 0}
@@ -130,7 +128,7 @@
               <Checkbox
                 checked={activeTags.includes(tag.name)}
                 on:change={() => handleTagToggle(tag.name)}
-                class="items-center px-2 py-1.5 w-full cursor-pointer ml-[22px]"
+                class="items-center px-2 py-1.5 w-full cursor-pointer"
               >
                 {tag.name}
               </Checkbox>

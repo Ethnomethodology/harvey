@@ -9,7 +9,7 @@
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2, Tag, ChevronRight as ChevronRightIcon } from '@lucide/svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2, Tag, ChevronRight as ChevronRightIcon, SquareCheck } from '@lucide/svelte';
 
     $: ungroupedTags = $allTags.filter(t => t.tag_group_id === null || t.tag_group_id === undefined);
     $: groupedTagsMap = $allTags.reduce((acc, tag) => {
@@ -2448,15 +2448,13 @@ function updateHighlightOverlayColor(id, color) {
 
                             {#each $allTagGroups as group}
                                 <DropdownItem class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
-                                    <div class="flex items-center gap-2 truncate">
+                                    <span class="truncate">{group.name}</span>
+                                    <div class="flex items-center gap-2 shrink-0">
                                         {#if isGroupChecked(group.id, $project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || [])}
-                                            <Check class="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                        {:else}
-                                            <div class="w-3.5 h-3.5 shrink-0"></div>
+                                            <SquareCheck class="w-4 h-4 text-blue-500" />
                                         {/if}
-                                        <span class="truncate">{group.name}</span>
+                                        <ChevronRightIcon class="w-4 h-4 text-gray-400" />
                                     </div>
-                                    <ChevronRightIcon class="w-4 h-4 text-gray-400 shrink-0" />
                                 </DropdownItem>
                                 <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
                                     {#if (groupedTagsMap[group.id] || []).length > 0}
@@ -2486,7 +2484,7 @@ function updateHighlightOverlayColor(id, color) {
                                         <Checkbox
                                             checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
                                             on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
-                                            class="items-center px-2 py-1.5 w-full cursor-pointer ml-[22px]"
+                                            class="items-center px-2 py-1.5 w-full cursor-pointer"
                                         >
                                             {tag.name}
                                         </Checkbox>
