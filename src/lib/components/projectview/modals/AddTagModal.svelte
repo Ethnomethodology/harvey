@@ -12,6 +12,13 @@
     let isLoading = false;
     let errorMessage = '';
 
+    $: if (showModal) {
+        name = '';
+        description = '';
+        errorMessage = '';
+        isLoading = false;
+    }
+
     function closeModal() {
         if (isLoading) return;
         dispatch('close');
@@ -53,7 +60,7 @@
     <div slot="header" class="flex items-center gap-2">
         <Tag class="w-5 h-5 text-gray-500" />
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-            Add Tag
+            Create Tag
         </h3>
     </div>
 

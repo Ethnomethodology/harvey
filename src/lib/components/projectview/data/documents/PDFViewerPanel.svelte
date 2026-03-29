@@ -1,14 +1,42 @@
 <!-- src/lib/components/projectview/documents/PDFViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-    import { Toolbar, Button, Tooltip } from 'flowbite-svelte';
+    import { Toolbar, Button, Tooltip, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
     import { readFile } from '@tauri-apps/plugin-fs';
     import { v4 as uuidv4 } from 'uuid';
-    import { project } from '$lib/stores/projectStore.js';
+    import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
+    import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2 } from '@lucide/svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2, Tag, ChevronRight as ChevronRightIcon, SquareCheck } from '@lucide/svelte';
+
+    import { addTag } from '$lib/stores/tagStore.js';
+
+    let isSearchVisible = false;
+    let searchTerm = '';
+
+    $: filteredTagGroups = searchTerm.trim()
+        ? $allTagGroups.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : $allTagGroups;
+
+    $: ungroupedTags = $allTags.filter(t => t.tag_group_id === null || t.tag_group_id === undefined);
+    $: filteredUngroupedTags = searchTerm.trim()
+        ? ungroupedTags.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : ungroupedTags;
+
+    $: groupedTagsMap = $allTags.reduce((acc, tag) => {
+        if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
+            if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
+            acc[tag.tag_group_id].push(tag);
+        }
+        return acc;
+    }, {});
+
+    function isGroupChecked(groupId, activeTags) {
+        const tags = groupedTagsMap[groupId] || [];
+        return tags.some(t => activeTags.includes(t.name));
+    }
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
@@ -1061,6 +1089,22 @@
 
     function toggleHighlightDropdown() { 
         isHighlightDropdownOpen = !isHighlightDropdownOpen;
+        if (isHighlightDropdownOpen) {
+            searchTerm = '';
+            isSearchVisible = false;
+        }
+    }
+
+    async function handleCreateTag() {
+        const trimmedTerm = searchTerm.trim();
+        if (!trimmedTerm) return;
+        try {
+            await addTag(trimmedTerm);
+            toggleTagInHighlightLocal(clickedHighlightId, trimmedTerm, 'pdf', pdfPath);
+            searchTerm = '';
+        } catch (err) {
+            console.error("Failed to create tag:", err);
+        }
     }
 
     async function applyHighlightColor(colorToApply) {
@@ -2358,7 +2402,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <div class="relative" bind:this={highlightDropdownRef}>
-      <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
+      <button type="button" class="mini-toolbar-button flex items-center focus:outline-none focus:ring-0 outline-none" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
         <Highlighter class="w-4 h-4" />
         <ChevronDown class="ml-1 h-3 w-3" />
       </button>
@@ -2422,6 +2466,95 @@ function updateHighlightOverlayColor(id, color) {
                     </Button>
                 {/each}
                 <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+                {#if toolbarMode === 'click'}
+                    <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
+                        <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
+                    </button>
+                    <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]" on:show={() => { searchTerm = ''; isSearchVisible = false; }}>
+                        <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1 flex items-center justify-between">
+                            <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
+                            <button on:click={() => isSearchVisible = !isSearchVisible} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none" title="Search Tags">
+                                <Search class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+
+                        {#if isSearchVisible}
+                        <div class="px-2 mb-2 mt-1">
+                            <input
+                                type="text"
+                                bind:value={searchTerm}
+                                placeholder="Search or add new..."
+                                class="w-full px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded focus:ring-blue-500 focus:border-blue-500"
+                                autocomplete="off"
+                                autocorrect="off"
+                            />
+                        </div>
+                        {/if}
+
+                            {#each filteredTagGroups as group}
+                                <DropdownItem class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
+                                    <span class="truncate">{group.name}</span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        {#if isGroupChecked(group.id, $project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || [])}
+                                            <SquareCheck class="w-4 h-4 text-blue-500" />
+                                        {/if}
+                                        <ChevronRightIcon class="w-4 h-4 text-gray-400" />
+                                    </div>
+                                </DropdownItem>
+                                <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
+                                    {#if (groupedTagsMap[group.id] || []).length > 0}
+                                        {#each groupedTagsMap[group.id] as tag}
+                                                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
+                                                <Checkbox
+                                                    checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
+                                                    on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
+                                                    class="items-center px-2 py-1.5 w-full cursor-pointer"
+                                                >
+                                                    {tag.name}
+                                                </Checkbox>
+                                            </li>
+                                        {/each}
+                                    {:else}
+                                                <li class="p-2 text-gray-500 italic text-xs list-none">No tags in group</li>
+                                    {/if}
+                                </Dropdown>
+                            {/each}
+
+                            {#if filteredUngroupedTags.length > 0}
+                                {#if filteredTagGroups.length > 0}
+                                    <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
+                                {/if}
+                                {#each filteredUngroupedTags as tag}
+                                            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
+                                        <Checkbox
+                                            checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
+                                            on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
+                                            class="items-center px-2 py-1.5 w-full cursor-pointer"
+                                        >
+                                            {tag.name}
+                                        </Checkbox>
+                                    </li>
+                                {/each}
+                            {/if}
+
+                            {#if filteredTagGroups.length === 0 && filteredUngroupedTags.length === 0 && !searchTerm.trim()}
+                                <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
+                            {/if}
+
+                            {#if searchTerm.trim() && !$allTags.some(t => t.name.toLowerCase() === searchTerm.trim().toLowerCase())}
+                                <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
+                                <li
+                                    on:click|stopPropagation={handleCreateTag}
+                                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCreateTag(); }}
+                                    role="button"
+                                    tabindex="0"
+                                    class="px-2 py-1.5 text-xs text-blue-600 dark:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded list-none"
+                                >
+                                    + Create new tag "{searchTerm.trim()}"
+                                </li>
+                            {/if}
+                        </Dropdown>
+                {/if}
                 <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" 
                     on:click={() => { handleHighlightAction('remove'); }}>
                     <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
