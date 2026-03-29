@@ -176,48 +176,56 @@
 					autocorrect="off"
 				/>
 			</div>
-			<ul>
+			<ul class="pb-1">
                 {#if !searchTerm && groupedOptions && groupedOptions.length > 0}
                     <!-- Grouped View -->
                     {#each groupedOptions as group}
                         {@const groupOptions = group.options.filter(o => availableOptions.includes(o))}
                         {#if groupOptions.length > 0}
-                            <li class="px-3 py-1.5 text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 sticky top-0">
-                                {group.name}
-                            </li>
-                            {#each groupOptions as option (option)}
-                                <li
-                                    on:click|stopPropagation={() => addItem(option)}
-                                    class="px-5 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
-                                >
-                                    {option}
-                                </li>
-                            {/each}
+                            <div class="relative mt-4 mb-3 mx-2">
+                                <span class="absolute -top-2 left-2 px-1 text-[9px] font-bold uppercase tracking-wider bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 z-10">
+                                    {group.name}
+                                </span>
+                                <div class="pt-3 pb-1 border border-blue-200 dark:border-blue-800/60 rounded-md">
+                                    {#each groupOptions as option (option)}
+                                        <li
+                                            on:click|stopPropagation={() => addItem(option)}
+                                            class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                                        >
+                                            {option}
+                                        </li>
+                                    {/each}
+                                </div>
+                            </div>
                         {/if}
                     {/each}
                     
-                    <!-- Handle ungrouped tags that weren't in any groupedOptions -->
+                    <!-- Handle ungrouped tags -->
                     {@const allGroupedOptions = new Set(groupedOptions.flatMap(g => g.options))}
                     {@const ungroupedOptions = availableOptions.filter(o => !allGroupedOptions.has(o))}
                     {#if ungroupedOptions.length > 0}
-                        <li class="px-3 py-1.5 text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 sticky top-0">
-                            Ungrouped
-                        </li>
-                        {#each ungroupedOptions as option (option)}
-                            <li
-                                on:click|stopPropagation={() => addItem(option)}
-                                class="px-5 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
-                            >
-                                {option}
-                            </li>
-                        {/each}
+                        <div class="relative mt-4 mb-3 mx-2">
+                            <span class="absolute -top-2 left-2 px-1 text-[9px] font-bold uppercase tracking-wider bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500 z-10">
+                                Ungrouped
+                            </span>
+                            <div class="pt-3 pb-1 border border-gray-200 dark:border-gray-800/60 rounded-md">
+                                {#each ungroupedOptions as option (option)}
+                                    <li
+                                        on:click|stopPropagation={() => addItem(option)}
+                                        class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                                    >
+                                        {option}
+                                    </li>
+                                {/each}
+                            </div>
+                        </div>
                     {/if}
                 {:else}
                     <!-- Flat Filtered View (for search or if no grouping) -->
     				{#each filteredAvailableOptions as option (option)}
     					<li
     						on:click|stopPropagation={() => addItem(option)}
-    						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
+    						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
     					>
     						{option}
     					</li>
