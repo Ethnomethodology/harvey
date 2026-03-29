@@ -1563,6 +1563,29 @@
         }
     }
 
+    async function handleTableTagToggle(tagName) {
+        const rowsToTag = (selectedRows && selectedRows.length > 0) ? selectedRows : (clickedRow ? [clickedRow] : []);
+        if (rowsToTag.length === 0) return;
+
+        // If the highlight doesn't exist, applying a transparent/default color creates it
+        const currentHighlights = get(project).currentTableHighlights || [];
+        const expectedId = `row-${rowsToTag[0].getData().harvey_internal_id}`;
+
+        let highlightExists = currentHighlights.some(h => {
+            if (h.id === expectedId) return true;
+            if (h.rowIndices && h.rowIndices.includes(rowsToTag[0].getData().harvey_internal_id)) return true;
+            return false;
+        });
+
+        if (!highlightExists) {
+            await applyHighlightToRows(rowsToTag, 'transparent', true);
+        }
+
+        import('$lib/stores/projectStore.js').then(({ toggleTagInHighlightLocal }) => {
+            toggleTagInHighlightLocal(expectedId, tagName, 'table', tablePath);
+        });
+    }
+
     async function handleTableHighlightDelete() {
         if (selectedRows && selectedRows.length > 0) {
             // Widget action: delete the whole group/range
@@ -4371,6 +4394,7 @@
         highlightId={clickedRow ? `row-${clickedRow.getData().harvey_internal_id}` : (selectedRows.length > 0 ? `row-${selectedRows[0].getData().harvey_internal_id}` : null)}
         docType="table"
         filePath={tablePath}
+        onTagToggle={handleTableTagToggle}
     />
 </div>
 

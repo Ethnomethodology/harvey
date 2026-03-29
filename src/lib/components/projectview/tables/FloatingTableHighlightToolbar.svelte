@@ -13,6 +13,7 @@
   export let highlightId;
   export let docType;
   export let filePath;
+  export let onTagToggle = null;
 
   // Derive current tags for this specific highlight from the project store
   $: currentHighlight = (() => {
@@ -41,7 +42,11 @@
   }
 
   function handleTagToggle(tagName) {
-    toggleTagInHighlightLocal(highlightId, tagName, docType, filePath);
+    if (onTagToggle) {
+      onTagToggle(tagName);
+    } else {
+      toggleTagInHighlightLocal(highlightId, tagName, docType, filePath);
+    }
   }
 
   const highlightOptions = [
@@ -83,7 +88,7 @@
       </Button>
     {/each}
     <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
-    <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:ring-0">
+    <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:!ring-0 focus:!outline-none">
       <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
       <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
         <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1">
