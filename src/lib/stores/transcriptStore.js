@@ -608,6 +608,14 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
             } else if (key === 'speaker') {
                 if (String(currentValue ?? '') !== String(newValue ?? '')) {
                     segmentToUpdate[key] = String(newValue ?? '');
+                    segmentToUpdate.speaker_json = null; // Clear stale rich JSON
+                    valueChanged = true;
+                }
+            } else if (key === 'start_time' || key === 'end_time') {
+                const numVal = Number(newValue);
+                if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) {
+                    segmentToUpdate[key] = numVal;
+                    segmentToUpdate.timestamp_json = null; // Clear stale rich JSON
                     valueChanged = true;
                 }
             } else {
@@ -1450,18 +1458,24 @@ function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerN
 
         if (userAssignedIndex >= 0 && userAssignedIndex < userNames.length) {
             if (userNames[userAssignedIndex] && userNames[userAssignedIndex].trim() !== "") {
-                newSegment.speaker = userNames[userAssignedIndex].trim();
+                const newName = userNames[userAssignedIndex].trim();
+                if (newSegment.speaker !== newName) {
+                    newSegment.speaker = newName;
+                    newSegment.speaker_json = null; // Invalidate stale rich speaker if name changed
+                }
             }
         } else {
             // --- Cross-Language Fallback ---
-            // If the original name is not a match or identifier, check if it's already a remapped name from the OTHER language.
             const sourceNames = (userNames === speakerConfig.translatedNames) ? speakerConfig.names : speakerConfig.translatedNames;
-            
             if (sourceNames && Array.isArray(sourceNames)) {
                 const sourceIndex = sourceNames.indexOf(originalSpeaker);
                 if (sourceIndex !== -1 && sourceIndex < userNames.length) {
                     if (userNames[sourceIndex] && userNames[sourceIndex].trim() !== "") {
-                        newSegment.speaker = userNames[sourceIndex].trim();
+                        const newName = userNames[sourceIndex].trim();
+                        if (newSegment.speaker !== newName) {
+                            newSegment.speaker = newName;
+                            newSegment.speaker_json = null;
+                        }
                     }
                 }
             }

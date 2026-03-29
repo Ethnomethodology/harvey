@@ -205,7 +205,7 @@ export function setSelectedGroup(groupId, groupData) {
 }
 
 
-export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
+export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true, forceReload = false) {
     const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables' || itemType === 'table';
@@ -217,7 +217,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
     };
 
     project.update(p => {
-        const selectingSamePath = p.selectedDocumentPath === normalizedFilePath && normalizedFilePath !== null; // Ensure filePath is not null for same path check
+        const selectingSamePath = p.selectedDocumentPath === normalizedFilePath && normalizedFilePath !== null && !forceReload;
 
         // Determine if loading is needed only if filePath is valid
         let newIsDocumentLoading = false;
@@ -931,10 +931,10 @@ export function markImageAnnotationsAsSaved() {
 }
 
 
-export function prepareStandaloneTranscriptView(filePath) {
+export function prepareStandaloneTranscriptView(filePath, forceReload = false) {
     const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     project.update(p => {
-        const isReselectingSameLoadedPath = p.currentStandaloneTranscriptPath === normalizedFilePath && !!normalizedFilePath && !!p.currentStandaloneTranscriptLexicalJson;
+        const isReselectingSameLoadedPath = p.currentStandaloneTranscriptPath === normalizedFilePath && !!normalizedFilePath && !!p.currentStandaloneTranscriptLexicalJson && !forceReload;
         let finalIsStandaloneTranscriptLoading = !normalizedFilePath ? false : !isReselectingSameLoadedPath;
         let finalIsGlobalLoading = finalIsStandaloneTranscriptLoading;
         let finalStatusMessage = !normalizedFilePath ? 'Transcript selection cleared.' :
@@ -1026,12 +1026,12 @@ export function markStandaloneTranscriptChangesDiscarded(filePath) {
 export function setActiveStandaloneTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeStandaloneTranscriptEditorRef: editorInstance })); }
 export function clearActiveStandaloneTranscriptEditorRef() { project.update(p => ({ ...p, activeStandaloneTranscriptEditorRef: null })); }
 
-export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
+export function prepareMediaNoteView(mediaPath, transcriptPath = null, forceReload = false) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
     const normalizedTranscriptPath = transcriptPath ? transcriptPath.replace(/\\/g, '/') : null;
 
     project.update(p => {
-        const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson);
+        const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson || forceReload);
         let finalIsGlobalLoading = p.isLoading;
         if (newIsMediaNoteLoading) finalIsGlobalLoading = true;
         else if (!normalizedMediaPath) finalIsGlobalLoading = false;

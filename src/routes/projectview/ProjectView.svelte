@@ -1108,15 +1108,33 @@
         }));
 
         if (selectedTab === "data") {
+            const projState = get(project);
             if (
-                !get(project).selectedDocumentPath &&
-                !get(project).currentStandaloneTranscriptPath &&
-                !get(project).selectedMediaNotePath
+                !projState.selectedDocumentPath &&
+                !projState.currentStandaloneTranscriptPath &&
+                !projState.selectedMediaNotePath
             ) {
                 prepareDocumentView(null);
+            } else {
+                // FORCE RELOAD to pick up any changes from Transcription Tab
+                if (projState.selectedDocumentPath) {
+                   prepareDocumentView(projState.selectedDocumentPath, projState.selectedDocumentType, projState.selectedDocumentOptions?.hasHeaders, true);
+                } else if (projState.currentStandaloneTranscriptPath) {
+                   prepareStandaloneTranscriptView(projState.currentStandaloneTranscriptPath, true);
+                } else if (projState.selectedMediaNotePath) {
+                   prepareMediaNoteView(projState.selectedMediaNotePath, projState.activeTranscriptPathInDataTab, true);
+                }
             }
         } else if (selectedTab === "transcription") {
-            // prepareDocumentView(null); // Removed to persist Data tab state
+            // FORCE RELOAD to pick up any changes from Data Tab
+            const activeTsPath = get(transcriptStore).currentTranscriptPath;
+            if (activeTsPath) {
+                // Path from transcriptStore is already correctly resolved (absolute or relative to project root)
+                loadTranscriptFile(activeTsPath).catch(err => {
+                    console.error("[ProjectView] Error reloading transcript on tab switch", err);
+                });
+            }
+
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
                 const proj = get(project);
