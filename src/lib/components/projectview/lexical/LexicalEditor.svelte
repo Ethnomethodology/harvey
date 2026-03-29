@@ -229,6 +229,17 @@
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
   let clickedNodeKey = null;
+  $: clickedHighlightId = (() => {
+    if (!clickedNodeKey || !editor) return null;
+    let hid = null;
+    editor.getEditorState().read(() => {
+      const node = _getNodeByKey(clickedNodeKey);
+      if (_isExtendedTextNode(node)) {
+        hid = node.getHighlightId();
+      }
+    });
+    return hid;
+  })();
 
   let editorUpdateTracker = 0; // Added reactive statement to track editor updates and re-trigger image resolution
 
@@ -3923,6 +3934,9 @@ function handleRemoveHighlightFromToolbar() {
   editor={editor}
   showToolbar={showModifyToolbar}
   toolbarPosition={modifyToolbarPosition}
+  highlightId={clickedHighlightId}
+  docType={$project.selectedDocumentPath === documentPath ? $project.selectedDocumentType : 'doc'}
+  filePath={documentPath}
   on:close={() => {
     showModifyToolbar = false;
     clickedNodeKey = null;

@@ -441,6 +441,75 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
     });
 }
 
+export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePath) {
+    project.update(p => {
+        let highlights, key, dirtyFlag, pathKey;
+        let isMediaNoteActive = false;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
+            pathKey = 'currentStandaloneTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript') {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'activeTranscriptPathInDataTab';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab === filePath;
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'table') {
+            highlights = p.currentTableHighlights;
+            key = 'currentTableHighlights';
+            dirtyFlag = 'isTableHighlightsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'selectedDocumentPath';
+        }
+
+        // Only update if the file currently loaded in the store matches the highlight's file
+        if (p[pathKey] !== filePath) {
+            return p;
+        }
+
+        if (!highlights || !Array.isArray(highlights)) return p;
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const currentTags = Array.isArray(h.tags) ? [...h.tags] : [];
+                const tagIndex = currentTags.indexOf(tagName);
+                if (tagIndex > -1) {
+                    currentTags.splice(tagIndex, 1);
+                } else {
+                    currentTags.push(tagName);
+                }
+                return { ...h, tags: currentTags };
+            }
+            return h;
+        });
+
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
+    });
+    highlightsLastUpdated.set(new Date());
+}
+
 export function removeTagFromHighlightLocal(highlightId, tagName, docType, filePath) {
     project.update(p => {
         let highlights, key, dirtyFlag, pathKey;
