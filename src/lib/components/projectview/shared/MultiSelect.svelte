@@ -17,6 +17,7 @@
 	let dropdownX = 0;
 	let dropdownY = 0;
 	let dropdownWidth = 0;
+	let placement = 'bottom';
 
 	const dispatch = createEventDispatcher();
 
@@ -84,6 +85,7 @@
 			dropdownX = rect.left + scrollX;
 			dropdownY = rect.bottom + scrollY + margin;
 			dropdownWidth = rect.width;
+			placement = 'bottom';
 
             // Flip logic: if it overflows viewport bottom, check if there's more space above
             if (rect.bottom + dropdownHeight > window.innerHeight) {
@@ -92,7 +94,8 @@
                 
                 if (spaceAbove > spaceBelow && spaceAbove > 100) {
                     // Position above
-                    dropdownY = rect.top + scrollY - Math.min(dropdownHeight, spaceAbove - margin) - margin;
+                    placement = 'top';
+                    dropdownY = rect.top + scrollY - margin;
                 }
             }
             
@@ -190,7 +193,7 @@
 		<div
 			use:portal
 			class="absolute z-[999999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
-			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px;"
+			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px; {placement === 'top' ? 'transform: translateY(-100%);' : ''}"
 		>
 			<div class="p-2">
 				<input
