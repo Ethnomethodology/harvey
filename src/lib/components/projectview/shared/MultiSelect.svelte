@@ -176,7 +176,7 @@
 			<ul>
 				{#each filteredAvailableOptions as option (option)}
 					<li
-						on:click={() => addItem(option)}
+						on:click|stopPropagation={() => addItem(option)}
 						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
 					>
 						{option}
@@ -185,7 +185,7 @@
 
                 {#if isEditable && searchTerm && !allOptions.includes(searchTerm)}
                 <li
-                    on:click={handleCreateNew}
+                    on:click|stopPropagation={handleCreateNew}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-500 hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer border-t border-gray-200 dark:border-t-border"
                 >
                     + Create new {itemType} "{searchTerm}"

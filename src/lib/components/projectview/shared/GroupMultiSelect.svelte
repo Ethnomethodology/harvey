@@ -215,7 +215,7 @@
 			<ul>
 				{#each filteredAvailableGroups as group (group.id)}
 					<li
-						on:click={() => addGroup(group)}
+						on:click|stopPropagation={() => addGroup(group)}
 						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-700 dark:text-gray-200"
 					>
 						{group.name}
@@ -228,7 +228,7 @@
 				{/if}
                 {#if isEditable}
                 <li
-                    on:click={handleCreateNewGroup}
+                    on:click|stopPropagation={handleCreateNewGroup}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer border-t border-gray-200 dark:border-gray-700"
                 >
                     + Create new group {searchTerm ? `"${searchTerm}"` : ''}
