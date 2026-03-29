@@ -571,7 +571,7 @@
 			on:click|stopPropagation
 		>
 			{#if !contextMenuItem.is_directory || contextMenuItem.file_type === "directory_media_stem"}
-				{#if contextMenuItem.file_type === "media" || contextMenuItem.file_type === "directory_media_stem"}
+				{#if contextMenuItem.file_type === "media" || contextMenuItem.file_type === "directory_media_stem" || contextMenuItem.file_type === "audio" || contextMenuItem.file_type === "video"}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Load")}
@@ -589,7 +589,7 @@
 					>
 					<hr class="my-1 border-gray-200 dark:border-gray-600" />
 				{/if}
-				{#if ["media", "transcript", "data", "directory_media_stem", "other"].includes(contextMenuItem.file_type)}
+				{#if ["media", "audio", "video", "audio_transcript", "video_transcript", "transcript", "data", "directory_media_stem", "other"].includes(contextMenuItem.file_type)}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Rename")}

@@ -65,8 +65,12 @@
         function recurse(o) {
             if (!o || count > 30) return;
             if (typeof o === 'string' && o.length > 3 && !o.includes('{')) {
-                chunks.push(o);
-                count++;
+                // Ignore empty lexical struct keys that end up here when a doc is actually empty
+                const ignored = ['root', 'paragraph', 'ltr', 'rtl', 'text'];
+                if (!ignored.includes(o.toLowerCase())) {
+                    chunks.push(o);
+                    count++;
+                }
             } else if (Array.isArray(o)) {
                 o.forEach(recurse);
             } else if (typeof o === 'object') {
