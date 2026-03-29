@@ -15,9 +15,16 @@
   // Derive current tags for this specific highlight from the project store
   $: currentHighlight = (() => {
     let highlights = [];
-    if (docType === 'pdf') highlights = $project.currentPdfAnnotations;
-    else if (docType === 'table') highlights = $project.currentTableHighlights;
-    else highlights = $project.currentDocumentHighlights;
+    if (docType === 'pdf') {
+      highlights = $project.currentPdfAnnotations;
+    } else if (docType === 'table') {
+      highlights = $project.currentTableHighlights;
+    } else if (docType === 'standalone_transcript') {
+      highlights = $project.currentStandaloneTranscriptHighlights;
+    } else {
+      // For 'doc', 'audio_transcript', 'video_transcript'
+      highlights = $project.currentDocumentHighlights;
+    }
     
     return highlights.find(h => h.id === highlightId);
   })();

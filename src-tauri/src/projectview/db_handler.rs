@@ -2294,14 +2294,14 @@ pub fn update_tag_group(
 pub fn delete_tag_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting tag group with id {} from project_id {}", group_id, project_id);
 
-    // Instead of deleting child tags, update them to have no group (NULL).
+    // Delete child tags instead of ungrouping them.
     conn.execute(
-        "UPDATE tags SET tag_group_id = NULL WHERE tag_group_id = ?1 AND project_id = ?2",
+        "DELETE FROM tags WHERE tag_group_id = ?1 AND project_id = ?2",
         params![group_id, project_id]
     )?;
 
     conn.execute("DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2", params![group_id, project_id])?;
-    info!("[DB] Tag group with id {} deleted successfully (child tags ungrouped).", group_id);
+    info!("[DB] Tag group with id {} deleted successfully (and its child tags deleted).", group_id);
     Ok(())
 }
 

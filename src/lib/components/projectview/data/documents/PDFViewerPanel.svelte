@@ -1,14 +1,15 @@
 <!-- src/lib/components/projectview/documents/PDFViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-    import { Toolbar, Button, Tooltip } from 'flowbite-svelte';
+    import { Toolbar, Button, Tooltip, Dropdown, Checkbox } from 'flowbite-svelte';
     import { readFile } from '@tauri-apps/plugin-fs';
     import { v4 as uuidv4 } from 'uuid';
-    import { project } from '$lib/stores/projectStore.js';
+    import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
+    import { allTags } from '$lib/stores/tagStore.js';
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2 } from '@lucide/svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2, Tag } from '@lucide/svelte';
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
@@ -2422,6 +2423,30 @@ function updateHighlightOverlayColor(id, color) {
                     </Button>
                 {/each}
                 <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+                {#if toolbarMode === 'click'}
+                    <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative">
+                        <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
+                        <Dropdown class="w-48 p-3 space-y-1 text-sm z-[100001]">
+                            <li class="p-1 border-b border-gray-100 dark:border-gray-600 mb-1">
+                                <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
+                            </li>
+                            {#each $allTags as tag}
+                                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+                                    <Checkbox
+                                        checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
+                                        on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfFilePath)}
+                                        class="items-center px-2 py-1.5 w-full cursor-pointer"
+                                    >
+                                        {tag.name}
+                                    </Checkbox>
+                                </li>
+                            {/each}
+                            {#if $allTags.length === 0}
+                                <li class="p-2 text-gray-500 italic text-xs">No tags available</li>
+                            {/if}
+                        </Dropdown>
+                    </Button>
+                {/if}
                 <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" 
                     on:click={() => { handleHighlightAction('remove'); }}>
                     <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
