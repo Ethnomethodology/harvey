@@ -50,7 +50,7 @@
     });
 </script>
 
-<div class="w-full h-full relative overflow-hidden bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[10px] flex items-center justify-center p-2 group-hover:bg-blue-50/30 dark:group-hover:bg-blue-900/10 transition-colors">
+<div class="w-full h-full relative overflow-hidden flex items-center justify-center p-2 transition-colors">
     {#if isLoading}
         <div class="animate-pulse flex flex-col w-full h-full space-y-1">
             <div class="h-4 bg-gray-200 dark:bg-gray-800 rounded w-full"></div>

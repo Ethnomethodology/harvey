@@ -148,7 +148,7 @@
     });
 </script>
 
-<div class="w-full h-full relative bg-gray-50 dark:bg-gray-950 overflow-hidden flex items-center justify-center">
+<div class="w-full h-full relative overflow-hidden flex items-center justify-center">
     {#if error || !file.waveform_data}
         <div class="absolute inset-0 flex items-center justify-center text-gray-300 dark:text-gray-700">
             <Music size={40} strokeWidth={1} />

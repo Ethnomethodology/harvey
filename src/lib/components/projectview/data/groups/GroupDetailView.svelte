@@ -741,57 +741,60 @@
                                         role="button"
                                         tabindex="0"
                                     >
-                                        <!-- Preview Area -->
-                                        <div class="aspect-square w-full relative bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-2 transition-colors duration-200 group-hover:border-gray-300 dark:group-hover:border-gray-600">
-                                            {#if file.file_type === 'image' && file.full_path}
-                                                <img 
-                                                    src={convertFileSrc(file.full_path)} 
-                                                    alt={file.name} 
-                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                    loading="lazy"
-                                                />
-                                            {:else if file.file_type === 'video' && file.full_path}
-                                                <video
-                                                    src={convertFileSrc(file.full_path) + '#t=0.1'}
-                                                    preload="metadata"
-                                                    muted
-                                                    playsinline
-                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                ></video>
-                                            {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path}
-                                                {#if file.name.toLowerCase().endsWith('.pdf')}
-                                                    <PdfThumbnail {file} projectId={$projectStore?.id} />
-                                                {:else if file.full_path.endsWith('.json')}
-                                                    <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                        <!-- Unified Thumbnail Container -->
+                                        <div class="aspect-square w-full relative bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden transition-all duration-300 group-hover:border-blue-200 dark:group-hover:border-blue-900 group-hover:shadow-md">
+                                            <!-- Preview Area -->
+                                            <div class="absolute inset-0 pb-8">
+                                                {#if file.file_type === 'image' && file.full_path}
+                                                    <img 
+                                                        src={convertFileSrc(file.full_path)} 
+                                                        alt={file.name} 
+                                                        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                        loading="lazy"
+                                                    />
+                                                {:else if file.file_type === 'video' && file.full_path}
+                                                    <video
+                                                        src={convertFileSrc(file.full_path) + '#t=0.1'}
+                                                        preload="metadata"
+                                                        muted
+                                                        playsinline
+                                                        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                    ></video>
+                                                {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path}
+                                                    {#if file.name.toLowerCase().endsWith('.pdf')}
+                                                        <PdfThumbnail {file} projectId={$projectStore?.id} />
+                                                    {:else if file.full_path.endsWith('.json')}
+                                                        <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                                    {:else}
+                                                        <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                            <svelte:component this={category.icon} class="w-10 h-10" />
+                                                        </div>
+                                                    {/if}
+                                                {:else if file.file_type === 'table' && file.full_path}
+                                                    <TableThumbnail {file} />
+                                                {:else if file.file_type === 'audio' || (file.file_type === 'media' && AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? ''))}
+                                                    <AudioThumbnail {file} />
                                                 {:else}
                                                     <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
-                                                        <svelte:component this={category.icon} class="w-12 h-12" />
+                                                        <svelte:component this={category.icon} class="w-10 h-10" />
                                                     </div>
                                                 {/if}
-                                            {:else if file.file_type === 'table' && file.full_path}
-                                                <TableThumbnail {file} />
-                                            {:else if file.file_type === 'audio' || (file.file_type === 'media' && AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? ''))}
-                                                <AudioThumbnail {file} />
-                                            {:else}
-                                                <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
-                                                    <svelte:component this={category.icon} class="w-12 h-12" />
-                                                </div>
-                                            {/if}
+                                            </div>
 
-                                            <!-- Actions (More options) -->
-                                            <button
-                                                on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                                class="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10"
-                                                title="More options for {file.name}"
-                                            >
-                                                <MoreHorizontal class="w-3.5 h-3.5" />
-                                            </button>
+                                            <!-- Bottom Band -->
+                                            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gray-100 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between px-2.5 gap-2 transition-colors duration-300 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/20">
+                                                <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300 truncate leading-tight uppercase tracking-tight" title={file.name}>
+                                                    {file.name}
+                                                </span>
+                                                <button
+                                                    on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                                    class="flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+                                                    title="More options for {file.name}"
+                                                >
+                                                    <MoreVertical class="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-
-                                        <!-- Filename Area -->
-                                        <p class="text-[11px] font-medium text-gray-600 dark:text-gray-400 truncate text-center px-1 group-hover:text-gray-900 dark:group-hover:text-gray-200" title={file.name}>
-                                            {file.name}
-                                        </p>
                                     </div>
                                 {/each}
                             </div>

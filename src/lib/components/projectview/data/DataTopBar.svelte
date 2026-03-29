@@ -694,18 +694,18 @@
         {#if isGroup}
             <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
                 <button
-                    on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
-                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
-                    title="Grid View"
-                >
-                    <LayoutGrid class="w-4 h-4" />
-                </button>
-                <button
                     on:click="{() => panelStateStore.setGroupDetailViewMode('list')}"
                     class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
                     title="List View"
                 >
                     <List class="w-4 h-4" />
+                </button>
+                <button
+                    on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
+                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+                    title="Grid View"
+                >
+                    <LayoutGrid class="w-4 h-4" />
                 </button>
             </div>
         {/if}

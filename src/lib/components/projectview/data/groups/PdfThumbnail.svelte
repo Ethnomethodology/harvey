@@ -104,7 +104,7 @@
 
 <div 
     bind:this={containerRef}
-    class="w-full h-full relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden flex items-center justify-center group"
+    class="w-full h-full relative overflow-hidden flex items-center justify-center group"
 >
     {#if thumbnailUrl}
         <img 
@@ -123,11 +123,7 @@
         </div>
     {/if}
 
-    {#if pageCount > 0}
-        <div class="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-[10px] font-bold text-white rounded uppercase tracking-tighter shadow-sm border border-white/10">
-            {pageCount} {pageCount === 1 ? 'Page' : 'Pages'}
-        </div>
-    {/if}
+
 
     {#if error}
         <div class="absolute inset-0 bg-red-50/90 dark:bg-red-950/90 flex items-center justify-center p-2 text-center">

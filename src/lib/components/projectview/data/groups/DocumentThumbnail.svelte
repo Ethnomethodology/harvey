@@ -172,7 +172,7 @@
     onMount(loadPreview);
 </script>
 
-<div class="w-full h-full p-3 bg-white dark:bg-gray-950 overflow-hidden relative group/thumb border border-transparent transition-colors duration-200">
+<div class="w-full h-full p-2.5 overflow-hidden relative group/thumb transition-colors duration-200">
     {#if isLoading}
         <div class="absolute inset-0 flex items-center justify-center">
             <div class="w-5 h-5 border-2 border-blue-500/10 border-t-blue-500/50 rounded-full animate-spin"></div>
