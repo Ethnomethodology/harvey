@@ -42,7 +42,6 @@
 			assignedOptions = [...assignedOptions, option];
 		}
 		updateAvailableOptions();
-		showDropdown = false;
 		searchTerm = '';
 		dispatch('update', { options: assignedOptions });
 	}
@@ -50,7 +49,6 @@
 	function handleCreateNew() {
 		if (!isEditable || !searchTerm.trim()) return;
 		const newOption = searchTerm.trim();
-		showDropdown = false;
 		searchTerm = '';
 		dispatch('create', { option: newOption });
 	}

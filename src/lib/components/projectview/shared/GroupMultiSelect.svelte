@@ -75,7 +75,6 @@
 			});
 			assignedGroups = [...assignedGroups, group];
 			updateAvailableGroups();
-			showDropdown = false;
 			searchTerm = '';
 			dispatch('groupsUpdated', { action: 'added', group });
 		} catch (err) {
@@ -86,7 +85,6 @@
 
 	function handleCreateNewGroup() {
 		if (!isEditable) return;
-		showDropdown = false;
 		dispatch('createNewGroup');
 	}
 
