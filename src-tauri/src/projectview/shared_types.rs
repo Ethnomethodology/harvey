@@ -706,6 +706,8 @@ pub struct AssociatedFile {
     pub created_at: Option<String>,    // Created at date from file metadata
     pub title: Option<String>,         // Title from file metadata
     pub description: Option<String>,   // Description from file metadata
+    pub waveform_data: Option<Vec<u8>>,
+    pub duration_seconds: Option<f64>,
 }
 
 // This struct is primarily for backend use when fetching from DB,

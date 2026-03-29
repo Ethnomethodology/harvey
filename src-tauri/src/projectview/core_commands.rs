@@ -495,6 +495,8 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             created_at,
             title,
             description,
+            waveform_data: meta_opt.as_ref().and_then(|meta| meta.waveform_data.clone()),
+            duration_seconds: meta_opt.as_ref().and_then(|meta| meta.duration_seconds),
         });
     }
     Ok(associated_files)
