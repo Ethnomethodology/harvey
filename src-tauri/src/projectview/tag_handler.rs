@@ -154,7 +154,7 @@ fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
         "document" => "document",
         "pdf" => "document",
         "table" => "table",
-        "imported_transcript" => "transcript",
+        "standalone_transcript" => "standalone_transcript",
         "audio_transcript" => "audio_transcript",
         "video_transcript" => "video_transcript",
         _ => "unknown",
@@ -170,18 +170,18 @@ fn determine_asset_type(
     info!("[Tags] determine_asset_type file_path_str: {}", file_path_str);
     let path = Path::new(file_path_str);
 
-    // 1. Check for imported_transcript (standalone)
+    // 1. Check for standalone_transcript (standalone)
     if let Some(db_type) = asset_type_opt {
-        if db_type == "imported_transcript" {
+        if db_type == "standalone_transcript" {
             return db_type.clone();
         }
     }
 
-    // 2. Path-based check for imported_transcript (fallback if DB type is missing/wrong)
+    // 2. Path-based check for standalone_transcript (fallback if DB type is missing/wrong)
     if path.to_str().unwrap_or_default().contains("harvey_files/Transcripts") {
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             if ext == "json" {
-                return "imported_transcript".to_string();
+                return "standalone_transcript".to_string();
             }
         }
     }
@@ -226,18 +226,18 @@ fn determine_asset_type(
                     return match extension.to_lowercase().as_str() {
                         "mp3" | "wav" | "m4a" | "flac" | "ogg" => "audio_transcript".to_string(),
                         "mp4" | "mov" | "avi" | "mkv" | "webm" => "video_transcript".to_string(),
-                        _ => "transcript".to_string(),
+                        _ => "audio_transcript".to_string(),
                     };
                 } else {
-                    warn!("[Tags] Could not find associated media asset metadata for transcript: {}. Falling back to generic 'transcript'.", file_path_str);
-                    return "transcript".to_string();
+                    warn!("[Tags] Could not find associated media asset metadata for transcript: {}. Falling back to 'audio_transcript'.", file_path_str);
+                    return "audio_transcript".to_string();
                 }
             }
         }
     }
 
 
-    // 4. Fallback to DB asset_type (if not imported_transcript)
+    // 4. Fallback to DB asset_type (if not standalone_transcript)
     if let Some(db_type) = asset_type_opt {
         if !db_type.is_empty() && db_type != "unknown" && db_type != "lexical" {
             return db_type.clone();
@@ -414,7 +414,7 @@ pub fn manage_highlight_comment(
 
     // Determine the table and column to update based on doc_type
     let (table_name, json_column, path_column) = match doc_type.as_str() {
-        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "document" | "pdf" | "image" | "lexical" | "standalone_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
         "table" => ("table_styles", "styles", "table_path"),
         _ => {
             let err_msg = format!("Unsupported document type for comment management: {}", doc_type);
@@ -584,7 +584,7 @@ pub fn remove_tag_from_highlight(
     // Determine the table and column to update based on doc_type
     let (table_name, json_column, path_column) = match doc_type.as_str() {
         // pdf_annotations stores highlights for multiple "types"
-        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "document" | "pdf" | "image" | "lexical" | "standalone_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
         "table" => ("table_styles", "styles", "table_path"),
         _ => {
             let err_msg = format!("Unsupported document type for tag removal: {}", doc_type);

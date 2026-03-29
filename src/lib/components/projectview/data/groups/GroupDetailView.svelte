@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
@@ -11,11 +11,13 @@
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
     import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
     import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
-    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown } from '@lucide/svelte';
+    import { Music, Film, FileText, Image as ImageIcon, Sheet, MessageSquareText, File, MoreHorizontal, MoreVertical, SquarePen, ChevronDown, Columns3Cog } from '@lucide/svelte';
     import DocumentThumbnail from './DocumentThumbnail.svelte';
     import TableThumbnail from './TableThumbnail.svelte';
+    import AudioThumbnail from './AudioThumbnail.svelte';
+    import PdfThumbnail from './PdfThumbnail.svelte'; // NEW
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
+    import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button, Badge } from 'flowbite-svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -50,7 +52,7 @@
         documents: [],
         images: [],
         tables: [],
-        imported_transcripts: [],
+        standalone_transcripts: [],
         videos: [],
         others: [] // For any files that don't fit predefined categories
     };
@@ -115,19 +117,26 @@
         { key: 'documents', name: 'Documents', singularName: 'Document', icon: FileText },
         { key: 'images', name: 'Images', singularName: 'Image', icon: ImageIcon },
         { key: 'tables', name: 'Tables', singularName: 'Table', icon: Sheet },
-        { key: 'imported_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
+        { key: 'standalone_transcripts', name: 'Transcripts', singularName: 'Transcript', icon: MessageSquareText },
         { key: 'videos', name: 'Videos', singularName: 'Video', icon: Film },
         { key: 'others', name: 'Others', singularName: 'Other', icon: File }
     ];
 
-    function getCategoryInfo(fileType) {
-        switch (fileType) {
+    function getCategoryInfo(file) {
+        switch (file.file_type) {
             case 'audio': return CATEGORY_ORDER.find(c => c.key === 'audios');
             case 'video': return CATEGORY_ORDER.find(c => c.key === 'videos');
+            case 'media':
+                if (AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                    return CATEGORY_ORDER.find(c => c.key === 'audios');
+                } else if (VIDEO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                    return CATEGORY_ORDER.find(c => c.key === 'videos');
+                }
+                return CATEGORY_ORDER.find(c => c.key === 'others');
             case 'document': return CATEGORY_ORDER.find(c => c.key === 'documents');
             case 'image': return CATEGORY_ORDER.find(c => c.key === 'images');
             case 'table': return CATEGORY_ORDER.find(c => c.key === 'tables');
-            case 'imported_transcript': return CATEGORY_ORDER.find(c => c.key === 'imported_transcripts');
+            case 'standalone_transcript': return CATEGORY_ORDER.find(c => c.key === 'standalone_transcripts');
             default: return CATEGORY_ORDER.find(c => c.key === 'others');
         }
     }
@@ -148,16 +157,25 @@
                 groupId: groupData.id
             });
 
-            const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+            const newCategorizedFiles = { audios: [], documents: [], images: [], tables: [], standalone_transcripts: [], videos: [], others: [] };
             allFiles = files || [];
             (files || []).forEach(file => { // Ensure files is an array
                 switch (file.file_type) {
                     case 'audio': newCategorizedFiles.audios.push(file); break;
                     case 'video': newCategorizedFiles.videos.push(file); break; // Added video to switch
+                    case 'media':
+                        if (AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                            newCategorizedFiles.audios.push(file);
+                        } else if (VIDEO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? '')) {
+                            newCategorizedFiles.videos.push(file);
+                        } else {
+                            newCategorizedFiles.others.push(file);
+                        }
+                        break;
                     case 'document': newCategorizedFiles.documents.push(file); break;
                     case 'image': newCategorizedFiles.images.push(file); break;
                     case 'table': newCategorizedFiles.tables.push(file); break;
-                    case 'imported_transcript': newCategorizedFiles.imported_transcripts.push(file); break;
+                    case 'standalone_transcript': newCategorizedFiles.standalone_transcripts.push(file); break;
                     default: newCategorizedFiles.others.push(file); break;
                 }
             });
@@ -182,8 +200,8 @@
             prepareDocumentView(filePathToOpen, 'tables');
         } else if (file.file_type === 'image') {
             prepareDocumentView(filePathToOpen, 'images');
-        } else if (file.file_type === 'imported_transcript') {
-            prepareImportedTranscriptView(filePathToOpen);
+        } else if (file.file_type === 'standalone_transcript') {
+            prepareStandaloneTranscriptView(filePathToOpen);
         } else if (file.file_type === 'audio' || file.file_type === 'video' || file.file_type === 'media_other') {
             prepareMediaNoteView(filePathToOpen);
         } else {
@@ -255,7 +273,7 @@
     $: if (groupData && groupData.id && $projectStore.id && $projectStore.xmlPath) {
         fetchGroupContents();
     } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) { // Added condition to clear if context is lost
-        categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
+        categorizedFiles = { audios: [], documents: [], images: [], tables: [], standalone_transcripts: [], videos: [], others: [] };
         allFiles = [];
         isLoading = false;
         errorMessage = null;
@@ -682,9 +700,11 @@
         {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
             <div class="mb-4 flex justify-between items-center">
                 <div class="relative inline-block text-left">
-                    <Button color="alternative" size="sm" class="flex items-center space-x-1">
-                        <span>{visibleColumnsCount} Columns</span>
-                        <ChevronDown class="w-4 h-4" />
+                    <Button color="alternative" size="sm" class="flex items-center space-x-1 px-3 py-1.5 focus:ring-0 group">
+                        <div class="flex items-center text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <Columns3Cog class="w-4 h-4" />
+                        </div>
+                        <ChevronDown class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors" />
                     </Button>
                     <Dropdown class="w-48 p-3 space-y-2">
                         {#each columns as col}
@@ -723,47 +743,60 @@
                                         role="button"
                                         tabindex="0"
                                     >
-                                        <!-- Preview Area -->
-                                        <div class="aspect-square w-full relative bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-2 transition-colors duration-200 group-hover:border-gray-300 dark:group-hover:border-gray-600">
-                                            {#if file.file_type === 'image' && file.full_path}
-                                                <img 
-                                                    src={convertFileSrc(file.full_path)} 
-                                                    alt={file.name} 
-                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                    loading="lazy"
-                                                />
-                                            {:else if file.file_type === 'video' && file.full_path}
-                                                <video
-                                                    src={convertFileSrc(file.full_path) + '#t=0.1'}
-                                                    preload="metadata"
-                                                    muted
-                                                    playsinline
-                                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                ></video>
-                                            {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path && file.full_path.endsWith('.json')}
-                                                <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
-                                            {:else if file.file_type === 'table' && file.full_path}
-                                                <TableThumbnail {file} />
-                                            {:else}
-                                                <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
-                                                    <svelte:component this={category.icon} class="w-12 h-12" />
-                                                </div>
-                                            {/if}
+                                        <!-- Unified Thumbnail Container -->
+                                        <div class="aspect-square w-full relative bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden transition-all duration-300 group-hover:border-blue-200 dark:group-hover:border-blue-900 group-hover:shadow-md">
+                                            <!-- Preview Area -->
+                                            <div class="absolute inset-0 pb-8">
+                                                {#if file.file_type === 'image' && file.full_path}
+                                                    <img 
+                                                        src={convertFileSrc(file.full_path)} 
+                                                        alt={file.name} 
+                                                        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                        loading="lazy"
+                                                    />
+                                                {:else if file.file_type === 'video' && file.full_path}
+                                                    <video
+                                                        src={convertFileSrc(file.full_path) + '#t=0.1'}
+                                                        preload="metadata"
+                                                        muted
+                                                        playsinline
+                                                        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                    ></video>
+                                                {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path}
+                                                    {#if file.name.toLowerCase().endsWith('.pdf')}
+                                                        <PdfThumbnail {file} projectId={$projectStore?.id} />
+                                                    {:else if file.full_path.endsWith('.json')}
+                                                        <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                                    {:else}
+                                                        <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                            <svelte:component this={category.icon} class="w-10 h-10" />
+                                                        </div>
+                                                    {/if}
+                                                {:else if file.file_type === 'table' && file.full_path}
+                                                    <TableThumbnail {file} />
+                                                {:else if file.file_type === 'audio' || (file.file_type === 'media' && AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? ''))}
+                                                    <AudioThumbnail {file} />
+                                                {:else}
+                                                    <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                        <svelte:component this={category.icon} class="w-10 h-10" />
+                                                    </div>
+                                                {/if}
+                                            </div>
 
-                                            <!-- Actions (More options) -->
-                                            <button
-                                                on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                                class="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10"
-                                                title="More options for {file.name}"
-                                            >
-                                                <MoreHorizontal class="w-3.5 h-3.5" />
-                                            </button>
+                                            <!-- Bottom Band -->
+                                            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gray-100 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between px-2.5 gap-2 transition-colors duration-300 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/20">
+                                                <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300 truncate leading-tight uppercase tracking-tight" title={file.name}>
+                                                    {file.name}
+                                                </span>
+                                                <button
+                                                    on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                                    class="flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
+                                                    title="More options for {file.name}"
+                                                >
+                                                    <MoreVertical class="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-
-                                        <!-- Filename Area -->
-                                        <p class="text-[11px] font-medium text-gray-600 dark:text-gray-400 truncate text-center px-1 group-hover:text-gray-900 dark:group-hover:text-gray-200" title={file.name}>
-                                            {file.name}
-                                        </p>
                                     </div>
                                 {/each}
                             </div>
@@ -797,10 +830,10 @@
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                     >
                                         {#if columns.find(c => c.key === 'type').visible}
-                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file.file_type)?.singularName || 'Unknown'}>
+                                            <TableBodyCell class="w-48 whitespace-nowrap" title={getCategoryInfo(file)?.singularName || 'Unknown'}>
                                                 <div class="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
-                                                    <svelte:component this={getCategoryInfo(file.file_type)?.icon || File} class="w-4 h-4" />
-                                                    <span>{getCategoryInfo(file.file_type)?.singularName || 'Unknown'}</span>
+                                                    <svelte:component this={getCategoryInfo(file)?.icon || File} class="w-4 h-4" />
+                                                    <span>{getCategoryInfo(file)?.singularName || 'Unknown'}</span>
                                                 </div>
                                             </TableBodyCell>
                                         {/if}

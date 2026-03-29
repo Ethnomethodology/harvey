@@ -22,7 +22,7 @@ pub async fn delete_attachment_command(
 
     let project_xml_content = fs::read_to_string(&project_xml_path)
         .map_err(|e| format!("Failed to read project XML: {}", e))?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content)
+    let project_data: ProjectXml = serde_json::from_str(&project_xml_content)
         .map_err(|e| format!("Failed to parse project XML: {}", e))?;
 
     let project_id = project_data.project_uuid;
@@ -99,6 +99,7 @@ pub async fn delete_attachment_command(
                 language_code: metadata_from_db.language_code,
                 properties: metadata_from_db.properties,
                 file_type: metadata_from_db.file_type.unwrap_or_default(),
+                thumbnail: metadata_from_db.thumbnail,
             };
 
             db_handler::save_asset_metadata(
@@ -133,7 +134,7 @@ pub async fn upload_attachment(
 
     let project_xml_content = fs::read_to_string(&project_xml_path)
         .map_err(|e| format!("Failed to read project XML: {}", e))?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content)
+    let project_data: ProjectXml = serde_json::from_str(&project_xml_content)
         .map_err(|e| format!("Failed to parse project XML: {}", e))?;
 
     let project_id = project_data.project_uuid;
@@ -221,6 +222,7 @@ pub async fn upload_attachment(
                 language_code: metadata_from_db.language_code,
                 properties: metadata_from_db.properties,
                 file_type: metadata_from_db.file_type.unwrap_or_default(),
+                thumbnail: metadata_from_db.thumbnail,
             };
 
             // Also register the attachment itself in asset_metadata
@@ -281,7 +283,7 @@ pub async fn get_base_asset_for_attachment(
 
     let project_xml_content = fs::read_to_string(&project_xml_path)
         .map_err(|e| format!("Failed to read project XML: {}", e))?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content)
+    let project_data: ProjectXml = serde_json::from_str(&project_xml_content)
         .map_err(|e| format!("Failed to parse project XML: {}", e))?;
 
     let project_id = project_data.project_uuid;

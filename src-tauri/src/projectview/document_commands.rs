@@ -38,7 +38,7 @@ pub async fn save_note_json(
         let project_data: ProjectXml = {
             let xml_content = fs::read_to_string(&project_xml_path)
                 .map_err(|e| format!("Failed to read project xml: {}", e))?;
-            quick_xml::de::from_str(&xml_content)
+            serde_json::from_str(&xml_content)
                 .map_err(|e| format!("Failed to parse project xml: {}", e))?
         };
         let project_id = project_data.project_uuid;
@@ -117,7 +117,7 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     info!( "[Backend Save Doc] Saved document content to: {}", target_path_buf.display() );
 
     let xml_content = fs::read_to_string(&project_xml_path_buf)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let relative_path_for_doc_xml = target_path_buf
         .strip_prefix(project_base_dir)?
@@ -188,6 +188,43 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     save_project_xml(&project_xml_path_buf, &project_data)?;
     info!("[Backend Save Doc] Project XML updated successfully.");
 
+    // Sync metadata to SQLite to ensure Foreign Keys like `file_groups` don't fail
+    let document_file_metadata = crate::projectview::shared_types::FileMetadata {
+        file_name: document_name.clone(),
+        file_path: target_path_buf.to_string_lossy().into_owned(),
+        last_modified: chrono::Utc::now().to_rfc3339(),
+        title: String::new(),
+        description: String::new(),
+        summary: String::new(),
+        duration_seconds: None,
+        width: None,
+        height: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        created_at: Some(chrono::Utc::now().to_rfc3339()),
+        original_import_path: None,
+        speaker_names: None,
+        waveform_data: None,
+        language_code: None,
+        properties: None,
+        file_type: "document".to_string(),
+        thumbnail: None,
+    };
+
+    if let Err(e) = crate::projectview::db_handler::save_asset_metadata(
+        &project_data.project_uuid,
+        &document_file_metadata,
+        &relative_path_for_doc_xml,
+        "doc",
+        None,
+    ) {
+        log::warn!("[Backend Save Doc] Failed to save document metadata to DB: {}", e);
+    } else {
+        log::info!("[Backend Save Doc] Successfully saved document metadata to DB for: {}", relative_path_for_doc_xml);
+    }
+
     Ok(())
 }
 
@@ -205,7 +242,7 @@ pub async fn load_document_metadata(
     let project_xml_path = PathBuf::from(&project_xml_path_str);
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
     let project_base_dir = project_xml_path.parent().unwrap();

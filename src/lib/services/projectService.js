@@ -58,9 +58,10 @@ import {
 
     markDocumentMetadataAsSaved,
     markPdfAnnotationsAsSaved,
+    setDocumentHighlights,
 
-    prepareImportedTranscriptView,
-    markImportedTranscriptChangesDiscarded,
+    prepareStandaloneTranscriptView,
+    markStandaloneTranscriptChangesDiscarded,
 
     showUnsavedChangesPrompt,
     hideUnsavedChangesPrompt,
@@ -143,10 +144,10 @@ export async function loadHighlightsForFile(filePath, itemType) {
         await loadImageAnnotations(filePath);
     } else if (itemType === 'tables' || itemType === 'table' || lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
         await loadTableHighlights(filePath);
-    } else if (itemType === 'imported_transcript') {
+    } else if (itemType === 'standalone_transcript') {
         // Assuming there's a function to load highlights for imported transcripts
         // If not, this part needs to be implemented. For now, let's log it.
-        console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
+        console.log(`[ProjectService] Highlight loading for 'standalone_transcript' is not yet implemented.`);
     } else { // 'doc' (non-PDF), etc.
         const metadata = await loadDocumentMetadata(filePath);
         if (metadata && metadata.highlights) {
@@ -458,7 +459,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
             imageFiles: loadedData.image_files || [],
-            importedTranscriptFiles: loadedData.imported_transcript_files || [],
+            standaloneTranscriptFiles: loadedData.standalone_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
             isLoading: false,
             error: null,
@@ -638,7 +639,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
             imageFiles: loadedData.image_files || [],
-            importedTranscriptFiles: loadedData.imported_transcript_files || [],
+            standaloneTranscriptFiles: loadedData.standalone_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
             isLoading: false,
             error: null,
@@ -900,9 +901,9 @@ export async function importTranscriptFile(sourceType = 'msWord') {
             setAssetImportStatus(true, `Importing transcript from ${sourceFilename}...`);
             const newTranscriptJsonPath = await invoke('import_word_transcript', { sourceDocxPathStr: sourceDocxPath, projectXmlPathStr: projectXmlPath });
             await refreshProjectFiles();
-            const importedTranscriptName = await basename(newTranscriptJsonPath);
-            setAssetImportStatus(false, `Transcript "${importedTranscriptName}" imported successfully.`);
-            prepareImportedTranscriptView(newTranscriptJsonPath);
+            const standaloneTranscriptName = await basename(newTranscriptJsonPath);
+            setAssetImportStatus(false, `Transcript "${standaloneTranscriptName}" imported successfully.`);
+            prepareStandaloneTranscriptView(newTranscriptJsonPath);
             return newTranscriptJsonPath;
         } else {
             throw new Error(`Unsupported transcript source type: ${sourceType}`);
@@ -914,7 +915,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
     }
 }
 
-export async function deleteImportedTranscript(transcriptAbsolutePath) {
+export async function deleteStandaloneTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
 
@@ -1069,7 +1070,16 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 let startTime = 0,
                     endTime = 0,
                     speakerName = "Unknown",
-                    segmentTextJsonString = "{}";
+                    segmentTextJsonString = "{}",
+                    indexJsonString = "{}",
+                    timestampJsonString = "{}",
+                    speakerJsonString = "{}";
+
+                const indexCellNode = rowNode.children[0];
+                if (indexCellNode.type === 'tablecell') {
+                    indexJsonString = JSON.stringify({ root: { type: 'root', children: JSON.parse(JSON.stringify(indexCellNode.children || [])), direction: null, format: '', indent: 0, version: 1 } });
+                }
+
                 const timestampCellNode = rowNode.children[1];
                 if (timestampCellNode.type !== 'tablecell') continue;
                 let timestampFullText = '';
@@ -1077,6 +1087,8 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 const timeParts = timestampFullText.split(' - ');
                 startTime = parseTimestampStringToSeconds(timeParts[0]);
                 endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
+                timestampJsonString = JSON.stringify({ root: { type: 'root', children: JSON.parse(JSON.stringify(timestampCellNode.children || [])), direction: null, format: '', indent: 0, version: 1 } });
+
                 const speakerCellNode = rowNode.children[2];
                 if (speakerCellNode.type !== 'tablecell') continue;
                 let tempSpeakerName = '';
@@ -1085,6 +1097,8 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 if (speakerName.endsWith(':')) {
                     speakerName = speakerName.slice(0, -1).trim();
                 }
+                speakerJsonString = JSON.stringify({ root: { type: 'root', children: JSON.parse(JSON.stringify(speakerCellNode.children || [])), direction: null, format: '', indent: 0, version: 1 } });
+
                 const textContentCellNode = rowNode.children[3];
                 if (textContentCellNode.type !== 'tablecell') continue;
                 const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || []));
@@ -1098,11 +1112,15 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                         version: 1
                     }
                 });
+
                 segmentsArray.push({
                     start_time: startTime,
                     end_time: endTime,
                     speaker: speakerName,
-                    text: segmentTextJsonString
+                    text: segmentTextJsonString,
+                    index_json: indexJsonString,
+                    timestamp_json: timestampJsonString,
+                    speaker_json: speakerJsonString
                 });
             } catch (cellProcessingError) {
                 segmentsArray.push({
@@ -1173,21 +1191,69 @@ export async function loadTranscriptFile(transcriptFilePath) {
         }
         setTranscriptData(relativeTranscriptPath, segmentsArray, false);
     } catch (error) {
-        let errorMessage = "Unknown error";
-        if (error && typeof error === 'object') {
-            if (error.__tauriCore__ && typeof error.__tauriCore__.message === 'string') {
-                errorMessage = error.__tauriCore__.message;
-            } else if (typeof error.message === 'string') {
-                errorMessage = error.message;
-            } else {
-                errorMessage = String(error); // Fallback to String(error) if no specific message found
-            }
-        } else if (typeof error === 'string') {
-            errorMessage = error;
-        }
-
+        const errorMessage = getErrorMessage(error);
+        console.error(`[ProjectService] loadTranscriptFile failed for "${transcriptFilePath}":`, error);
         project.update(p => ({ ...p, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.` }));
         throw new Error(`Failed to load transcript: ${errorMessage}`);
+    }
+}
+export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHighlights = []) {
+    let finalHighlights = [];
+    try {
+        const parsed = typeof lexicalJsonString === 'string' ? JSON.parse(lexicalJsonString) : lexicalJsonString;
+        
+        let allTextNodes = [];
+        function walk(node) {
+            if (!node) return;
+            if (node.highlightId) { 
+                allTextNodes.push(node);
+            } else if (Array.isArray(node.children)) {
+                node.children.forEach(walk);
+            }
+        }
+        walk(parsed?.root);
+
+        if (allTextNodes.length === 0) return [];
+
+        const existingHighlightsMap = new Map((existingHighlights || []).map(h => [h.id, h]));
+        
+        const blocks = {};
+        for (const node of allTextNodes) {
+             const id = node.highlightId;
+             if (!blocks[id]) { blocks[id] = []; }
+             blocks[id].push(node);
+        }
+
+        let orderIndex = 0;
+        for (const [highlightId, block] of Object.entries(blocks)) {
+            const firstNode = block[0];
+            const style = typeof firstNode.style === 'string' ? firstNode.style : "";
+            const colorMatch = style.match(/background-color:\s*([^;]+)/);
+            const color = colorMatch ? colorMatch[1].trim() : 'transparent';
+            
+            const metadata = existingHighlightsMap.get(highlightId);
+            
+            let extractedText = '';
+            for (const n of block) {
+                if (typeof n.text === 'string') {
+                    extractedText += n.text;
+                }
+            }
+
+            finalHighlights.push({
+                id: highlightId,
+                text: extractedText,
+                nodeKey: firstNode.key || null,
+                color: color,
+                tags: metadata ? [...(metadata.tags || [])] : [],
+                comments: metadata ? [...(metadata.comments || [])] : [],
+                documentOrder: orderIndex++
+            });
+        }
+        return finalHighlights;
+    } catch(e) {
+        console.error("[extractHighlightsFromLexicalJson] error:", e);
+        return [];
     }
 }
 export async function saveTranscriptData() {
@@ -1205,7 +1271,150 @@ export async function saveTranscriptData() {
     let fullLexicalTableJsonString = "";
     try {
         const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), });
-        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); let speakerName = segment.speaker || "Unknown"; if (speakerName !== "Unknown" && !speakerName.endsWith(':')) { speakerName += ':'; } pSpeaker.append(_createTextNode(speakerName)); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError); } } else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError); } } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError); } }); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
+        await editorForTableAssembly.update(() => {
+            const root = _getRoot();
+            root.clear();
+            const tableNode = _createTableNode();
+            const headerRow = _createTableRowNode();
+            const headers = ["#", "Timestamp", "Speaker", "Text"];
+            for (const headerText of headers) {
+                const cell = _createTableCellNode({ headerState: 'column' });
+                const paragraph = _createParagraphNode();
+                paragraph.append(_createTextNode(headerText));
+                cell.append(paragraph);
+                headerRow.append(cell);
+            }
+            tableNode.append(headerRow);
+
+            function appendNodesToCell(cell, serializedChildren) {
+                if (!Array.isArray(serializedChildren) || serializedChildren.length === 0) {
+                    cell.append(_createParagraphNode());
+                    return;
+                }
+                serializedChildren.forEach(serializedNode => {
+                    try {
+                        const liveNode = _parseSerializedNode(serializedNode);
+                        if (liveNode) {
+                            if (typeof liveNode.clone === 'function') cell.append(liveNode.clone());
+                            else if (typeof liveNode.constructor?.clone === 'function') cell.append(liveNode.constructor.clone(liveNode));
+                        }
+                    } catch (e) {
+                        console.error("[TableAssembly] Error parsing node for rich cell:", e);
+                    }
+                });
+            }
+
+            for (let i = 0; i < transcriptSegments.length; i++) {
+                const segment = transcriptSegments[i];
+                const dataRow = _createTableRowNode();
+
+                // 1. Index Column
+                const cellNum = _createTableCellNode();
+                const expectedIdxText = String(i + 1);
+                let idxRichNodesUsed = false;
+                if (segment.index_json) {
+                    try {
+                        const parsed = JSON.parse(segment.index_json);
+                        const plainText = parsed.root.children.map(extractPlainTextFromLexicalNode).join('');
+                        if (plainText.trim() === expectedIdxText) {
+                            appendNodesToCell(cellNum, parsed.root.children);
+                            idxRichNodesUsed = true;
+                        }
+                    } catch (e) { }
+                }
+                if (!idxRichNodesUsed) {
+                    const pNum = _createParagraphNode();
+                    pNum.append(_createTextNode(expectedIdxText));
+                    cellNum.append(pNum);
+                }
+                dataRow.append(cellNum);
+
+                // 2. Timestamp Column
+                const cellTime = _createTableCellNode();
+                const startTimeStr = formatTimestampHtml(segment.start_time || 0);
+                const endTimeStr = formatTimestampHtml(segment.end_time || 0);
+                const expectedTimeText = `${startTimeStr} - ${endTimeStr}`;
+                let timeRichNodesUsed = false;
+                if (segment.timestamp_json) {
+                    try {
+                        const parsed = JSON.parse(segment.timestamp_json);
+                        const plainText = parsed.root.children.map(extractPlainTextFromLexicalNode).join('');
+                        if (plainText.trim() === expectedTimeText) {
+                            appendNodesToCell(cellTime, parsed.root.children);
+                            timeRichNodesUsed = true;
+                        }
+                    } catch (e) { }
+                }
+                if (!timeRichNodesUsed) {
+                    const pTime = _createParagraphNode();
+                    pTime.append(_createTextNode(expectedTimeText));
+                    cellTime.append(pTime);
+                }
+                dataRow.append(cellTime);
+
+                // 3. Speaker Column
+                const cellSpeaker = _createTableCellNode();
+                let speakerName = segment.speaker || "Unknown";
+                if (speakerName !== "Unknown" && !speakerName.endsWith(':')) {
+                    speakerName += ':';
+                }
+                let speakerRichNodesUsed = false;
+                if (segment.speaker_json) {
+                    try {
+                        const parsed = JSON.parse(segment.speaker_json);
+                        const plainText = parsed.root.children.map(extractPlainTextFromLexicalNode).join('');
+                        if (plainText.trim() === speakerName) {
+                            appendNodesToCell(cellSpeaker, parsed.root.children);
+                            speakerRichNodesUsed = true;
+                        }
+                    } catch (e) { }
+                }
+                if (!speakerRichNodesUsed) {
+                    const pSpeaker = _createParagraphNode();
+                    pSpeaker.append(_createTextNode(speakerName));
+                    cellSpeaker.append(pSpeaker);
+                }
+                dataRow.append(cellSpeaker);
+
+                // 4. Text Column (Existing Logic)
+                const cellText = _createTableCellNode();
+                if (segment.text && typeof segment.text === 'string') {
+                    let parsedSegmentState;
+                    try {
+                        parsedSegmentState = JSON.parse(segment.text);
+                    } catch (e) {
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error V6: Malformed cell JSON]"));
+                        cellText.append(pError);
+                        dataRow.append(cellText);
+                        tableNode.append(dataRow);
+                        continue;
+                    }
+                    function flattenNodes(nodes) {
+                        return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]);
+                    }
+                    const rawChildren = parsedSegmentState?.root?.children || [];
+                    const serializedChildNodes = flattenNodes(rawChildren);
+                    if (serializedChildNodes.length > 0) {
+                        serializedChildNodes.forEach(serializedNodeObject => {
+                            if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) return;
+                            try {
+                                const liveNode = _parseSerializedNode(serializedNodeObject);
+                                if (liveNode) {
+                                    if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone());
+                                    else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode));
+                                }
+                            } catch (e) { }
+                        });
+                    } else cellText.append(_createParagraphNode());
+                } else cellText.append(_createParagraphNode());
+                dataRow.append(cellText);
+
+                tableNode.append(dataRow);
+            }
+            root.append(tableNode);
+            root.append(_createParagraphNode());
+        });
         fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
 
         // Add validation here
@@ -1214,15 +1423,33 @@ export async function saveTranscriptData() {
             throw new Error("Generated Lexical JSON is invalid: missing root or children.");
         }
 
+        // Auto-extract highlights from the constructed JSON and sync with the database
+        const currentHighlights = get(project).currentDocumentHighlights || [];
+        const extractedHighlights = extractHighlightsFromLexicalJson(parsedJson, currentHighlights);
+        
+        try {
+            await invoke('save_lexical_highlights', {
+                args: {
+                    projectId: projData.id,
+                    documentPath: transcriptPath,
+                    highlightsJson: JSON.stringify(extractedHighlights)
+                }
+            });
+            setDocumentHighlights(extractedHighlights);
+        } catch (hlError) {
+            console.error("[ProjectService] Failed to sync extracted highlights to DB:", hlError);
+        }
+
     } catch (assemblyError) {
         project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
     }
+    const languageCode = tsData.activeTranscript?.language_code ?? null;
     try {
-        await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString });
+        await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString, language_code: languageCode });
         markTranscriptAsSaved();
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to save transcript: ${errorMessage}`);
     }
@@ -1480,14 +1707,14 @@ export async function deleteProjectItem(itemPath) {
         const wasSelectedMedia = currentTs.selectedMediaFile?.path === itemPath;
         const wasCurrentTranscript = currentTs.currentTranscriptPath === itemPath;
         const wasSelectedDocument = currentProj.selectedDocumentPath === itemPath;
-        const wasSelectedImportedTranscript = currentProj.currentImportedTranscriptPath === itemPath;
+        const wasSelectedStandaloneTranscript = currentProj.currentStandaloneTranscriptPath === itemPath;
         const wasSelectedMediaNote = currentProj.selectedMediaNotePath === itemPath;
         const wasActiveTranscriptInDataTab = currentProj.activeTranscriptPathInDataTab === itemPath;
 
         if (wasSelectedMedia) selectMedia(null);
         else if (wasCurrentTranscript) clearTranscriptState();
         else if (wasSelectedDocument) prepareDocumentView(null);
-        else if (wasSelectedImportedTranscript) prepareImportedTranscriptView(null);
+        else if (wasSelectedStandaloneTranscript) prepareStandaloneTranscriptView(null);
         else if (wasSelectedMediaNote) prepareMediaNoteView(null);
 
         // Clear the data tab's active transcript if it was deleted, so it can correctly fall back or show "No Transcription Yet"
@@ -1939,7 +2166,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
 
         const transcriptFilename = await basename(targetFullPath);
 
-        await invoke('save_imported_transcript_and_update_xml', {
+        await invoke('save_standalone_transcript_and_update_xml', {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             transcriptName: transcriptFilename,
@@ -1982,7 +2209,7 @@ export async function convertAndSaveTranscriptAsTranscript() {
             assetRelativePath: relativePath,
             metadataPayload: fileMetadata,
             customFieldsPayload: null,
-            assetType: 'imported_transcript',
+            assetType: 'standalone_transcript',
         });
 
         // Attach the original media file to the new transcript
@@ -2212,11 +2439,11 @@ export async function saveHighlightChanges(highlight) {
     }
 }
 
-export async function saveImportedTranscriptContent(filePath, jsonContent, highlightsJson = null) {
+export async function saveStandaloneTranscriptContent(filePath, jsonContent, highlightsJson = null) {
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.' }));
+        project.update(p => ({ ...p, standaloneTranscriptError: errorMsg, statusMessage: 'Save failed.' }));
         throw new Error(errorMsg);
     }
     try {
@@ -2225,7 +2452,7 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     } catch (e) {
         const errorMsg = `Cannot save transcript: Content not valid JSON or invalid structure. ${e.message}`;
         await message(errorMsg, { title: 'Save Error', type: 'error' });
-        project.update(p => ({ ...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
+        project.update(p => ({ ...p, standaloneTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).' }));
         throw new Error(errorMsg);
     }
 
@@ -2236,8 +2463,8 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
     try {
         let finalHighlightsJson = highlightsJson;
         if (finalHighlightsJson === null) {
-            finalHighlightsJson = projState.isImportedTranscriptMetadataDirty
-                ? JSON.stringify(projState.currentImportedTranscriptHighlights || [])
+            finalHighlightsJson = projState.isStandaloneTranscriptMetadataDirty
+                ? JSON.stringify(projState.currentStandaloneTranscriptHighlights || [])
                 : null;
         }
 
@@ -2247,12 +2474,12 @@ export async function saveImportedTranscriptContent(filePath, jsonContent, highl
             highlightsJson: finalHighlightsJson,
         });
 
-        const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
-        markImportedTranscriptAsSaved(filePath, jsonContent);
+        const { markStandaloneTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+        markStandaloneTranscriptAsSaved(filePath, jsonContent);
 
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
-        project.update(p => ({ ...p, importedTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+        project.update(p => ({ ...p, standaloneTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
         await message(`Error saving transcript '${filename}': ${errorMessage}`, { title: 'Save Transcript Error', type: 'error' });
         throw error;
     }
@@ -2513,17 +2740,17 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialDocumentJson;
         resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
-    } else if (projState.currentImportedTranscriptPath && (projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty)) {
+    } else if (projState.currentStandaloneTranscriptPath && (projState.isStandaloneTranscriptDirty || projState.isStandaloneTranscriptMetadataDirty)) {
         itemIsDirty = true;
-        itemPath = projState.currentImportedTranscriptPath;
+        itemPath = projState.currentStandaloneTranscriptPath;
         itemTypeForPrompt = 'imported transcript';
-        if (projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
-            saveFunction = projState.activeImportedTranscriptEditorRef.ref.save;
-            discardFunction = () => markImportedTranscriptChangesDiscarded(itemPath);
-            initialContentForReset = projState.initialImportedTranscriptLexicalJson;
-            resetEditorFunction = projState.activeImportedTranscriptEditorRef.ref.resetEditorState;
+        if (projState.activeStandaloneTranscriptEditorRef?.ref && typeof projState.activeStandaloneTranscriptEditorRef.ref.save === 'function') {
+            saveFunction = projState.activeStandaloneTranscriptEditorRef.ref.save;
+            discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
+            initialContentForReset = projState.initialStandaloneTranscriptLexicalJson;
+            resetEditorFunction = projState.activeStandaloneTranscriptEditorRef.ref.resetEditorState;
         } else {
-            discardFunction = () => markImportedTranscriptChangesDiscarded(itemPath);
+            discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
         }
     } else if (tsState.currentTranscriptPath && tsState.transcriptDirty) {
         itemIsDirty = true;
@@ -2798,7 +3025,7 @@ export async function requestDocumentTranslation(documentPath, modelName, target
     }
 }
 
-export async function requestImportedTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
+export async function requestStandaloneTranscriptTranslation(transcriptPath, modelName, targetLanguage, sourceLanguage) {
     const currentProject = get(project);
     const ts = get(transcriptStore);
 
@@ -2815,7 +3042,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
     setTranslationStatus(true, null, { status: 'initiating', sourcePath: transcriptPath });
 
     try {
-        const initiatedPayload = await invoke('translate_imported_transcript_command', {
+        const initiatedPayload = await invoke('translate_standalone_transcript_command', {
             projectXmlPath: currentProject.xmlPath,
             transcriptPath,
             modelName: modelName,
@@ -2831,7 +3058,7 @@ export async function requestImportedTranscriptTranslation(transcriptPath, model
     } catch (error) {
         const errorMessage = error.message || String(error);
         setTranslationStatus(false, null, { status: 'error', errorMessage });
-        console.error(`[ProjectService] Error during translate_imported_transcript_command invocation:`, error);
+        console.error(`[ProjectService] Error during translate_standalone_transcript_command invocation:`, error);
     }
 }
 
@@ -3039,7 +3266,7 @@ export async function getProjectAssetsForLink(projectId) {
             'audio-transcript': 'Audio Transcripts',
             'video-transcript': 'Video Transcripts',
             'transcript': 'Transcripts',
-            'imported_transcript': 'Transcripts',
+            'standalone_transcript': 'Transcripts',
             'document': 'Documents',
             'doc': 'Documents',
             'pdf': 'Documents',

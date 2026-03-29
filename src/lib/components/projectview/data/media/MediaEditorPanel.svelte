@@ -5,7 +5,7 @@
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import {
         project, // Store, aliased to projectStore below for clarity in functions
-        clearImportedTranscriptSplit
+        clearStandaloneTranscriptSplit
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog';
@@ -36,7 +36,7 @@
     let primaryHighlightedRowIndex = -1;
     let secondaryHighlightedRowIndex = -1;
 
-    $: splitInfo = $projectStore.importedTranscriptSplits[$projectStore.activeTranscriptPathInDataTab];
+    $: splitInfo = $projectStore.standaloneTranscriptSplits[$projectStore.activeTranscriptPathInDataTab];
     $: splitPartnerPath = splitInfo?.partner;
     $: orientation = splitInfo?.orientation || 'horizontal';
 
@@ -421,7 +421,7 @@
                             <button 
                                 class="hover:text-red-500 ml-2 flex-shrink-0" 
                                 title="Close Split"
-                                on:click={() => clearImportedTranscriptSplit($projectStore.activeTranscriptPathInDataTab)}
+                                on:click={() => clearStandaloneTranscriptSplit($projectStore.activeTranscriptPathInDataTab)}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
                                     <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>

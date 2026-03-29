@@ -1,17 +1,17 @@
-<!-- src/lib/components/projectview/notes/imported_transcripts/TranscriptEditorPanel.svelte -->
+<!-- src/lib/components/projectview/notes/standalone_transcripts/TranscriptEditorPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
-        setImportedTranscriptEditorContent,
-        markImportedTranscriptAsSaved,
-        markImportedTranscriptChangesDiscarded,
-        setActiveImportedTranscriptEditorRef,
-        clearActiveImportedTranscriptEditorRef,
-        setLoadedImportedTranscriptData,
-        setImportedTranscriptLoadFailed,
-        setImportedTranscriptHighlights,
+        setStandaloneTranscriptEditorContent,
+        markStandaloneTranscriptAsSaved,
+        markStandaloneTranscriptChangesDiscarded,
+        setActiveStandaloneTranscriptEditorRef,
+        clearActiveStandaloneTranscriptEditorRef,
+        setLoadedStandaloneTranscriptData,
+        setStandaloneTranscriptLoadFailed,
+        setStandaloneTranscriptHighlights,
         highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
@@ -77,14 +77,14 @@
     let localIsMetadataDirty = false;
 
     // --- Derived state from local or store ---
-    $: currentLexicalJson = isPrimary ? $project.currentImportedTranscriptLexicalJson : localCurrentLexicalJson;
-    $: initialLexicalJson = isPrimary ? $project.initialImportedTranscriptLexicalJson : localInitialLexicalJson;
-    $: isDirty = isPrimary ? $project.isImportedTranscriptDirty : localIsDirty;
-    $: isLoading = isPrimary ? $project.isImportedTranscriptLoading : localIsLoading;
-    $: errorMessage = isPrimary ? $project.importedTranscriptError : localErrorMessage;
+    $: currentLexicalJson = isPrimary ? $project.currentStandaloneTranscriptLexicalJson : localCurrentLexicalJson;
+    $: initialLexicalJson = isPrimary ? $project.initialStandaloneTranscriptLexicalJson : localInitialLexicalJson;
+    $: isDirty = isPrimary ? $project.isStandaloneTranscriptDirty : localIsDirty;
+    $: isLoading = isPrimary ? $project.isStandaloneTranscriptLoading : localIsLoading;
+    $: errorMessage = isPrimary ? $project.standaloneTranscriptError : localErrorMessage;
     
-    $: currentHighlights = isPrimary ? $project.currentImportedTranscriptHighlights : localCurrentHighlights;
-    $: isMetadataDirty = isPrimary ? $project.isImportedTranscriptMetadataDirty : localIsMetadataDirty;
+    $: currentHighlights = isPrimary ? $project.currentStandaloneTranscriptHighlights : localCurrentHighlights;
+    $: isMetadataDirty = isPrimary ? $project.isStandaloneTranscriptMetadataDirty : localIsMetadataDirty;
 
     // New state for highlights
     let initialHighlightsFromBackend = [];
@@ -99,7 +99,7 @@
 
     // --- Store Subscription (Updated to only sync if primary and matching path) ---
     $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
-    $: if (isPrimary && $project.currentImportedTranscriptPath === itemPath) {
+    $: if (isPrimary && $project.currentStandaloneTranscriptPath === itemPath) {
         if (editorRef && currentLexicalJson !== editorJsonState) {
             console.log("[TranscriptEditorPanel Store Sync] Updating editorRef state from store.");
             editorRef.resetEditorState(currentLexicalJson);
@@ -119,7 +119,7 @@
     async function loadHighlightsForTranscript(path) {
         console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
         if (!path) {
-            if (isPrimary) setImportedTranscriptHighlights([], false);
+            if (isPrimary) setStandaloneTranscriptHighlights([], false);
             else {
                 localCurrentHighlights = [];
                 localInitialHighlights = [];
@@ -147,7 +147,7 @@
 
             if (isPrimary) {
                 initialHighlightsFromBackend = highlights;
-                setImportedTranscriptHighlights(highlights, false);
+                setStandaloneTranscriptHighlights(highlights, false);
             } else {
                 localInitialHighlights = JSON.parse(JSON.stringify(highlights));
                 localCurrentHighlights = JSON.parse(JSON.stringify(highlights));
@@ -157,7 +157,7 @@
             console.log(`[TranscriptEditorPanel] highlights updated.`);
         } catch (e) {
             console.error("[TranscriptEditorPanel] Error loading lexical highlights for transcript:", e);
-            if (isPrimary) setImportedTranscriptHighlights([], false);
+            if (isPrimary) setStandaloneTranscriptHighlights([], false);
             else {
                 localCurrentHighlights = [];
                 localInitialHighlights = [];
@@ -169,7 +169,7 @@
     // --- MODIFIED Load Function ---
     async function loadAndConvertTranscript(filePath) {
         if (!filePath) {
-            if (isPrimary) setLoadedImportedTranscriptData(null, null);
+            if (isPrimary) setLoadedStandaloneTranscriptData(null, null);
             else {
                 localCurrentLexicalJson = null;
                 localInitialLexicalJson = null;
@@ -180,12 +180,12 @@
         editorJsonState = '';
         if (isPrimary) {
             project.update(p => ({...p,
-                currentImportedTranscriptPath: filePath,
-                isImportedTranscriptLoading: true,
-                importedTranscriptError: null,
-                currentImportedTranscriptLexicalJson: null,
-                initialImportedTranscriptLexicalJson: null,
-                isImportedTranscriptDirty: false,
+                currentStandaloneTranscriptPath: filePath,
+                isStandaloneTranscriptLoading: true,
+                standaloneTranscriptError: null,
+                currentStandaloneTranscriptLexicalJson: null,
+                initialStandaloneTranscriptLexicalJson: null,
+                isStandaloneTranscriptDirty: false,
                 selectedDocumentPath: null,
                 currentDocumentJson: null,
                 initialDocumentJson: null,
@@ -272,7 +272,7 @@
                 }
                 
                 if (isPrimary) {
-                    setLoadedImportedTranscriptData(filePath, lexicalTableJsonToLoad);
+                    setLoadedStandaloneTranscriptData(filePath, lexicalTableJsonToLoad);
                 } else {
                     localCurrentLexicalJson = lexicalTableJsonToLoad;
                     localInitialLexicalJson = lexicalTableJsonToLoad;
@@ -289,7 +289,7 @@
             const loadErrorMsg = `Failed to load/parse transcript: ${e.message}`;
             if (editorRef) editorRef.resetEditorState(''); // Reset editor on error
             if (isPrimary) {
-                setImportedTranscriptLoadFailed(filePath, loadErrorMsg);
+                setStandaloneTranscriptLoadFailed(filePath, loadErrorMsg);
             } else {
                 localErrorMessage = loadErrorMsg;
                 localIsLoading = false;
@@ -297,7 +297,7 @@
         } finally {
              // Ensure loading state is always turned off
              if (isPrimary) {
-                project.update(p => p.currentImportedTranscriptPath === filePath ? { ...p, isImportedTranscriptLoading: false } : p);
+                project.update(p => p.currentStandaloneTranscriptPath === filePath ? { ...p, isStandaloneTranscriptLoading: false } : p);
              } else {
                 localIsLoading = false;
              }
@@ -473,7 +473,7 @@
     function handleHighlightsChange(event) {
         const { highlights } = event.detail;
         if (isPrimary) {
-            setImportedTranscriptHighlights(highlights);
+            setStandaloneTranscriptHighlights(highlights);
         } else {
             localCurrentHighlights = highlights;
             localIsMetadataDirty = JSON.stringify(localInitialHighlights) !== JSON.stringify(highlights);
@@ -494,7 +494,7 @@
 
                 if (!isLoading && !errorMessage) {
                     if (isPrimary) {
-                        setImportedTranscriptEditorContent(itemPath, newLexicalJson);
+                        setStandaloneTranscriptEditorContent(itemPath, newLexicalJson);
                     } else {
                         localCurrentLexicalJson = newLexicalJson;
                         localIsDirty = localInitialLexicalJson !== newLexicalJson;
@@ -531,12 +531,12 @@
 
         console.log("[TranscriptEditorPanel] handleSave: Attempting to save transcript (and/or metadata) via service:", itemPath);
         try {
-            const { saveImportedTranscriptContent } = await import('$lib/services/projectService.js');
+            const { saveStandaloneTranscriptContent } = await import('$lib/services/projectService.js');
             
             // Prepare highlights JSON if not primary
             const hJson = isPrimary ? null : JSON.stringify(currentHighlights);
 
-            await saveImportedTranscriptContent(itemPath, editorJsonState, hJson);
+            await saveStandaloneTranscriptContent(itemPath, editorJsonState, hJson);
             
             if (!isPrimary) {
                 localInitialLexicalJson = editorJsonState;
@@ -557,7 +557,7 @@
             const userConfirmed = await confirm('Discard unsaved changes to this transcript?', { type: 'warning', title: 'Discard Changes' });
             if (userConfirmed) {
                 if (isPrimary) {
-                    markImportedTranscriptChangesDiscarded(itemPath);
+                    markStandaloneTranscriptChangesDiscarded(itemPath);
                 } else {
                     localCurrentLexicalJson = localInitialLexicalJson;
                     localIsDirty = false;
@@ -584,7 +584,7 @@
     onMount(() => {
         console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath, 'isPrimary:', isPrimary);
         if (isPrimary) {
-            setActiveImportedTranscriptEditorRef({ ref: self });
+            setActiveStandaloneTranscriptEditorRef({ ref: self });
         }
         if (itemPath) {
             loadAndConvertTranscript(itemPath);
@@ -598,9 +598,9 @@
         console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
         clearTimeout(changeDebounceTimeout);
         if (isPrimary) {
-            const activeRef = get(project).activeImportedTranscriptEditorRef;
+            const activeRef = get(project).activeStandaloneTranscriptEditorRef;
             if (activeRef && activeRef.getItemPath && activeRef.getItemPath() === itemPath) {
-                 clearActiveImportedTranscriptEditorRef();
+                 clearActiveStandaloneTranscriptEditorRef();
             }
         }
 	});

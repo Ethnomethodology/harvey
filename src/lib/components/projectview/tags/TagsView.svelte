@@ -157,7 +157,7 @@
             case 'image': return ImageIcon;
             case 'table': return Sheet;
             case 'transcript': return MessageSquareText;
-            case 'imported_transcript': return MessageSquareText;
+            case 'standalone_transcript': return MessageSquareText;
             case 'audio_transcript': return Music;
             case 'video_transcript': return Film;
             default: return CircleHelp;
@@ -624,7 +624,7 @@
         let viewType = highlight.source.file_type === 'audio' || highlight.source.file_type === 'video' ? 'media' :
                        highlight.source.file_type === 'csv' ? 'table' :
                        highlight.source.file_type === 'image' ? 'image' :
-                       highlight.source.file_type === 'imported_transcript' ? 'transcript' : 'document';
+                       highlight.source.file_type === 'standalone_transcript' ? 'transcript' : 'document';
         let attachmentToOpen = null;
         let originalDocType = highlight.source.file_type;
         

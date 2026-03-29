@@ -508,7 +508,7 @@
         $refresher;
         (async () => {
             const currentProjectStoreState = get(project);
-            const isSupportedType = itemType === 'doc' || itemType === 'imported_transcript' || itemType === 'table' || currentProjectStoreState.selectedMediaNotePath;
+            const isSupportedType = itemType === 'doc' || itemType === 'standalone_transcript' || itemType === 'table' || currentProjectStoreState.selectedMediaNotePath;
             const currentPathToUse = itemType === 'doc' && currentProjectStoreState.selectedMediaNotePath ? currentProjectStoreState.selectedMediaNotePath : itemPath;
             if (currentPathToUse && isSupportedType && currentProjectStoreState?.baseDirectory) {
                 const newOriginalDetails = await getOriginalAssetDetails(currentPathToUse, currentProjectStoreState);

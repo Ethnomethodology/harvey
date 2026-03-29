@@ -62,7 +62,7 @@ pub async fn import_table_file(
             error!("[import_table_file] Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e);
             CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e))
         })?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| {
             error!("[import_table_file] Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e);
             CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))
@@ -120,7 +120,7 @@ pub async fn import_table_file(
             error!("[import_table_file] Failed to read project XML for update from {}: {}", project_xml_path.display(), e);
             CommandError::Io(format!("Failed to read project XML for update from {}: {}", project_xml_path.display(), e))
         })?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)
         .map_err(|e| {
             error!("[import_table_file] Failed to parse project XML for update from {}: {}", project_xml_path.display(), e);
             CommandError::XmlDeserialization(format!("Failed to parse project XML for update from {}: {}", project_xml_path.display(), e))
@@ -246,6 +246,7 @@ pub async fn import_table_file(
         language_code: None,
         properties: None,
         file_type: "table".to_string(),
+        thumbnail: None,
     };
     debug!("[import_table_file] File metadata for DB created.");
 
@@ -292,7 +293,7 @@ pub async fn delete_table_column(
     let project_xml_path = get_project_xml_path_from_item(&table_path)?;
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let relative_path_for_xml = table_path
         .strip_prefix(project_xml_path.parent().unwrap())?
@@ -409,7 +410,7 @@ pub async fn set_table_headers(
 
     let mut project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
 
     if let Some(table_entry) = project_data.table_files.files.iter_mut()
@@ -450,7 +451,7 @@ pub async fn load_table_data(table_path_str: String) -> Result<Value, CommandErr
 
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
 
     let has_headers = project_data.table_files.files.iter()
@@ -885,7 +886,7 @@ pub async fn rename_table_header(
         .replace("\\", "/");
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let has_headers = project_data.table_files.files.iter()
         .find(|f| f.relative_path == relative_path_for_xml)
@@ -941,7 +942,7 @@ pub async fn save_table_styles(file_path: String, styles: Value) -> Result<(), C
     let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&file_path))?;
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
     let styles_string = serde_json::to_string(&styles)
@@ -954,7 +955,7 @@ pub async fn load_table_styles(file_path: String) -> Result<Value, CommandError>
     let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&file_path))?;
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
-        quick_xml::de::from_str(&xml_content)?
+        serde_json::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
     let styles_string_option = db_handler::load_table_styles(&project_id, &file_path)?;
@@ -988,7 +989,7 @@ mod tests {
             document_files: Default::default(),
             table_files: Default::default(),
             image_files: Default::default(),
-            imported_transcript_files: Default::default(),
+            standalone_transcript_files: Default::default(),
             document_metadata_files: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&project_data).unwrap();
@@ -1040,7 +1041,7 @@ mod tests {
         assert!(!metadata_json_path.exists(), ".metadata.json file should NOT exist at {}", metadata_json_path.display());
 
         let updated_xml_content = fs::read_to_string(&project_xml_path)?;
-        let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_xml_content)?;
+        let updated_project_data: ProjectXml = serde_json::from_str(&updated_xml_content)?;
 
         let expected_table_name = final_table_abs_path.file_name().unwrap().to_str().unwrap();
         let expected_relative_path = final_table_abs_path.strip_prefix(&project_dir)?.to_string_lossy().replace("\\", "/");
@@ -1119,7 +1120,7 @@ pub async fn create_new_table(
     let xml_path = PathBuf::from(&project_xml_path);
     let project_base_dir = xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base directory."))?;
 
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path)?)?;
 
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
     fs::create_dir_all(&tables_base)?;

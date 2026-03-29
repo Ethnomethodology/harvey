@@ -682,12 +682,17 @@
 													title="Delete model">Delete</button
 												>
 											{:else if status === 'downloading' || status === 'cancelling'}
-												<div class="flex flex-col items-end">
+												<div class="flex flex-col items-end w-full">
 													<span class="text-[10px] text-blue-700 dark:text-blue-300 font-medium tabular-nums mb-1">
-														{#if status === 'cancelling'}Cancelling...{:else}Downloading...{/if}
+														{#if status === 'cancelling'}Cancelling...{:else}Downloading... {progressPercent}%{/if}
 													</span>
+													{#if status === 'downloading' && progressPercent > 0}
+														<div class="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-1.5">
+															<div class="h-full bg-blue-500 transition-all duration-300" style="width: {progressPercent}%"></div>
+														</div>
+													{/if}
 													<button
-														class="btn-cancel"
+														class="btn-cancel text-[10px] px-2 py-0.5"
 														on:click={() => handleCancel(model.id)}
 														disabled={!isCancelEnabled}
 														title="Cancel download">Cancel</button
@@ -756,7 +761,10 @@
 					</div>
 					<button on:click={() => handleDownload(null)} class="btn-blue-small mb-0.5">
 						{#if isDownloading}
-							Downloading...
+							<span class="flex items-center gap-1">
+								<svg class="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+								{progressPercent > 0 ? `Downloading ${progressPercent}%` : 'Downloading...'}
+							</span>
 						{:else}
 							Download
 						{/if}

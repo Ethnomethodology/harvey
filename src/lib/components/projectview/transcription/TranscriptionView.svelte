@@ -723,7 +723,7 @@
             console.log("[TranscriptionView] Loading media via selectMedia.");
             selectMedia(item);
         } else if (
-            item.file_type === "transcript" ||
+            item.file_type === "audio_transcript" || item.file_type === "video_transcript" ||
             item.file_type === "audio-transcript" ||
             item.file_type === "video-transcript"
         ) {

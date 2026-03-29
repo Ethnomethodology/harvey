@@ -12,6 +12,9 @@ export const HARVEY_FILES_DIR = "harvey_files";
 export const MEDIA_DIR_NAME = 'Media';
 export const AUDIOS_DIR_NAME = 'Audios';
 export const VIDEOS_DIR_NAME = 'Videos';
+export const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac']);
+export const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
+
 const MEDIA_SUBDIR = 'media';
 const TRANSCRIPTS_SUBDIR = 'transcripts';
 
@@ -41,7 +44,7 @@ export const initialState = {
     tableFiles: [],
     tableData: [],
     imageFiles: [],
-    importedTranscriptFiles: [],
+    standaloneTranscriptFiles: [],
     documentMetadataFiles: [],
     isLoading: true,
     error: null,
@@ -76,13 +79,13 @@ export const initialState = {
     initialTableHighlights: [],
     isTableHighlightsDirty: false,
 
-    currentImportedTranscriptPath: null,
-    currentImportedTranscriptLexicalJson: null,
-    initialImportedTranscriptLexicalJson: null,
-    isImportedTranscriptDirty: false,
-    isImportedTranscriptLoading: false,
-    importedTranscriptError: null,
-    activeImportedTranscriptEditorRef: null,
+    currentStandaloneTranscriptPath: null,
+    currentStandaloneTranscriptLexicalJson: null,
+    initialStandaloneTranscriptLexicalJson: null,
+    isStandaloneTranscriptDirty: false,
+    isStandaloneTranscriptLoading: false,
+    standaloneTranscriptError: null,
+    activeStandaloneTranscriptEditorRef: null,
 
     selectedMediaNotePath: null,
     currentMediaNoteTranscriptJson: null,
@@ -112,7 +115,7 @@ export const initialState = {
 
     activeTranscriptPathInDataTab: null,
     fileRenamed: null,
-    importedTranscriptSplits: {}, // Maps path -> { partner: path, orientation: 'horizontal' | 'vertical' }
+    standaloneTranscriptSplits: {}, // Maps path -> { partner: path, orientation: 'horizontal' | 'vertical' }
     showSplitTranscriptModal: false,
     pendingSplitOrientation: 'horizontal', // Track orientation for next split
 
@@ -123,9 +126,9 @@ export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 
-export function setImportedTranscriptSplit(pathA, pathB, orientation = 'horizontal') {
+export function setStandaloneTranscriptSplit(pathA, pathB, orientation = 'horizontal') {
     project.update(p => {
-        const newSplits = { ...p.importedTranscriptSplits };
+        const newSplits = { ...p.standaloneTranscriptSplits };
         if (pathB) {
             newSplits[pathA] = { partner: pathB, orientation };
             newSplits[pathB] = { partner: pathA, orientation };
@@ -136,12 +139,12 @@ export function setImportedTranscriptSplit(pathA, pathB, orientation = 'horizont
                 delete newSplits[partnerInfo.partner];
             }
         }
-        return { ...p, importedTranscriptSplits: newSplits };
+        return { ...p, standaloneTranscriptSplits: newSplits };
     });
 }
 
-export function clearImportedTranscriptSplit(path) {
-    setImportedTranscriptSplit(path, null);
+export function clearStandaloneTranscriptSplit(path) {
+    setStandaloneTranscriptSplit(path, null);
 }
 
 export const currentProjectGroupsList = writable([]);
@@ -183,13 +186,13 @@ export function setSelectedGroup(groupId, groupData) {
         isDocumentLoading: false,
         documentError: null,
         activeDocumentEditorRef: null,
-        currentImportedTranscriptPath: null,
-        currentImportedTranscriptLexicalJson: null,
-        initialImportedTranscriptLexicalJson: null,
-        isImportedTranscriptDirty: false,
-        isImportedTranscriptLoading: false,
-        importedTranscriptError: null,
-        activeImportedTranscriptEditorRef: null,
+        currentStandaloneTranscriptPath: null,
+        currentStandaloneTranscriptLexicalJson: null,
+        initialStandaloneTranscriptLexicalJson: null,
+        isStandaloneTranscriptDirty: false,
+        isStandaloneTranscriptLoading: false,
+        standaloneTranscriptError: null,
+        activeStandaloneTranscriptEditorRef: null,
         selectedMediaNotePath: null,
         currentMediaNoteTranscriptJson: null,
         initialMediaNoteTranscriptJson: null,
@@ -202,7 +205,7 @@ export function setSelectedGroup(groupId, groupData) {
 }
 
 
-export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
+export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true, forceReload = false) {
     const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables' || itemType === 'table';
@@ -214,7 +217,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
     };
 
     project.update(p => {
-        const selectingSamePath = p.selectedDocumentPath === normalizedFilePath && normalizedFilePath !== null; // Ensure filePath is not null for same path check
+        const selectingSamePath = p.selectedDocumentPath === normalizedFilePath && normalizedFilePath !== null && !forceReload;
 
         // Determine if loading is needed only if filePath is valid
         let newIsDocumentLoading = false;
@@ -259,13 +262,13 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
             isLoading: newIsDocumentLoading, // Global isLoading reflects specific loading
 
             // Clear other view states
-            currentImportedTranscriptPath: null,
-            currentImportedTranscriptLexicalJson: null,
-            initialImportedTranscriptLexicalJson: null,
-            isImportedTranscriptDirty: false,
-            activeImportedTranscriptEditorRef: null,
-            importedTranscriptError: null,
-            isImportedTranscriptLoading: false,
+            currentStandaloneTranscriptPath: null,
+            currentStandaloneTranscriptLexicalJson: null,
+            initialStandaloneTranscriptLexicalJson: null,
+            isStandaloneTranscriptDirty: false,
+            activeStandaloneTranscriptEditorRef: null,
+            standaloneTranscriptError: null,
+            isStandaloneTranscriptLoading: false,
 
             selectedMediaNotePath: null,
             currentMediaNoteTranscriptJson: null,
@@ -352,10 +355,10 @@ export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
             highlights = p.currentPdfAnnotations;
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
-        } else if (docType === 'imported_transcript') {
-            highlights = p.currentImportedTranscriptHighlights;
-            key = 'currentImportedTranscriptHighlights';
-            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
         } else if (docType === 'image') {
             highlights = p.currentImageAnnotations;
             key = 'currentImageAnnotations';
@@ -397,10 +400,10 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
             highlights = p.currentPdfAnnotations;
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
-        } else if (docType === 'imported_transcript') {
-            highlights = p.currentImportedTranscriptHighlights;
-            key = 'currentImportedTranscriptHighlights';
-            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
         } else if (docType === 'image') {
             highlights = p.currentImageAnnotations;
             key = 'currentImageAnnotations';
@@ -438,6 +441,75 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
     });
 }
 
+export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePath) {
+    project.update(p => {
+        let highlights, key, dirtyFlag, pathKey;
+        let isMediaNoteActive = false;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
+            pathKey = 'currentStandaloneTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript') {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'activeTranscriptPathInDataTab';
+            isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab === filePath;
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else if (docType === 'table') {
+            highlights = p.currentTableHighlights;
+            key = 'currentTableHighlights';
+            dirtyFlag = 'isTableHighlightsDirty';
+            pathKey = 'selectedDocumentPath';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+            pathKey = 'selectedDocumentPath';
+        }
+
+        // Only update if the file currently loaded in the store matches the highlight's file
+        if (p[pathKey] !== filePath) {
+            return p;
+        }
+
+        if (!highlights || !Array.isArray(highlights)) return p;
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const currentTags = Array.isArray(h.tags) ? [...h.tags] : [];
+                const tagIndex = currentTags.indexOf(tagName);
+                if (tagIndex > -1) {
+                    currentTags.splice(tagIndex, 1);
+                } else {
+                    currentTags.push(tagName);
+                }
+                return { ...h, tags: currentTags };
+            }
+            return h;
+        });
+
+        const updatedState = { ...p, [key]: newHighlights, [dirtyFlag]: true };
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+        return updatedState;
+    });
+    highlightsLastUpdated.set(new Date());
+}
+
 export function removeTagFromHighlightLocal(highlightId, tagName, docType, filePath) {
     project.update(p => {
         let highlights, key, dirtyFlag, pathKey;
@@ -448,12 +520,12 @@ export function removeTagFromHighlightLocal(highlightId, tagName, docType, fileP
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
             pathKey = 'selectedDocumentPath';
-        } else if (docType === 'imported_transcript') {
-            highlights = p.currentImportedTranscriptHighlights;
-            key = 'currentImportedTranscriptHighlights';
-            dirtyFlag = 'isImportedTranscriptMetadataDirty';
-            pathKey = 'currentImportedTranscriptPath';
-        } else if (docType === 'audio_transcript' || docType === 'video_transcript' || docType === 'transcript') {
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
+            pathKey = 'currentStandaloneTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript') {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
             dirtyFlag = 'isDocumentMetadataDirty';
@@ -509,12 +581,12 @@ export function manageCommentInHighlightLocal(highlightId, action, commentObj, c
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
             pathKey = 'selectedDocumentPath';
-        } else if (docType === 'imported_transcript') {
-            highlights = p.currentImportedTranscriptHighlights;
-            key = 'currentImportedTranscriptHighlights';
-            dirtyFlag = 'isImportedTranscriptMetadataDirty';
-            pathKey = 'currentImportedTranscriptPath';
-        } else if (docType === 'audio_transcript' || docType === 'video_transcript' || docType === 'transcript') {
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
+            pathKey = 'currentStandaloneTranscriptPath';
+        } else if (docType === 'audio_transcript' || docType === 'video_transcript') {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
             dirtyFlag = 'isDocumentMetadataDirty';
@@ -583,10 +655,10 @@ export function deleteComment(highlightId, commentId, docType = 'doc') {
             highlights = p.currentPdfAnnotations;
             key = 'currentPdfAnnotations';
             dirtyFlag = 'isPdfAnnotationsDirty';
-        } else if (docType === 'imported_transcript') {
-            highlights = p.currentImportedTranscriptHighlights;
-            key = 'currentImportedTranscriptHighlights';
-            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'standalone_transcript') {
+            highlights = p.currentStandaloneTranscriptHighlights;
+            key = 'currentStandaloneTranscriptHighlights';
+            dirtyFlag = 'isStandaloneTranscriptMetadataDirty';
         } else if (docType === 'image') {
             highlights = p.currentImageAnnotations;
             key = 'currentImageAnnotations';
@@ -928,12 +1000,12 @@ export function markImageAnnotationsAsSaved() {
 }
 
 
-export function prepareImportedTranscriptView(filePath) {
+export function prepareStandaloneTranscriptView(filePath, forceReload = false) {
     const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     project.update(p => {
-        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === normalizedFilePath && !!normalizedFilePath && !!p.currentImportedTranscriptLexicalJson;
-        let finalIsImportedTranscriptLoading = !normalizedFilePath ? false : !isReselectingSameLoadedPath;
-        let finalIsGlobalLoading = finalIsImportedTranscriptLoading;
+        const isReselectingSameLoadedPath = p.currentStandaloneTranscriptPath === normalizedFilePath && !!normalizedFilePath && !!p.currentStandaloneTranscriptLexicalJson && !forceReload;
+        let finalIsStandaloneTranscriptLoading = !normalizedFilePath ? false : !isReselectingSameLoadedPath;
+        let finalIsGlobalLoading = finalIsStandaloneTranscriptLoading;
         let finalStatusMessage = !normalizedFilePath ? 'Transcript selection cleared.' :
             isReselectingSameLoadedPath ? `Viewing transcript: ${normalizedFilePath.split(/[\/]/).pop()}` :
             `Loading transcript: ${normalizedFilePath.split(/[\/]/).pop()}`;
@@ -942,13 +1014,13 @@ export function prepareImportedTranscriptView(filePath) {
             ...p,
             selectedGroupId: normalizedFilePath ? null : p.selectedGroupId,
             selectedGroupData: normalizedFilePath ? null : p.selectedGroupData,
-            currentImportedTranscriptPath: normalizedFilePath,
-            currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
-            initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
-            isImportedTranscriptDirty: isReselectingSameLoadedPath ? p.isImportedTranscriptDirty : false,
-            isImportedTranscriptLoading: finalIsImportedTranscriptLoading,
-            importedTranscriptError: null,
-            activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
+            currentStandaloneTranscriptPath: normalizedFilePath,
+            currentStandaloneTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentStandaloneTranscriptLexicalJson : null,
+            initialStandaloneTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialStandaloneTranscriptLexicalJson : null,
+            isStandaloneTranscriptDirty: isReselectingSameLoadedPath ? p.isStandaloneTranscriptDirty : false,
+            isStandaloneTranscriptLoading: finalIsStandaloneTranscriptLoading,
+            standaloneTranscriptError: null,
+            activeStandaloneTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeStandaloneTranscriptEditorRef : null,
             statusMessage: finalStatusMessage,
             isLoading: finalIsGlobalLoading,
             documentTextCount: isReselectingSameLoadedPath ? p.documentTextCount : null,
@@ -961,74 +1033,74 @@ export function prepareImportedTranscriptView(filePath) {
             selectedMediaNotePath: null,
             currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, mediaNoteTranscriptError: null, isMediaNoteTranscriptLoading: false, activeMediaNoteEditorRef: null,
             // Reset imported transcript highlight state
-            initialImportedTranscriptHighlights: [],
-            currentImportedTranscriptHighlights: [],
-            isImportedTranscriptMetadataDirty: false,
+            initialStandaloneTranscriptHighlights: [],
+            currentStandaloneTranscriptHighlights: [],
+            isStandaloneTranscriptMetadataDirty: false,
         };
     });
 }
-export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
-export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
-export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
-export function setImportedTranscriptHighlights(highlights, markDirty = true) {
+export function setLoadedStandaloneTranscriptData(filePath, lexicalJsonContent) { const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentStandaloneTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentStandaloneTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialStandaloneTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isStandaloneTranscriptDirty: false, isStandaloneTranscriptLoading: false, standaloneTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isStandaloneTranscriptLoading && p.currentStandaloneTranscriptPath === filePath) { return { ...p, isStandaloneTranscriptLoading: false, isLoading: false }; } return p; } }); }
+export function setStandaloneTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentStandaloneTranscriptPath === filePath) { return { ...p, currentStandaloneTranscriptLexicalJson: createMinimalValidLexicalJson(), initialStandaloneTranscriptLexicalJson: createMinimalValidLexicalJson(), isStandaloneTranscriptDirty: false, isStandaloneTranscriptLoading: false, standaloneTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading transcript ${filePath.split(/[\\/]/).pop()}.`, activeStandaloneTranscriptEditorRef: null, isLoading: false }; } else if (p.isStandaloneTranscriptLoading && p.currentStandaloneTranscriptPath === filePath) { return { ...p, isStandaloneTranscriptLoading: false, isLoading: false }; } return p; }); }
+export function setStandaloneTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentStandaloneTranscriptPath === filePath) { const initial = p.initialStandaloneTranscriptLexicalJson; const current = p.currentStandaloneTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isStandaloneTranscriptDirty !== newDirtyState) { return { ...p, currentStandaloneTranscriptLexicalJson: newLexicalJsonContent, isStandaloneTranscriptDirty: newDirtyState, }; } } return p; }); }
+export function setStandaloneTranscriptHighlights(highlights, markDirty = true) {
     project.update(store => {
         const currentJson = JSON.stringify(highlights);
 
         if (!markDirty) {
-            store.initialImportedTranscriptHighlights = JSON.parse(currentJson);
+            store.initialStandaloneTranscriptHighlights = JSON.parse(currentJson);
         }
 
-        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
+        const initialJson = JSON.stringify(store.initialStandaloneTranscriptHighlights);
 
-        store.currentImportedTranscriptHighlights = highlights;
+        store.currentStandaloneTranscriptHighlights = highlights;
         if (markDirty) {
-            store.isImportedTranscriptMetadataDirty = initialJson !== currentJson;
+            store.isStandaloneTranscriptMetadataDirty = initialJson !== currentJson;
         }
         return store;
     });
     highlightsLastUpdated.set(new Date());
 }
 
-export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) {
+export function markStandaloneTranscriptAsSaved(filePath, savedLexicalJsonContent) {
     project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            p.initialImportedTranscriptLexicalJson = savedLexicalJsonContent;
-            p.currentImportedTranscriptLexicalJson = savedLexicalJsonContent;
-            p.isImportedTranscriptDirty = false;
+        if (p.currentStandaloneTranscriptPath === filePath) {
+            p.initialStandaloneTranscriptLexicalJson = savedLexicalJsonContent;
+            p.currentStandaloneTranscriptLexicalJson = savedLexicalJsonContent;
+            p.isStandaloneTranscriptDirty = false;
 
             // Also update highlight baseline
-            p.initialImportedTranscriptHighlights = JSON.parse(JSON.stringify(p.currentImportedTranscriptHighlights));
-            p.isImportedTranscriptMetadataDirty = false;
+            p.initialStandaloneTranscriptHighlights = JSON.parse(JSON.stringify(p.currentStandaloneTranscriptHighlights));
+            p.isStandaloneTranscriptMetadataDirty = false;
 
             p.statusMessage = `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}`;
         }
         return p;
     });
 }
-export function markImportedTranscriptChangesDiscarded(filePath) {
+export function markStandaloneTranscriptChangesDiscarded(filePath) {
     project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            p.currentImportedTranscriptLexicalJson = p.initialImportedTranscriptLexicalJson;
-            p.isImportedTranscriptDirty = false;
+        if (p.currentStandaloneTranscriptPath === filePath) {
+            p.currentStandaloneTranscriptLexicalJson = p.initialStandaloneTranscriptLexicalJson;
+            p.isStandaloneTranscriptDirty = false;
 
             // Also revert highlights
-            p.currentImportedTranscriptHighlights = JSON.parse(JSON.stringify(p.initialImportedTranscriptHighlights));
-            p.isImportedTranscriptMetadataDirty = false;
+            p.currentStandaloneTranscriptHighlights = JSON.parse(JSON.stringify(p.initialStandaloneTranscriptHighlights));
+            p.isStandaloneTranscriptMetadataDirty = false;
 
             p.statusMessage = 'Imported transcript changes discarded.';
         }
         return p;
     });
 }
-export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
-export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
+export function setActiveStandaloneTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeStandaloneTranscriptEditorRef: editorInstance })); }
+export function clearActiveStandaloneTranscriptEditorRef() { project.update(p => ({ ...p, activeStandaloneTranscriptEditorRef: null })); }
 
-export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
+export function prepareMediaNoteView(mediaPath, transcriptPath = null, forceReload = false) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
     const normalizedTranscriptPath = transcriptPath ? transcriptPath.replace(/\\/g, '/') : null;
 
     project.update(p => {
-        const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson);
+        const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson || forceReload);
         let finalIsGlobalLoading = p.isLoading;
         if (newIsMediaNoteLoading) finalIsGlobalLoading = true;
         else if (!normalizedMediaPath) finalIsGlobalLoading = false;
@@ -1055,8 +1127,8 @@ export function prepareMediaNoteView(mediaPath, transcriptPath = null) {
             // Clear other fieldnotes states
             selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, documentTextCount: null, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
-            currentImportedTranscriptPath: null,
-            currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
+            currentStandaloneTranscriptPath: null,
+            currentStandaloneTranscriptLexicalJson: null, initialStandaloneTranscriptLexicalJson: null, isStandaloneTranscriptDirty: false, isStandaloneTranscriptLoading: false, standaloneTranscriptError: null, activeStandaloneTranscriptEditorRef: null,
             activeTranscriptPathInDataTab: normalizedTranscriptPath, // Set if provided, otherwise cleared
         };
     });
@@ -1280,7 +1352,7 @@ export function clearActiveMediaNoteEditorRef() { project.update(p => { if (p.ac
 
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
-export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting ? true : p.isLoading })); }
+export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, standaloneTranscriptError: isImporting ? null : p.standaloneTranscriptError, isLoading: isImporting ? true : p.isLoading })); }
 export function showConversionPrompt(fileName, onConfirm, onCancel) { project.update(p => ({ ...p, showConfirmConversionModal: true, conversionFileName: fileName, onConversionConfirm: onConfirm, onConversionCancel: onCancel, })); }
 export function hideConversionPrompt() { project.update(p => ({ ...p, showConfirmConversionModal: false, conversionFileName: '', onConversionConfirm: () => {}, onConversionCancel: () => {}, })); }
 
@@ -1349,7 +1421,7 @@ listen('media_renamed', (event) => {
                         updatedNode.path = newAbsMediaPath;
                         updatedNode.relative_path = newRelMediaPath;
                         nodeChanged = true;
-                    } else if (updatedNode.file_type === 'transcript' && updatedNode.path.includes(`/${oldStem}/`)) {
+                    } else if ((updatedNode.file_type === 'audio_transcript' || updatedNode.file_type === 'video_transcript') && updatedNode.path.includes(`/${oldStem}/`)) {
                         if (updatedNode.name.startsWith(oldStem)) {
                             updatedNode.name = updatedNode.name.replace(oldStem, newStem);
                         }

@@ -129,8 +129,9 @@
     function handleTableContainerClick(e) {
         if (currentActiveViewType === 'pivot' || !mainPanelContainer || !tabulatorInstance) return;
 
-        
+        const cellEl = e.target.closest('.tabulator-cell');
         const rowEl = e.target.closest('.tabulator-row');
+        
         if (rowEl) {
             try {
                 const row = tabulatorInstance.getRow(rowEl);
@@ -139,7 +140,7 @@
                     const rowIndex = rowData.harvey_internal_id;
                     const highlights = get(project).currentTableHighlights || [];
                     
-                    // Find the highlight this row belongs to
+                    // Find the highlight this row/cell belongs to
                     const existingHighlight = highlights.find(h => {
                         const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
                         return indices.includes(rowIndex);
@@ -156,7 +157,9 @@
                             selectedRows = [];
                         }
 
-                        const rect = rowEl.getBoundingClientRect();
+                        // Use cell element for positioning if available, otherwise fallback to row
+                        const targetEl = cellEl || rowEl;
+                        const rect = targetEl.getBoundingClientRect();
                         const showBelow = rect.top < 150;
                         
                         tableModifyToolbarPosition = {
@@ -180,26 +183,46 @@
             if (ranges && ranges.length > 0 && !showTableModifyToolbar) {
                 const range = ranges[0];
                 const rows = range.getRows();
-                if (rows && rows.length > 1) {
-                    selectedRows = rows;
+                const cols = range.getColumns();
 
+                // Only show on drag end if it's a multi-cell selection (more than 1x1)
+                if (rows && cols && (rows.length > 1 || cols.length > 1)) {
+                    selectedRows = rows;
                     clickedRow = null;
                     lastRangeSelectedTime = Date.now();
                     
+                    // In a multi-cell selection, anchor to the bottom-right cell
                     const lastRow = rows[rows.length - 1];
-                    const lastRowEl = lastRow.getElement();
-                    if (lastRowEl) {
-                        const rect = lastRowEl.getBoundingClientRect();
-                        const showBelow = rect.top < 150;
+                    const lastCol = cols[cols.length - 1];
+                    
+                    try {
+                        const cell = lastRow.getCells().find(c => c.getColumn().getField() === lastCol.getField());
+                        const cellEl = cell ? cell.getElement() : lastRow.getElement();
                         
-                        tableModifyToolbarPosition = {
-                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
-                            left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
-                        };
-                        showTableModifyToolbar = true;
+                        if (cellEl) {
+                            const rect = cellEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                            };
+                            showTableModifyToolbar = true;
+                        }
+                    } catch (err) {
+                        // Fallback to row element if cell target fails
+                        const lastRowEl = lastRow.getElement();
+                        if (lastRowEl) {
+                            const rect = lastRowEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                            };
+                            showTableModifyToolbar = true;
+                        }
                     }
                 }
-
             }
         }, 100);
     }
@@ -622,7 +645,7 @@
         } else if (category === 'Transcripts') {
             // Standalone transcripts (imported)
             viewType = 'transcript';
-            originalDocType = 'imported_transcript';
+            originalDocType = 'standalone_transcript';
         } else if (category === 'Tables') {
             viewType = 'table';
             originalDocType = 'csv';

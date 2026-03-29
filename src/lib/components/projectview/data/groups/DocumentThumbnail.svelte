@@ -65,8 +65,12 @@
         function recurse(o) {
             if (!o || count > 30) return;
             if (typeof o === 'string' && o.length > 3 && !o.includes('{')) {
-                chunks.push(o);
-                count++;
+                // Ignore empty lexical struct keys that end up here when a doc is actually empty
+                const ignored = ['root', 'paragraph', 'ltr', 'rtl', 'text'];
+                if (!ignored.includes(o.toLowerCase())) {
+                    chunks.push(o);
+                    count++;
+                }
             } else if (Array.isArray(o)) {
                 o.forEach(recurse);
             } else if (typeof o === 'object') {
@@ -168,7 +172,7 @@
     onMount(loadPreview);
 </script>
 
-<div class="w-full h-full p-3 bg-white dark:bg-gray-950 overflow-hidden relative group/thumb border border-transparent transition-colors duration-200">
+<div class="w-full h-full p-2.5 overflow-hidden relative group/thumb transition-colors duration-200">
     {#if isLoading}
         <div class="absolute inset-0 flex items-center justify-center">
             <div class="w-5 h-5 border-2 border-blue-500/10 border-t-blue-500/50 rounded-full animate-spin"></div>

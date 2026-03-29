@@ -28,7 +28,7 @@
     'doc': 'Documents',
     'image': 'Images',
     'media': 'Media Files',
-    'imported_transcript': 'Transcripts',
+    'standalone_transcript': 'Transcripts',
     'transcript': 'Transcripts',
     'table': 'Tables',
     'note': 'Notes'

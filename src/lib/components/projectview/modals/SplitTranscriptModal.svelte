@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/modals/SplitTranscriptModal.svelte -->
 <script>
     import { createEventDispatcher } from 'svelte';
-    import { project, setImportedTranscriptSplit } from '$lib/stores/projectStore.js';
+    import { project, setStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
     import { 
 		Modal,
         Button, 
@@ -28,12 +28,12 @@
 
     $: {
         const p = $project;
-        const currentPath = p.currentImportedTranscriptPath || p.activeTranscriptPathInDataTab;
+        const currentPath = p.currentStandaloneTranscriptPath || p.activeTranscriptPathInDataTab;
         if (currentPath) {
             basename(currentPath).then(name => currentFileName = name);
             
-            if (p.currentImportedTranscriptPath) {
-                transcriptOptions = p.importedTranscriptFiles
+            if (p.currentStandaloneTranscriptPath) {
+                transcriptOptions = p.standaloneTranscriptFiles
                     .map(f => {
                         const fullPath = normalizePath(`${p.baseDirectory}/${f.relativePath || f.relative_path}`);
                         return {
@@ -89,16 +89,16 @@
     }
 
     // Reactive row count calculation
-    $: if ($project.showSplitTranscriptModal && ($project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab) && selectedPartnerPath) {
-        calculateRowCounts($project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab, selectedPartnerPath);
+    $: if ($project.showSplitTranscriptModal && ($project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab) && selectedPartnerPath) {
+        calculateRowCounts($project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab, selectedPartnerPath);
     }
 
     async function calculateRowCounts(currentPath, partnerPath) {
         isLoadingCounts = true;
         try {
             // Count current transcript rows (from store if available, else file)
-            if ($project.currentImportedTranscriptLexicalJson && $project.currentImportedTranscriptPath === currentPath) {
-                currentTranscriptRowCount = countRowsInJson($project.currentImportedTranscriptLexicalJson);
+            if ($project.currentStandaloneTranscriptLexicalJson && $project.currentStandaloneTranscriptPath === currentPath) {
+                currentTranscriptRowCount = countRowsInJson($project.currentStandaloneTranscriptLexicalJson);
             } else if ($project.currentMediaNoteTranscriptJson && $project.activeTranscriptPathInDataTab === currentPath) {
                 currentTranscriptRowCount = countRowsInJson($project.currentMediaNoteTranscriptJson);
             } else {
@@ -140,8 +140,8 @@
 
     function handleConfirm() {
         if (selectedPartnerPath) {
-            setImportedTranscriptSplit(
-                $project.currentImportedTranscriptPath || $project.activeTranscriptPathInDataTab, 
+            setStandaloneTranscriptSplit(
+                $project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab,
                 selectedPartnerPath, 
                 $project.pendingSplitOrientation
             );

@@ -7,14 +7,14 @@
     import DocumentView from './documents/DocumentView.svelte';
     import TableView from './tables/TableView.svelte';
     import ImageView from './images/ImageView.svelte';
-    import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte';
+    import StandaloneTranscriptView from './standalone_transcripts/StandaloneTranscriptView.svelte';
     import MediaView from './media/MediaView.svelte';
     import GroupDetailView from './groups/GroupDetailView.svelte';
     import InfoPanel from './shared_panels/InfoPanel.svelte';
     import HighlightsPanel from './shared_panels/HighlightsPanel.svelte';
     import AttachmentsPanel from './shared_panels/AttachmentsPanel.svelte';
     import RightBar from './shared_panels/RightBar.svelte';
-    import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
+    import { project, prepareDocumentView, prepareStandaloneTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
     import { checkUnsavedChangesThenProceed, normalizePath } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
     import { slide } from 'svelte/transition';
@@ -38,7 +38,7 @@
     export let tableViewRef;
     let imageViewRef;
     let documentViewRef;
-    let importedTranscriptViewRef;
+    let standaloneTranscriptViewRef;
 
     export async function getExportData() {
         console.log("[DataView] getExportData called. tableViewRef:", !!tableViewRef);
@@ -61,8 +61,8 @@
         console.log('[DataView] Received requestInsertAttachedImage:', imagePath);
         if (activeViewType === 'documents' && documentViewRef && typeof documentViewRef.insertImage === 'function') {
             documentViewRef.insertImage(imagePath);
-        } else if (activeViewType === 'imported_transcript' && importedTranscriptViewRef && typeof importedTranscriptViewRef.insertImage === 'function') {
-            importedTranscriptViewRef.insertImage(imagePath);
+        } else if (activeViewType === 'standalone_transcript' && standaloneTranscriptViewRef && typeof standaloneTranscriptViewRef.insertImage === 'function') {
+            standaloneTranscriptViewRef.insertImage(imagePath);
         } else {
             console.warn("[DataView] Active view does not support inserting images");
         }
@@ -77,11 +77,11 @@
             } else {
                 console.warn("[DataView] documentViewRef.playMedia is not a function");
             }
-        } else if (activeViewType === 'imported_transcript' && importedTranscriptViewRef) {
-            if (typeof importedTranscriptViewRef.playMedia === 'function') {
-                importedTranscriptViewRef.playMedia(mediaPath);
+        } else if (activeViewType === 'standalone_transcript' && standaloneTranscriptViewRef) {
+            if (typeof standaloneTranscriptViewRef.playMedia === 'function') {
+                standaloneTranscriptViewRef.playMedia(mediaPath);
             } else {
-                console.warn("[DataView] importedTranscriptViewRef.playMedia is not a function");
+                console.warn("[DataView] standaloneTranscriptViewRef.playMedia is not a function");
             }
         }
     }
@@ -203,17 +203,17 @@
             pathFromStore = value.selectedMediaNotePath;
             typeFromStore = 'media_note';
             itemTypeForInfo = 'doc'; // Treat the associated transcript as a doc for panels
-        } else if (value.currentImportedTranscriptPath) {
-            pathFromStore = value.currentImportedTranscriptPath;
-            typeFromStore = 'imported_transcript';
-            itemTypeForInfo = 'imported_transcript';
+        } else if (value.currentStandaloneTranscriptPath) {
+            pathFromStore = value.currentStandaloneTranscriptPath;
+            typeFromStore = 'standalone_transcript';
+            itemTypeForInfo = 'standalone_transcript';
         } else if (value.selectedDocumentPath) {
             pathFromStore = value.selectedDocumentPath;
             const lowerPath = pathFromStore.toLowerCase();
             const extension = lowerPath.split('.').pop();
 
             if (lowerPath.endsWith('.pdf') ||
-                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => normalizePath(`${value.baseDirectory}/${f.relativePath}`) !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
+                (lowerPath.endsWith('.json') && (!value.standaloneTranscriptFiles || value.standaloneTranscriptFiles.every(f => normalizePath(`${value.baseDirectory}/${f.relativePath}`) !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
                  lowerPath.endsWith('.txt') ||
                  lowerPath.endsWith('.md')) {
                 typeFromStore = 'documents';
@@ -247,7 +247,7 @@
              console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
 
-        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'imported_transcript' && itemTypeForInfo !== 'table' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
+        if (itemTypeForInfo !== 'doc' && itemTypeForInfo !== 'standalone_transcript' && itemTypeForInfo !== 'table' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
             panelStateStore.setActiveInfoPanelTab('metadata');
         }
     });
@@ -306,14 +306,14 @@
 
         if (typeForStore) {
             prepareDocumentView(pathForView, typeForStore, hasHeadersForView !== undefined ? hasHeadersForView : true);
-        } else if (typeForView === 'transcript' || typeForView === 'imported_transcript') {
-            prepareImportedTranscriptView(pathForView);
+        } else if (typeForView === 'standalone_transcript') {
+            prepareStandaloneTranscriptView(pathForView);
         } else if (typeForView === 'media_note') {
             prepareMediaNoteView(pathForView);
         } else {
             console.warn(`[DataView] Unknown typeForView: '${typeForView}'. Clearing views.`);
             prepareDocumentView(null, 'placeholder');
-            prepareImportedTranscriptView(null);
+            prepareStandaloneTranscriptView(null);
             prepareMediaNoteView(null);
             activeItemTypeForInfoPanel = null;
         }
@@ -394,8 +394,8 @@
                 {:else if activeViewType === 'tables'}
                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} bind:activeSubItemPath bind:activeSubItemType on:requestviewchange={(event) => handleRequestViewChange(event.detail)} />                 {:else if activeViewType === 'images'}
                      <ImageView bind:this={imageViewRef} itemPath={activeItemPath} />
-                {:else if activeViewType === 'imported_transcript'}
-                     <ImportedTranscriptView bind:this={importedTranscriptViewRef} itemPath={activeItemPath} />
+                {:else if activeViewType === 'standalone_transcript'}
+                     <StandaloneTranscriptView bind:this={standaloneTranscriptViewRef} itemPath={activeItemPath} />
                 {:else if activeViewType === 'media_note'}
                      <MediaView
                         itemPath={activeItemPath}

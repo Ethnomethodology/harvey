@@ -349,11 +349,11 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
     }
     let project_base_dir = harvey_files_dir.parent().ok_or_else(|| CommandError::from("Could not get project base dir"))?;
     let project_base_dir_name = project_base_dir.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get project dir name"))?;
-    let project_xml_path = project_base_dir.join(format!("{}.harvey.xml", project_base_dir_name));
+    let project_xml_path = project_base_dir.join(format!("{}.harvey", project_base_dir_name));
     let project_xml_path_str = project_xml_path.to_string_lossy().to_string();
 
     if !project_xml_path.exists() {
-        return Err(CommandError::from(format!("Project XML not found: {:?}", project_xml_path)));
+        return Err(CommandError::from(format!("Project Manifest not found: {:?}", project_xml_path)));
     }
 
     let mut trim_counter = 1;
@@ -451,7 +451,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 
     info!("[Trim Backend] Updating XML: {}", project_xml_path.display());
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let original_entry = project_data.find_media(&original_media_identifier).cloned();
     let (original_speakers, _original_transcripts, is_video_source) = match original_entry {
@@ -610,6 +610,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             language_code: None,
             properties: None,
             file_type: String::new(),
+            thumbnail: None,
         };
 
         let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
@@ -741,7 +742,7 @@ pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<()
     }
 
     let xml_content = fs::read_to_string(&xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
     let mut found_and_updated = false;
 
     if let Some(media_file) = project_data.find_media_by_relative_path_mut(&payload.media_relative_path) {
@@ -875,7 +876,7 @@ pub async fn save_transcript_json(
     info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}', Stem Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path, stem_rel_path);
 
     let xml_content = fs::read_to_string(&normalized_project_xml_path_buf)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
     let mut found_media = false;
 
     if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_rel_path) {
@@ -948,7 +949,7 @@ pub async fn save_transcript_json(
         &project_uuid_for_db,
         &transcript_metadata,
         &transcript_relative_path,
-        "transcript",
+        &file_type,
         None
     )?;
 
@@ -2885,6 +2886,7 @@ pub async fn stop_live_transcription(
                             language_code: metadata_from_db.language_code,
                             properties: metadata_from_db.properties,
                             file_type: metadata_from_db.file_type.unwrap_or_else(|| "document".to_string()),
+                            thumbnail: metadata_from_db.thumbnail,
                         };
 
                         if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
@@ -2919,6 +2921,7 @@ pub async fn stop_live_transcription(
                             language_code: None,
                             properties: None,
                             file_type: "document".to_string(),
+                            thumbnail: None,
                         };
 
                         let attachments_json_string = json!(audio_files).to_string();

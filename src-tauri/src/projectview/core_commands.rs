@@ -410,7 +410,7 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
     let project_base_dir = project_xml_path.parent().ok_or_else(|| "Could not get project base directory.".to_string())?;
 
     let project_data_for_uuid: ProjectXml = match fs::read_to_string(&project_xml_path){
-        Ok(content) => match quick_xml::de::from_str(&content) {
+        Ok(content) => match serde_json::from_str(&content) {
             Ok(data) => data,
             Err(e) => return Err(format!("Failed to parse project XML for UUID: {}", e)),
         },
@@ -474,7 +474,7 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             // Assuming TRANSCRIPTS_DIR implies it's an imported transcript if not under a media stem.
             // The logic in load_project_data for FileEntry might be more robust here.
             // For now, following the provided snippet's logic.
-            file_type = "imported_transcript".to_string();
+            file_type = "standalone_transcript".to_string();
         }
         // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
         // or use/enhance shared_utils::determine_asset_type if applicable.
@@ -495,6 +495,9 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             created_at,
             title,
             description,
+            waveform_data: meta_opt.as_ref().and_then(|meta| meta.waveform_data.clone()),
+            duration_seconds: meta_opt.as_ref().and_then(|meta| meta.duration_seconds),
+            thumbnail_data: meta_opt.as_ref().and_then(|meta| meta.thumbnail.clone()),
         });
     }
     Ok(associated_files)
@@ -584,6 +587,17 @@ pub async fn add_file_to_existing_group(project_id: String, group_id: String, fi
             Err(e.to_string())
         }
     }
+}
+
+#[tauri::command]
+pub async fn save_pdf_metadata(
+    project_id: String,
+    asset_relative_path: String,
+    thumbnail: Vec<u8>,
+) -> Result<(), String> {
+    info!("[CMD] save_pdf_metadata for project_id: {}, path: {}", project_id, asset_relative_path);
+    db_handler::save_pdf_metadata_to_db(&project_id, &asset_relative_path, &thumbnail)
+        .map_err(|e| format!("Failed to save PDF metadata to DB: {}", e))
 }
 // --- End Group Commands ---
 
@@ -741,7 +755,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     ensure_base_asset_dirs(project_base_dir)?;
 
     let project_xml_content = fs::read_to_string(&xml_path).map_err(|e| CommandError::from(format!("Failed to read XML {}: {}", xml_path.display(), e)))?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
+    let mut project_data: ProjectXml = serde_json::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
 
     let mut was_uuid_generated = false;
     if project_data.project_uuid.is_empty() {
@@ -755,25 +769,41 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     info!("[Backend Load XML] Project Name: {}", project_name);
     info!("[Backend Load XML] Project UUID: {}", project_data.project_uuid); // Log the UUID being used
 
-    // Identity Check / Self-Healing:
+    // --- Parse Project Assets ---
     // Register this project in the SQLite DB. This handles cases where:
     // 1. It's a fresh import (DB didn't know about it).
     // 2. The project folder was moved (DB has old path).
-    // 3. The XML was overwritten (DB needs to align with new UUID).
+    // 3. The Manifest was overwritten (DB needs to align with new UUID).
     if let Err(e) = db_handler::add_project_to_db(
         &project_data.project_uuid,
         &project_name,
         &base_directory,
         &xml_path.to_string_lossy()
     ) {
-        error!("[Backend Load XML] Failed to register project identity in DB: {}", e);
+        error!("[Backend Load Manifest] Failed to register project identity in DB: {}", e);
+    }
+
+    // Performance optimization check: Do we have assets in the database?
+    let db_path = db_handler::get_db_path().map_err(|e| CommandError::Message(e.to_string()))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| CommandError::Message(e.to_string()))?;
+    let asset_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM asset_metadata WHERE project_id = ?",
+        [&project_data.project_uuid],
+        |row| row.get(0)
+    ).unwrap_or(0);
+
+    let is_new_project_in_db = asset_count == 0;
+    if is_new_project_in_db {
+        info!("[Backend Load Manifest] Project is new to SQLite. Running deep sync/auto-healing.");
+    } else {
+        info!("[Backend Load Manifest] Project already exists in SQLite ({} assets). Skipping heavy database sync.", asset_count);
     }
 
     let mut file_entries: Vec<FileEntry> = Vec::new();
     let mut was_xml_healed = false;
 
     // Helper closure to process media entries from different lists
-    let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>, dir_name: &str, was_healed: &mut bool| -> Result<(), CommandError> {
+    let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>, dir_name: &str, was_healed: &mut bool, is_new_project: bool| -> Result<(), CommandError> {
         let dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, dir_name);
         for media_entry in entries {
             // Ignore legacy Media folder entries
@@ -891,12 +921,12 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
                     let transcript_file_type = if let Some(metadata) = media_asset_metadata {
                         match metadata.asset_type.as_str() {
-                            "audio" => "audio-transcript".to_string(),
-                            "video" => "video-transcript".to_string(),
-                            _ => "transcript".to_string(),
+                            "audio" => "audio_transcript".to_string(),
+                            "video" => "video_transcript".to_string(),
+                            _ => "audio_transcript".to_string(),
                         }
                     } else {
-                        "transcript".to_string()
+                        "audio_transcript".to_string()
                     };
 
                     media_children.push(FileEntry {
@@ -932,13 +962,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         Ok(())
     };
 
-    process_media_list(&mut project_data.audio_files.files, AUDIOS_DIR, &mut was_xml_healed)?;
-    process_media_list(&mut project_data.video_files.files, VIDEOS_DIR, &mut was_xml_healed)?;
-    process_media_list(&mut project_data.media_files.files, MEDIA_DIR, &mut was_xml_healed)?;
+    process_media_list(&mut project_data.audio_files.files, AUDIOS_DIR, &mut was_xml_healed, is_new_project_in_db)?;
+    process_media_list(&mut project_data.video_files.files, VIDEOS_DIR, &mut was_xml_healed, is_new_project_in_db)?;
+    process_media_list(&mut project_data.media_files.files, MEDIA_DIR, &mut was_xml_healed, is_new_project_in_db)?; // Legacy folder
 
     // Add imported transcript files to the main file_entries tree
-    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
-        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+    for standalone_transcript_entry in project_data.standalone_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&standalone_transcript_entry.relative_path);
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
@@ -949,8 +979,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             file_entries.push(FileEntry {
                 name: transcript_file_name,
                 path: transcript_file_canonical,
-                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
-                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                relative_path: standalone_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "standalone_transcript".to_string(), // Explicitly set to standalone_transcript
                 is_directory: false,
                 parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
                 depth: 3, // Assuming it's at the same level as media stems
@@ -964,8 +994,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         }
     }
     // Add imported transcript files to the main file_entries tree
-    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
-        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+    for standalone_transcript_entry in project_data.standalone_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&standalone_transcript_entry.relative_path);
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
@@ -976,8 +1006,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             file_entries.push(FileEntry {
                 name: transcript_file_name,
                 path: transcript_file_canonical,
-                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
-                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                relative_path: standalone_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "standalone_transcript".to_string(), // Explicitly set to standalone_transcript
                 is_directory: false,
                 parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
                 depth: 3, // Assuming it's at the same level as media stems
@@ -1088,12 +1118,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
-        project_data.imported_transcript_files.files.len()
+        project_data.standalone_transcript_files.files.len()
     );
 
     // --- SYNC & SELF-HEALING: Ensure DB has metadata for all XML assets ---
-    let project_id_sync = project_data.project_uuid.clone();
-    let mut current_xml_relative_paths = std::collections::HashSet::new();
+    if is_new_project_in_db {
+        let project_id_sync = project_data.project_uuid.clone();
+        let mut current_xml_relative_paths = std::collections::HashSet::new();
 
     // Helper closure to sync media entries
     let mut sync_media_list = |entries: &Vec<MediaFileEntryXml>| -> Result<(), CommandError> {
@@ -1146,20 +1177,20 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                         file_type: t_file_type.to_string(),
                         ..FileMetadata::default()
                     };
-                    let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, "transcript", None);
+                    let _ = db_handler::save_asset_metadata(&project_id_sync, &t_file_meta, &t_rel_path, &t_file_type, None);
                 }
             }
         }
         Ok(())
     };
 
-    sync_media_list(&project_data.audio_files.files)?;
-    sync_media_list(&project_data.video_files.files)?;
-    sync_media_list(&project_data.media_files.files)?;
-    info!("[DB SYNC] Finished syncing media items.");
+        sync_media_list(&project_data.audio_files.files)?;
+        sync_media_list(&project_data.video_files.files)?;
+        sync_media_list(&project_data.media_files.files)?;
+        info!("[DB SYNC] Finished syncing media items.");
 
-    // 2. Sync Document Files
-    for doc in &project_data.document_files.files {
+        // 1. Sync Documents
+        for doc in &project_data.document_files.files {
         let rel_path = doc.relative_path.clone().replace("\\", "/");
         current_xml_relative_paths.insert(rel_path.clone());
         let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
@@ -1186,6 +1217,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: doc.language_code.clone(),
                 properties: None,
                 file_type: "document".to_string(),
+                thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "document", None);
         } else if let Some(mut meta_db) = existing_meta {
@@ -1213,14 +1245,15 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
                     file_type: meta_db.file_type.unwrap_or("document".to_string()),
+                    thumbnail: meta_db.thumbnail,
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
             }
         }
     }
 
-    // 3. Sync Table Files
-    for table in &project_data.table_files.files {
+        // 2. Sync Table Files
+        for table in &project_data.table_files.files {
         let rel_path = table.relative_path.clone().replace("\\", "/");
         current_xml_relative_paths.insert(rel_path.clone());
         let existing_meta = db_handler::load_asset_metadata(&project_id_sync, &rel_path).ok().flatten();
@@ -1252,6 +1285,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: table.language_code.clone(),
                 properties: Some(serde_json::to_string(&props_map).unwrap()),
                 file_type: "table".to_string(),
+                thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "table", None);
         } else if let Some(mut meta_db) = existing_meta {
@@ -1299,14 +1333,15 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
                     file_type: meta_db.file_type.unwrap_or("table".to_string()),
+                    thumbnail: meta_db.thumbnail,
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
             }
         }
     }
 
-    // 4. Sync Imported Transcripts
-    for transcript in &project_data.imported_transcript_files.files {
+        // 3. Sync Imported Transcripts
+        for transcript in &project_data.standalone_transcript_files.files {
         let rel_path = transcript.relative_path.clone().replace("\\", "/");
         current_xml_relative_paths.insert(rel_path.clone());
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
@@ -1330,14 +1365,15 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 waveform_data: None,
                 language_code: None,
                 properties: None,
-                file_type: "transcript".to_string(),
+                file_type: "standalone_transcript".to_string(),
+                thumbnail: None,
             };
-            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "imported_transcript", None);
+            let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "standalone_transcript", None);
         }
     }
 
-    // 5. Sync Images
-    for image in &project_data.image_files.files {
+        // 4. Sync Images
+        for image in &project_data.image_files.files {
         let rel_path = image.relative_path.clone().replace("\\", "/");
         current_xml_relative_paths.insert(rel_path.clone());
         if let Ok(None) = db_handler::load_asset_metadata(&project_id_sync, &rel_path) {
@@ -1362,50 +1398,52 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: None,
                 properties: None,
                 file_type: "image".to_string(),
+                thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "image", None);
         }
     }
 
-    // 6. PRUNE: Remove metadata for files no longer in XML
-    // This handles the "ghost" items issue in the dropdown.
-    if let Ok(db_path) = db_handler::get_db_path() {
-        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
-            let mut stmt = conn.prepare("SELECT asset_relative_path FROM asset_metadata WHERE project_id = ?1")?;
-            let db_paths: Vec<String> = stmt.query_map(params![project_id_sync], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
-            
-            for db_path in db_paths {
-                // If it's an attachment, we don't prune it yet as they aren't explicitly in the main XML lists
-                if db_path.contains("/attachments/") { continue; }
+        // 5. PRUNE: Remove metadata for files no longer in XML
+        // This handles the "ghost" items issue in the dropdown.
+        if let Ok(db_path) = db_handler::get_db_path() {
+            if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+                let mut stmt = conn.prepare("SELECT asset_relative_path FROM asset_metadata WHERE project_id = ?1")?;
+                let db_paths: Vec<String> = stmt.query_map(params![project_id_sync], |row| row.get(0))?
+                    .filter_map(|r| r.ok())
+                    .collect();
 
-                if !current_xml_relative_paths.contains(&db_path) {
-                    info!("[Backend Prune] Removing stale metadata for: {} (project_id: {})", db_path, project_id_sync);
-                    let _ = db_handler::delete_asset_metadata(&project_id_sync, &db_path);
+                for db_path in db_paths {
+                    // If it's an attachment, we don't prune it yet as they aren't explicitly in the main XML lists
+                    if db_path.contains("/attachments/") { continue; }
+
+                    if !current_xml_relative_paths.contains(&db_path) {
+                        info!("[Backend Prune] Removing stale metadata for: {} (project_id: {})", db_path, project_id_sync);
+                        let _ = db_handler::delete_asset_metadata(&project_id_sync, &db_path);
+                    }
                 }
             }
         }
-    }
+    } // End of if is_new_project_in_db
 
     if was_uuid_generated || was_xml_healed {
         let save_reason = if was_xml_healed { "healed data" } else { "new UUID" };
         match save_project_xml(&xml_path, &project_data) {
-            Ok(_) => info!("[Backend Load XML] Successfully saved updated project XML with {} to {}", save_reason, xml_path.display()),
-            Err(e) => warn!("[Backend Load XML] Failed to save updated project XML with {} to {}: {}", save_reason, xml_path.display(), e),
+            Ok(_) => info!("[Backend Load Manifest] Successfully saved updated project manifest with {} to {}", save_reason, xml_path.display()),
+            Err(e) => warn!("[Backend Load Manifest] Failed to save updated project manifest with {} to {}: {}", save_reason, xml_path.display(), e),
         }
     }
 
     Ok(ProjectViewData {
         project_name,
-        project_xml_path,
+        project_xml_path: project_xml_path.to_string(),
         base_directory,
         project_uuid: project_data.project_uuid.clone(),
         files: file_entries,
         document_files: project_data.document_files.files,
         table_files: project_data.table_files.files,
         image_files: project_data.image_files.files,
-        imported_transcript_files: project_data.imported_transcript_files.files,
+        standalone_transcript_files: project_data.standalone_transcript_files.files,
         document_metadata_files: project_data.document_metadata_files.files,
     })
 }
@@ -1547,7 +1585,7 @@ pub async fn import_media(
 
     // Load project XML to check for conflicts
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(media_dir_name);
     fs::create_dir_all(&media_asset_dir)?;
@@ -1605,6 +1643,7 @@ pub async fn import_media(
         language_code: None,
         properties: None,
         file_type: final_asset_type.clone(),
+        thumbnail: None,
     };
 
     let db_key_relative_path = Path::new(HARVEY_FILES_DIR)
@@ -1695,7 +1734,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
     // Get project_id for DB operations
     let project_xml_content_for_uuid = fs::read_to_string(&xml_path_buf)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
     let project_id_for_db = project_data_for_uuid.project_uuid;
     if project_id_for_db.is_empty() {
@@ -1720,14 +1759,14 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             let tables_folder = format!("{}/", TABLES_DIR.to_lowercase());
             let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if item_type_guess == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
-                "imported_transcript".to_string()
+                "standalone_transcript".to_string()
             } else if item_type_guess == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
                 "table".to_string()
             } else {
                 item_type_guess
             }
         };
-        let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+        let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
         let mut xml_changed = false;
 
         match item_type_guess.as_str() {
@@ -1740,7 +1779,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 }
             },
-            "transcript" => {
+            "audio_transcript" | "video_transcript" => {
                 let stem_dir_rel_path = std::path::Path::new(&item_relative_path_guess).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
                 if !stem_dir_rel_path.is_empty() {
                     if let Some(media_entry) = project_data.find_media_by_stem_dir_mut(&stem_dir_rel_path) {
@@ -1753,10 +1792,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 }
             },
-            "imported_transcript" => {
-                let initial_len = project_data.imported_transcript_files.files.len();
-                project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path_guess);
-                if project_data.imported_transcript_files.files.len() < initial_len {
+            "standalone_transcript" => {
+                let initial_len = project_data.standalone_transcript_files.files.len();
+                project_data.standalone_transcript_files.files.retain(|t| t.relative_path != item_relative_path_guess);
+                if project_data.standalone_transcript_files.files.len() < initial_len {
                     info!("[Backend Delete] Cleaned up XML imported transcript entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
                 }
@@ -1836,7 +1875,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         let images_folder = format!("{}/", IMAGES_DIR.to_lowercase());
         let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
         if item_type == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
-            "imported_transcript".to_string()
+            "standalone_transcript".to_string()
         } else if item_type == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
             "table".to_string()
         } else if item_type == "other" && path_lower.contains(&images_folder)
@@ -1856,7 +1895,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     let mut path = None;
                     let mut rel = None;
                     if let Ok(xml_content) = fs::read_to_string(&xml_path_buf) {
-                        if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                        if let Ok(project_data) = serde_json::from_str::<ProjectXml>(&xml_content) {
                             if let Some(entry) = project_data.find_media(&media_stem) {
                                 // Extract the folder from relative_path, e.g. "harvey_files/Audios/Stem/media/file.wav" -> "harvey_files/Audios/Stem"
                                 let rel_path = Path::new(&entry.relative_path);
@@ -1871,7 +1910,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 };
 
                 // Cleanup highlights for all associated transcripts before deleting
-                if let Ok(project_data) = quick_xml::de::from_str::<ProjectXml>(&fs::read_to_string(&xml_path_buf).unwrap_or_default()) {
+                if let Ok(project_data) = serde_json::from_str::<ProjectXml>(&fs::read_to_string(&xml_path_buf).unwrap_or_default()) {
                     if let Some(media_entry) = project_data.find_media(&media_stem) {
                         for transcript in &media_entry.transcripts {
                             if let Err(e) = delete_annotations_from_db(&project_id_for_db, &transcript.relative_path, "lexical") {
@@ -1892,7 +1931,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     fs::remove_dir_all(&media_stem_dir_path).map_err(|e| CommandError::from(format!("Failed to delete directory {}: {}", media_stem_dir_path.display(), e)))?;
 
                     info!("[Backend Delete] Updating XML to remove entry for '{}'", media_stem);
-                    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+                    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
                     if project_data.remove_media(media_stem) {
                         save_project_xml(&xml_path_buf, &project_data)?;
                         info!("[Backend Delete] XML media entry removed.");
@@ -1901,7 +1940,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 } else {
                     warn!("[Backend Delete] Media stem directory {} not found. Assuming already deleted. Cleaning up XML.", media_stem_dir_path.display());
-                     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+                     let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
                      if project_data.remove_media(&media_stem) {
                          save_project_xml(&xml_path_buf, &project_data)?;
                          info!("[Backend Delete] XML media entry removed during cleanup.");
@@ -1911,7 +1950,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 return Err(CommandError::from(format!("Could not determine media stem for media file deletion: {}", item_path)));
             }
         },
-        "transcript" => {
+        "audio_transcript" | "video_transcript" => {
              if let Some(media_stem) = media_stem_opt.as_deref() {
                 info!("[Backend Delete] Deleting media-associated transcript file: {}", item_path_buf.display());
                 fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete file {}: {}", item_path_buf.display(), e)))?;
@@ -1930,7 +1969,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 }
 
                 info!("[Backend Delete] Updating XML to remove transcript link for stem name '{}' with path '{}'", media_stem, item_relative_path);
-                let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+                let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
                 let mut xml_changed = false;
                 let stem_dir_rel_path = std::path::Path::new(&item_relative_path).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
                 
@@ -1957,7 +1996,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 return Err(CommandError::from(format!("Could not determine media stem for transcript: {}", item_path)));
             }
         },
-        "imported_transcript" => {
+        "standalone_transcript" => {
             info!("[Backend Delete] Deleting standalone imported transcript file: {}", item_path_buf.display());
             fs::remove_file(&item_path_buf)
                 .map_err(|e| CommandError::from(format!("Failed to delete imported transcript file {}: {}", item_path_buf.display(), e)))?;
@@ -1987,13 +2026,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
 
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let initial_entries = project_data.imported_transcript_files.files.len();
-            project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let initial_entries = project_data.standalone_transcript_files.files.len();
+            project_data.standalone_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
 
             // document_metadata_files list in XML is no longer managed for imported transcript metadata
 
-            if project_data.imported_transcript_files.files.len() < initial_entries {
+            if project_data.standalone_transcript_files.files.len() < initial_entries {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Delete] XML updated for imported transcript.");
             } else {
@@ -2026,7 +2065,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     }
                 }
             }
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let prefix = format!("{}/{}/{}", HARVEY_FILES_DIR, DOCS_DIR, stem);
             project_data.document_files.files.retain(|d| !d.relative_path.starts_with(&prefix) && d.relative_path != item_relative_path);
             project_data.document_metadata_files.files
@@ -2078,7 +2117,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
 
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_table_len = project_data.table_files.files.len();
             project_data.table_files.files.retain(|t| t.relative_path != item_relative_path);
             if project_data.table_files.files.len() < initial_table_len {
@@ -2124,7 +2163,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
 
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_len = project_data.image_files.files.len();
             project_data.image_files.files.retain(|i| i.relative_path != item_relative_path);
 
@@ -2265,7 +2304,7 @@ fn rename_asset_with_folder(
         &new_filename, // Pass the new filename for the file_name field in DB
     )?;
 
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(project_xml_path)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(project_xml_path)?)?;
 
     match item_type {
         "doc" => {
@@ -2377,7 +2416,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
     // Get project_id for DB operations
     let project_xml_content_for_uuid = fs::read_to_string(&xml_path_buf)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
     let project_id_for_db = project_data_for_uuid.project_uuid;
     if project_id_for_db.is_empty() {
@@ -2413,7 +2452,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The original extension will be re-applied by rename_asset_with_folder.
             final_new_path = rename_asset_with_folder(&app_handle, &item_path_buf, new_stem_from_input, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
         },
-        "transcript" => {
+        "audio_transcript" | "video_transcript" => {
             let new_filename_with_ext = new_name_trimmed;
             let new_path = parent_dir.join(new_filename_with_ext);
             final_new_path = new_path.clone();
@@ -2442,7 +2481,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let stem_dir_rel_path = std::path::Path::new(&item_relative_path).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().replace("\\", "/")).unwrap_or_default();
 
             info!("[Backend Rename] Updating XML for stem '{}': Path '{}' -> '{}', name -> '{}'", stem_dir_rel_path, item_relative_path, new_relative_path, new_filename_with_ext);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut xml_changed = false;
 
             if !stem_dir_rel_path.is_empty() {
@@ -2469,16 +2508,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     old_path: item_path_buf.to_string_lossy().into_owned(),
                     new_path: new_path.to_string_lossy().into_owned(),
                     new_name: new_filename_with_ext.to_string(),
-                    item_type: "transcript".to_string(),
+                    item_type: item_type.to_string(),
                     project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
                     base_directory: project_base_dir.to_string_lossy().into_owned(),
                 };
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
-                    warn!("[Backend Rename] Failed to emit item_renamed event for transcript: {}", e);
+                    warn!("[Backend Rename] Failed to emit item_renamed event for media-associated transcript: {}", e);
                 }
             }
         },
-        "imported_transcript" => {
+        "standalone_transcript" => {
             let old_transcript_file_abs_path = &item_path_buf;
             let old_transcript_folder_abs_path = parent_dir;
             let old_transcript_relative_path = &item_relative_path; // This is key for DB
@@ -2576,14 +2615,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // 4. Update Project XML
             // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
             info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            // Removed: let mut xml_actually_changed_for_imported_transcript = false;
+            let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            // Removed: let mut xml_actually_changed_for_standalone_transcript = false;
 
-            if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
+            if let Some(entry) = project_data.standalone_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.to_string();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
-                project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                // xml_actually_changed_for_imported_transcript = true; // Variable removed
+                project_data.standalone_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+                // xml_actually_changed_for_standalone_transcript = true; // Variable removed
                 info!("[Backend Rename] XML imported transcript entry updated. Saving XML.");
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
@@ -2592,12 +2631,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     old_path: item_path_buf.to_string_lossy().into_owned(),
                     new_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
                     new_name: new_transcript_filename_with_ext_str.to_string(),
-                    item_type: "imported_transcript".to_string(),
+                    item_type: "standalone_transcript".to_string(),
                     project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
                     base_directory: project_base_dir.to_string_lossy().into_owned(),
                 };
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
-                    warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
+                    warn!("[Backend Rename] Failed to emit item_renamed event for standalone_transcript: {}", e);
                 }
             } else {
                 // This should ideally not happen if DB update was successful, as it means XML was out of sync.
@@ -2636,7 +2675,7 @@ mod tests {
                 <documentFiles/>
                 <tableFiles/>
                 <imageFiles/>
-                <importedTranscriptFiles/>
+                <standaloneTranscriptFiles/>
                 <documentMetadataFiles/>
             </project>"#,
             project_name_test, test_uuid
@@ -2752,5 +2791,20 @@ pub async fn reveal_in_file_explorer(app: AppHandle, file_path_str: String) -> R
     
 
         Ok(())
-
     }
+#[tauri::command]
+pub async fn export_project_manifest(project_id: String, manifest_path: String) -> Result<(), CommandError> {
+    info!("[Backend Export Manifest] Exporting SQLite data to JSON manifest for project: {}", project_id);
+
+    // In a fully developed CQRS architecture, this function will query `asset_metadata` and build the `ProjectXml` struct.
+    // For now, it simply touches the manifest to ensure its modified timestamp updates,
+    // since the current synchronous logic already keeps the manifest updated.
+    // This allows the Svelte frontend to start hooking into the command for debounced "save" logic seamlessly.
+
+    let path = std::path::PathBuf::from(&manifest_path);
+    if path.exists() {
+        let _ = std::fs::OpenOptions::new().append(true).open(&path); // Touch the file to update modify timestamp
+    }
+
+    Ok(())
+}
