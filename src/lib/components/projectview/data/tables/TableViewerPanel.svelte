@@ -113,6 +113,7 @@
     let tableModifyToolbarPosition = { top: 0, left: 0 };
     let clickedRow = null;
     let selectedRows = []; // Rows from a multi-cell/multi-row selection
+    let activeHighlightIdForToolbar = null;
     let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
     let mainPanelContainer = null;
 
@@ -141,18 +142,24 @@
                     const highlights = get(project).currentTableHighlights || [];
                     
                     // Find the highlight this row/cell belongs to
+                    const field = cellEl?.dataset.field || (e.target.closest('.tabulator-cell')?.getAttribute('tabulator-field'));
+                    const cellKey = field ? `cell-${rowIndex}-${field}` : null;
+
                     const existingHighlight = highlights.find(h => {
+                        if (cellKey && h.id === cellKey) return true; // Direct cell match
                         const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
-                        return indices.includes(rowIndex);
+                        return !h.id?.startsWith('cell-') && indices.includes(rowIndex);
                     });
 
                     if (existingHighlight) {
+                        activeHighlightIdForToolbar = existingHighlight.id;
+                        
                         // If it's a group, load the whole group into selectedRows
                         if (existingHighlight.rowIndices && existingHighlight.rowIndices.length > 1) {
                             selectedRows = existingHighlight.rowIndices.map(idx => tabulatorInstance.getRow(idx)).filter(r => r !== false);
                             clickedRow = null;
                         } else {
-                            // Single row highlight
+                            // Single row or cell highlight
                             clickedRow = row;
                             selectedRows = [];
                         }
@@ -189,6 +196,13 @@
                 if (rows && cols && (rows.length > 1 || cols.length > 1)) {
                     selectedRows = rows;
                     clickedRow = null;
+                    
+                    // Identify if this selection matches an existing highlight group
+                    const firstIdx = rows[0].getData().harvey_internal_id;
+                    const highlights = get(project).currentTableHighlights || [];
+                    const existingHighlight = highlights.find(h => h.rowIndices && h.rowIndices.includes(firstIdx));
+                    activeHighlightIdForToolbar = existingHighlight ? existingHighlight.id : null;
+
                     lastRangeSelectedTime = Date.now();
                     
                     // In a multi-cell selection, anchor to the bottom-right cell
@@ -354,6 +368,7 @@
             showTableModifyToolbar = false;
             clickedRow = null;
             selectedRows = [];
+            activeHighlightIdForToolbar = null;
         }
 
     }
@@ -1564,39 +1579,56 @@
     }
 
     async function handleTableTagToggle(tagName) {
+        let highlightId = activeHighlightIdForToolbar;
         const rowsToTag = (selectedRows && selectedRows.length > 0) ? selectedRows : (clickedRow ? [clickedRow] : []);
-        if (rowsToTag.length === 0) return;
 
-        // If the highlight doesn't exist, applying a transparent/default color creates it
-        const currentHighlights = get(project).currentTableHighlights || [];
-        const expectedId = `row-${rowsToTag[0].getData().harvey_internal_id}`;
-
-        let highlightExists = currentHighlights.some(h => {
-            if (h.id === expectedId) return true;
-            if (h.rowIndices && h.rowIndices.includes(rowsToTag[0].getData().harvey_internal_id)) return true;
-            return false;
-        });
-
-        if (!highlightExists) {
+        if (!highlightId && rowsToTag.length > 0) {
+            // No existing highlight, create one for the selection (default transparent)
             await applyHighlightToRows(rowsToTag, 'transparent', true);
+            
+            // After applying, find the new highlight ID from the store
+            const firstIdx = rowsToTag[0].getData().harvey_internal_id;
+            const highlights = get(project).currentTableHighlights || [];
+            const newHighlight = highlights.find(h => {
+                const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
+                return !h.id?.startsWith('cell-') && indices.includes(firstIdx);
+            });
+            if (newHighlight) {
+                highlightId = newHighlight.id;
+                activeHighlightIdForToolbar = highlightId;
+            }
         }
 
+        if (!highlightId) return;
+
         import('$lib/stores/projectStore.js').then(({ toggleTagInHighlightLocal }) => {
-            toggleTagInHighlightLocal(expectedId, tagName, 'table', tablePath);
+            toggleTagInHighlightLocal(highlightId, tagName, 'table', tablePath);
         });
     }
 
     async function handleTableHighlightDelete() {
+        if (activeHighlightIdForToolbar?.startsWith('cell-')) {
+            let currentHighlights = get(project).currentTableHighlights || [];
+            currentHighlights = currentHighlights.filter(h => h.id !== activeHighlightIdForToolbar);
+            setTableHighlights(currentHighlights);
+            await saveTableHighlights();
+            showTableModifyToolbar = false;
+            activeHighlightIdForToolbar = null;
+            return;
+        }
+
         if (selectedRows && selectedRows.length > 0) {
             // Widget action: delete the whole group/range
             await applyHighlightToRows(selectedRows, null, false);
             showTableModifyToolbar = false;
             selectedRows = [];
+            activeHighlightIdForToolbar = null;
         } else if (clickedRow) {
             // Widget action: delete single row
             await applyHighlightToRows([clickedRow], null, false);
             showTableModifyToolbar = false;
             clickedRow = null;
+            activeHighlightIdForToolbar = null;
         }
     }
 
@@ -4390,8 +4422,8 @@
         toolbarPosition={tableModifyToolbarPosition}
         onChangeColor={handleTableHighlightColorChange}
         onDelete={handleTableHighlightDelete}
-        onClose={() => { showTableModifyToolbar = false; clickedRow = null; }}
-        highlightId={clickedRow ? `row-${clickedRow.getData().harvey_internal_id}` : (selectedRows.length > 0 ? `row-${selectedRows[0].getData().harvey_internal_id}` : null)}
+        onClose={() => { showTableModifyToolbar = false; clickedRow = null; selectedRows = []; activeHighlightIdForToolbar = null; }}
+        highlightId={activeHighlightIdForToolbar}
         docType="table"
         filePath={tablePath}
         onTagToggle={handleTableTagToggle}
