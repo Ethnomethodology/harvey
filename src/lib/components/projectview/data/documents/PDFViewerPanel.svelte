@@ -2434,7 +2434,7 @@ function updateHighlightOverlayColor(id, color) {
                                 <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
                                     <Checkbox
                                         checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
-                                        on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfFilePath)}
+                                        on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
                                         class="items-center px-2 py-1.5 w-full cursor-pointer"
                                     >
                                         {tag.name}

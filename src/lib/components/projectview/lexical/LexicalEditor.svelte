@@ -3935,7 +3935,9 @@ function handleRemoveHighlightFromToolbar() {
   showToolbar={showModifyToolbar}
   toolbarPosition={modifyToolbarPosition}
   highlightId={clickedHighlightId}
-  docType={$project.selectedDocumentPath === documentPath ? $project.selectedDocumentType : 'doc'}
+  docType={$project.selectedDocumentPath === documentPath ? $project.selectedDocumentType :
+           ($project.currentStandaloneTranscriptPath === documentPath ? 'standalone_transcript' :
+           ($project.activeTranscriptPathInDataTab === documentPath ? $project.activeTranscriptTypeInDataTab || 'audio_transcript' : 'doc'))}
   filePath={documentPath}
   on:close={() => {
     showModifyToolbar = false;

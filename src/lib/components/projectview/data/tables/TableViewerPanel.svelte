@@ -350,7 +350,7 @@
         // Prevent immediate closing if a range was just selected (e.g. at the end of a drag)
         const recentlySelected = (Date.now() - lastRangeSelectedTime) < 300;
         
-        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !recentlySelected) {
+        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !event.target.closest('[role="menu"]') && !event.target.closest('.z-\\[100001\\]') && !event.target.closest('.z-\\[100000\\]') && !recentlySelected) {
             showTableModifyToolbar = false;
             clickedRow = null;
             selectedRows = [];
