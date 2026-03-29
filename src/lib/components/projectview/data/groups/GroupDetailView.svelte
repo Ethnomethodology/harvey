@@ -15,6 +15,7 @@
     import DocumentThumbnail from './DocumentThumbnail.svelte';
     import TableThumbnail from './TableThumbnail.svelte';
     import AudioThumbnail from './AudioThumbnail.svelte';
+    import PdfThumbnail from './PdfThumbnail.svelte'; // NEW
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Search, Dropdown, Checkbox, Button } from 'flowbite-svelte';
 
@@ -757,8 +758,16 @@
                                                     playsinline
                                                     class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                 ></video>
-                                            {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path && file.full_path.endsWith('.json')}
-                                                <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                            {:else if (file.file_type === 'document' || file.file_type.includes('transcript')) && file.full_path}
+                                                {#if file.name.toLowerCase().endsWith('.pdf')}
+                                                    <PdfThumbnail {file} projectId={$projectStore?.id} />
+                                                {:else if file.full_path.endsWith('.json')}
+                                                    <DocumentThumbnail {file} isTranscript={file.file_type.includes('transcript')} />
+                                                {:else}
+                                                    <div class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 text-gray-400 dark:text-gray-500">
+                                                        <svelte:component this={category.icon} class="w-12 h-12" />
+                                                    </div>
+                                                {/if}
                                             {:else if file.file_type === 'table' && file.full_path}
                                                 <TableThumbnail {file} />
                                             {:else if file.file_type === 'audio' || (file.file_type === 'media' && AUDIO_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() ?? ''))}

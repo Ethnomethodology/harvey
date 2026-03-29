@@ -99,6 +99,8 @@ pub async fn delete_attachment_command(
                 language_code: metadata_from_db.language_code,
                 properties: metadata_from_db.properties,
                 file_type: metadata_from_db.file_type.unwrap_or_default(),
+                page_count: metadata_from_db.page_count,
+                thumbnail: metadata_from_db.thumbnail,
             };
 
             db_handler::save_asset_metadata(
@@ -221,6 +223,8 @@ pub async fn upload_attachment(
                 language_code: metadata_from_db.language_code,
                 properties: metadata_from_db.properties,
                 file_type: metadata_from_db.file_type.unwrap_or_default(),
+                page_count: metadata_from_db.page_count,
+                thumbnail: metadata_from_db.thumbnail,
             };
 
             // Also register the attachment itself in asset_metadata

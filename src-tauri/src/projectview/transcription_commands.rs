@@ -610,6 +610,8 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             language_code: None,
             properties: None,
             file_type: String::new(),
+            page_count: None,
+            thumbnail: None,
         };
 
         let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
@@ -2885,6 +2887,8 @@ pub async fn stop_live_transcription(
                             language_code: metadata_from_db.language_code,
                             properties: metadata_from_db.properties,
                             file_type: metadata_from_db.file_type.unwrap_or_else(|| "document".to_string()),
+                            page_count: metadata_from_db.page_count,
+                            thumbnail: metadata_from_db.thumbnail,
                         };
 
                         if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
@@ -2919,6 +2923,8 @@ pub async fn stop_live_transcription(
                             language_code: None,
                             properties: None,
                             file_type: "document".to_string(),
+                            page_count: None,
+                            thumbnail: None,
                         };
 
                         let attachments_json_string = json!(audio_files).to_string();

@@ -33,6 +33,8 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub language_code: Option<String>,
     pub properties: Option<String>,
     pub file_type: Option<String>, // Added field
+    pub page_count: Option<i32>,   // NEW
+    pub thumbnail: Option<Vec<u8>>, // NEW
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -247,6 +249,8 @@ pub fn init_db() -> Result<(), CommandError> {
             language_code TEXT,
             properties TEXT,
             file_type TEXT, -- Added field
+            page_count INTEGER, -- NEW
+            thumbnail BLOB, -- NEW
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -263,6 +267,26 @@ pub fn init_db() -> Result<(), CommandError> {
     if !file_type_column_exists {
         info!("[DB] Adding file_type column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
+    }
+
+    // Check and add page_count column to asset_metadata if missing
+    let mut stmt_check_page_count = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let page_count_column_exists = stmt_check_page_count
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "page_count"));
+    if !page_count_column_exists {
+        info!("[DB] Adding page_count column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN page_count INTEGER", [])?;
+    }
+
+    // Check and add thumbnail column to asset_metadata if missing
+    let mut stmt_check_thumbnail = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let thumbnail_column_exists = stmt_check_thumbnail
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "thumbnail"));
+    if !thumbnail_column_exists {
+        info!("[DB] Adding thumbnail column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN thumbnail BLOB", [])?;
     }
 
     // Always check for records with missing file_type and attempt to backfill
@@ -1644,6 +1668,8 @@ pub fn save_asset_metadata(
             language_code = excluded.language_code,
             properties = excluded.properties,
             file_type = COALESCE(NULLIF(excluded.file_type, ''), file_type),
+            page_count = excluded.page_count,
+            thumbnail = excluded.thumbnail,
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -1675,6 +1701,8 @@ pub fn save_asset_metadata(
             to_sql_optional_str(metadata.language_code.as_deref()),
             to_sql_optional_str(metadata.properties.as_deref()),
             metadata.file_type, // Parameter 24
+            metadata.page_count, // NEW Parameter 25
+            to_sql_optional_blob(metadata.thumbnail.as_deref()), // NEW Parameter 26
         ],
     )?;
 
@@ -1697,7 +1725,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
                creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
-               language_code, properties, file_type
+               language_code, properties, file_type, page_count, thumbnail
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1726,6 +1754,8 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             language_code: row.get(19)?,
             properties: row.get(20)?,
             file_type: row.get(21)?,
+            page_count: row.get(22)?,
+            thumbnail: row.get(23)?,
         })
     }).optional()?;
 
@@ -1771,6 +1801,26 @@ pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Res
     if changes > 0 {
         info!("[DB] Asset metadata and relations deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
     }
+
+    Ok(())
+}
+
+pub fn save_pdf_metadata_to_db(
+    project_id: &str,
+    asset_relative_path: &str,
+    page_count: i32,
+    thumbnail: &[u8],
+) -> Result<(), CommandError> {
+    debug!("[DB] Saving PDF metadata for project_id {}: {}", project_id, asset_relative_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "UPDATE asset_metadata 
+         SET page_count = ?1, thumbnail = ?2, updated_at = CURRENT_TIMESTAMP 
+         WHERE project_id = ?3 AND asset_relative_path = ?4",
+        params![page_count, thumbnail, project_id, asset_relative_path],
+    )?;
 
     Ok(())
 }

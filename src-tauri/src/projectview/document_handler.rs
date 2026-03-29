@@ -193,6 +193,8 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
+                page_count: None,
+                thumbnail: None,
             };
 
             // Save metadata to SQLite database
@@ -319,6 +321,8 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
+                page_count: None,
+                thumbnail: None,
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

@@ -450,6 +450,8 @@ pub async fn generate_survey_documents(
             language_code: metadata_from_db.language_code,
             properties: metadata_from_db.properties,
             file_type: metadata_from_db.file_type.unwrap_or_default(),
+            page_count: metadata_from_db.page_count,
+            thumbnail: metadata_from_db.thumbnail,
         };
 
         let _ = db_handler::save_asset_metadata(

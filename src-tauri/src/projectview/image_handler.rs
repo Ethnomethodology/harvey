@@ -89,6 +89,8 @@ fn register_project_image(
         language_code: None,
         properties: None,
         file_type: "image".to_string(),
+        page_count: None,
+        thumbnail: None,
     };
 
     let mut custom_fields_map = serde_json::Map::new();
@@ -358,6 +360,8 @@ pub async fn import_image_file(
                 language_code: None,
                 properties: None,
                 file_type: "image".to_string(),
+                page_count: None,
+                thumbnail: None,
     };
 
     // relative_path_for_xml is already calculated and holds the image's relative path

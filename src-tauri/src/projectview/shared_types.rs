@@ -58,6 +58,10 @@ pub struct FileMetadata {
     pub properties: Option<String>,
     #[serde(default)]
     pub file_type: String, // New field: audio, video, document, table, image, transcript, audio-transcript, video-transcript
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_count: Option<i32>,   // NEW
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<Vec<u8>>, // NEW
 }
 
 #[allow(dead_code)]
@@ -691,6 +695,8 @@ impl Default for FileMetadata {
             language_code: None,
             properties: None,
             file_type: String::new(),
+            page_count: None,
+            thumbnail: None,
         }
     }
 }
@@ -708,6 +714,8 @@ pub struct AssociatedFile {
     pub description: Option<String>,   // Description from file metadata
     pub waveform_data: Option<Vec<u8>>,
     pub duration_seconds: Option<f64>,
+    pub page_count: Option<i32>,      // NEW
+    pub thumbnail_data: Option<Vec<u8>>, // NEW
 }
 
 // This struct is primarily for backend use when fetching from DB,
