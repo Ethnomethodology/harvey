@@ -2,7 +2,9 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import Dropdown from '$lib/components/shared/Dropdown.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
-    import { MessageSquare, Code, Check, Square, Circle, Info } from '@lucide/svelte';
+    import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
+    import { MessageSquare, Code, Check, Square, Circle, Info, Tags } from '@lucide/svelte';
+    import { allTags as allTagsStore, addTag } from '$lib/stores/tagStore.js';
 
     const dispatch = createEventDispatcher();
 
@@ -26,6 +28,7 @@
     export let panelBounds = null; // New prop to receive the bounding rectangle of the parent panel
     export let useSolidColors = false; // New prop to determine color palette
     export let isCensoredMode = false; // New prop for censored-only mode
+    export let initialTags = [];
 
     let title = initialTitle;
     let description = initialDescription;
@@ -41,6 +44,7 @@
     let tailFlipped = initialTailFlipped || false;
     let rounded = initialRounded || false;
     let isOval = initialIsOval || false;
+    let tags = [...initialTags];
 
     const transparentColors = [
         { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
@@ -84,7 +88,7 @@
 
     $: highlightOptions = isCensoredMode ? censoredColors : (useSolidColors ? solidColors : transparentColors);
 
-    $: notifyChanges(title, description, selectedColor, text, html, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval);
+    $: notifyChanges(title, description, selectedColor, text, html, selectedTextColor, selectedFontSize, selectedBorderColor, selectedBorderSize, selectedShape, selectedTailStyle, tailFlipped, rounded, isOval, tags);
 
     function notifyChanges() {
         dispatch('save', { 
@@ -101,7 +105,8 @@
             tailStyle: selectedTailStyle,
             tailFlipped,
             rounded,
-            isOval
+            isOval,
+            tags
         });
     }
 
@@ -120,6 +125,21 @@
     function handleLexicalChange(event) {
         text = event.detail.jsonString;
         html = event.detail.htmlString;
+    }
+    
+    function handleTagsUpdate(newTags) {
+        tags = newTags;
+    }
+
+    async function handleCreateTag(newTag) {
+        try {
+            await addTag(newTag);
+            if (!tags.includes(newTag)) {
+                tags = [...tags, newTag];
+            }
+        } catch (error) {
+            console.error('Failed to create tag:', error);
+        }
     }
 
     // Adjust position to keep dialog within viewport (basic implementation)
@@ -155,7 +175,12 @@
     function handleClickOutside(event) {
         if (dialogElement && !dialogElement.contains(event.target)) {
             // Don't close if clicking a dropdown menu or Lexical modal
-            if (event.target.closest('.ui-dropdown-menu') || event.target.closest('.lexical-modal')) return;
+            if (
+                event.target.closest('.ui-dropdown-menu') || 
+                event.target.closest('.lexical-modal') || 
+                event.target.closest('.multi-select-dropdown') || 
+                event.target.closest('.group-multi-select-dropdown')
+            ) return;
             handleDone();
         }
     }
@@ -387,6 +412,23 @@
             <div class="flex items-start space-x-1.5">
                 <Info class="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span>Anonymization is only permanent when the image is <strong>exported with annotations</strong>.</span>
+            </div>
+        </div>
+    {/if}
+
+    {#if !isCensoredMode && initialText === null}
+        <div class="mb-4">
+            <div class="flex items-center w-full mb-2">
+                <Tags class="w-3.5 h-3.5 mr-2 flex-shrink-0 text-gray-500" />
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Tags</span>
+            </div>
+            <div class="w-full relative">
+                <TagMultiSelect
+                    allTags={$allTagsStore.map(t => t.name)}
+                    assignedTags={tags}
+                    on:update={(e) => handleTagsUpdate(e.detail.tags)}
+                    on:createtag={(e) => handleCreateTag(e.detail.tag)}
+                />
             </div>
         </div>
     {/if}

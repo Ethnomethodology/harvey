@@ -20,6 +20,10 @@
 	let availableGroupsToAssign: GroupData[] = [];
 	let showDropdown = false;
 	let searchTerm = '';
+	let rootElement: HTMLElement;
+	let dropdownX = 0;
+	let dropdownY = 0;
+	let dropdownWidth = 0;
 
 	const dispatch = createEventDispatcher();
 
@@ -97,11 +101,52 @@
 		if (showDropdown) {
 			// Reset search term when opening dropdown
 			searchTerm = '';
+			updateDropdownPosition();
 		}
+	}
+
+	function updateDropdownPosition() {
+		if (rootElement) {
+			const rect = rootElement.getBoundingClientRect();
+			const dropdownHeight = 240; // max-h-60 = 240px
+			const margin = 5;
+            
+            // Default position: below
+			dropdownX = rect.left;
+			dropdownY = rect.bottom + margin;
+			dropdownWidth = rect.width;
+
+            // Flip logic: if it overflows bottom, check if there's more space above
+            if (dropdownY + dropdownHeight > window.innerHeight) {
+                const spaceAbove = rect.top;
+                const spaceBelow = window.innerHeight - rect.bottom;
+                
+                if (spaceAbove > spaceBelow && spaceAbove > 100) {
+                    // Position above
+                    dropdownY = rect.top - Math.min(dropdownHeight, spaceAbove - margin) - margin;
+                }
+            }
+            
+            // Horizontal shift to stay within viewport
+            if (dropdownX + dropdownWidth > window.innerWidth) {
+                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin);
+            }
+		}
+	}
+
+	function portal(node) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			}
+		};
 	}
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={rootElement}>
 	<!-- Assigned Groups Tags -->
 	<div class="flex flex-wrap gap-1 mb-2 p-1 border border-gray-300 dark:border-gray-600 rounded-md min-h-[30px]">
 		{#if assignedGroups.length === 0}
@@ -155,7 +200,9 @@
 	<!-- Dropdown -->
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			use:portal
+			class="fixed z-[999999] mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto group-multi-select-dropdown"
+			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px;"
 		>
 			<div class="p-2">
 				<input
@@ -194,12 +241,16 @@
 	{/if}
 </div>
 
-<svelte:window on:click={(event) => {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.relative')) { // Clicked outside the component
-        showDropdown = false;
-    }
-}}/>
+<svelte:window 
+	on:click={(event) => {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.relative') && !target.closest('.group-multi-select-dropdown')) { // Clicked outside the component and its dropdown
+			showDropdown = false;
+		}
+	}}
+	on:resize={updateDropdownPosition}
+	on:scroll={updateDropdownPosition}
+/>
 
 <style>
 	/* Ensure dropdown appears above other elements */

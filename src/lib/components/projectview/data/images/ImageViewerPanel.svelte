@@ -1310,7 +1310,7 @@
     }
 
     async function handleAnnotationDialogUpdate(event) {
-        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
+        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval, tags } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -1381,6 +1381,7 @@
                 }
             },
             body: newBody,
+            tags: tags || []
         };
 
         const updatedAnnotations = $currentAnnotations.map(a =>
@@ -2077,6 +2078,7 @@
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
+                    initialTags={annotationBeingEdited?.tags || []}
                     isEditing={isEditingExisting}
                     useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape.startsWith('text-area')}
                     isCensoredMode={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('censored')}

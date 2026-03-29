@@ -11,6 +11,9 @@
 	let showDropdown = false;
 	let searchTerm = '';
 	let rootElement: HTMLElement;
+	let dropdownX = 0;
+	let dropdownY = 0;
+	let dropdownWidth = 0;
 
 	const dispatch = createEventDispatcher();
 
@@ -62,11 +65,57 @@
 		showDropdown = !showDropdown;
 		if (showDropdown) {
 			searchTerm = '';
+			updateDropdownPosition();
 		}
+	}
+
+	function updateDropdownPosition() {
+		if (rootElement) {
+			const rect = rootElement.getBoundingClientRect();
+			const dropdownHeight = 240; // max-h-60 = 240px
+			const margin = 5;
+            
+            // Default position: below
+			dropdownX = rect.left;
+			dropdownY = rect.bottom + margin;
+			dropdownWidth = rect.width;
+
+            // Flip logic: if it overflows bottom, check if there's more space above
+            if (dropdownY + dropdownHeight > window.innerHeight) {
+                const spaceAbove = rect.top;
+                const spaceBelow = window.innerHeight - rect.bottom;
+                
+                if (spaceAbove > spaceBelow && spaceAbove > 100) {
+                    // Position above
+                    dropdownY = rect.top - Math.min(dropdownHeight, spaceAbove - margin) - margin;
+                }
+            }
+            
+            // Horizontal shift to stay within viewport
+            if (dropdownX + dropdownWidth > window.innerWidth) {
+                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin);
+            }
+		}
+	}
+
+	function portal(node) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			}
+		};
 	}
 
 	function handleClickOutside(event: MouseEvent) {
 		if (rootElement && !rootElement.contains(event.target as Node)) {
+			// Also check if clicked inside the portaled dropdown
+			const dropdown = document.querySelector('.multi-select-dropdown');
+			if (dropdown && dropdown.contains(event.target as Node)) {
+				return;
+			}
 			showDropdown = false;
 		}
 	}
@@ -112,7 +161,9 @@
 
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			use:portal
+			class="fixed z-[999999] mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
+			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px;"
 		>
 			<div class="p-2">
 				<input
@@ -147,7 +198,11 @@
 	{/if}
 </div>
 
-<svelte:window on:click={handleClickOutside} />
+<svelte:window 
+	on:click={handleClickOutside} 
+	on:resize={updateDropdownPosition}
+	on:scroll={updateDropdownPosition}
+/>
 
 <style>
 	.relative {
