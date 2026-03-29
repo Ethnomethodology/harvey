@@ -1,5 +1,5 @@
-<!-- src/lib/components/projectview/lexical/FloatingModifyHighlightToolbar.svelte -->
 <script>
+  import { Toolbar, Button, Tooltip } from 'flowbite-svelte';
   import { Trash2 } from '@lucide/svelte';
   export let showToolbar;
   export let toolbarPosition;
@@ -29,85 +29,23 @@
 
 {#if showToolbar}
 <div
-  class="selection-toolbar"
+  class="fixed z-[100000] pointer-events-auto"
   style="top: {toolbarPosition.top}px; left: {toolbarPosition.left}px;"
 >
-  <div class="highlight-options">
+  <Toolbar embedded class="rounded-full shadow-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-1 py-1 flex items-center gap-x-0.5">
     {#each highlightOptions as option}
-      <button
-        class="color-box"
-        style="background-color: {option.value};"
-        on:click|stopPropagation={() => handleChange(option.value)}
-        title={option.label}
-      ></button>
+      <Button color="none" class="p-1 rounded-full hover:scale-110 transition-transform duration-100" on:click={() => handleChange(option.value)}>
+        <span class="w-[18px] h-[18px] rounded-full border border-gray-300 dark:border-gray-600 block shadow-sm" style="background-color: {option.value}"></span>
+      </Button>
     {/each}
-  </div>
-  <button class="remove-highlight border-l border-gray-300 dark:border-gray-700 pl-1 ml-1" on:click|stopPropagation={handleDelete} title="Remove Highlight">
-    <Trash2 class="h-4 w-4" />
-  </button>
+    <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+    <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" on:click={handleDelete}>
+      <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
+    </Button>
+  </Toolbar>
 </div>
 {/if}
 
 <style>
-.selection-toolbar {
-  position: fixed;
-  z-index: 100000;
-  background-color: #fff;
-  border: 1px solid #9ca3af; /* gray-400 */
-  border-radius: 4px;
-  padding: 4px 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
-  pointer-events: auto;
-}
-
-:global(html.dark) .selection-toolbar {
-  background-color: #111827; /* gray-900 */
-  border-color: #374151; /* gray-700 */
-}
-
-.highlight-options {
-  display: flex;
-  gap: 6px;
-  margin-right: 4px;
-}
-
-.color-box {
-  width: 18px; 
-  height: 18px;
-  border: 1px solid #9ca3af; /* gray-400 */
-  border-radius: 9999px; /* rounded-full */
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.color-box:hover {
-    transform: scale(1.1);
-}
-
-:global(html.dark) .color-box {
-    border-color: #374151; /* gray-700 */
-}
-
-.remove-highlight {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ef4444; /* red-500 */
-}
-
-.remove-highlight:hover {
-    background-color: #fee2e2; /* red-100 */
-}
-
-:global(html.dark) .remove-highlight:hover {
-    background-color: #450a0a; /* red-950/20 */
-}
+  /* Removed custom CSS in favor of Flowbite components and Tailwind utility classes */
 </style>
