@@ -2438,11 +2438,12 @@ function updateHighlightOverlayColor(id, color) {
                 {/each}
                 <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
                 {#if toolbarMode === 'click'}
-                    <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:!ring-0 focus:!outline-none">
+                    <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
                         <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
-                        <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
-                            <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1">
-                                <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
+                    </button>
+                    <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
+                        <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1">
+                            <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
                             </div>
 
                             {#each $allTagGroups as group}
@@ -2497,7 +2498,6 @@ function updateHighlightOverlayColor(id, color) {
                                 <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
                             {/if}
                         </Dropdown>
-                    </Button>
                 {/if}
                 <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" 
                     on:click={() => { handleHighlightAction('remove'); }}>

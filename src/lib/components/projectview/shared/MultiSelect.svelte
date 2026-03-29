@@ -159,7 +159,9 @@
 
     // Reactive trigger for position update when showDropdown becomes true
     // Also re-calculate if the number of options changes significantly (e.g. typing)
-    $: if (showDropdown && rootElement && (filteredAvailableOptions || true)) {
+    $: if (showDropdown && rootElement) {
+        // Reference filteredAvailableOptions to trigger re-calculation when it changes
+        filteredAvailableOptions;
         setTimeout(updateDropdownPosition, 0);
     }
 </script>
