@@ -120,6 +120,28 @@
 			showDropdown = false;
 		}
 	}
+
+    import { onMount, onDestroy } from 'svelte';
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMount(() => {
+        if (typeof ResizeObserver !== 'undefined' && rootElement) {
+            resizeObserver = new ResizeObserver(() => {
+                if (showDropdown) updateDropdownPosition();
+            });
+            resizeObserver.observe(rootElement);
+        }
+    });
+
+    onDestroy(() => {
+        if (resizeObserver) resizeObserver.disconnect();
+    });
+
+    // Reactive trigger for position update when showDropdown becomes true
+    $: if (showDropdown && rootElement) {
+        // Use a small timeout or tick if needed, but usually works directly
+        setTimeout(updateDropdownPosition, 0);
+    }
 </script>
 
 <div class="relative bg-white dark:bg-gray-900" bind:this={rootElement}>
@@ -248,7 +270,7 @@
 <svelte:window 
 	on:click={handleClickOutside} 
 	on:resize={updateDropdownPosition}
-	on:scroll={updateDropdownPosition}
+	on:scroll|capture={updateDropdownPosition}
 />
 
 <style>

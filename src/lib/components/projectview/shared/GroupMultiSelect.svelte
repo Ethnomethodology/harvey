@@ -142,6 +142,27 @@
 			}
 		};
 	}
+
+    import { onMount, onDestroy } from 'svelte';
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMount(() => {
+        if (typeof ResizeObserver !== 'undefined' && rootElement) {
+            resizeObserver = new ResizeObserver(() => {
+                if (showDropdown) updateDropdownPosition();
+            });
+            resizeObserver.observe(rootElement);
+        }
+    });
+
+    onDestroy(() => {
+        if (resizeObserver) resizeObserver.disconnect();
+    });
+
+    // Reactive trigger for position update when showDropdown becomes true
+    $: if (showDropdown && rootElement) {
+        setTimeout(updateDropdownPosition, 0);
+    }
 </script>
 
 <div class="relative" bind:this={rootElement}>
@@ -247,7 +268,7 @@
 		}
 	}}
 	on:resize={updateDropdownPosition}
-	on:scroll={updateDropdownPosition}
+	on:scroll|capture={updateDropdownPosition}
 />
 
 <style>
