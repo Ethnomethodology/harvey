@@ -3,6 +3,9 @@
 
 	export let itemType: string; // 'tag' or 'group'
 	export let allOptions: string[] = [];
+    /** Optional grouped options for rendering categories in the dropdown. 
+     * If provided, dropdown will show headers when search is empty. */
+    export let groupedOptions: { name: string, options: string[] }[] | null = null;
 	export let assignedOptions: string[] = [];
 	export let isEditable = true;
 	export let placeholder: string = 'No items assigned.';
@@ -174,14 +177,52 @@
 				/>
 			</div>
 			<ul>
-				{#each filteredAvailableOptions as option (option)}
-					<li
-						on:click|stopPropagation={() => addItem(option)}
-						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
-					>
-						{option}
-					</li>
-				{/each}
+                {#if !searchTerm && groupedOptions && groupedOptions.length > 0}
+                    <!-- Grouped View -->
+                    {#each groupedOptions as group}
+                        {@const groupOptions = group.options.filter(o => availableOptions.includes(o))}
+                        {#if groupOptions.length > 0}
+                            <li class="px-3 py-1.5 text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 sticky top-0">
+                                {group.name}
+                            </li>
+                            {#each groupOptions as option (option)}
+                                <li
+                                    on:click|stopPropagation={() => addItem(option)}
+                                    class="px-5 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
+                                >
+                                    {option}
+                                </li>
+                            {/each}
+                        {/if}
+                    {/each}
+                    
+                    <!-- Handle ungrouped tags that weren't in any groupedOptions -->
+                    {@const allGroupedOptions = new Set(groupedOptions.flatMap(g => g.options))}
+                    {@const ungroupedOptions = availableOptions.filter(o => !allGroupedOptions.has(o))}
+                    {#if ungroupedOptions.length > 0}
+                        <li class="px-3 py-1.5 text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 sticky top-0">
+                            Ungrouped
+                        </li>
+                        {#each ungroupedOptions as option (option)}
+                            <li
+                                on:click|stopPropagation={() => addItem(option)}
+                                class="px-5 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
+                            >
+                                {option}
+                            </li>
+                        {/each}
+                    {/if}
+                {:else}
+                    <!-- Flat Filtered View (for search or if no grouping) -->
+    				{#each filteredAvailableOptions as option (option)}
+    					<li
+    						on:click|stopPropagation={() => addItem(option)}
+    						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
+    					>
+    						{option}
+    					</li>
+    				{/each}
+                {/if}
 
                 {#if isEditable && searchTerm && !allOptions.includes(searchTerm)}
                 <li

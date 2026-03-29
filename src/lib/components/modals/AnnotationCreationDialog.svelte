@@ -422,7 +422,6 @@
             </div>
             <div class="w-full relative">
                 <TagMultiSelect
-                    allTags={$allTagsStore.map(t => t.name)}
                     assignedTags={tags}
                     on:update={(e) => handleTagsUpdate(e.detail.tags)}
                     on:createtag={(e) => handleCreateTag(e.detail.tag)}
