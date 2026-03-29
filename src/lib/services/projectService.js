@@ -1218,11 +1218,12 @@ export async function saveTranscriptData() {
         project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
     }
+    const languageCode = tsData.activeTranscript?.language_code ?? null;
     try {
-        await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString });
+        await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString, language_code: languageCode });
         markTranscriptAsSaved();
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to save transcript: ${errorMessage}`);
     }

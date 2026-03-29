@@ -610,7 +610,6 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
             language_code: None,
             properties: None,
             file_type: String::new(),
-            page_count: None,
             thumbnail: None,
         };
 
@@ -2887,7 +2886,6 @@ pub async fn stop_live_transcription(
                             language_code: metadata_from_db.language_code,
                             properties: metadata_from_db.properties,
                             file_type: metadata_from_db.file_type.unwrap_or_else(|| "document".to_string()),
-                            page_count: metadata_from_db.page_count,
                             thumbnail: metadata_from_db.thumbnail,
                         };
 
@@ -2923,7 +2921,6 @@ pub async fn stop_live_transcription(
                             language_code: None,
                             properties: None,
                             file_type: "document".to_string(),
-                            page_count: None,
                             thumbnail: None,
                         };
 

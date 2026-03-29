@@ -193,7 +193,6 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
 
@@ -321,7 +320,6 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
 

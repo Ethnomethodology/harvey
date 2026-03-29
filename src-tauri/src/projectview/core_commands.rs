@@ -497,7 +497,6 @@ pub async fn get_group_contents(project_xml_path_str: String, group_id: String) 
             description,
             waveform_data: meta_opt.as_ref().and_then(|meta| meta.waveform_data.clone()),
             duration_seconds: meta_opt.as_ref().and_then(|meta| meta.duration_seconds),
-            page_count: meta_opt.as_ref().and_then(|meta| meta.page_count),
             thumbnail_data: meta_opt.as_ref().and_then(|meta| meta.thumbnail.clone()),
         });
     }
@@ -594,11 +593,10 @@ pub async fn add_file_to_existing_group(project_id: String, group_id: String, fi
 pub async fn save_pdf_metadata(
     project_id: String,
     asset_relative_path: String,
-    page_count: i32,
     thumbnail: Vec<u8>,
 ) -> Result<(), String> {
     info!("[CMD] save_pdf_metadata for project_id: {}, path: {}", project_id, asset_relative_path);
-    db_handler::save_pdf_metadata_to_db(&project_id, &asset_relative_path, page_count, &thumbnail)
+    db_handler::save_pdf_metadata_to_db(&project_id, &asset_relative_path, &thumbnail)
         .map_err(|e| format!("Failed to save PDF metadata to DB: {}", e))
 }
 // --- End Group Commands ---
@@ -1219,7 +1217,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: doc.language_code.clone(),
                 properties: None,
                 file_type: "document".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "document", None);
@@ -1248,7 +1245,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
                     file_type: meta_db.file_type.unwrap_or("document".to_string()),
-                    page_count: meta_db.page_count,
                     thumbnail: meta_db.thumbnail,
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
@@ -1289,7 +1285,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: table.language_code.clone(),
                 properties: Some(serde_json::to_string(&props_map).unwrap()),
                 file_type: "table".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "table", None);
@@ -1338,7 +1333,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     language_code: meta_db.language_code,
                     properties: meta_db.properties,
                     file_type: meta_db.file_type.unwrap_or("table".to_string()),
-                    page_count: meta_db.page_count,
                     thumbnail: meta_db.thumbnail,
                 };
                 let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta_to_save, &rel_path, &meta_db.asset_type, meta_db.custom_fields_json.as_deref());
@@ -1372,7 +1366,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: None,
                 properties: None,
                 file_type: "standalone_transcript".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "standalone_transcript", None);
@@ -1405,7 +1398,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 language_code: None,
                 properties: None,
                 file_type: "image".to_string(),
-                page_count: None,
                 thumbnail: None,
             };
             let _ = db_handler::save_asset_metadata(&project_id_sync, &file_meta, &rel_path, "image", None);
@@ -1651,7 +1643,6 @@ pub async fn import_media(
         language_code: None,
         properties: None,
         file_type: final_asset_type.clone(),
-        page_count: None,
         thumbnail: None,
     };
 

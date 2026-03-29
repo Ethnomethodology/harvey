@@ -246,7 +246,6 @@ pub async fn import_table_file(
         language_code: None,
         properties: None,
         file_type: "table".to_string(),
-        page_count: None,
         thumbnail: None,
     };
     debug!("[import_table_file] File metadata for DB created.");

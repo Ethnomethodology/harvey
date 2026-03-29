@@ -210,7 +210,6 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
         language_code: None,
         properties: None,
         file_type: "document".to_string(),
-        page_count: None,
         thumbnail: None,
     };
 

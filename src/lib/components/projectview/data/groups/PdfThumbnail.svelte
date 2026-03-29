@@ -11,7 +11,6 @@
     let isLoading = !file.thumbnail_data;
     let error = null;
     let thumbnailUrl = null;
-    let pageCount = file.page_count || 0;
     let observer;
     let containerRef;
     let isVisible = false;
@@ -60,7 +59,6 @@
                 const assetUrl = convertFileSrc(file.full_path);
                 const loadingTask = pdfjsLib.getDocument(assetUrl);
                 const pdf = await loadingTask.promise;
-                pageCount = pdf.numPages;
 
                 // Render first page
                 const page = await pdf.getPage(1);
@@ -82,7 +80,6 @@
                 await invoke('save_pdf_metadata', {
                     projectId,
                     assetRelativePath: file.relative_path,
-                    pageCount: pageCount,
                     thumbnail: Array.from(uint8Array)
                 });
 

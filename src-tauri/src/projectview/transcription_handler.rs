@@ -499,7 +499,6 @@ pub async fn import_word_transcript<R: Runtime>(
         language_code: None,
         properties: None,
         file_type,
-        page_count: None,
         thumbnail: None,
     };
 

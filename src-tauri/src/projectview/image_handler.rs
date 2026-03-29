@@ -89,7 +89,6 @@ fn register_project_image(
         language_code: None,
         properties: None,
         file_type: "image".to_string(),
-        page_count: None,
         thumbnail: None,
     };
 
@@ -360,7 +359,6 @@ pub async fn import_image_file(
                 language_code: None,
                 properties: None,
                 file_type: "image".to_string(),
-                page_count: None,
                 thumbnail: None,
     };
 
