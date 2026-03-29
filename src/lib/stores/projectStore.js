@@ -471,7 +471,7 @@ export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePat
             highlights = p.currentTableHighlights;
             key = 'currentTableHighlights';
             dirtyFlag = 'isTableHighlightsDirty';
-            pathKey = 'selectedDocumentPath';
+            pathKey = 'selectedDocumentPath'; // Table paths are stored here
         } else {
             highlights = p.currentDocumentHighlights;
             key = 'currentDocumentHighlights';
@@ -481,6 +481,7 @@ export function toggleTagInHighlightLocal(highlightId, tagName, docType, filePat
 
         // Only update if the file currently loaded in the store matches the highlight's file
         if (p[pathKey] !== filePath) {
+            console.warn(`[toggleTagInHighlightLocal] Path mismatch for ${docType}: store has ${p[pathKey]}, but highlight expects ${filePath}`);
             return p;
         }
 

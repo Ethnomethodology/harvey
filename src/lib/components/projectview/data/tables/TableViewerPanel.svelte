@@ -4362,6 +4362,9 @@
         onChangeColor={handleTableHighlightColorChange}
         onDelete={handleTableHighlightDelete}
         onClose={() => { showTableModifyToolbar = false; clickedRow = null; }}
+        highlightId={clickedRow ? `row-${clickedRow.getData().harvey_internal_id}` : (selectedRows.length > 0 ? `row-${selectedRows[0].getData().harvey_internal_id}` : null)}
+        docType="table"
+        filePath={tablePath}
     />
 </div>
 

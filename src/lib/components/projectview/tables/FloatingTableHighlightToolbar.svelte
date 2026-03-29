@@ -1,8 +1,8 @@
 <script>
   import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
-  import { allTags } from '$lib/stores/tagStore.js';
-  import { Toolbar, Button, Dropdown, Checkbox } from 'flowbite-svelte';
-  import { Trash2, Tag } from '@lucide/svelte';
+  import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
+  import { Toolbar, Button, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
+  import { Trash2, Tag, ChevronRight, Check } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   export let showToolbar = false;
@@ -25,6 +25,20 @@
   })();
 
   $: activeTags = currentHighlight?.tags || [];
+
+  $: ungroupedTags = $allTags.filter(t => t.tag_group_id === null || t.tag_group_id === undefined);
+  $: groupedTagsMap = $allTags.reduce((acc, tag) => {
+    if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
+      if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
+      acc[tag.tag_group_id].push(tag);
+    }
+    return acc;
+  }, {});
+
+  function isGroupChecked(groupId) {
+    const tags = groupedTagsMap[groupId] || [];
+    return tags.some(t => activeTags.includes(t.name));
+  }
 
   function handleTagToggle(tagName) {
     toggleTagInHighlightLocal(highlightId, tagName, docType, filePath);
@@ -71,23 +85,61 @@
     <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
     <Button color="none" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative">
       <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
-      <Dropdown class="w-48 p-3 space-y-1 text-sm z-[100001]">
-        <li class="p-1 border-b border-gray-100 dark:border-gray-600 mb-1">
+      <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]">
+        <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1">
           <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
-        </li>
-        {#each $allTags as tag}
-          <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
-            <Checkbox 
-              checked={activeTags.includes(tag.name)} 
-              on:change={() => handleTagToggle(tag.name)}
-              class="items-center px-2 py-1.5 w-full cursor-pointer"
-            >
-              {tag.name}
-            </Checkbox>
-          </li>
+        </div>
+
+        {#each $allTagGroups as group}
+          <DropdownItem class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
+            <div class="flex items-center gap-2 truncate">
+              {#if isGroupChecked(group.id)}
+                <Check class="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              {:else}
+                <div class="w-3.5 h-3.5 shrink-0"></div>
+              {/if}
+              <span class="truncate">{group.name}</span>
+            </div>
+            <ChevronRight class="w-4 h-4 text-gray-400 shrink-0" />
+          </DropdownItem>
+          <Dropdown placement="right-start" class="w-48 p-2 space-y-1 z-[100002]">
+            {#if (groupedTagsMap[group.id] || []).length > 0}
+              {#each groupedTagsMap[group.id] as tag}
+                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+                  <Checkbox
+                    checked={activeTags.includes(tag.name)}
+                    on:change={() => handleTagToggle(tag.name)}
+                    class="items-center px-2 py-1.5 w-full cursor-pointer"
+                  >
+                    {tag.name}
+                  </Checkbox>
+                </li>
+              {/each}
+            {:else}
+              <li class="p-2 text-gray-500 italic text-xs">No tags in group</li>
+            {/if}
+          </Dropdown>
         {/each}
-        {#if $allTags.length === 0}
-          <li class="p-2 text-gray-500 italic text-xs">No tags available</li>
+
+        {#if ungroupedTags.length > 0}
+          {#if $allTagGroups.length > 0}
+             <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
+          {/if}
+          {#each ungroupedTags as tag}
+            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600">
+              <Checkbox
+                checked={activeTags.includes(tag.name)}
+                on:change={() => handleTagToggle(tag.name)}
+                class="items-center px-2 py-1.5 w-full cursor-pointer ml-[22px]"
+              >
+                {tag.name}
+              </Checkbox>
+            </li>
+          {/each}
+        {/if}
+
+        {#if $allTagGroups.length === 0 && ungroupedTags.length === 0}
+          <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
         {/if}
       </Dropdown>
     </Button>
