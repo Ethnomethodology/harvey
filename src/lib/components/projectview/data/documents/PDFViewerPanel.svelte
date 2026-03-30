@@ -713,7 +713,7 @@
             const id = highlightSpan.dataset.hlId; 
             const color = highlightSpan.dataset.hlColor || highlightSpan.style.backgroundColor;
             if (id !== clickedHighlightId || !showSelectionToolbar) {
-                clickedHighlightId = id; clickedHighlightColor = color; selectedRange = null; toolbarMode = 'click';
+                clickedHighlightId = id; clickedHighlightColor = color; selectedRange = null; toolbarMode = 'click'; isTagDropdownOpen = false;
                 // Try to select the corresponding highlight span, else use overlay's bounding rect
                 let clickRange = null;
                 const span = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${id}"]`);
@@ -821,6 +821,7 @@
         selectedRange = null; 
         clickedHighlightId = null; 
         clickedHighlightColor = null;
+        isTagDropdownOpen = false;
     }
     function handleToolbarMouseEnter() { clearTimeout(hideToolbarTimeoutId); }
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
