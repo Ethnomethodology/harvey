@@ -1,9 +1,9 @@
-# Project Harvey 1.0: Architectural Overview
+# Project Harvey: Architectural Overview
 
-## Harvey 1.0: The Vision
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work intensively with qualitative multimedia data. It provides a robust suite of offline tools for managing projects, transcribing audio and video files using local AI models (Whisper.cpp / Faster-Whisper), diarizing speakers (Pyannote), translating text (NLLB / Helsinki-NLP), and editing transcripts with a feature-rich, media-synchronized text editor.
+## Harvey: The Vision
+Project Harvey is a comprehensive desktop application designed for researchers, journalists, and individuals who work intensively with qualitative multimedia data. It provides a robust suite of offline tools for managing projects, transcribing audio and video files using local AI models (Whisper.cpp / Faster-Whisper), diarizing speakers (Pyannote), translating text (NLLB / Helsinki-NLP), and editing transcripts with a feature-rich, media-synchronized text editor.
 
-Harvey 1.0 is designed with privacy and data sovereignty as a priority. Core AI functionalities run entirely locally on the user's hardware. Users download the necessary models once during the initial Setup Wizard and can then operate entirely offline, ensuring sensitive research data never leaves their device.
+Harvey is designed with privacy and data sovereignty as a priority. Core AI functionalities run entirely locally on the user's hardware. Users download the necessary models once during the initial Setup Wizard and can then operate entirely offline, ensuring sensitive research data never leaves their device.
 
 ## Technology Stack
 
