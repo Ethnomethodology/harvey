@@ -78,6 +78,7 @@
     let highlightDropdownRef;
     let isHighlightDropdownOpen = false;
     let selectedHighlightColor = 'transparent';
+    let isTagDropdownOpen = false;
 
     let zoomDropdownRef;
     let isZoomDropdownOpen = false;
@@ -712,7 +713,7 @@
             const id = highlightSpan.dataset.hlId; 
             const color = highlightSpan.dataset.hlColor || highlightSpan.style.backgroundColor;
             if (id !== clickedHighlightId || !showSelectionToolbar) {
-                clickedHighlightId = id; clickedHighlightColor = color; selectedRange = null; toolbarMode = 'click';
+                clickedHighlightId = id; clickedHighlightColor = color; selectedRange = null; toolbarMode = 'click'; isTagDropdownOpen = false;
                 // Try to select the corresponding highlight span, else use overlay's bounding rect
                 let clickRange = null;
                 const span = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${id}"]`);
@@ -820,6 +821,7 @@
         selectedRange = null; 
         clickedHighlightId = null; 
         clickedHighlightColor = null;
+        isTagDropdownOpen = false;
     }
     function handleToolbarMouseEnter() { clearTimeout(hideToolbarTimeoutId); }
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
@@ -968,15 +970,16 @@
             const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
             // applyHighlightToSelectionDOM now primarily focuses on calling renderHighlightOverlay
 
-            hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
 
             if (!visualRendered && newSelectionProcessedQuads.length > 0) { // Only warn if quads were expected
                 console.warn("Visual rendering of new highlight failed, though processed quads were generated. Aborting deferred tasks.");
+                hideSelectionToolbar();
                 return;
             }
             if (!visualRendered && newSelectionProcessedQuads.length === 0) {
                 console.warn("Visual rendering of new highlight failed, no processed quads. Aborting deferred tasks.");
+                hideSelectionToolbar();
                 return;
             }
 
@@ -995,14 +998,20 @@
 
                         await tick(); // Allow store dispatch to settle if needed by markPdfAnnotationsDirty
                         markPdfAnnotationsDirty();
-                        // console.log(`[Highlight Action Defer] Added highlight ${newHighlightId}`);
+
+                        // Flow B/C: Keep toolbar open and switch to modify mode
+                        toolbarMode = 'click';
+                        clickedHighlightId = newHighlightId;
+                        clickedHighlightColor = color;
+                        selectedRange = null;
+
                     } else {
                         console.warn(`[Highlight Action Defer] Failed to create dataForStorage for ${newHighlightId}. Highlight might not be saved correctly.`);
-                        // Potentially remove the visual highlight here if data creation is critical
-                        // removeHighlightOverlay(newHighlightId); // Or removeClickedHighlightBlockDOM if spans were created
+                        hideSelectionToolbar();
                     }
                 } catch (e) {
                     console.error(`[Highlight Action Defer] Error processing new highlight ${newHighlightId}:`, e);
+                    hideSelectionToolbar();
                 }
             });
 
@@ -1114,8 +1123,6 @@
 
         if (selectedRange && toolbarMode === 'selection') {
             await handleHighlightAction(colorValue);
-            window.getSelection()?.removeAllRanges();
-            hideSelectionToolbar();
         } else if (toolbarMode === 'click' && clickedHighlightId) {
             await handleHighlightAction(colorValue);
         }
@@ -2467,10 +2474,10 @@ function updateHighlightOverlayColor(id, color) {
                 {/each}
                 <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
                 {#if toolbarMode === 'click'}
-                    <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
+                    <button id="pdf-tag-btn" type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
                         <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
                     </button>
-                    <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]" on:show={() => { searchTerm = ''; isSearchVisible = false; }}>
+                    <Dropdown bind:open={isTagDropdownOpen} triggeredBy="#pdf-tag-btn" class="w-56 p-2 space-y-1 text-sm z-[100001]" on:show={() => { searchTerm = ''; isSearchVisible = false; }}>
                         <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1 flex items-center justify-between">
                             <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
                             <button on:click={() => isSearchVisible = !isSearchVisible} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none" title="Search Tags">
@@ -2554,6 +2561,12 @@ function updateHighlightOverlayColor(id, color) {
                                 </li>
                             {/if}
                         </Dropdown>
+                {:else}
+                    <div class="relative">
+                        <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none" on:click={async () => { await handleHighlightAction('rgba(255, 242, 117, 0.5)'); setTimeout(() => { isTagDropdownOpen = true; }, 50); }}>
+                            <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
+                        </button>
+                    </div>
                 {/if}
                 <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" 
                     on:click={() => { handleHighlightAction('remove'); }}>

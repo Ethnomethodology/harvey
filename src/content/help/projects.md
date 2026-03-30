@@ -9,9 +9,10 @@ A Harvey Project is a self-contained folder structure. Moving this folder moves 
 
 ```
 Project Folder/
-├── ProjectName.harvey.xml (XML Data)
+├── ProjectName.harvey (JSON Manifest)
 └── harvey_files/
-    ├── Media/ (Audio/Video sources)
+    ├── Audios/ (Imported audio files)
+    ├── Videos/ (Imported video files)
     ├── Documents/ (JSON/PDF/MD)
     ├── Images/ (Imported images)
     ├── Tables/ (CSV/XLSX files)

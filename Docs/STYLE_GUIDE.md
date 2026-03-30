@@ -5,162 +5,92 @@ This document outlines the design system for the Harvey desktop application. The
 ## 1. Core Design Philosophy
 
 - **Clean and Uncluttered**: Prioritize content and functionality. Use whitespace effectively to create a sense of calm and focus.
-- **Modern**: Employ current best practices without being overly trendy. The design should feel timeless and durable.
-- **Accessible**: Ensure all color combinations meet WCAG AA standards for contrast, and that typography is highly legible.
-- **Intuitive**: The design should guide the user. Visual hierarchy, interactive cues, and consistent patterns are paramount.
-- **Unique**: The design should feel bespoke to Harvey, not like a generic template.
+- **Modern Utility-First**: Harvey relies on **Tailwind CSS** for rapid, consistent styling directly within the Svelte template markup.
+- **Component Driven**: We leverage **Flowbite-Svelte** to provide accessible, pre-built interactive components (Modals, Dropdowns, Toolbars, Inputs) that automatically hook into Tailwind's configuration.
+- **Accessible**: Ensure all color combinations meet WCAG AA standards for contrast, and that typography is highly legible across both Light and Dark themes.
 
-## 2. Color Palettes
+## 2. Tailwind CSS & Flowbite-Svelte
 
-Colors are defined as CSS custom properties for easy theming. The primary brand color is a professional and academic **Slate Blue**.
+Harvey's styling is primarily driven by the `tailwind.config.js` file, which defines the core color palette, breakpoints, and plugins (like Flowbite).
 
-### Primary Color: Slate
+**Avoid writing custom CSS rules in `<style>` blocks unless strictly necessary for highly specific, complex layouts (e.g., custom scrollbars, complex SVG overlays, or deeply nested Tabulator grids).** Instead, compose utility classes.
 
-| Role          | Light Mode | Dark Mode  | HEX (Light) | HEX (Dark) |
-|---------------|------------|------------|-------------|------------|
-| Primary       | `primary`  | `primary`  | `#4A6987`   | `#6B97C2`  |
-| Lighter (Hover) | `primary-hover` | `primary-hover` | `#6B8AAA` | `#8CB5D9`  |
-| Darker (Active) | `primary-active`| `primary-active`| `#3A536C` | `#4A6987`  |
+### Theming: Light & Dark Mode
 
-### Light Mode Palette
+Harvey supports full dark mode via the `class` strategy in Tailwind. All UI components must explicitly define both states using the `dark:` variant prefix.
 
-| Role              | Name            | HEX       | Description                                      |
-|-------------------|-----------------|-----------|--------------------------------------------------|
-| Background        | `bg-primary`    | `#F8F9FA` | A very light, neutral off-white.                 |
-| Surface           | `bg-secondary`  | `#FFFFFF` | For cards, sidebars, and modals.                 |
-| Border            | `border`        | `#E9ECEF` | Subtle, low-contrast for defining edges.         |
-| Primary Text      | `text-primary`  | `#212529` | A very dark gray for maximum readability.        |
-| Secondary Text    | `text-secondary`| `#6C757D` | For labels, hints, and less important info.      |
-| Interactive       | `accent`        | `#4A6987` | The primary brand color for interactive elements.|
-| Success           | `success`       | `#2F9E44` | Green for success states.                        |
-| Warning           | `warning`       | `#F7B42C` | Amber for warnings.                              |
-| Error             | `error`         | `#D63939` | Red for errors and destructive actions.          |
+*   **Example (Backgrounds & Text):**
+    ```html
+    <!-- Correct -->
+    <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        Content
+    </div>
+    ```
 
-### Dark Mode Palette
+*   **Example (Borders):**
+    ```html
+    <!-- Correct -->
+    <div class="border border-gray-200 dark:border-gray-700">
+        Divided Section
+    </div>
+    ```
 
-| Role              | Name            | HEX       | Description                                      |
-|-------------------|-----------------|-----------|--------------------------------------------------|
-| Background        | `bg-primary`    | `#1A1D21` | A very dark, desaturated blue-gray.              |
-| Surface           | `bg-secondary`  | `#2C3138` | A slightly lighter dark shade for cards.         |
-| Border            | `border`        | `#373C44` | Subtle, just visible against the surface.        |
-| Primary Text      | `text-primary`  | `#F8F9FA` | A very light gray for maximum readability.       |
-| Secondary Text    | `text-secondary`| `#ADB5BD` | Lighter gray for labels, maintaining contrast.   |
-| Interactive       | `accent`        | `#6B97C2` | A brighter slate blue to stand out.              |
-| Success           | `success`       | `#40C057` | A brighter green for dark backgrounds.           |
-| Warning           | `warning`       | `#FCC419` | A brighter amber for dark backgrounds.           |
-| Error             | `error`         | `#F06565` | A brighter red for dark backgrounds.             |
+The active theme is managed globally by `$themePreference` (in `src/lib/stores/themeStore.js`) and toggled via the Application Configuration menu.
 
----
+## 3. Color Palettes
 
-## 3. Typography
+We utilize Tailwind's extended color palette, heavily relying on the `gray` scale for structure and `blue` for primary brand accents and interactive states.
 
-### Font Family
+### Light Mode Focus
+*   **Backgrounds**: `bg-gray-50` for application canvases, `bg-white` for surface cards.
+*   **Text**: `text-gray-900` for primary content, `text-gray-500` for secondary metadata.
+*   **Borders**: `border-gray-200` or `border-gray-300`.
+*   **Interactive**: `bg-blue-600` for primary buttons, `text-blue-600` for text links.
 
-The UI will use **Inter**, a modern, professional, and highly legible sans-serif font. It is well-suited for user interfaces and provides excellent readability across a wide range of sizes and weights. It should be imported from a font service like Google Fonts.
+### Dark Mode Focus
+*   **Backgrounds**: `dark:bg-gray-950` for application canvases, `dark:bg-gray-900` or `dark:bg-gray-800` for surface cards.
+*   **Text**: `dark:text-white` or `dark:text-gray-100` for primary content, `dark:text-gray-400` for secondary metadata.
+*   **Borders**: `dark:border-gray-700` or `dark:border-gray-600`.
+*   **Interactive**: `dark:bg-blue-700` for primary buttons, `dark:text-blue-500` for text links.
 
-- **Font Family**: `Inter, sans-serif`
+## 4. Typography
 
-### Typographic Scale
+The UI will use **Inter**, a modern, professional, and highly legible sans-serif font.
 
-A consistent, rhythmic scale is used for all text elements.
+- **Font Family**: `font-sans` (mapped to Inter in Tailwind config).
+- **Scale**: Use standard Tailwind text utilities (`text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl`, `text-2xl`).
 
-| Element         | Font Size (rem) | Font Size (px) | Font Weight |
-|-----------------|-----------------|----------------|-------------|
-| H1 / Page Title | `2rem`          | 32px           | `600` (Semi-bold) |
-| H2 / Section Title| `1.5rem`        | 24px           | `600` (Semi-bold) |
-| H3 / Card Title | `1.125rem`      | 18px           | `600` (Semi-bold) |
-| Body            | `1rem`          | 16px           | `400` (Regular)   |
-| Label           | `0.875rem`      | 14px           | `500` (Medium)    |
-| Caption         | `0.75rem`       | 12px           | `400` (Regular)   |
+## 5. Spacing and Layout
 
----
+The layout is built on Tailwind's standard 4px rem-based grid system.
 
-## 4. Spacing and Layout
+*   **Padding/Margins**: Use multiples of this base unit (`p-4`, `m-2`, `gap-3`).
+*   **Flexbox/Grid**: Rely heavily on `flex`, `flex-col`, `items-center`, `justify-between`, and CSS Grid (`grid-cols-2`) for structural alignment over custom floats or absolute positioning (unless building floating UI like toolbars).
+*   **Border Radius**: A standard `rounded-md` (6px) or `rounded-lg` (8px) is used for most components like buttons, inputs, and cards.
 
-### Base Unit
+## 6. Flowbite Component Standards
 
-The layout is built on a **4px** grid system. All margins, padding, and gaps should use multiples of this base unit (4, 8, 12, 16, 24, 32, etc.).
+When building interactive UI, prefer Flowbite-Svelte components over raw HTML tags to ensure accessibility and consistent styling.
 
-- **Base Spacing Unit**: `1` unit = `0.25rem` (4px).
+### Buttons (`<Button>`)
+*   **Primary**: `color="blue"` (Auto-maps to solid blue background).
+*   **Secondary/Outline**: `color="alternative"` (Auto-maps to bordered, transparent background).
+*   **Destructive**: `color="red"` (Used for delete confirmations).
+*   **Icon Buttons**: Use standard HTML `<button>` tags with Tailwind utilities for precise sizing and hover states (e.g., `p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800`) when wrapping Lucide icons.
 
-### Borders & Radius
-
-- **Border Style**: `1px solid var(--color-border)`
-- **Border Radius**: A standard `6px` (`rounded-md` in Tailwind) is used for most components like buttons, inputs, and cards to maintain a consistent, soft-modern look.
-
----
-
-## 5. Component Styles
-
-### Buttons
-
-- **Primary**: Solid fill (`bg-accent`, `text-white`). Hover: `bg-primary-hover`.
-- **Secondary**: Outline (`border-border`, `text-accent`). Hover: `bg-accent/10`.
-- **Tertiary (Ghost)**: No border or background (`text-accent`). Hover: `bg-accent/10`.
-- **States**: `focus` state should have a visible ring. `disabled` state should use `opacity-50` and `cursor-not-allowed`.
-
-### Input Fields (Text, Dropdowns)
-
-- **Default**: `bg-secondary`, `text-primary`, `border-border`.
-- **Focus**: Border color changes to `border-accent`. A subtle focus ring should be visible.
-- **Disabled**: `bg-primary`, `text-secondary`, `opacity-50`.
-
-### Tabs
-
-- **Active**: `text-accent`, with a solid `border-accent` underline.
-- **Inactive**: `text-secondary`, no border. Hover: `text-primary`.
-
-### Cards / Containers
-
-- **Style**: `bg-secondary` with `border-border` and a `rounded-md` radius.
-- **Shadow**: A very subtle box shadow to create depth: `0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04)`.
+### Inputs (`<Input>`, `<Select>`, `<Textarea>`)
+*   Always bind values using Svelte's `bind:value`.
+*   Ensure text inputs, specifically those dealing with tags, comments, or technical configurations, disable native browser interference to prevent frustrating autocorrect behavior:
+    ```html
+    <Input type="text" autocomplete="off" autocorrect="off" spellcheck="false" />
+    ```
 
 ### Icons
-
-- **Set**: **Lucide** (already in the project). It's clean, simple, and comprehensive.
-- **Color**: Icons should use `text-secondary` by default. When part of an interactive element (like a button), they can adopt the state color (e.g., `text-accent` on hover).
-
----
-
-## 6. CSS Custom Properties Implementation
-
-The following CSS variables will be defined in `src/app.css` to power the theme.
-
-```css
-/* In src/app.css */
-@layer base {
-  :root {
-    /* Light Theme */
-    --color-primary: 74 105 135;      /* #4A6987 */
-    --color-primary-hover: 107 138 170; /* #6B8AAA */
-    --color-primary-active: 58 83 108;  /* #3A536C */
-
-    --color-bg-primary: 248 249 250;    /* #F8F9FA */
-    --color-bg-secondary: 255 255 255;  /* #FFFFFF */
-    --color-border: 233 236 239;      /* #E9ECEF */
-    --color-text-primary: 33 37 41;      /* #212529 */
-    --color-text-secondary: 108 117 125; /* #6C757D */
-    
-    --color-success: 47 158 68;        /* #2F9E44 */
-    --color-warning: 247 180 44;       /* #F7B42C */
-    --color-error: 214 57 57;         /* #D63939 */
-  }
-
-  .dark {
-    /* Dark Theme */
-    --color-primary: 107 151 194;     /* #6B97C2 */
-    --color-primary-hover: 139 181 217;/* #8CB5D9 */
-    --color-primary-active: 74 105 135; /* #4A6987 */
-
-    --color-bg-primary: 26 29 33;       /* #1A1D21 */
-    --color-bg-secondary: 44 49 56;      /* #2C3138 */
-    --color-border: 55 60 68;         /* #373C44 */
-    --color-text-primary: 248 249 250;   /* #F8F9FA */
-    --color-text-secondary: 173 181 189; /* #ADB5BD */
-
-    --color-success: 64 192 87;         /* #40C057 */
-    --color-warning: 252 196 25;        /* #FCC419 */
-    --color-error: 240 101 101;        /* #F06565 */
-  }
-}
-```
+*   **Set**: **Lucide Svelte** (`@lucide/svelte`).
+*   **Usage**: Import directly and apply Tailwind classes for sizing and color:
+    ```svelte
+    <script>
+        import { Settings } from '@lucide/svelte';
+    </script>
+    <Settings class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+    ```

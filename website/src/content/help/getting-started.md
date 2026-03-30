@@ -10,7 +10,7 @@ order: 4
 </script>
 
 1.  **Initial Configuration**
-    Before you begin, head to the **Configure tab**. You will need to install the required libraries and download your preferred AI models to enable all functionalities of the app. See [Configure](configure) for more detail.
+    When you launch Harvey for the first time, you will be prompted to run the **Setup Wizard**. This wizard automates the installation of required Python libraries and helps you download your preferred AI models (for transcription and translation) to enable all functionalities of the app. See [Configure](configure) for more detail or if you wish to set paths manually.
 
 2.  **Create a Project**
     Once configured, select "Create Project" from the welcome screen. Choose a folder on your disk where all assets and data for this project will be stored.

@@ -62,8 +62,17 @@
         insertTranscriptSegment,
     } from "$lib/stores/transcriptStore.js";
     import { message, confirm } from "@tauri-apps/plugin-dialog";
-    import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+    import {
+        getCurrentWindow,
+        LogicalSize,
+        currentMonitor,
+    } from "@tauri-apps/api/window";
     import { invoke } from "@tauri-apps/api/core";
+    import {
+        PROJECT_MIN_WIDTH,
+        WELCOME_HEIGHT,
+        DEFAULT_MIN_HEIGHT,
+    } from "$lib/constants/windowSize.js";
     import {
         configStatus,
         updateConfigStatus,
@@ -357,7 +366,7 @@
 
     onMount(async () => {
         const appWindow = getCurrentWindow();
-        await appWindow.setMinSize(new LogicalSize(1024, 600));
+        await appWindow.setMinSize(new LogicalSize(PROJECT_MIN_WIDTH, DEFAULT_MIN_HEIGHT));
         await appWindow.maximize();
         await invoke("set_menu_context", { context: "project" }).catch((err) =>
             console.warn("Failed to set menu context:", err),
@@ -1038,9 +1047,14 @@
         if (canProceed) {
             await clearProjectDataStore();
             const appWindow = getCurrentWindow();
-            await appWindow.setMinSize(new LogicalSize(800, 600)); // Reset min size for welcome screen
+            await appWindow.setMinSize(
+                new LogicalSize(PROJECT_MIN_WIDTH, DEFAULT_MIN_HEIGHT),
+            ); // Reset min size for welcome screen
             await appWindow.unmaximize();
-            await appWindow.setSize(new LogicalSize(800, 600));
+            await appWindow.setSize(
+                new LogicalSize(PROJECT_MIN_WIDTH, WELCOME_HEIGHT),
+            );
+            await appWindow.center();
             await goto("/");
         }
         handlingCloseRequest = false;

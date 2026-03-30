@@ -13,10 +13,29 @@
     import { project } from '$lib/stores/projectStore.js';
     import { page } from '$app/stores';
     import { loadProjectDataAndUpdateStore, normalizePath } from '$lib/services/projectService.js';
-    import { tick } from 'svelte';
+    import { tick, onDestroy } from 'svelte';
     import { Loader } from '@lucide/svelte'; // Import Loader component
+    import { open } from '@tauri-apps/plugin-shell';
   
+    function handleGlobalClick(event) {
+        const anchor = event.target.closest('a');
+        if (!anchor) return;
+
+        const href = anchor.getAttribute('href');
+        if (!href) return;
+
+        // Intercept external links
+        if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:')) {
+            event.preventDefault();
+            open(href).catch(err => {
+                console.error(`[+layout.svelte] Failed to open external link ${href}:`, err);
+            });
+        }
+    }
+
     onMount(async () => {
+      document.addEventListener('click', handleGlobalClick, true);
+
       console.debug('[+layout.svelte] onMount started.'); // DEBUG
       // --- Load theme preference ---
       try {
@@ -75,6 +94,12 @@
       }
   
       
+    });
+
+    onDestroy(() => {
+        if (typeof document !== 'undefined') {
+            document.removeEventListener('click', handleGlobalClick, true);
+        }
     });
   
 </script>

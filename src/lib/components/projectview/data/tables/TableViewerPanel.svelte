@@ -1583,8 +1583,8 @@
         const rowsToTag = (selectedRows && selectedRows.length > 0) ? selectedRows : (clickedRow ? [clickedRow] : []);
 
         if (!highlightId && rowsToTag.length > 0) {
-            // No existing highlight, create one for the selection (default transparent)
-            await applyHighlightToRows(rowsToTag, 'transparent', true);
+            // No existing highlight, create one for the selection (default Yellow for tags)
+            await applyHighlightToRows(rowsToTag, '#FFF275', true);
             
             // After applying, find the new highlight ID from the store
             const firstIdx = rowsToTag[0].getData().harvey_internal_id;

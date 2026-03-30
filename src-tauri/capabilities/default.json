@@ -26,6 +26,8 @@
     "core:window:allow-set-size",
     "core:window:allow-set-min-size",
     "core:window:allow-maximize",
+    "core:window:allow-center",
+    "core:window:allow-current-monitor",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "core:webview:default",
