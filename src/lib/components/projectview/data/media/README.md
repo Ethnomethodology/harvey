@@ -16,7 +16,7 @@ block-beta
 flowchart TD
   MediaView --> MediaEditorPanel
 
-  subgraph MediaEditorPanel Components
+  subgraph MediaEditorPanelComp ["MediaEditorPanel Components"]
     MediaPlayer["Shared MediaPlayer"]
     InteractiveWaveform["InteractiveWaveform (Trim Mode)"]
     TimestampInput

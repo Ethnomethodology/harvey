@@ -15,7 +15,7 @@ block-beta
 flowchart TD
   TableView --> TableViewerPanel
 
-  subgraph TableViewerPanel Architecture
+  subgraph TableViewerPanelArch ["TableViewerPanel Architecture"]
     Toolbar["Formatting Toolbar"]
     TabulatorInstance["Tabulator.js Grid Instance"]
     PivotViewRenderer["Native Pivot View HTML Table"]

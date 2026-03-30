@@ -15,7 +15,7 @@ block-beta
 flowchart TD
   ImageView --> ImageViewerPanel
 
-  subgraph ImageViewerPanel Architecture
+  subgraph ImageViewerPanelArch ["ImageViewerPanel Architecture"]
     Toolbar
     OpenSeadragonCanvas["OpenSeadragon Canvas (Deep Zoom)"]
     SVGOverlay["SVG Overlay (Annotations)"]
