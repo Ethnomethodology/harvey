@@ -878,7 +878,7 @@
   }
 
   import { get } from 'svelte/store';
-  import { project } from '$lib/stores/projectStore.js';
+  import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
   import { triggerRefresh } from '$lib/stores/refresherStore.js';
   import { invoke } from '@tauri-apps/api/core';
 
@@ -1961,7 +1961,8 @@
   }
 
   function applyHighlightColor(colorToApply) {
-    if (!editor || (!editable && !allowReadModeHighlights)) return;
+    if (!editor || (!editable && !allowReadModeHighlights)) return null;
+    let generatedHighlightId = null;
     editor.update(() => {
         const selection = _getSelection();
         if (_isTableSelection(selection)) {
@@ -1980,7 +1981,7 @@
             _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
-            const newId = uuidv4();
+            generatedHighlightId = uuidv4();
             for (const node of selectedNodes) {
                 let targetNode = node;
                 if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent())) {
@@ -1994,7 +1995,7 @@
 
                     if (colorToApply !== 'transparent') {
                         // Always assign a new ID for the new highlight range
-                        extendedNode.setHighlightId(newId);
+                        extendedNode.setHighlightId(generatedHighlightId);
                     } else {
                         if (currentHighlightId !== null) {
                             extendedNode.setHighlightId(null);
@@ -2008,6 +2009,7 @@
         }
     });
     isHighlightDropdownOpen = false;
+    return generatedHighlightId;
 }
 
 function gatherAllHighlights() {
@@ -3402,8 +3404,70 @@ function handleMouseUp() {
 }
 
 function handleCreateHighlight(color) {
-    applyHighlightColor(color);
-    showCreateToolbar = false;
+    const newHighlightId = applyHighlightColor(color);
+    if (newHighlightId) {
+        showCreateToolbar = false;
+        // Seamless transition to Modify Flow (Flow B)
+        setTimeout(() => {
+            clickedHighlightId = newHighlightId;
+            modifyToolbarPosition = { ...createToolbarPosition };
+
+            // Find the node key to pass to the modify toolbar
+            editor.getEditorState().read(() => {
+                const root = _getRoot();
+                const nodesToVisit = [root];
+                while(nodesToVisit.length > 0) {
+                    const node = nodesToVisit.pop();
+                    if (_isExtendedTextNode(node) && node.getHighlightId() === newHighlightId) {
+                        clickedNodeKey = node.getKey();
+                        break;
+                    }
+                    if (node.getChildren) {
+                        const children = node.getChildren();
+                        for (let i = children.length - 1; i >= 0; i--) {
+                            nodesToVisit.push(children[i]);
+                        }
+                    }
+                }
+            });
+            showModifyToolbar = true;
+        }, 50);
+    }
+}
+
+function handleCreateTagDirectly(tagName) {
+    // Flow C: Assign tag directly to unhighlighted text (Defaults to Yellow)
+    const newHighlightId = applyHighlightColor('#FFF275'); // Default yellow
+    if (newHighlightId) {
+        showCreateToolbar = false;
+
+        // Immediately assign the tag to the new highlight in the store
+        toggleTagInHighlightLocal(newHighlightId, tagName, $project.selectedDocumentPath === documentPath ? $project.selectedDocumentType : ($project.currentStandaloneTranscriptPath === documentPath ? 'standalone_transcript' : ($project.activeTranscriptPathInDataTab === documentPath ? $project.activeTranscriptTypeInDataTab || 'audio_transcript' : 'doc')), documentPath);
+
+        setTimeout(() => {
+            clickedHighlightId = newHighlightId;
+            modifyToolbarPosition = { ...createToolbarPosition };
+
+            editor.getEditorState().read(() => {
+                const root = _getRoot();
+                const nodesToVisit = [root];
+                while(nodesToVisit.length > 0) {
+                    const node = nodesToVisit.pop();
+                    if (_isExtendedTextNode(node) && node.getHighlightId() === newHighlightId) {
+                        clickedNodeKey = node.getKey();
+                        break;
+                    }
+                    if (node.getChildren) {
+                        const children = node.getChildren();
+                        for (let i = children.length - 1; i >= 0; i--) {
+                            nodesToVisit.push(children[i]);
+                        }
+                    }
+                }
+            });
+            showModifyToolbar = true;
+        }, 50);
+    }
 }
 
 function handleRemoveHighlightFromToolbar() {
@@ -4006,11 +4070,11 @@ function handleRemoveHighlightFromToolbar() {
 />
 
 <FloatingHighlightToolbar
-  editor={editor}
   showToolbar={showCreateToolbar}
   toolbarPosition={createToolbarPosition}
   onHighlight={handleCreateHighlight}
   onRemoveHighlight={handleRemoveHighlightFromToolbar}
+  onTagToggle={handleCreateTagDirectly}
 />
 {/if}
 </div>
