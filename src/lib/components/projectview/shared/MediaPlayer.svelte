@@ -1023,9 +1023,10 @@
 					isEditingSegment &&
 					editSegmentEndTime > editSegmentStartTime
 				) {
+					// Only loop if we just crossed the end boundary from within the segment
 					if (
-						currentTime < editSegmentStartTime ||
-						currentTime >= editSegmentEndTime
+						currentTime >= editSegmentEndTime &&
+						localCurrentTime < editSegmentEndTime
 					) {
 						video.currentTime = editSegmentStartTime;
 						currentTime = editSegmentStartTime;
@@ -1561,13 +1562,8 @@
 		let clamped = Math.max(0, Math.min(seconds, duration));
 
 		if (!explicitMediaPath) {
-			// Only apply trim/edit clamping for main player
-			if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
-				clamped = Math.max(
-					editSegmentStartTime,
-					Math.min(clamped, editSegmentEndTime - 0.001),
-				);
-			} else if (isTrimming && trimEndTime > trimStartTime) {
+			// Only apply trim clamping for main player (Edit mode clamping removed)
+			if (isTrimming && trimEndTime > trimStartTime) {
 				clamped = Math.max(
 					trimStartTime,
 					Math.min(clamped, trimEndTime - 0.001),

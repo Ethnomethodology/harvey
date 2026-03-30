@@ -10,6 +10,8 @@
         CircleHelp,
         FileText,
     } from "@lucide/svelte";
+    import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "$lib/stores/projectStore.js";
+
     // Use relative path for recursive import within the same directory (if this file is TreeNode.svelte)
     // If TreeNode is imported elsewhere, this might need adjustment, but assuming it's self-recursive
     import TreeNode from "./TreeNode.svelte";
@@ -56,63 +58,64 @@
     }
 
     /* ---------- helpers ---------- */
-    const AUDIO_EXTENSIONS = new Set([
-        "mp3",
-        "wav",
-        "m4a",
-        "ogg",
-        "aac",
-        "flac",
-    ]);
-    const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "avi", "mkv", "webm"]);
+
     // Define extensions for note types for icon matching
     const NOTE_EXTENSIONS = new Set(["json", "md", "txt"]); // Adjusted to include json
 
     /* ---------- Highlighting Logic ---------- */
-    $: shouldHighlight =
+    $: isMediaHighlighted =
         !node.is_directory &&
-        ((node.file_type === "media" && node.path === selectedMediaPath) ||
-            (node.file_type === "transcript" &&
-                node.path === currentTranscriptPath));
+        node.file_type === "media" &&
+        node.path === selectedMediaPath;
+    $: isTranscriptHighlighted =
+        !node.is_directory &&
+        node.file_type.includes("transcript") &&
+        node.path === currentTranscriptPath;
+    $: shouldHighlight = isMediaHighlighted || isTranscriptHighlighted;
 </script>
 
 <!-- List Item Structure -->
-<li class="text-xs select-none">
+<li class="text-xs select-none group/tree-li">
     <!-- Clickable/Hoverable Row -->
     <div
-        class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+        class="flex items-center justify-between w-full px-1.5 py-1 text-left rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         class:cursor-pointer={!node.is_directory}
         class:cursor-default={node.is_directory}
-        class:bg-blue-100={shouldHighlight}
-        class:dark:bg-blue-900={shouldHighlight}
+        class:bg-blue-100={isTranscriptHighlighted}
+        class:dark:bg-blue-800={isTranscriptHighlighted}
         on:click={handleRowClick}
         on:dblclick={handleRowDoubleClick}
         on:contextmenu={handleRowContextMenu}
         title={node.name}
     >
-        <!-- Indentation based on depth -->
-        <!-- Base depth is 3 (stem folder). Subtract 3 to get nesting level (0 for stem, 1 for subdirs, 2 for files) -->
-        <span
-            class="flex-shrink-0"
-            style:width="{(node.depth > 3 ? node.depth - 3 : 0) * 1.25}rem;"
-        ></span>
+        <div class="flex items-center space-x-1.5 flex-grow overflow-hidden truncate">
+            <!-- Indentation based on depth -->
+            <!-- Base depth is 3 (stem folder). Subtract 3 to get nesting level (0 for stem, 1 for subdirs, 2 for files) -->
+            <span
+                class="flex-shrink-0"
+                style:width="{(node.depth > 4 ? node.depth - 4 : 0) * 0.8}rem;"
+            ></span>
 
-        <!-- Folder Toggle Icon OR File Icon -->
-        {#if node.is_directory}
-            <span
-                on:click={toggleExpand}
-                class="px-1 cursor-pointer flex-shrink-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            >
-                {#if expanded}
-                    <FolderOpen class="w-4 h-4" />
-                {:else}
-                    <FolderClosed class="w-4 h-4" />
-                {/if}
-            </span>
-        {:else}
-            <!-- File Icon -->
-            <span
-                class="px-1 flex-shrink-0 flex items-center justify-center text-gray-600 dark:text-gray-400"
+            <!-- Folder Toggle Icon OR File Icon -->
+            {#if node.is_directory}
+                <span
+                    on:click={toggleExpand}
+                    class="flex-shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                >
+                    {#if expanded}
+                        <FolderOpen class="w-4 h-4" />
+                    {:else}
+                        <FolderClosed class="w-4 h-4" />
+                    {/if}
+                </span>
+            {:else}
+                <!-- File Icon -->
+                <span
+                    class="flex-shrink-0 flex items-center justify-center w-4 h-4"
+                class:text-gray-600={!shouldHighlight}
+                class:dark:text-gray-400={!shouldHighlight}
+                class:text-blue-600={shouldHighlight}
+                class:dark:text-blue-400={shouldHighlight}
             >
                 {#if node.file_type === "media" && AUDIO_EXTENSIONS.has(node.name
                             .split(".")
@@ -124,7 +127,7 @@
                             .pop()
                             ?.toLowerCase() ?? "")}
                     <Film class="w-4 h-4" />
-                {:else if node.file_type === "transcript" || node.file_type === "imported_transcript"}
+                {:else if node.file_type === "audio_transcript" || node.file_type === "video_transcript" || node.file_type === "standalone_transcript"}
                     <MessageSquareText class="w-4 h-4" />
                 {:else if node.file_type === "note"}
                     <FileText class="w-4 h-4" />
@@ -136,20 +139,22 @@
 
         <!-- Filename -->
         <span
-            class="text-left w-full px-1 py-0.5 truncate"
+            class="text-left flex-grow truncate font-medium"
             class:text-blue-700={shouldHighlight}
-            class:dark:text-blue-300={shouldHighlight}
-            class:font-medium={node.is_directory}
+            class:dark:text-blue-200={shouldHighlight}
+            class:text-gray-700={!shouldHighlight && node.is_directory}
             class:text-gray-800={!shouldHighlight && !node.is_directory}
+            class:dark:text-gray-400={!shouldHighlight && node.is_directory}
             class:dark:text-gray-200={!shouldHighlight && !node.is_directory}
         >
             {node.name}
         </span>
+        </div>
     </div>
 
     <!-- Recursive Rendering for Children -->
     {#if node.is_directory && expanded && node.children && node.children.length}
-        <ul class="space-y-0.5 mt-0.5">
+        <ul class="mt-0.5 space-y-0.5 border-l border-transparent" style:margin-left="{(node.depth > 4 ? node.depth - 4 : 0) * 0.8 + 0.75}rem;">
             {#each node.children as child (child.path || child.name)}
                 <svelte:self
                     node={child}

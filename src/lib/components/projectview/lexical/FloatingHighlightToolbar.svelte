@@ -1,19 +1,11 @@
-
-<!-- src/lib/components/projectview/lexical/FloatingHighlightToolbar.svelte -->
 <script>
-  import { onMount } from 'svelte';
-  import { Ban } from '@lucide/svelte';
+  import { Toolbar, Button, Tooltip } from 'flowbite-svelte';
+  import { Trash2 } from '@lucide/svelte';
 
-  export let editor;
-  export let showToolbar;
-  export let toolbarPosition;
+  export let showToolbar = false;
+  export let toolbarPosition = { top: 0, left: 0 };
   export let onHighlight;
   export let onRemoveHighlight;
-
-  let isDarkMode = false;
-  onMount(() => {
-    isDarkMode = document.documentElement.classList.contains('dark');
-  });
 
   const highlightOptions = [
       { value: '#FFF275', label: 'Yellow' }, 
@@ -38,71 +30,23 @@
 
 {#if showToolbar}
 <div
-  class="selection-toolbar"
-  class:dark={isDarkMode}
+  class="fixed z-[100000] pointer-events-auto"
   style="top: {toolbarPosition.top}px; left: {toolbarPosition.left}px;"
 >
-  <div class="highlight-options">
+  <Toolbar embedded class="rounded-full shadow-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-1 py-1 flex items-center gap-x-0.5">
     {#each highlightOptions as option}
-      <button
-        class="color-box"
-        style="background-color: {option.value};"
-        on:click={() => handleHighlight(option.value)}
-        title={option.label}
-      ></button>
+      <Button color="none" class="p-1 rounded-full hover:scale-110 transition-transform duration-100" on:click={() => handleHighlight(option.value)}>
+        <span class="w-[18px] h-[18px] rounded-full border border-gray-300 dark:border-gray-600 block shadow-sm" style="background-color: {option.value}"></span>
+      </Button>
     {/each}
-  </div>
-  <button class="remove-highlight" on:click={handleRemove}>
-    <Ban class="h-4 w-4" />
-  </button>
+    <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+    <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" on:click={handleRemove}>
+      <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
+    </Button>
+  </Toolbar>
 </div>
 {/if}
 
 <style>
-.selection-toolbar {
-  position: absolute;
-  z-index: 10;
-  background-color: #fff;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.selection-toolbar.dark {
-    background-color: #2d3748;
-    border-color: #4a5568;
-}
-
-.highlight-options {
-  display: flex;
-  gap: 4px;
-  margin-right: 8px;
-}
-
-.color-box {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.selection-toolbar.dark .color-box {
-    border-color: #718096;
-}
-
-.remove-highlight {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  color: #000;
-}
-
-.selection-toolbar.dark .remove-highlight {
-    color: #fff;
-}
+  /* Removed custom CSS in favor of Flowbite components and Tailwind utility classes */
 </style>

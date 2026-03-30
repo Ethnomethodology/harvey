@@ -113,6 +113,7 @@
     let tableModifyToolbarPosition = { top: 0, left: 0 };
     let clickedRow = null;
     let selectedRows = []; // Rows from a multi-cell/multi-row selection
+    let activeHighlightIdForToolbar = null;
     let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
     let mainPanelContainer = null;
 
@@ -129,8 +130,9 @@
     function handleTableContainerClick(e) {
         if (currentActiveViewType === 'pivot' || !mainPanelContainer || !tabulatorInstance) return;
 
-        
+        const cellEl = e.target.closest('.tabulator-cell');
         const rowEl = e.target.closest('.tabulator-row');
+        
         if (rowEl) {
             try {
                 const row = tabulatorInstance.getRow(rowEl);
@@ -139,24 +141,32 @@
                     const rowIndex = rowData.harvey_internal_id;
                     const highlights = get(project).currentTableHighlights || [];
                     
-                    // Find the highlight this row belongs to
+                    // Find the highlight this row/cell belongs to
+                    const field = cellEl?.dataset.field || (e.target.closest('.tabulator-cell')?.getAttribute('tabulator-field'));
+                    const cellKey = field ? `cell-${rowIndex}-${field}` : null;
+
                     const existingHighlight = highlights.find(h => {
+                        if (cellKey && h.id === cellKey) return true; // Direct cell match
                         const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
-                        return indices.includes(rowIndex);
+                        return !h.id?.startsWith('cell-') && indices.includes(rowIndex);
                     });
 
                     if (existingHighlight) {
+                        activeHighlightIdForToolbar = existingHighlight.id;
+                        
                         // If it's a group, load the whole group into selectedRows
                         if (existingHighlight.rowIndices && existingHighlight.rowIndices.length > 1) {
                             selectedRows = existingHighlight.rowIndices.map(idx => tabulatorInstance.getRow(idx)).filter(r => r !== false);
                             clickedRow = null;
                         } else {
-                            // Single row highlight
+                            // Single row or cell highlight
                             clickedRow = row;
                             selectedRows = [];
                         }
 
-                        const rect = rowEl.getBoundingClientRect();
+                        // Use cell element for positioning if available, otherwise fallback to row
+                        const targetEl = cellEl || rowEl;
+                        const rect = targetEl.getBoundingClientRect();
                         const showBelow = rect.top < 150;
                         
                         tableModifyToolbarPosition = {
@@ -180,26 +190,53 @@
             if (ranges && ranges.length > 0 && !showTableModifyToolbar) {
                 const range = ranges[0];
                 const rows = range.getRows();
-                if (rows && rows.length > 1) {
-                    selectedRows = rows;
+                const cols = range.getColumns();
 
+                // Only show on drag end if it's a multi-cell selection (more than 1x1)
+                if (rows && cols && (rows.length > 1 || cols.length > 1)) {
+                    selectedRows = rows;
                     clickedRow = null;
+                    
+                    // Identify if this selection matches an existing highlight group
+                    const firstIdx = rows[0].getData().harvey_internal_id;
+                    const highlights = get(project).currentTableHighlights || [];
+                    const existingHighlight = highlights.find(h => h.rowIndices && h.rowIndices.includes(firstIdx));
+                    activeHighlightIdForToolbar = existingHighlight ? existingHighlight.id : null;
+
                     lastRangeSelectedTime = Date.now();
                     
+                    // In a multi-cell selection, anchor to the bottom-right cell
                     const lastRow = rows[rows.length - 1];
-                    const lastRowEl = lastRow.getElement();
-                    if (lastRowEl) {
-                        const rect = lastRowEl.getBoundingClientRect();
-                        const showBelow = rect.top < 150;
+                    const lastCol = cols[cols.length - 1];
+                    
+                    try {
+                        const cell = lastRow.getCells().find(c => c.getColumn().getField() === lastCol.getField());
+                        const cellEl = cell ? cell.getElement() : lastRow.getElement();
                         
-                        tableModifyToolbarPosition = {
-                            top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
-                            left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
-                        };
-                        showTableModifyToolbar = true;
+                        if (cellEl) {
+                            const rect = cellEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                            };
+                            showTableModifyToolbar = true;
+                        }
+                    } catch (err) {
+                        // Fallback to row element if cell target fails
+                        const lastRowEl = lastRow.getElement();
+                        if (lastRowEl) {
+                            const rect = lastRowEl.getBoundingClientRect();
+                            const showBelow = rect.top < 150;
+                            tableModifyToolbarPosition = {
+                                top: showBelow ? (rect.bottom + 5) : (rect.top - 45),
+                                left: Math.min(window.innerWidth - 130, Math.max(10, rect.left + (rect.width / 2) - 60))
+                            };
+                            showTableModifyToolbar = true;
+                        }
                     }
                 }
-
             }
         }, 100);
     }
@@ -327,10 +364,11 @@
         // Prevent immediate closing if a range was just selected (e.g. at the end of a drag)
         const recentlySelected = (Date.now() - lastRangeSelectedTime) < 300;
         
-        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !recentlySelected) {
+        if (showTableModifyToolbar && !event.target.closest('.selection-toolbar') && !event.target.closest('[role="menu"]') && !event.target.closest('.z-\\[100001\\]') && !event.target.closest('.z-\\[100000\\]') && !recentlySelected) {
             showTableModifyToolbar = false;
             clickedRow = null;
             selectedRows = [];
+            activeHighlightIdForToolbar = null;
         }
 
     }
@@ -622,7 +660,7 @@
         } else if (category === 'Transcripts') {
             // Standalone transcripts (imported)
             viewType = 'transcript';
-            originalDocType = 'imported_transcript';
+            originalDocType = 'standalone_transcript';
         } else if (category === 'Tables') {
             viewType = 'table';
             originalDocType = 'csv';
@@ -1540,17 +1578,57 @@
         }
     }
 
+    async function handleTableTagToggle(tagName) {
+        let highlightId = activeHighlightIdForToolbar;
+        const rowsToTag = (selectedRows && selectedRows.length > 0) ? selectedRows : (clickedRow ? [clickedRow] : []);
+
+        if (!highlightId && rowsToTag.length > 0) {
+            // No existing highlight, create one for the selection (default transparent)
+            await applyHighlightToRows(rowsToTag, 'transparent', true);
+            
+            // After applying, find the new highlight ID from the store
+            const firstIdx = rowsToTag[0].getData().harvey_internal_id;
+            const highlights = get(project).currentTableHighlights || [];
+            const newHighlight = highlights.find(h => {
+                const indices = h.rowIndices || [parseInt(h.id?.substring(4), 10)];
+                return !h.id?.startsWith('cell-') && indices.includes(firstIdx);
+            });
+            if (newHighlight) {
+                highlightId = newHighlight.id;
+                activeHighlightIdForToolbar = highlightId;
+            }
+        }
+
+        if (!highlightId) return;
+
+        import('$lib/stores/projectStore.js').then(({ toggleTagInHighlightLocal }) => {
+            toggleTagInHighlightLocal(highlightId, tagName, 'table', tablePath);
+        });
+    }
+
     async function handleTableHighlightDelete() {
+        if (activeHighlightIdForToolbar?.startsWith('cell-')) {
+            let currentHighlights = get(project).currentTableHighlights || [];
+            currentHighlights = currentHighlights.filter(h => h.id !== activeHighlightIdForToolbar);
+            setTableHighlights(currentHighlights);
+            await saveTableHighlights();
+            showTableModifyToolbar = false;
+            activeHighlightIdForToolbar = null;
+            return;
+        }
+
         if (selectedRows && selectedRows.length > 0) {
             // Widget action: delete the whole group/range
             await applyHighlightToRows(selectedRows, null, false);
             showTableModifyToolbar = false;
             selectedRows = [];
+            activeHighlightIdForToolbar = null;
         } else if (clickedRow) {
             // Widget action: delete single row
             await applyHighlightToRows([clickedRow], null, false);
             showTableModifyToolbar = false;
             clickedRow = null;
+            activeHighlightIdForToolbar = null;
         }
     }
 
@@ -2777,6 +2855,12 @@
     $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
         // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
         debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
+    }
+
+    // Reactive watcher to capture tags/comments added to base tables
+    // via floating toolbar or HighlightsPanel sidebar
+    $: if (!isViewingDocument && tableReady && $project.isTableHighlightsDirty) {
+        saveTableHighlights();
     }
 
     export async function openLexicalDocument(docPath) {
@@ -4338,7 +4422,11 @@
         toolbarPosition={tableModifyToolbarPosition}
         onChangeColor={handleTableHighlightColorChange}
         onDelete={handleTableHighlightDelete}
-        onClose={() => { showTableModifyToolbar = false; clickedRow = null; }}
+        onClose={() => { showTableModifyToolbar = false; clickedRow = null; selectedRows = []; activeHighlightIdForToolbar = null; }}
+        highlightId={activeHighlightIdForToolbar}
+        docType="table"
+        filePath={tablePath}
+        onTagToggle={handleTableTagToggle}
     />
 </div>
 

@@ -39,7 +39,7 @@
         hideUnsavedChangesPrompt,
         hideConversionPrompt,
         prepareDocumentView,
-        prepareImportedTranscriptView,
+        prepareStandaloneTranscriptView,
         prepareMediaNoteView,
     } from "$lib/stores/projectStore.js";
     import { fetchAllTags } from "$lib/stores/tagStore.js";
@@ -330,12 +330,14 @@
         }
     }
 
-    // Reactive declaration for config issues
+    // Enhanced logic for critical issues: includes missing libraries for the selected engine 
+    // OR if Python libraries are completely missing which impacts most features.
     $: hasCriticalConfigIssues =
         ($configStatus.selected_transcription_engine === "faster-whisper" &&
             !$configStatus.python_libraries_installed) ||
         ($configStatus.selected_transcription_engine === "whisper-cpp" &&
-            !$configStatus.whisper_cpp_installed);
+            !$configStatus.whisper_cpp_installed) ||
+        !$configStatus.python_libraries_installed;
 
     $: hasNonCriticalConfigIssues =
         !hasCriticalConfigIssues &&
@@ -349,8 +351,7 @@
                 !$configStatus.whisper_cpp_models_downloaded) ||
             ($configStatus.selected_transcription_engine === "faster-whisper" &&
                 (!$configStatus.faster_whisper_models_downloaded ||
-                    !$configStatus.faster_whisper_dependencies_installed ||
-                    !$configStatus.python_libraries_installed)));
+                    !$configStatus.faster_whisper_dependencies_installed)));
 
     $: hasConfigIssues = hasCriticalConfigIssues || hasNonCriticalConfigIssues;
 
@@ -676,7 +677,7 @@
             } else if (selectedTab === "data") {
                 const activeDocEditor = proj.activeDocumentEditorRef?.ref;
                 const activeImpTsEditor =
-                    proj.activeImportedTranscriptEditorRef?.ref;
+                    proj.activeStandaloneTranscriptEditorRef?.ref;
                 const activeMediaNoteEditor =
                     proj.activeMediaNoteEditorRef?.ref;
 
@@ -696,7 +697,7 @@
                                 ),
                             );
                     } else if (
-                        proj.isImportedTranscriptDirty &&
+                        proj.isStandaloneTranscriptDirty &&
                         activeImpTsEditor &&
                         typeof activeImpTsEditor.save === "function"
                     ) {
@@ -1102,20 +1103,38 @@
         project.update((p) => ({
             ...p,
             isDocumentLoading: false,
-            isImportedTranscriptLoading: false,
+            isStandaloneTranscriptLoading: false,
             isMediaNoteTranscriptLoading: false,
         }));
 
         if (selectedTab === "data") {
+            const projState = get(project);
             if (
-                !get(project).selectedDocumentPath &&
-                !get(project).currentImportedTranscriptPath &&
-                !get(project).selectedMediaNotePath
+                !projState.selectedDocumentPath &&
+                !projState.currentStandaloneTranscriptPath &&
+                !projState.selectedMediaNotePath
             ) {
                 prepareDocumentView(null);
+            } else {
+                // FORCE RELOAD to pick up any changes from Transcription Tab
+                if (projState.selectedDocumentPath) {
+                   prepareDocumentView(projState.selectedDocumentPath, projState.selectedDocumentType, projState.selectedDocumentOptions?.hasHeaders, true);
+                } else if (projState.currentStandaloneTranscriptPath) {
+                   prepareStandaloneTranscriptView(projState.currentStandaloneTranscriptPath, true);
+                } else if (projState.selectedMediaNotePath) {
+                   prepareMediaNoteView(projState.selectedMediaNotePath, projState.activeTranscriptPathInDataTab, true);
+                }
             }
         } else if (selectedTab === "transcription") {
-            // prepareDocumentView(null); // Removed to persist Data tab state
+            // FORCE RELOAD to pick up any changes from Data Tab
+            const activeTsPath = get(transcriptStore).currentTranscriptPath;
+            if (activeTsPath) {
+                // Path from transcriptStore is already correctly resolved (absolute or relative to project root)
+                loadTranscriptFile(activeTsPath).catch(err => {
+                    console.error("[ProjectView] Error reloading transcript on tab switch", err);
+                });
+            }
+
             // If no media is selected, find and select the first one
             if (!get(transcriptStore).selectedMediaFile) {
                 const proj = get(project);
@@ -1213,7 +1232,7 @@
         // Determine if we are already viewing this path
         const isAlreadyViewing =
             normalizePath(proj.selectedDocumentPath) === path ||
-            normalizePath(proj.currentImportedTranscriptPath) === path ||
+            normalizePath(proj.currentStandaloneTranscriptPath) === path ||
             normalizePath(proj.selectedMediaNotePath) === path;
 
         if (isAlreadyViewing) {
@@ -1244,10 +1263,10 @@
 
         // Determine type and prepare view
         if (tabName === "data") {
-            const isImportedTranscript =
-                viewType === "transcript" ||
-                originalDocType === "imported_transcript" ||
-                proj.importedTranscriptFiles?.some(
+            const isStandaloneTranscript =
+                viewType === "standalone_transcript" ||
+                originalDocType === "standalone_transcript" ||
+                proj.standaloneTranscriptFiles?.some(
                     (f) =>
                         normalizePath(
                             `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
@@ -1255,11 +1274,13 @@
                 );
 
             const isMediaTranscript =
+                viewType === "audio_transcript" ||
+                viewType === "video_transcript" ||
                 originalDocType === "audio_transcript" ||
                 originalDocType === "video_transcript";
 
-            if (isImportedTranscript) {
-                prepareImportedTranscriptView(path);
+            if (isStandaloneTranscript) {
+                prepareStandaloneTranscriptView(path);
             } else if (isMediaTranscript) {
                 function findMediaByTranscriptPathRecursive(
                     nodes,
@@ -1355,7 +1376,7 @@
         const projState = get(project);
         const stillLoading =
             projState.isDocumentLoading ||
-            projState.isImportedTranscriptLoading ||
+            projState.isStandaloneTranscriptLoading ||
             projState.isMediaNoteTranscriptLoading;
         if (
             !stillLoading &&
@@ -1777,7 +1798,7 @@
                         prepareDocumentView(importedPath, "images");
                     }
                 }
-            } else if (actionType === "transcript") {
+            } else if (actionType === "transcript") { // this actionType refers to "transcript" import context menu item, keep it.
                 showImportTranscriptSourceModal = true;
                 project.update((p) => ({ ...p, isLoading: false }));
             } else {
@@ -1806,7 +1827,7 @@
                 const newTranscriptPath = await importTranscriptFile("msWord");
                 if (newTranscriptPath) {
                     if (await ensureTab("data")) {
-                        prepareImportedTranscriptView(newTranscriptPath);
+                        prepareStandaloneTranscriptView(newTranscriptPath);
                     }
                 }
             } catch (e) {
@@ -1873,8 +1894,8 @@
             (get(transcriptStore)?.isTranscribing ?? false)) ||
         $project.isImportingAsset ||
         ($project.selectedDocumentPath && $project.isDocumentLoading) ||
-        ($project.currentImportedTranscriptPath &&
-            $project.isImportedTranscriptLoading) ||
+        ($project.currentStandaloneTranscriptPath &&
+            $project.isStandaloneTranscriptLoading) ||
         ($project.selectedMediaNotePath &&
             $project.isMediaNoteTranscriptLoading);
 </script>
@@ -1928,9 +1949,9 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="flex flex-grow w-full overflow-hidden min-h-0">
+    <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 overflow-hidden border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 border-r border-gray-300 dark:border-gray-700"
         >
             <div class="flex-grow flex flex-col space-y-2">
                 <button
@@ -2060,16 +2081,15 @@
                     title="Configure"
                     aria-label="Configure"
                     on:click={() => (showConfigurationModal = true)}
-                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center transition-colors hover:bg-gray-300 dark:hover:bg-gray-800 focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400 
+                    {!hasConfigIssues ? 'text-gray-700 dark:text-gray-300' : ''}
+                    {hasCriticalConfigIssues ? 'text-red-500' : ''}
+                    {!hasCriticalConfigIssues && hasNonCriticalConfigIssues ? 'text-yellow-500' : ''}"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="currentColor"
-                        class="w-6 h-6 bi bi-gear-wide-connected {hasCriticalConfigIssues
-                            ? 'text-red-500'
-                            : hasNonCriticalConfigIssues
-                              ? 'text-yellow-500'
-                              : ''}"
+                        class="w-6 h-6 bi bi-gear-wide-connected"
                         viewBox="0 0 16 16"
                     >
                         <path
@@ -2081,9 +2101,9 @@
         </div>
 
         <div
-            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 overflow-hidden min-w-0"
+            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0"
         >
-            <div class="flex flex-col flex-grow min-h-0 overflow-hidden">
+            <div class="flex flex-col flex-grow min-h-0">
                 {#if selectedTab === "transcription"}
                     <TranscriptionView
                         bind:this={transcriptionViewRef}

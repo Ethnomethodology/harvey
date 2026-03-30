@@ -21,7 +21,7 @@ const initialPanelState = {
     activeInfoPanelTab: 'metadata', // NEW - Default active tab for the new InfoPanel/RightBar
     transcriptionPanelCollapsed: false, // For the main transcription settings/info panel in TranscriptionView
     tagsLeftPanelCollapsed: false, // Added
-    groupDetailViewMode: loadedState.groupDetailViewMode || 'grid', // 'grid' or 'list', persisted
+    groupDetailViewMode: loadedState.groupDetailViewMode || 'list', // 'list' or 'grid', persisted
     // Add other panel states here as needed
 };
 

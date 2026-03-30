@@ -3,6 +3,9 @@
 
 	export let itemType: string; // 'tag' or 'group'
 	export let allOptions: string[] = [];
+    /** Optional grouped options for rendering categories in the dropdown. 
+     * If provided, dropdown will show headers when search is empty. */
+    export let groupedOptions: { name: string, options: string[] }[] | null = null;
 	export let assignedOptions: string[] = [];
 	export let isEditable = true;
 	export let placeholder: string = 'No items assigned.';
@@ -11,6 +14,11 @@
 	let showDropdown = false;
 	let searchTerm = '';
 	let rootElement: HTMLElement;
+	let dropdownX = 0;
+	let dropdownY = 0;
+	let dropdownWidth = 0;
+	let placement = 'bottom';
+	let dropdownElement: HTMLElement;
 
 	const dispatch = createEventDispatcher();
 
@@ -39,7 +47,6 @@
 			assignedOptions = [...assignedOptions, option];
 		}
 		updateAvailableOptions();
-		showDropdown = false;
 		searchTerm = '';
 		dispatch('update', { options: assignedOptions });
 	}
@@ -47,7 +54,6 @@
 	function handleCreateNew() {
 		if (!isEditable || !searchTerm.trim()) return;
 		const newOption = searchTerm.trim();
-		showDropdown = false;
 		searchTerm = '';
 		dispatch('create', { option: newOption });
 	}
@@ -62,14 +68,102 @@
 		showDropdown = !showDropdown;
 		if (showDropdown) {
 			searchTerm = '';
+			updateDropdownPosition();
 		}
+	}
+
+	function updateDropdownPosition() {
+		if (rootElement) {
+			const rect = rootElement.getBoundingClientRect();
+
+			// Calculate the actual or estimated height of the dropdown
+			let currentDropdownHeight = 240; // Default max height
+			if (dropdownElement) {
+				currentDropdownHeight = dropdownElement.offsetHeight;
+			} else {
+				// Estimate if not yet mounted (search input ~42px, padding ~8px, items ~28px each)
+				const estimatedItemCount = groupedOptions ?
+					(searchTerm ? filteredAvailableOptions.length : availableOptions.length + groupedOptions.length) :
+					filteredAvailableOptions.length;
+				currentDropdownHeight = Math.min(240, 50 + (estimatedItemCount * 28));
+			}
+
+			const margin = 5;
+
+            // Document-relative coordinates (allows for absolute positioning attached to body)
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.scrollY || window.pageYOffset;
+            
+            // Default position: below
+			dropdownX = rect.left + scrollX;
+			dropdownY = rect.bottom + scrollY + margin;
+			dropdownWidth = rect.width;
+			placement = 'bottom';
+
+            // Flip logic: if it overflows viewport bottom, check if there's more space above
+            if (rect.bottom + currentDropdownHeight > window.innerHeight) {
+                const spaceAbove = rect.top;
+                const spaceBelow = window.innerHeight - rect.bottom;
+                
+                if (spaceAbove > spaceBelow && spaceAbove > 100) {
+                    // Position above
+                    placement = 'top';
+                    dropdownY = rect.top + scrollY - margin;
+                }
+            }
+            
+            // Horizontal shift to stay within viewport (still relative to document width)
+            if (rect.left + dropdownWidth > window.innerWidth) {
+                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin) + scrollX;
+            }
+		}
+	}
+
+	function portal(node) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			}
+		};
 	}
 
 	function handleClickOutside(event: MouseEvent) {
 		if (rootElement && !rootElement.contains(event.target as Node)) {
+			// Also check if clicked inside the portaled dropdown
+			const dropdown = document.querySelector('.multi-select-dropdown');
+			if (dropdown && dropdown.contains(event.target as Node)) {
+				return;
+			}
 			showDropdown = false;
 		}
 	}
+
+    import { onMount, onDestroy } from 'svelte';
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMount(() => {
+        if (typeof ResizeObserver !== 'undefined' && rootElement) {
+            resizeObserver = new ResizeObserver(() => {
+                if (showDropdown) updateDropdownPosition();
+            });
+            resizeObserver.observe(rootElement);
+        }
+    });
+
+    onDestroy(() => {
+        if (resizeObserver) resizeObserver.disconnect();
+    });
+
+    // Reactive trigger for position update when showDropdown becomes true
+    // Also re-calculate if the number of options changes significantly (e.g. typing)
+    $: if (showDropdown && rootElement) {
+        // Reference filteredAvailableOptions to trigger re-calculation when it changes
+        filteredAvailableOptions;
+        setTimeout(updateDropdownPosition, 0);
+    }
 </script>
 
 <div class="relative bg-white dark:bg-gray-900" bind:this={rootElement}>
@@ -112,7 +206,10 @@
 
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			use:portal
+			bind:this={dropdownElement}
+			class="absolute z-[999999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto multi-select-dropdown"
+			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px; {placement === 'top' ? 'transform: translateY(-100%);' : ''}"
 		>
 			<div class="p-2">
 				<input
@@ -124,19 +221,65 @@
 					autocorrect="off"
 				/>
 			</div>
-			<ul>
-				{#each filteredAvailableOptions as option (option)}
-					<li
-						on:click={() => addItem(option)}
-						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200"
-					>
-						{option}
-					</li>
-				{/each}
+			<ul class="pb-1">
+                {#if !searchTerm && groupedOptions && groupedOptions.length > 0}
+                    <!-- Grouped View -->
+                    {#each groupedOptions as group}
+                        {@const groupOptions = group.options.filter(o => availableOptions.includes(o))}
+                        {#if groupOptions.length > 0}
+                            <div class="relative mt-4 mb-3 mx-2">
+                                <span class="absolute -top-2 left-2 px-1 text-[9px] font-bold uppercase tracking-wider bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 z-10">
+                                    {group.name}
+                                </span>
+                                <div class="pt-3 pb-1 border border-blue-200 dark:border-blue-800/60 rounded-md">
+                                    {#each groupOptions as option (option)}
+                                        <li
+                                            on:click|stopPropagation={() => addItem(option)}
+                                            class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                                        >
+                                            {option}
+                                        </li>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+                    {/each}
+                    
+                    <!-- Handle ungrouped tags -->
+                    {@const allGroupedOptions = new Set(groupedOptions.flatMap(g => g.options))}
+                    {@const ungroupedOptions = availableOptions.filter(o => !allGroupedOptions.has(o))}
+                    {#if ungroupedOptions.length > 0}
+                        <div class="relative mt-4 mb-3 mx-2">
+                            <span class="absolute -top-2 left-2 px-1 text-[9px] font-bold uppercase tracking-wider bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500 z-10">
+                                Ungrouped
+                            </span>
+                            <div class="pt-3 pb-1 border border-gray-200 dark:border-gray-800/60 rounded-md">
+                                {#each ungroupedOptions as option (option)}
+                                    <li
+                                        on:click|stopPropagation={() => addItem(option)}
+                                        class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                                    >
+                                        {option}
+                                    </li>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+                {:else}
+                    <!-- Flat Filtered View (for search or if no grouping) -->
+    				{#each filteredAvailableOptions as option (option)}
+    					<li
+    						on:click|stopPropagation={() => addItem(option)}
+    						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+    					>
+    						{option}
+    					</li>
+    				{/each}
+                {/if}
 
                 {#if isEditable && searchTerm && !allOptions.includes(searchTerm)}
                 <li
-                    on:click={handleCreateNew}
+                    on:click|stopPropagation={handleCreateNew}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-500 hover:bg-gray-100 dark:hover:bg-blue-500/10 cursor-pointer border-t border-gray-200 dark:border-t-border"
                 >
                     + Create new {itemType} "{searchTerm}"
@@ -147,7 +290,11 @@
 	{/if}
 </div>
 
-<svelte:window on:click={handleClickOutside} />
+<svelte:window 
+	on:click={handleClickOutside} 
+	on:resize={updateDropdownPosition}
+	on:scroll|capture={updateDropdownPosition}
+/>
 
 <style>
 	.relative {

@@ -242,7 +242,7 @@
 			disabled={!canView}
 			title={!canView ? 'Transcripts are not compatible' : 'Activate dual view'}
 		>
-			Enable Compare View
+			Compare
 		</Button>
 	</svelte:fragment>
 </Modal>

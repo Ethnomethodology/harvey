@@ -5,7 +5,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { refresher } from '$lib/stores/refresherStore.js';
 
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setStandaloneTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations, saveTableHighlights, loadHighlightsForFile } from '$lib/services/projectService.js';
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
@@ -27,32 +27,41 @@
                 return;
             }
             if (itemPath) {
-                console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
-
+                console.log('[HighlightsPanel] Global refresher triggered, forcing re-load for', itemPath);
                 let pathForHighlights = itemPath;
                 const p = get(project);
                 if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
                      pathForHighlights = p.activeTranscriptPathInDataTab;
                 }
-
+                
+                // For the global refresher, we DO want a hard reload from disk/DB to allow external sync
                 await loadHighlightsForFile(pathForHighlights, itemType);
-                await fetchAllTags(); // Also refresh the list of all available tags
+                await fetchAllTags();
             }
         });
     });
 
-	$: if (refreshKey) {
-		if (itemPath) {
-            let pathForHighlights = itemPath;
-            const p = get(project);
-            if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
-                 pathForHighlights = p.activeTranscriptPathInDataTab;
-            }
+    $: if (refreshKey && itemPath) {
+        let pathForHighlights = itemPath;
+        const p = get(project);
+        if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
+             pathForHighlights = p.activeTranscriptPathInDataTab;
+        }
 
-			loadHighlightsForFile(pathForHighlights, itemType);
-			fetchAllTags();
-		}
-	}
+        // Logic to prevent overwriting active local edits:
+        // If the path matches what is already open in the store AND the store is not empty, 
+        // skip the redundant load when the panel mounts or when a local "save" just happened.
+        const currentHighlightsInStore = p.currentDocumentHighlights || p.currentStandaloneTranscriptHighlights || p.currentTableHighlights || p.currentPdfAnnotations || p.currentImageAnnotations || [];
+        const currentActivePath = p.selectedDocumentPath || p.currentStandaloneTranscriptPath || (p.selectedMediaNotePath === itemPath ? p.activeTranscriptPathInDataTab : null);
+
+        if (pathForHighlights === currentActivePath && currentHighlightsInStore.length > 0) {
+            console.log('[HighlightsPanel] Active document already has highlights in store, skipping redundant refresh for', pathForHighlights);
+        } else {
+            console.log('[HighlightsPanel] Loading highlights for', pathForHighlights);
+            loadHighlightsForFile(pathForHighlights, itemType);
+            fetchAllTags();
+        }
+    }
 
     onDestroy(() => {
         if (unsubscribeRefresher) {
@@ -86,9 +95,9 @@
         if (p.selectedMediaNotePath) {
             effectiveType = 'doc'; // Media transcripts are handled like docs
             activeHighlights = p.currentDocumentHighlights || [];
-        } else if (p.currentImportedTranscriptPath) {
-            effectiveType = 'imported_transcript';
-            activeHighlights = p.currentImportedTranscriptHighlights || [];
+        } else if (p.currentStandaloneTranscriptPath) {
+            effectiveType = 'standalone_transcript';
+            activeHighlights = p.currentStandaloneTranscriptHighlights || [];
         } else if (currentPath?.toLowerCase().endsWith('.pdf') || (itemPath && itemPath.toLowerCase().endsWith('.pdf'))) {
             effectiveType = 'pdf';
             activeHighlights = p.currentPdfAnnotations || [];
@@ -137,19 +146,19 @@
         } else if (type === 'table') {
             return highlights.map(h => ({
                 id: h.id,
-                color: h.color,
+                color: h.color || 'rgba(255, 242, 117, 0.5)',
                 text: h.text,
                 tags: h.tags || [],
                 comments: h.comments || []
             }));
-        } else { // Handles 'doc', 'pdf', 'imported_transcript'
+        } else { // Handles 'doc', 'pdf', 'standalone_transcript'
             const isPdf = type === 'pdf';
             const map = new Map();
             for (const highlight of highlights) {
                 if (!map.has(highlight.id)) {
                     map.set(highlight.id, {
                         id: highlight.id,
-                        color: highlight.color,
+                        color: highlight.color || 'rgba(255, 242, 117, 0.5)',
                         textParts: [],
                         tags: highlight.tags || [],
                         comments: highlight.comments || [],
@@ -185,8 +194,8 @@
     $: processedHighlights = processHighlights(activeHighlights, effectiveType);
 
     async function handleHighlightsUpdate(newHighlights) {
-        if (effectiveType === 'imported_transcript') {
-            setImportedTranscriptHighlights(newHighlights);
+        if (effectiveType === 'standalone_transcript') {
+            setStandaloneTranscriptHighlights(newHighlights);
         } else if (effectiveType === 'pdf') {
             updatePdfAnnotations(newHighlights, true);
         } else if (effectiveType === 'image') {
@@ -386,7 +395,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if effectiveType === 'doc' || effectiveType === 'media' || effectiveType === 'imported_transcript' || effectiveType === 'image' || effectiveType === 'table' || effectiveType === 'pdf'}
+        {:else if effectiveType === 'doc' || effectiveType === 'media' || effectiveType === 'standalone_transcript' || effectiveType === 'image' || effectiveType === 'table' || effectiveType === 'pdf'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>

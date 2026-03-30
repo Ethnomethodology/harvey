@@ -95,6 +95,7 @@
   import DatePromptModal from '../modals/DatePromptModal.svelte';
   import FindReplaceModal from '../modals/FindReplaceModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
+  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
   import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
   import notificationStore from '$lib/stores/notificationStore.js';
   import {
@@ -196,6 +197,8 @@
   let latestScrollTargetKey = null; // New component-level variable
   let areHighlightsReady = false; // Track if highlights have been loaded from backend
   let areNodesReady = false; // Track if initial nodes have been loaded into Lexical
+  let showCreateToolbar = false;
+  let createToolbarPosition = { top: 0, left: 0 };
 
   let previousDocumentHighlightsIds = new Set();
   
@@ -226,6 +229,17 @@
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
   let clickedNodeKey = null;
+  $: clickedHighlightId = (() => {
+    if (!clickedNodeKey || !editor) return null;
+    let hid = null;
+    editor.getEditorState().read(() => {
+      const node = _getNodeByKey(clickedNodeKey);
+      if (_isExtendedTextNode(node)) {
+        hid = node.getHighlightId();
+      }
+    });
+    return hid;
+  })();
 
   let editorUpdateTracker = 0; // Added reactive statement to track editor updates and re-trigger image resolution
 
@@ -1163,8 +1177,8 @@
                         if (domElement) {
                             const rect = domElement.getBoundingClientRect();
                             modifyToolbarPosition = {
-                                top: rect.top - 40,
-                                left: rect.left,
+                                top: rect.top - 45,
+                                left: Math.max(5, rect.left + (rect.width / 2) - 100),
                             };
                             showModifyToolbar = true;
                             clickedNodeKey = node.getKey();
@@ -1174,8 +1188,8 @@
                         if (domElement) {
                             const rect = domElement.getBoundingClientRect();
                             modifyToolbarPosition = {
-                                top: rect.top - 40,
-                                left: rect.left,
+                                top: rect.top - 45,
+                                left: Math.max(5, rect.left + (rect.width / 2) - 100),
                             };
                             showModifyToolbar = true;
                             clickedNodeKey = parent.getKey();
@@ -3352,6 +3366,50 @@ function syncLayout() {
 $: if (editor && activeLayout) {
     syncLayout();
 }
+
+function handleMouseUp() {
+    if (!editor || (!editable && !allowReadModeHighlights)) return;
+    if (!toolbarConfig.highlight) return;
+
+    // Small delay to ensure Lexical has updated its internal selection state
+    setTimeout(() => {
+        editor.getEditorState().read(() => {
+            const selection = _getSelection();
+            if (_isRangeSelection(selection) && !selection.isCollapsed()) {
+                const domSelection = window.getSelection();
+                if (domSelection.rangeCount > 0) {
+                    const range = domSelection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    const containerRect = editorWrapper.getBoundingClientRect();
+                    
+                    // Position toolbar above the selection, centered
+                    createToolbarPosition = {
+                        top: rect.top - 45,
+                        left: Math.max(5, rect.left + (rect.width / 2) - 100) 
+                    };
+                    
+                    // Boundary check for top
+                    if (createToolbarPosition.top < 5) createToolbarPosition.top = 5;
+
+                    showCreateToolbar = true;
+                    showModifyToolbar = false; // Ensure modify toolbar is hidden
+                }
+            } else {
+                showCreateToolbar = false;
+            }
+        });
+    }, 20);
+}
+
+function handleCreateHighlight(color) {
+    applyHighlightColor(color);
+    showCreateToolbar = false;
+}
+
+function handleRemoveHighlightFromToolbar() {
+    applyHighlightColor('transparent');
+    showCreateToolbar = false;
+}
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
@@ -3775,6 +3833,7 @@ $: if (editor && activeLayout) {
         autocorrect={['ul', 'ol', 'check'].includes(blockType) ? "off" : "on"}
         autocapitalize={['ul', 'ol', 'check'].includes(blockType) ? "off" : "on"}
         data-placeholder={placeholder}
+        on:mouseup={handleMouseUp}
     ></div>
 
     <div class="resizer-line" style={resizerLineStyle}></div>
@@ -3814,7 +3873,6 @@ $: if (editor && activeLayout) {
       on:close={handleTableCellMenuClose}
     />
   {/if}
-</div>
 
 <LinkModal
   bind:showModal={showLinkModal}
@@ -3876,6 +3934,11 @@ $: if (editor && activeLayout) {
   editor={editor}
   showToolbar={showModifyToolbar}
   toolbarPosition={modifyToolbarPosition}
+  highlightId={clickedHighlightId}
+  docType={$project.selectedDocumentPath === documentPath ? $project.selectedDocumentType :
+           ($project.currentStandaloneTranscriptPath === documentPath ? 'standalone_transcript' :
+           ($project.activeTranscriptPathInDataTab === documentPath ? $project.activeTranscriptTypeInDataTab || 'audio_transcript' : 'doc'))}
+  filePath={documentPath}
   on:close={() => {
     showModifyToolbar = false;
     clickedNodeKey = null;
@@ -3941,7 +4004,17 @@ $: if (editor && activeLayout) {
     clickedNodeKey = null;
   }}
 />
+
+<FloatingHighlightToolbar
+  editor={editor}
+  showToolbar={showCreateToolbar}
+  toolbarPosition={createToolbarPosition}
+  onHighlight={handleCreateHighlight}
+  onRemoveHighlight={handleRemoveHighlightFromToolbar}
+/>
 {/if}
+</div>
+
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
       @apply p-1.5 rounded inline-flex items-center justify-center

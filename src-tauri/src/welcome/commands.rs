@@ -9,7 +9,7 @@ use crate::DownloadCancellationState;
 use chrono::{Utc, DateTime};
 use log; // Use log crate
 use quick_xml::{Reader, Writer, events::{Event, BytesText}};
-use quick_xml::de::from_str;
+use serde_json::from_str;
 use serde::{Deserialize};
 use std::{
     collections::HashSet,
@@ -455,7 +455,6 @@ pub async fn download_translation_model_command(
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
         .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
-        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
@@ -466,13 +465,41 @@ pub async fn download_translation_model_command(
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                log::info!("[Python] {}", &line_str);
-                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                if line_str.starts_with("PROGRESS:") {
+                    let parts: Vec<&str> = line_str.split(':').collect();
+                    if let Some(percent_str) = parts.get(1) {
+                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
+                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                            window.emit("translation-download-progress", serde_json::json!({ 
+                                "model_name": &model_name, 
+                                "percent": percent,
+                                "file_name": file_name
+                            })).unwrap();
+                        }
+                    }
+                } else {
+                    log::info!("[Python] {}", &line_str);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                }
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
-                log::error!("[Python] {}", &line_str);
-                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                if line_str.starts_with("PROGRESS:") {
+                    let parts: Vec<&str> = line_str.split(':').collect();
+                    if let Some(percent_str) = parts.get(1) {
+                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
+                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                            window.emit("translation-download-progress", serde_json::json!({ 
+                                "model_name": &model_name, 
+                                "percent": percent,
+                                "file_name": file_name
+                            })).unwrap();
+                        }
+                    }
+                } else {
+                    log::error!("[Python] {}", &line_str);
+                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                }
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);
@@ -788,15 +815,18 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     let xml_path = project_dir_path.join(xml_file_name);
     log::info!("create_project: Creating project file: {:?}", xml_path);
 
-    let escaped_name = quick_xml::escape::escape(trimmed_name);
-    // Add project_uuid to the XML content
-    let project_xml_content = format!(
-        "<project>\n  <name>{}</name>\n  <project_uuid>{}</project_uuid>\n  <mediaFiles></mediaFiles>\n</project>",
-        escaped_name, project_uuid
-    );
+    // Create an empty JSON manifest with UUID
+    let initial_project_data = crate::projectview::shared_types::ProjectXml {
+        name: trimmed_name.to_string(),
+        project_uuid: project_uuid.clone(),
+        ..Default::default()
+    };
 
-    fs::write(&xml_path, project_xml_content)?;
-    log::info!("create_project: Wrote project XML content with UUID.");
+    let project_json_content = serde_json::to_string_pretty(&initial_project_data)
+        .map_err(|e| CommandError::from(format!("Failed to serialize initial JSON: {}", e)))?;
+
+    fs::write(&xml_path, project_json_content)?;
+    log::info!("create_project: Wrote initial JSON manifest content with UUID.");
 
     // Canonicalize paths *after* file/dir creation
     let absolute_xml_path = canonicalize_path(&xml_path)?
@@ -1083,7 +1113,7 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
     Ok(())
 }
 #[command] pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- open_project: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(&project_xml_path); if !path_buf.exists() || !path_buf.is_file() { log::error!("open_project: Error - XML file not found: {}", project_xml_path); return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path))); } log::info!("open_project: File exists."); let mut config = read_config()?; log::info!("open_project: Config read."); let project_index = config.projects.iter().position(|p| p.path == project_xml_path); log::info!("open_project: Project index in config: {:?}", project_index); let final_project_info: ProjectInfo; let mut config_needs_write = false; if let Some(index) = project_index { log::info!("open_project: Found project in config ('{}'). Updating timestamp.", config.projects[index].name); let now = Utc::now(); if config.projects[index].last_opened_ts != now { config.projects[index].last_opened_ts = now; config_needs_write = true; log::info!("open_project: Updated last_opened_ts for '{}'.", config.projects[index].name); } else { log::info!("open_project: Timestamp current for '{}'.", config.projects[index].name); } final_project_info = config.projects[index].clone(); } else { log::info!("open_project: Project not in config, importing..."); match import_project_internal(&project_xml_path) { Ok(imported_info) => { log::info!("open_project: Import successful."); final_project_info = imported_info; config_needs_write = true; /* Config was updated by import */ }, Err(e) => { log::error!("open_project: Import failed: {}", e); return Err(e); } } } if config_needs_write { log::info!("open_project: Config needs write. Writing..."); config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); write_config(&config)?; log::info!("open_project: Config.xml written."); } else { log::info!("open_project: Config up-to-date."); } log::info!("---- open_project: End Successfully ----"); Ok(final_project_info) }
-fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = canonicalize_path(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read XML ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = from_str(&xml_content).map_err(|e| CommandError::from(format!("XML deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
+fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = canonicalize_path(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read JSON ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = serde_json::from_str(&xml_content).map_err(|e| CommandError::from(format!("JSON deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
 #[command] pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project: Start Command Wrapper. Path='{}' ----", project_xml_path); let result = import_project_internal(&project_xml_path); log::info!("---- import_project: End Command Wrapper ----"); result }
 #[command]
 pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError> {
@@ -1094,7 +1124,7 @@ pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError
     if xml_path.exists() && xml_path.is_file() {
         match fs::read_to_string(&xml_path) {
             Ok(xml_content) => {
-                match quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                match serde_json::from_str::<ProjectXml>(&xml_content) {
                     Ok(project_data) => {
                         if !project_data.project_uuid.is_empty() {
                             project_uuid_for_db_deletion = Some(project_data.project_uuid);

@@ -43,8 +43,10 @@
     // Virtualization state
     let scrollTop = 0;
     let containerHeight = 0;
-    const ESTIMATED_SEGMENT_HEIGHT = 70; // Adjust as needed, or measure dynamically
     const OVERSCAN_COUNT = 5; // Number of items to render above/below viewport
+
+    // Reactive estimate based on layout mode (used for virtualization math)
+    $: ESTIMATED_SEGMENT_HEIGHT = previewEditMode ? 110 : 85;
 
     let searchUiContainerElement;
     let searchToggleButtonElement;
@@ -658,59 +660,52 @@
                     activeSegmentIndex < karaokeScrollIndex &&
                     karaokeScrollIndex !== -1;
 
-                // Sweet spot for incremental scrolling (middle 50% of the screen)
-                const sweetSpotTop =
-                    viewportTop + currentContainerHeight * 0.25;
-                const sweetSpotBottom =
-                    viewportTop + currentContainerHeight * 0.75;
-                const isItemInSweetSpot =
-                    itemTop >= sweetSpotTop && itemBottom <= sweetSpotBottom;
+                // --- Identical Precision Centering & Jump Logic ---
+                // We attempt to find the actual element in the DOM to get precise coordinates.
+                // If virtualization has rendered it, we use the real position; otherwise, we fall back to estimates.
+                
+                const segmentElementId = `segment-${activeSegmentIndex}-p`;
+                const segmentElement = document.getElementById(segmentElementId);
+                
+                // Track "Jumps" (seeks) to force centering.
+                const isJump = karaokeScrollIndex !== -1 && Math.abs(activeSegmentIndex - karaokeScrollIndex) > 1;
+                
+                let actualItemTop = ($transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex) * ESTIMATED_SEGMENT_HEIGHT;
+                let actualItemBottom = actualItemTop + ESTIMATED_SEGMENT_HEIGHT;
+                let actualItemHeight = ESTIMATED_SEGMENT_HEIGHT;
+                
+                if (segmentElement) {
+                    actualItemTop = segmentElement.offsetTop;
+                    actualItemHeight = segmentElement.offsetHeight;
+                    actualItemBottom = actualItemTop + actualItemHeight;
+                }
 
-                // Condition for incremental scroll
-                if (
-                    $transcriptStore.player.isPlaying &&
-                    isScrollingDown &&
-                    isItemInSweetSpot &&
-                    maxScrollTop - currentDomScrollTop > 1
-                ) {
-                    const targetScrollTop = Math.min(
-                        currentDomScrollTop +
-                            ($transcriptStore.isDualModeActive
-                                ? 2 * ESTIMATED_SEGMENT_HEIGHT
-                                : ESTIMATED_SEGMENT_HEIGHT),
-                        maxScrollTop,
+                const safeZoneTop = viewportTop + currentContainerHeight * 0.15;
+                const safeZoneBottom = viewportBottom - currentContainerHeight * 0.15;
+                
+                // Determine if we should force a centering scroll.
+                // We force it if:
+                // 1. The item is outside the "safe zone" (approaching edges).
+                // 2. The player is NOT playing (manual navigation like Next/Prev/Waveform click).
+                // 3. This was an explicit "jump" (progress bar seek).
+                // Note: Logic is now identical for Read and Edit modes to ensure consistent behavior.
+                const isItemOutsideSafeZone = actualItemTop < safeZoneTop || actualItemBottom > safeZoneBottom;
+                const isManualNavigation = !$transcriptStore.player.isPlaying;
+                const forceCentering = isItemOutsideSafeZone || isManualNavigation || isJump;
+                
+                if (forceCentering) {
+                    let targetDomScrollTop =
+                        actualItemTop -
+                        currentContainerHeight / 2 +
+                        actualItemHeight / 2;
+                    
+                    targetDomScrollTop = Math.max(
+                        0,
+                        Math.min(targetDomScrollTop, maxScrollTop),
                     );
-                    manualSmoothScroll(targetScrollTop);
-                } else {
-                    // Fallback to centering logic for seeking, scrolling up, or when the item is outside the sweet spot.
-                    const scrollThreshold =
-                        ($transcriptStore.isDualModeActive ? 4 : 2) *
-                        ESTIMATED_SEGMENT_HEIGHT;
-                    const effectiveViewportTop =
-                        viewportTop + (isScrollingUp ? scrollThreshold : 0);
-                    const effectiveViewportBottom =
-                        viewportBottom -
-                        (isScrollingDown ? scrollThreshold : 0);
-                    const isItemInsideEffectiveViewport =
-                        itemTop >= effectiveViewportTop &&
-                        itemBottom <= effectiveViewportBottom;
 
-                    if (!isItemInsideEffectiveViewport) {
-                        let targetDomScrollTop =
-                            itemTop -
-                            currentContainerHeight / 2 +
-                            ESTIMATED_SEGMENT_HEIGHT;
-                        targetDomScrollTop = Math.max(
-                            0,
-                            Math.min(targetDomScrollTop, maxScrollTop),
-                        );
-
-                        if (
-                            Math.abs(targetDomScrollTop - currentDomScrollTop) >
-                            1
-                        ) {
-                            manualSmoothScroll(targetDomScrollTop);
-                        }
+                    if (Math.abs(targetDomScrollTop - currentDomScrollTop) > 5) {
+                        manualSmoothScroll(targetDomScrollTop, 400);
                     }
                 }
             }
@@ -1735,7 +1730,7 @@
                     class:group={true}
                     on:mouseenter={() => (hoveredSegment = seg.segmentIndex)}
                     on:mouseleave={() => (hoveredSegment = -1)}
-                    style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
+                    style="min-height: 40px;"
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2 relative"
                     class:segment-active={seg.segmentIndex ===
                         activeSegmentIndex}

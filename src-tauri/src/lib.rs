@@ -364,6 +364,7 @@ pub fn run() {
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
             projectview::core_commands::reveal_in_file_explorer,
+            projectview::core_commands::export_project_manifest,
             // --- Project view GROUP commands (added) ---
             projectview::core_commands::create_new_group,
             projectview::core_commands::get_project_groups,
@@ -374,6 +375,7 @@ pub fn run() {
             projectview::core_commands::update_group_details,
             projectview::core_commands::rename_project_group, // Added command
             projectview::core_commands::delete_project_group, // Added command
+            projectview::core_commands::save_pdf_metadata, // NEW
 
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
@@ -430,7 +432,7 @@ pub fn run() {
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,
             projectview::translation_commands::translate_document_command,
-            projectview::translation_commands::translate_imported_transcript_command,
+            projectview::translation_commands::translate_standalone_transcript_command,
             projectview::translation_commands::cancel_translation_command,
 
 
@@ -500,7 +502,7 @@ pub fn run() {
 
             // --- Project view TRANSCRIPT IMPORT command ---
             projectview::transcription_handler::import_word_transcript,
-            projectview::transcription_handler::save_imported_transcript_and_update_xml
+            projectview::transcription_handler::save_standalone_transcript_and_update_xml
 
         ])
         .run(tauri::generate_context!())

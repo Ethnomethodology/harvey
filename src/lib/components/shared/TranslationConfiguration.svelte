@@ -204,6 +204,9 @@
 	let unlistenComplete = null;
 	let unlistenError = null;
     let unlistenFinished = null;
+    let unlistenProgress = null;
+    let progressPercent = 0;
+    let currentDownloadFile = "";
 
 	function handleOptionChange() {
 		if (selectedOption === 'selectLanguages' && modelName.trim() !== '') {
@@ -253,6 +256,8 @@
 				modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
 				isDownloading = true;
                 isInstallingDependencies = false;
+				progressPercent = 0;
+				currentDownloadFile = "";
 				showLogModal = true;
 			});
 			unlistenLog = await listen('translation-download-log', (event) => {
@@ -291,6 +296,11 @@
 					modelName = '';
 				}
 			});
+			unlistenProgress = await listen('translation-download-progress', (event) => {
+				const { percent, file_name } = event.payload;
+				progressPercent = percent;
+				if (file_name) currentDownloadFile = file_name;
+			});
 			unlistenError = await listen('translation-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
 				let finalStatus;
@@ -324,6 +334,7 @@
 		if (unlistenComplete) unlistenComplete();
 		if (unlistenError) unlistenError();
 		if (unlistenFinished) unlistenFinished();
+		if (unlistenProgress) unlistenProgress();
 	});
 
 	async function handleDownload(targetModelId) {
@@ -492,7 +503,7 @@
 		</div>
 	</div>
 
-	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
+	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading || isInstallingDependencies} isChecking={isChecking} progress={progressPercent} currentFile={currentDownloadFile} title={isInstallingDependencies ? "Installing Dependencies" : "Downloading Translation Model"} inProgressText={isInstallingDependencies ? "Installing..." : "Downloading..."} />
 
 	<div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-md p-3 mb-4 flex-shrink-0">
 		<div class="flex items-center justify-between mb-2">
@@ -671,12 +682,17 @@
 													title="Delete model">Delete</button
 												>
 											{:else if status === 'downloading' || status === 'cancelling'}
-												<div class="flex flex-col items-end">
+												<div class="flex flex-col items-end w-full">
 													<span class="text-[10px] text-blue-700 dark:text-blue-300 font-medium tabular-nums mb-1">
-														{#if status === 'cancelling'}Cancelling...{:else}Downloading...{/if}
+														{#if status === 'cancelling'}Cancelling...{:else}Downloading... {progressPercent}%{/if}
 													</span>
+													{#if status === 'downloading' && progressPercent > 0}
+														<div class="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-1.5">
+															<div class="h-full bg-blue-500 transition-all duration-300" style="width: {progressPercent}%"></div>
+														</div>
+													{/if}
 													<button
-														class="btn-cancel"
+														class="btn-cancel text-[10px] px-2 py-0.5"
 														on:click={() => handleCancel(model.id)}
 														disabled={!isCancelEnabled}
 														title="Cancel download">Cancel</button
@@ -745,7 +761,10 @@
 					</div>
 					<button on:click={() => handleDownload(null)} class="btn-blue-small mb-0.5">
 						{#if isDownloading}
-							Downloading...
+							<span class="flex items-center gap-1">
+								<svg class="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+								{progressPercent > 0 ? `Downloading ${progressPercent}%` : 'Downloading...'}
+							</span>
 						{:else}
 							Download
 						{/if}

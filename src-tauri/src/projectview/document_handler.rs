@@ -59,7 +59,7 @@ pub async fn import_document<R: Runtime>(
     // Read project_uuid from XML once at the beginning
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
@@ -83,7 +83,7 @@ pub async fn import_document<R: Runtime>(
     
     // Read project_data to check for name conflicts in XML
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     // Create per-document folder under Documents, using the truncated stem
     let docs_base = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
@@ -139,7 +139,7 @@ pub async fn import_document<R: Runtime>(
 
             info!("[import_document] Updating project XML to include PDF: {}", final_pdf_name);
             let xml_content = fs::read_to_string(&project_xml_path)?;
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+            let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
             let relative_path_for_pdf_xml = final_pdf_path // Path uses truncated name
                 .strip_prefix(project_base_dir)?
@@ -193,6 +193,7 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
+                thumbnail: None,
             };
 
             // Save metadata to SQLite database
@@ -238,7 +239,7 @@ pub async fn import_document<R: Runtime>(
                 source_path.to_string_lossy().to_string(),
                 temp_html_path.to_string_lossy().to_string(),
                 "html".to_string(),
-                source_format_arg.to_string(),
+                format!("--from={}", source_format_arg),
             ];
             
             info!("[import_document] Running pandoc script: {} {}", script_path.display(), pandoc_args.join(" "));
@@ -319,6 +320,7 @@ pub async fn import_document<R: Runtime>(
                 language_code: None,
                 properties: None,
                 file_type: "document".to_string(),
+                thumbnail: None,
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

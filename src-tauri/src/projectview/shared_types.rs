@@ -58,6 +58,8 @@ pub struct FileMetadata {
     pub properties: Option<String>,
     #[serde(default)]
     pub file_type: String, // New field: audio, video, document, table, image, transcript, audio-transcript, video-transcript
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<Vec<u8>>, // NEW
 }
 
 #[allow(dead_code)]
@@ -125,7 +127,7 @@ pub struct HighlightInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quick_xml::de::from_str;
+    use serde_json::from_str;
     use quick_xml::se::to_string;
 
     // Helper function to wrap SpeakersXml for top-level element serialization/deserialization
@@ -334,7 +336,7 @@ pub struct ImageEntryXml {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ImportedTranscriptEntryXml {
+pub struct StandaloneTranscriptEntryXml {
     #[serde(rename = "name")]
     pub name: String,
     #[serde(rename = "relativePath")]
@@ -370,9 +372,9 @@ pub struct ImageFiles {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct ImportedTranscriptFiles {
-    #[serde(rename = "importedTranscriptFile", default)]
-    pub files: Vec<ImportedTranscriptEntryXml>,
+pub struct StandaloneTranscriptFiles {
+    #[serde(rename = "standaloneTranscriptFile", default)]
+    pub files: Vec<StandaloneTranscriptEntryXml>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -432,8 +434,8 @@ pub struct ProjectXml {
     pub table_files: TableFiles,
     #[serde(rename = "imageFiles", default)]
     pub image_files: ImageFiles,
-    #[serde(rename = "importedTranscriptFiles", default)]
-    pub imported_transcript_files: ImportedTranscriptFiles,
+    #[serde(rename = "standaloneTranscriptFiles", default)]
+    pub standalone_transcript_files: StandaloneTranscriptFiles,
     #[serde(rename = "documentMetadataFiles", default)]
     pub document_metadata_files: DocumentMetadataFiles,
 }
@@ -447,6 +449,37 @@ impl ProjectXml {
             return Some(f);
         }
         if let Some(f) = self.media_files.files.iter_mut().find(|f| f.name == name) {
+            return Some(f);
+        }
+        None
+    }
+
+    pub fn find_media_by_relative_path_mut(&mut self, relative_path: &str) -> Option<&mut MediaFileEntryXml> {
+        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
+            return Some(f);
+        }
+        None
+    }
+
+    pub fn find_media_by_stem_dir_mut(&mut self, stem_rel_path: &str) -> Option<&mut MediaFileEntryXml> {
+        // Media relative path usually looks like `harvey_files/Audios/input_videos/media/input_videos.mp3`
+        // We want to match `harvey_files/Audios/input_videos` part
+        let matcher = |f: &&mut MediaFileEntryXml| -> bool {
+            f.relative_path.starts_with(stem_rel_path)
+        };
+        if let Some(f) = self.audio_files.files.iter_mut().find(&matcher) {
+            return Some(f);
+        }
+        if let Some(f) = self.video_files.files.iter_mut().find(&matcher) {
+            return Some(f);
+        }
+        if let Some(f) = self.media_files.files.iter_mut().find(&matcher) {
             return Some(f);
         }
         None
@@ -470,6 +503,18 @@ impl ProjectXml {
         self.audio_files.files.retain(|f| f.name != name);
         self.video_files.files.retain(|f| f.name != name);
         self.media_files.files.retain(|f| f.name != name);
+        let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        new_len < old_len
+    }
+
+    pub fn remove_media_by_stem_dir(&mut self, stem_rel_path: &str) -> bool {
+        let old_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        let matcher = |f: &MediaFileEntryXml| -> bool {
+            f.relative_path.starts_with(stem_rel_path)
+        };
+        self.audio_files.files.retain(|f| !matcher(f));
+        self.video_files.files.retain(|f| !matcher(f));
+        self.media_files.files.retain(|f| !matcher(f));
         let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
         new_len < old_len
     }
@@ -515,7 +560,7 @@ pub struct ProjectViewData {
     pub document_files: Vec<DocumentEntryXml>,
     pub table_files: Vec<TableEntryXml>,
     pub image_files: Vec<ImageEntryXml>,
-    pub imported_transcript_files: Vec<ImportedTranscriptEntryXml>,
+    pub standalone_transcript_files: Vec<StandaloneTranscriptEntryXml>,
     pub document_metadata_files: Vec<DocumentMetadataEntryXml>,
 }
 
@@ -648,6 +693,7 @@ impl Default for FileMetadata {
             language_code: None,
             properties: None,
             file_type: String::new(),
+            thumbnail: None,
         }
     }
 }
@@ -657,12 +703,15 @@ pub struct AssociatedFile {
     pub name: String,
     pub relative_path: String, // Relative to project base_directory
     pub full_path: String,     // Absolute path
-    pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "imported_transcript", "other"
+    pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "standalone_transcript", "other"
     pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
     pub last_modified: Option<String>, // Last modified date from file metadata
     pub created_at: Option<String>,    // Created at date from file metadata
     pub title: Option<String>,         // Title from file metadata
     pub description: Option<String>,   // Description from file metadata
+    pub waveform_data: Option<Vec<u8>>,
+    pub duration_seconds: Option<f64>,
+    pub thumbnail_data: Option<Vec<u8>>,
 }
 
 // This struct is primarily for backend use when fetching from DB,

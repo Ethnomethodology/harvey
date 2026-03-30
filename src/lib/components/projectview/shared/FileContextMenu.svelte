@@ -1,6 +1,8 @@
 <!-- src/lib/components/projectview/shared/FileContextMenu.svelte -->
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
+
 
   export let item = null; // File object { name, path, relativePath, file_type, media_xml_identifier? }
   export let x = 0;
@@ -11,13 +13,12 @@
 
   const dispatch = createEventDispatcher();
 
-  const AUDIO_EXTENSIONS = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac'];
-  const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+
 
   function isMedia(fileItem) {
     if (!fileItem || !fileItem.name) return false;
     const ext = fileItem.name.split('.').pop()?.toLowerCase() || '';
-    return AUDIO_EXTENSIONS.includes(ext) || VIDEO_EXTENSIONS.includes(ext);
+    return AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext);
   }
 
   function emitAction(actionName) {

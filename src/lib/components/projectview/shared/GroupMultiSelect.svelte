@@ -20,6 +20,10 @@
 	let availableGroupsToAssign: GroupData[] = [];
 	let showDropdown = false;
 	let searchTerm = '';
+	let rootElement: HTMLElement;
+	let dropdownX = 0;
+	let dropdownY = 0;
+	let dropdownWidth = 0;
 
 	const dispatch = createEventDispatcher();
 
@@ -71,7 +75,6 @@
 			});
 			assignedGroups = [...assignedGroups, group];
 			updateAvailableGroups();
-			showDropdown = false;
 			searchTerm = '';
 			dispatch('groupsUpdated', { action: 'added', group });
 		} catch (err) {
@@ -82,7 +85,6 @@
 
 	function handleCreateNewGroup() {
 		if (!isEditable) return;
-		showDropdown = false;
 		dispatch('createNewGroup');
 	}
 
@@ -97,11 +99,77 @@
 		if (showDropdown) {
 			// Reset search term when opening dropdown
 			searchTerm = '';
+			updateDropdownPosition();
 		}
 	}
+
+	function updateDropdownPosition() {
+		if (rootElement) {
+			const rect = rootElement.getBoundingClientRect();
+			const dropdownHeight = 240; // max-h-60 = 240px
+			const margin = 5;
+            
+            // Document-relative coordinates (allows for absolute positioning attached to body)
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.scrollY || window.pageYOffset;
+            
+            // Default position: below
+			dropdownX = rect.left + scrollX;
+			dropdownY = rect.bottom + scrollY + margin;
+			dropdownWidth = rect.width;
+
+            // Flip logic: if it overflows viewport bottom, check if there's more space above
+            if (rect.bottom + dropdownHeight > window.innerHeight) {
+                const spaceAbove = rect.top;
+                const spaceBelow = window.innerHeight - rect.bottom;
+                
+                if (spaceAbove > spaceBelow && spaceAbove > 100) {
+                    // Position above
+                    dropdownY = rect.top + scrollY - Math.min(dropdownHeight, spaceAbove - margin) - margin;
+                }
+            }
+            
+            // Horizontal shift to stay within viewport (still relative to document width)
+            if (rect.left + dropdownWidth > window.innerWidth) {
+                dropdownX = Math.max(margin, window.innerWidth - dropdownWidth - margin) + scrollX;
+            }
+		}
+	}
+
+	function portal(node) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+			}
+		};
+	}
+
+    import { onMount, onDestroy } from 'svelte';
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMount(() => {
+        if (typeof ResizeObserver !== 'undefined' && rootElement) {
+            resizeObserver = new ResizeObserver(() => {
+                if (showDropdown) updateDropdownPosition();
+            });
+            resizeObserver.observe(rootElement);
+        }
+    });
+
+    onDestroy(() => {
+        if (resizeObserver) resizeObserver.disconnect();
+    });
+
+    // Reactive trigger for position update when showDropdown becomes true
+    $: if (showDropdown && rootElement) {
+        setTimeout(updateDropdownPosition, 0);
+    }
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={rootElement}>
 	<!-- Assigned Groups Tags -->
 	<div class="flex flex-wrap gap-1 mb-2 p-1 border border-gray-300 dark:border-gray-600 rounded-md min-h-[30px]">
 		{#if assignedGroups.length === 0}
@@ -155,7 +223,9 @@
 	<!-- Dropdown -->
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			use:portal
+			class="absolute z-[999999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto group-multi-select-dropdown"
+			style="top: {dropdownY}px; left: {dropdownX}px; width: {dropdownWidth}px;"
 		>
 			<div class="p-2">
 				<input
@@ -170,7 +240,7 @@
 			<ul>
 				{#each filteredAvailableGroups as group (group.id)}
 					<li
-						on:click={() => addGroup(group)}
+						on:click|stopPropagation={() => addGroup(group)}
 						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-700 dark:text-gray-200"
 					>
 						{group.name}
@@ -183,7 +253,7 @@
 				{/if}
                 {#if isEditable}
                 <li
-                    on:click={handleCreateNewGroup}
+                    on:click|stopPropagation={handleCreateNewGroup}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer border-t border-gray-200 dark:border-gray-700"
                 >
                     + Create new group {searchTerm ? `"${searchTerm}"` : ''}
@@ -194,12 +264,16 @@
 	{/if}
 </div>
 
-<svelte:window on:click={(event) => {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.relative')) { // Clicked outside the component
-        showDropdown = false;
-    }
-}}/>
+<svelte:window 
+	on:click={(event) => {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.relative') && !target.closest('.group-multi-select-dropdown')) { // Clicked outside the component and its dropdown
+			showDropdown = false;
+		}
+	}}
+	on:resize={updateDropdownPosition}
+	on:scroll|capture={updateDropdownPosition}
+/>
 
 <style>
 	/* Ensure dropdown appears above other elements */

@@ -22,7 +22,7 @@ use calamine;
 
 pub const CONFIG_DIR_NAME: &str = ".harvey";
 pub const CONFIG_FILE_NAME: &str = "config.xml";
-pub const PROJECT_FILE_EXTENSION: &str = "harvey.xml";
+pub const PROJECT_FILE_EXTENSION: &str = "harvey";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProjectInfo {

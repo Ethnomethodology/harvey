@@ -122,6 +122,12 @@
         }
     }
 
+    function isHighlightAnnotation(annotation) {
+        if (!annotation) return false;
+        const shapeType = annotation.target?.selector?.value?.shape;
+        return ['rectangle', 'circle', 'polygon'].includes(shapeType);
+    }
+
     async function handleExportImage(event) {
         const { filePath, includeAnnotations } = event.detail;
         if (!osdViewer || !currentAssetUrl) return;
@@ -1287,7 +1293,7 @@
     }
 
     function handleAnnotationDoubleClick(event, annotation) {
-        if (!get(isLexicalEditMode)) return;
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         event.stopPropagation(); // Prevent OSD zoom
         console.log("Annotation double-clicked:", annotation);
         annotationBeingEdited = annotation;
@@ -1304,7 +1310,7 @@
     }
 
     async function handleAnnotationDialogUpdate(event) {
-        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval } = event.detail;
+        const { title, description, color, text, html, textColor, fontSize, borderColor, borderSize, shape, tailStyle, tailFlipped, rounded, isOval, tags } = event.detail;
         if (!annotationBeingEdited) return;
 
         let updatedSelector = { ...annotationBeingEdited.target.selector.value };
@@ -1375,6 +1381,7 @@
                 }
             },
             body: newBody,
+            tags: tags || []
         };
 
         const updatedAnnotations = $currentAnnotations.map(a =>
@@ -1409,7 +1416,8 @@
     }
 
     function startShapeDrag(event, annotationId) {
-        if (!get(isLexicalEditMode)) return;
+        const annotation = $currentAnnotations.find(a => a.id === annotationId);
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         // Do not stop propagation, so OSD 'canvas-press' fires
         event.preventDefault();
         isDraggingShape = true;
@@ -1424,7 +1432,8 @@
     }
 
     function startResizeDrag(event, annotationId, handleType) {
-        if (!get(isLexicalEditMode)) return;
+        const annotation = $currentAnnotations.find(a => a.id === annotationId);
+        if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
         event.preventDefault();
         // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
         // event.stopPropagation();
@@ -2069,6 +2078,7 @@
                     initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
                     initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                     initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
+                    initialTags={annotationBeingEdited?.tags || []}
                     isEditing={isEditingExisting}
                     useSolidColors={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('speech-bubble') || annotationBeingEdited?.target?.selector?.value?.shape.startsWith('text-area')}
                     isCensoredMode={annotationBeingEdited?.target?.selector?.value?.shape.startsWith('censored')}

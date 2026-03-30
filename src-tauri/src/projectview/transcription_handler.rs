@@ -1,6 +1,6 @@
 // src-tauri/src/projectview/transcription_handler.rs
 use super::shared_types::{
-    TranscriptSegment, ProjectXml, ImportedTranscriptEntryXml, FileMetadata,
+    TranscriptSegment, ProjectXml, StandaloneTranscriptEntryXml, FileMetadata,
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
 };
 use super::shared_utils::{truncate_filename_stem, MAX_FILENAME_STEM_LENGTH, save_project_xml};
@@ -250,13 +250,13 @@ pub async fn import_word_transcript<R: Runtime>(
     let truncated_transcript_base_name = truncate_filename_stem(&original_docx_filename, MAX_FILENAME_STEM_LENGTH);
     let transcript_filename_stem_truncated = Path::new(&truncated_transcript_base_name).file_stem() // Get stem from "truncated.docx"
         .and_then(|s| s.to_str())
-        .unwrap_or("imported_transcript") // Fallback
+        .unwrap_or("standalone_transcript") // Fallback
         .to_string();
     info!("[import_word_transcript] Original DOCX: '{}', Truncated base for transcript: '{}'", original_docx_filename, transcript_filename_stem_truncated);
 
     // Read project_data to check for name conflicts in XML
     let xml_content = fs::read_to_string(&project_xml_path)?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
     let transcripts_root = project_base_dir.join(HARVEY_FILES_DIR).join(TRANSCRIPTS_DIR);
 
@@ -270,8 +270,8 @@ pub async fn import_word_transcript<R: Runtime>(
 
         let candidate_folder = transcripts_root.join(&current_stem);
 
-        // Check if this stem is already used in project_data.imported_transcript_files.files
-        let name_conflict = project_data.imported_transcript_files.files.iter().any(|f| {
+        // Check if this stem is already used in project_data.standalone_transcript_files.files
+        let name_conflict = project_data.standalone_transcript_files.files.iter().any(|f| {
             f.name == current_stem || f.name.starts_with(&format!("{}.", current_stem))
         });
 
@@ -449,7 +449,7 @@ pub async fn import_word_transcript<R: Runtime>(
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
-    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+    let project_data_for_uuid: ProjectXml = serde_json::from_str(&project_xml_content_for_uuid)
         .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID: {}", e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
@@ -460,7 +460,7 @@ pub async fn import_word_transcript<R: Runtime>(
 
     // --- Save metadata to DB ---
     // Try to determine if this transcript belongs to a video or audio by checking if its name matches any media stem
-    let mut file_type = "transcript".to_string();
+    let mut file_type = "standalone_transcript".to_string();
     if let Ok(assets) = db_handler::get_project_assets_for_link(&project_id_for_db) {
         if let Some(matching_media) = assets.iter().find(|a| {
             let is_media = a.file_type.as_deref() == Some("video") || a.file_type.as_deref() == Some("audio");
@@ -470,9 +470,9 @@ pub async fn import_word_transcript<R: Runtime>(
             transcript_filename_stem == media_filename
         }) {
             file_type = if matching_media.file_type.as_deref() == Some("video") {
-                "video-transcript".to_string()
+                "video_transcript".to_string()
             } else {
-                "audio-transcript".to_string()
+                "audio_transcript".to_string()
             };
             info!("[import_word_transcript] Automatically matched transcript to media stem '{}', assigned type '{}'", transcript_filename_stem, file_type);
         }
@@ -499,6 +499,7 @@ pub async fn import_word_transcript<R: Runtime>(
         language_code: None,
         properties: None,
         file_type,
+        thumbnail: None,
     };
 
     let asset_relative_path_for_db = final_transcript_path
@@ -506,7 +507,7 @@ pub async fn import_word_transcript<R: Runtime>(
         .to_string_lossy()
         .replace("\\", "/");
 
-    let asset_type = "imported_transcript"; // Define asset type
+    let asset_type = "standalone_transcript"; // Define asset type
 
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db, // Pass project_id
@@ -523,22 +524,22 @@ pub async fn import_word_transcript<R: Runtime>(
     // --- End of DB metadata saving ---
 
     // Update Project XML
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
     
     // The relative_transcript_path_for_xml is the same as asset_relative_path_for_db used above
     let relative_transcript_path_for_xml = asset_relative_path_for_db; // Path uses final (potentially suffixed) truncated name
 
-    let new_imported_transcript_entry = ImportedTranscriptEntryXml {
+    let new_standalone_transcript_entry = StandaloneTranscriptEntryXml {
         name: new_transcript_filename.clone(), // XML name is the final (potentially suffixed) truncated filename
         relative_path: relative_transcript_path_for_xml.clone(),
     };
 
-    if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry.relative_path) {
-        project_data.imported_transcript_files.files.push(new_imported_transcript_entry);
-        project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    if !project_data.standalone_transcript_files.files.iter().any(|t| t.relative_path == new_standalone_transcript_entry.relative_path) {
+        project_data.standalone_transcript_files.files.push(new_standalone_transcript_entry);
+        project_data.standalone_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
         info!("[import_word_transcript] Added new imported transcript entry to XML project data.");
     } else {
-        warn!("[import_word_transcript] Standalone transcript with relative path {} already exists in XML. Not adding duplicate.", new_imported_transcript_entry.relative_path);
+        warn!("[import_word_transcript] Standalone transcript with relative path {} already exists in XML. Not adding duplicate.", new_standalone_transcript_entry.relative_path);
     }
 
     // The block for adding .metadata.json to project_data.document_metadata_files.files is REMOVED.
@@ -551,7 +552,7 @@ pub async fn import_word_transcript<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn save_imported_transcript_and_update_xml(
+pub async fn save_standalone_transcript_and_update_xml(
     project_xml_path: String,
     target_path: String,
     transcript_name: String,
@@ -586,28 +587,28 @@ pub async fn save_imported_transcript_and_update_xml(
         .map_err(|e| CommandError::from(format!("Failed write transcript file: {}", e)))?;
 
     // Update XML
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path_buf)?)?;
+    let mut project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path_buf)?)?;
     
     let relative_path = target_path_buf
         .strip_prefix(project_base_dir)?
         .to_string_lossy()
         .replace("\\", "/");
 
-    let new_entry = ImportedTranscriptEntryXml {
+    let new_entry = StandaloneTranscriptEntryXml {
         name: transcript_name.clone(),
         relative_path: relative_path.clone(),
     };
 
-    if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == relative_path) {
-        project_data.imported_transcript_files.files.push(new_entry);
-        project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    if !project_data.standalone_transcript_files.files.iter().any(|t| t.relative_path == relative_path) {
+        project_data.standalone_transcript_files.files.push(new_entry);
+        project_data.standalone_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
         save_project_xml(&project_xml_path_buf, &project_data)?;
         info!("[Backend Save Imported Transcript] Added XML entry: {}", relative_path);
     } else {
         // Update name if changed
-        if let Some(pos) = project_data.imported_transcript_files.files.iter().position(|t| t.relative_path == relative_path) {
-             if project_data.imported_transcript_files.files[pos].name != transcript_name {
-                 project_data.imported_transcript_files.files[pos].name = transcript_name;
+        if let Some(pos) = project_data.standalone_transcript_files.files.iter().position(|t| t.relative_path == relative_path) {
+             if project_data.standalone_transcript_files.files[pos].name != transcript_name {
+                 project_data.standalone_transcript_files.files[pos].name = transcript_name;
                  save_project_xml(&project_xml_path_buf, &project_data)?;
              }
         }
@@ -623,7 +624,7 @@ mod tests {
     // PathBuf is already imported via super::* if PathBuf is used in super
     use tempfile::tempdir;
     // DocumentMetadataEntryXml and StandardAssetMetadata are no longer directly used here
-    use crate::projectview::shared_types::{ProjectXml, ImportedTranscriptEntryXml, FileMetadata, TranscriptSegment};
+    use crate::projectview::shared_types::{ProjectXml, StandaloneTranscriptEntryXml, FileMetadata, TranscriptSegment};
     use crate::projectview::db_handler; // For direct db interactions in test
     use chrono::Utc;
     use serde_json; // For serializing segments in test setup
@@ -651,7 +652,7 @@ mod tests {
             document_files: Default::default(),
             table_files: Default::default(),
             image_files: Default::default(),
-            imported_transcript_files: Default::default(),
+            standalone_transcript_files: Default::default(),
             document_metadata_files: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&initial_project_data)?;
@@ -717,14 +718,14 @@ mod tests {
             waveform_data: None,
             language_code: None,
             properties: None,
-            file_type: "transcript".to_string(),
+            file_type: "standalone_transcript".to_string(),
         };
 
         let asset_relative_path_for_db_str = final_transcript_path
             .strip_prefix(project_base_dir)?
             .to_string_lossy()
             .replace("\\", "/");
-        let asset_type_str = "imported_transcript";
+        let asset_type_str = "standalone_transcript";
 
         // 2. Simulate saving metadata to DB (using the test in-memory connection)
         // Replicating db_handler::save_asset_metadata's core SQL for the test:
@@ -784,14 +785,14 @@ mod tests {
         }
 
         // 3. Simulate updating Project XML
-        let mut current_project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
-        let new_imported_transcript_entry_obj = ImportedTranscriptEntryXml {
+        let mut current_project_data: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        let new_standalone_transcript_entry_obj = StandaloneTranscriptEntryXml {
             name: new_transcript_filename.clone(),
             relative_path: asset_relative_path_for_db_str.clone(),
         };
-        if !current_project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry_obj.relative_path) {
-            current_project_data.imported_transcript_files.files.push(new_imported_transcript_entry_obj.clone());
-            current_project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        if !current_project_data.standalone_transcript_files.files.iter().any(|t| t.relative_path == new_standalone_transcript_entry_obj.relative_path) {
+            current_project_data.standalone_transcript_files.files.push(new_standalone_transcript_entry_obj.clone());
+            current_project_data.standalone_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
         }
         // The part for adding to project_data.document_metadata_files is intentionally removed.
         save_project_xml(&project_xml_path, &current_project_data)?;
@@ -832,9 +833,9 @@ mod tests {
         }
 
         // Verify XML Data
-        let updated_project_data_from_xml_check: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
-        assert_eq!(updated_project_data_from_xml_check.imported_transcript_files.files.len(), 1);
-        assert_eq!(updated_project_data_from_xml_check.imported_transcript_files.files[0].name, new_imported_transcript_entry_obj.name);
+        let updated_project_data_from_xml_check: ProjectXml = serde_json::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        assert_eq!(updated_project_data_from_xml_check.standalone_transcript_files.files.len(), 1);
+        assert_eq!(updated_project_data_from_xml_check.standalone_transcript_files.files[0].name, new_standalone_transcript_entry_obj.name);
         assert!(updated_project_data_from_xml_check.document_metadata_files.files.is_empty(), "Document metadata files list in XML should be empty regarding this transcript.");
 
         Ok(())

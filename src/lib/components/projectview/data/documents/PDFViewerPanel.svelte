@@ -1,13 +1,42 @@
 <!-- src/lib/components/projectview/documents/PDFViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+    import { Toolbar, Button, Tooltip, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
     import { readFile } from '@tauri-apps/plugin-fs';
     import { v4 as uuidv4 } from 'uuid';
-    import { project } from '$lib/stores/projectStore.js';
+    import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
+    import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
     import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
     import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
-    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2 } from '@lucide/svelte';
+    import { ChevronLeft, ChevronRight, Minus, Plus, Search, ChevronDown, Check, Highlighter, MessageSquare, Undo2, Redo2, Trash2, Tag, ChevronRight as ChevronRightIcon, SquareCheck } from '@lucide/svelte';
+
+    import { addTag } from '$lib/stores/tagStore.js';
+
+    let isSearchVisible = false;
+    let searchTerm = '';
+
+    $: filteredTagGroups = searchTerm.trim()
+        ? $allTagGroups.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : $allTagGroups;
+
+    $: ungroupedTags = $allTags.filter(t => t.tag_group_id === null || t.tag_group_id === undefined);
+    $: filteredUngroupedTags = searchTerm.trim()
+        ? ungroupedTags.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : ungroupedTags;
+
+    $: groupedTagsMap = $allTags.reduce((acc, tag) => {
+        if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
+            if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
+            acc[tag.tag_group_id].push(tag);
+        }
+        return acc;
+    }, {});
+
+    function isGroupChecked(groupId, activeTags) {
+        const tags = groupedTagsMap[groupId] || [];
+        return tags.some(t => activeTags.includes(t.name));
+    }
 
     let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
@@ -72,18 +101,6 @@
         { value: '3', label: '300%' },
         { value: '4', label: '400%' },
     ];
-
-    const markerIconSVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16">
-            <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
-        </svg>
-    `;
-
-    const removeHighlightIconSVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-        </svg>
-    `;
 
     let searchQuery = ''; let lastSearched = '';
     let currentFindState = 0;
@@ -629,11 +646,17 @@
                 }
 
             if (isInTextLayer && range.toString().trim().length > 0) {
-                // We store the selection but don't show the floating toolbar (as per new requirements)
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
-                clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
-                showSelectionToolbar = false; 
+                clickedHighlightId = null; 
+                clickedHighlightColor = null; 
+                toolbarMode = 'selection';
+                showSelectionToolbar = true; 
+
+                // Defer positioning to ensure the toolbar DOM is ready if it was just turned on
+                requestAnimationFrame(() => {
+                    if (showSelectionToolbar) positionToolbarAtRange(selectedRange);
+                });
 
                 return;
             }
@@ -759,6 +782,33 @@
             if (top < 0) top = 0; 
         }
         
+        selectionToolbarLeft = left;
+        selectionToolbarTop = top;
+    }
+
+    /** Position toolbar centrally above the selection range */
+    function positionToolbarAtRange(range) {
+        if (!selectionToolbarElement || !pdfViewerWrapperElement || !range) return;
+        
+        const rects = range.getClientRects();
+        if (rects.length === 0) return;
+        
+        // Find the topmost and center-most span of the selection
+        const rect = rects[0];
+        const containerRect = pdfViewerWrapperElement.getBoundingClientRect();
+        
+        let toolbarWidth = selectionToolbarElement.offsetWidth || 180;
+        let toolbarHeight = selectionToolbarElement.offsetHeight || 36;
+        
+        let left = rect.left - containerRect.left + (rect.width / 2) - (toolbarWidth / 2);
+        let top = rect.top - containerRect.top - toolbarHeight - 12;
+
+        // Boundary checks
+        left = Math.max(10, Math.min(containerRect.width - toolbarWidth - 10, left));
+        if (top < 10) {
+            top = rect.bottom - containerRect.top + 10; // Show below if no space above
+        }
+
         selectionToolbarLeft = left;
         selectionToolbarTop = top;
     }
@@ -1039,6 +1089,22 @@
 
     function toggleHighlightDropdown() { 
         isHighlightDropdownOpen = !isHighlightDropdownOpen;
+        if (isHighlightDropdownOpen) {
+            searchTerm = '';
+            isSearchVisible = false;
+        }
+    }
+
+    async function handleCreateTag() {
+        const trimmedTerm = searchTerm.trim();
+        if (!trimmedTerm) return;
+        try {
+            await addTag(trimmedTerm);
+            toggleTagInHighlightLocal(clickedHighlightId, trimmedTerm, 'pdf', pdfPath);
+            searchTerm = '';
+        } catch (err) {
+            console.error("Failed to create tag:", err);
+        }
     }
 
     async function applyHighlightColor(colorToApply) {
@@ -2336,7 +2402,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <div class="relative" bind:this={highlightDropdownRef}>
-      <button class="mini-toolbar-button flex items-center" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
+      <button type="button" class="mini-toolbar-button flex items-center focus:outline-none focus:ring-0 outline-none" on:click={toggleHighlightDropdown} title="Highlight Color" disabled={loading || !pdfDoc} style="background-color: {selectedHighlightColor === 'transparent' ? 'transparent': selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' && selectedHighlightColor !== null ? '#000' : 'currentColor'}">
         <Highlighter class="w-4 h-4" />
         <ChevronDown class="ml-1 h-3 w-3" />
       </button>
@@ -2383,33 +2449,117 @@ function updateHighlightOverlayColor(id, color) {
     {/if}
 
     {#if showSelectionToolbar}
-        <div class="floating-toolbar absolute bg-white dark:bg-gray-900 border border-gray-400 dark:border-gray-700 shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
+        <div class="absolute z-[100] pointer-events-auto transition-opacity duration-100"
             bind:this={selectionToolbarElement}
             style:top="{selectionToolbarTop}px"
             style:left="{selectionToolbarLeft}px"
-            style:display="flex"
             style:opacity="{showSelectionToolbar ? '1' : '0'}"
             style:visibility="{showSelectionToolbar ? 'visible' : 'hidden'}"
             on:mouseenter={handleToolbarMouseEnter}
             on:mouseleave={handleToolbarMouseLeave} >
 
-            {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
-                <button class="floating-toolbar-button"
-                    title="{toolbarMode === 'click' ? `Change highlight to ${opt.label}` : `Highlight selection ${opt.label}`}"
-                    on:click|stopPropagation={() => { handleHighlightAction(opt.value); }}>
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-700 block" style:background-color={opt.value}></span>
-                </button>
-            {/each}
-            <div class="separator !mx-0.5"></div>
-            <button class="floating-toolbar-button"
-                title="{toolbarMode === 'click' ? 'Remove this entire highlight' : 'Remove highlight from selection'}"
-                on:click|stopPropagation={() => { handleHighlightAction('remove'); }}>
+            <Toolbar embedded class="rounded-full shadow-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-1 py-1 flex items-center gap-x-0.5">
+                {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
+                    <Button color="none" class="p-1 rounded-full hover:scale-110 transition-transform duration-100" 
+                        on:click={() => { handleHighlightAction(opt.value); }}>
+                        <span class="w-[18px] h-[18px] rounded-full border border-gray-300 dark:border-gray-600 block shadow-sm" style:background-color={opt.value}></span>
+                    </Button>
+                {/each}
+                <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
                 {#if toolbarMode === 'click'}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4 text-red-600 dark:text-red-400" viewBox="0 0 16 16"> <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5m2.5 3a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5"/> <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/> </svg>
-                {:else}
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-700 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></span>
+                    <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 group relative focus:outline-none focus:ring-0 outline-none">
+                        <Tag class="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
+                    </button>
+                    <Dropdown class="w-56 p-2 space-y-1 text-sm z-[100001]" on:show={() => { searchTerm = ''; isSearchVisible = false; }}>
+                        <div class="px-2 py-1 border-b border-gray-100 dark:border-gray-600 mb-1 flex items-center justify-between">
+                            <span class="font-medium text-gray-900 dark:text-gray-300">Tags</span>
+                            <button on:click={() => isSearchVisible = !isSearchVisible} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none" title="Search Tags">
+                                <Search class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+
+                        {#if isSearchVisible}
+                        <div class="px-2 mb-2 mt-1">
+                            <input
+                                type="text"
+                                bind:value={searchTerm}
+                                placeholder="Search or add new..."
+                                class="w-full px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded focus:ring-blue-500 focus:border-blue-500"
+                                autocomplete="off"
+                                autocorrect="off"
+                            />
+                        </div>
+                        {/if}
+
+                            {#each filteredTagGroups as group}
+                                <DropdownItem class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
+                                    <span class="truncate">{group.name}</span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        {#if isGroupChecked(group.id, $project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || [])}
+                                            <SquareCheck class="w-4 h-4 text-blue-500" />
+                                        {/if}
+                                        <ChevronRightIcon class="w-4 h-4 text-gray-400" />
+                                    </div>
+                                </DropdownItem>
+                                <Dropdown placement="right-start" trigger="hover" class="w-48 p-2 space-y-1 z-[100002]">
+                                    {#if (groupedTagsMap[group.id] || []).length > 0}
+                                        {#each groupedTagsMap[group.id] as tag}
+                                                <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
+                                                <Checkbox
+                                                    checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
+                                                    on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
+                                                    class="items-center px-2 py-1.5 w-full cursor-pointer"
+                                                >
+                                                    {tag.name}
+                                                </Checkbox>
+                                            </li>
+                                        {/each}
+                                    {:else}
+                                                <li class="p-2 text-gray-500 italic text-xs list-none">No tags in group</li>
+                                    {/if}
+                                </Dropdown>
+                            {/each}
+
+                            {#if filteredUngroupedTags.length > 0}
+                                {#if filteredTagGroups.length > 0}
+                                    <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
+                                {/if}
+                                {#each filteredUngroupedTags as tag}
+                                            <li class="rounded hover:bg-gray-100 dark:hover:bg-gray-600 list-none">
+                                        <Checkbox
+                                            checked={($project.currentPdfAnnotations.find(h => h.id === clickedHighlightId)?.tags || []).includes(tag.name)}
+                                            on:change={() => toggleTagInHighlightLocal(clickedHighlightId, tag.name, 'pdf', pdfPath)}
+                                            class="items-center px-2 py-1.5 w-full cursor-pointer"
+                                        >
+                                            {tag.name}
+                                        </Checkbox>
+                                    </li>
+                                {/each}
+                            {/if}
+
+                            {#if filteredTagGroups.length === 0 && filteredUngroupedTags.length === 0 && !searchTerm.trim()}
+                                <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
+                            {/if}
+
+                            {#if searchTerm.trim() && !$allTags.some(t => t.name.toLowerCase() === searchTerm.trim().toLowerCase())}
+                                <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>
+                                <li
+                                    on:click|stopPropagation={handleCreateTag}
+                                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCreateTag(); }}
+                                    role="button"
+                                    tabindex="0"
+                                    class="px-2 py-1.5 text-xs text-blue-600 dark:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded list-none"
+                                >
+                                    + Create new tag "{searchTerm.trim()}"
+                                </li>
+                            {/if}
+                        </Dropdown>
                 {/if}
-            </button>
+                <Button color="none" class="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 group" 
+                    on:click={() => { handleHighlightAction('remove'); }}>
+                    <Trash2 class="w-4 h-4 text-red-500 group-hover:text-red-600" />
+                </Button>
+            </Toolbar>
         </div>
     {/if}
 
@@ -2503,9 +2653,6 @@ function updateHighlightOverlayColor(id, color) {
     padding: 1px 0;
 }
 
-    .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
-    .floating-toolbar-button { @apply p-1 border border-transparent hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
-
-    .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
+    .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; }
 
 </style>

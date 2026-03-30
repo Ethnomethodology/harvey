@@ -119,18 +119,31 @@
 
     let isMediaPlayerHidden = false; // New state variable
 
-    // Logic to show media player by default if the new media is a video
-    $: {
+    // Reactive media type detection
+    $: isVideoMedia = (() => {
         const selectedMedia = $transcriptStore.selectedMediaFile;
         if (selectedMedia && selectedMedia.path) {
-            const extension = selectedMedia.path
-                .split(".")
-                .pop()
-                ?.toLowerCase();
+            const extension = selectedMedia.path.split(".").pop()?.toLowerCase();
             const videoExtensions = ["mp4", "mov", "webm", "avi", "mkv"];
-            if (videoExtensions.includes(extension)) {
-                isMediaPlayerHidden = false;
-            }
+            return videoExtensions.includes(extension);
+        }
+        return false;
+    })();
+
+    $: isAudioMedia = (() => {
+        const selectedMedia = $transcriptStore.selectedMediaFile;
+        if (selectedMedia && selectedMedia.path) {
+            const extension = selectedMedia.path.split(".").pop()?.toLowerCase();
+            const audioExtensions = ["mp3", "wav", "m4a", "ogg", "flac", "aac"];
+            return audioExtensions.includes(extension);
+        }
+        return false;
+    })();
+
+    // Logic to show media player by default if the new media is a video
+    $: {
+        if (isVideoMedia) {
+            isMediaPlayerHidden = false;
         }
     }
 
@@ -218,18 +231,30 @@
         if (detail && typeof detail.time === "number") {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === "number") {
-            const segment = get(transcriptStore).segments?.[detail.index];
-            if (segment && mediaPlayerRef) {
-                const seekTime = isSegmentEditingActive
-                    ? Math.max(
-                          currentEditSegmentStart,
-                          Math.min(
-                              segment.start_time,
-                              currentEditSegmentEnd - 0.001,
-                          ),
-                      )
-                    : segment.start_time;
-                mediaPlayerRef.seekTo(seekTime);
+            const index = detail.index;
+            const segment = get(transcriptStore).segments?.[index];
+            if (segment) {
+                // Ensure store index is synced on navigation (e.g., Next/Prev buttons)
+                updatePlayerCurrentSegmentIndex(index);
+
+                if (mediaPlayerRef) {
+                    const seekTime = isSegmentEditingActive
+                        ? Math.max(
+                              currentEditSegmentStart,
+                              Math.min(
+                                  segment.start_time,
+                                  currentEditSegmentEnd - 0.001,
+                              ),
+                          )
+                        : segment.start_time;
+                    mediaPlayerRef.seekTo(seekTime);
+                    if (verticalWaveformRef) {
+                        verticalWaveformRef.scrollToTime(seekTime);
+                    }
+                    if (horizontalWaveformRef) {
+                        horizontalWaveformRef.scrollToTime(seekTime);
+                    }
+                }
             }
         } else {
             console.warn(
@@ -523,6 +548,36 @@
         }
     }
 
+    let lastCenterScrollIndex = -1;
+    $: {
+        const curIdx = $transcriptStore.player.currentSegmentIndex;
+        const totalSegs = $transcriptStore.segments?.length || 0;
+
+        if (
+            curIdx !== lastCenterScrollIndex &&
+            curIdx >= 0 &&
+            curIdx < totalSegs
+        ) {
+            const isPlaying = $transcriptStore.player.isPlaying;
+            // Only jump-scroll to center if we are NOT playing (manual seek while paused)
+            // or if the jump is significant (seeking while playing)
+            const isSignificantJump =
+                lastCenterScrollIndex !== -1 &&
+                Math.abs(curIdx - lastCenterScrollIndex) > 1;
+
+            if (!isPlaying || isSignificantJump) {
+                const segment = $transcriptStore.segments[curIdx];
+                if (segment) {
+                    verticalWaveformRef?.scrollToTime(segment.start_time);
+                    horizontalWaveformRef?.scrollToTime(segment.start_time);
+                }
+            }
+            lastCenterScrollIndex = curIdx;
+        } else if (curIdx === -1) {
+            lastCenterScrollIndex = -1;
+        }
+    }
+
     $: if (mediaPlayerRef && mediaPlayerRef.videoElement) {
         const video = mediaPlayerRef.videoElement;
         if (isSegmentEditingActive) {
@@ -589,40 +644,38 @@
         });
     }
 
-    // Helper function to find media by associated transcript path
-    function findMediaByTranscriptPath(transcriptPath, projectFiles) {
+    // Helper function to extract the stem directory path
+    function getStemRelPath(relPath) {
+        if (!relPath) return "";
+        const parts = relPath.replace(/\\/g, '/').split('/');
+        if (parts.length >= 3) {
+            // e.g. "harvey_files/Videos/input_videos/transcripts/file.json"
+            // extracts the parent stem -> "harvey_files/Videos/input_videos"
+            return parts.slice(0, parts.length - 2).join('/');
+        }
+        return "";
+    }
+
+    // Helper function to find media by associated transcript relative path
+    function findMediaByTranscriptRelativePath(transcriptRelativePath, projectFiles) {
         console.log(
-            "[TranscriptionView] findMediaByTranscriptPath: Searching for transcriptPath:",
-            transcriptPath,
-        );
-        console.log(
-            "[TranscriptionView] findMediaByTranscriptPath: projectFiles structure:",
-            JSON.stringify(projectFiles, null, 2),
+            "[TranscriptionView] findMediaByTranscriptRelativePath: Searching for transcriptRelativePath:",
+            transcriptRelativePath,
         );
 
-        if (!projectFiles) return null;
+        if (!projectFiles || !transcriptRelativePath) return null;
+        
+        const targetStemPath = getStemRelPath(transcriptRelativePath);
+        if (!targetStemPath) return null;
 
         function recurse(nodes) {
             for (const node of nodes) {
-                console.log(
-                    "[TranscriptionView] findMediaByTranscriptPath: Checking node:",
-                    node.name,
-                    "file_type:",
-                    node.file_type,
-                );
-                if (node.file_type === "media" && node.associated_transcripts) {
-                    console.log(
-                        "[TranscriptionView] findMediaByTranscriptPath: Media node found, checking associated_transcripts:",
-                        node.associated_transcripts,
-                    );
-                    if (
-                        node.associated_transcripts.some(
-                            (t) => t.path === transcriptPath,
-                        )
-                    ) {
+                if (node.file_type === "media" && node.relative_path) {
+                    const mediaStemPath = getStemRelPath(node.relative_path);
+                    if (mediaStemPath && mediaStemPath === targetStemPath) {
                         console.log(
-                            "[TranscriptionView] findMediaByTranscriptPath: Match found for transcriptPath:",
-                            transcriptPath,
+                            "[TranscriptionView] findMediaByTranscriptRelativePath: Match found for targetStemPath:",
+                            targetStemPath,
                             "in media node:",
                             node.name,
                         );
@@ -670,7 +723,7 @@
             console.log("[TranscriptionView] Loading media via selectMedia.");
             selectMedia(item);
         } else if (
-            item.file_type === "transcript" ||
+            item.file_type === "audio_transcript" || item.file_type === "video_transcript" ||
             item.file_type === "audio-transcript" ||
             item.file_type === "video-transcript"
         ) {
@@ -684,11 +737,11 @@
 
             const currentProjectFiles = get(project).files;
             console.log(
-                "[TranscriptionView] Calling findMediaByTranscriptPath with transcript path:",
-                item.path,
+                "[TranscriptionView] Calling findMediaByTranscriptRelativePath with transcript relative path:",
+                item.relative_path,
             );
-            const associatedMedia = findMediaByTranscriptPath(
-                item.path,
+            const associatedMedia = findMediaByTranscriptRelativePath(
+                item.relative_path,
                 currentProjectFiles,
             );
 
@@ -729,8 +782,8 @@
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
-<div class="flex flex-col h-screen w-full overflow-hidden">
-    <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
+<div class="flex flex-col h-full w-full">
+    <div class="flex flex-col flex-grow min-h-0 w-full">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if !$panelStateStore.transcriptionPanelCollapsed}
@@ -752,14 +805,16 @@
                 class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700"
             >
                 <div
-                    class="{isMediaPlayerHidden
-                        ? ''
-                        : $transcriptStore.englishSegments &&
-                            $transcriptStore.englishSegments.length > 0 &&
-                            $transcriptStore.originalSegments &&
-                            $transcriptStore.originalSegments.length > 0
-                          ? 'h-[calc(50%-1.75rem)]'
-                          : 'h-1/2'} bg-white dark:bg-gray-950 flex flex-col"
+                    class="bg-white dark:bg-gray-950 flex flex-col flex-shrink-0 {
+                        (isVideoMedia && !isMediaPlayerHidden)
+                            ? ($transcriptStore.englishSegments &&
+                                $transcriptStore.englishSegments.length > 0 &&
+                                $transcriptStore.originalSegments &&
+                                $transcriptStore.originalSegments.length > 0)
+                                ? 'h-[calc(50%-1.75rem)]'
+                                : 'h-1/2'
+                            : 'h-[64px]'
+                    }"
                 >
                     <MediaPlayer
                         bind:this={mediaPlayerRef}
@@ -864,48 +919,48 @@
                 />
             </div>
         </div>
-
-        <!-- Horizontal Waveform Panel (Conditional) -->
-        {#if currentWaveformLayout === "horizontal"}
-            <div
-                style="height: {horizontalWaveformContainerHeightPx}px;"
-                class="border-t border-gray-200 dark:border-gray-700"
-            >
-                {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
-                    <InteractiveWaveform
-                        bind:this={horizontalWaveformRef}
-                        externalAudioBuffer={$transcriptStore.audioBuffer}
-                        externalCurrentTime={$transcriptStore.player
-                            .currentTime}
-                        externalDuration={$transcriptStore.player.duration}
-                        externalSegments={$transcriptStore.segments}
-                        externalCurrentSegmentIndex={$transcriptStore.player
-                            .currentSegmentIndex}
-                        isEditingSegment={isSegmentEditingActive}
-                        editSegmentStartTime={currentEditSegmentStart}
-                        editSegmentEndTime={currentEditSegmentEnd}
-                        showTrimUI={panelEditModeActive}
-                        fixedHeightPx={horizontalWaveformContainerHeightPx}
-                        compactMode={false}
-                        on:navigate={handlePanelNavigate}
-                        on:segmentupdate={handleWaveformSegmentUpdate}
-                    />
-                {:else if $transcriptStore.selectedMediaFile}
-                    <div
-                        class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
-                    >
-                        Waveform still loading...
-                    </div>
-                {:else}
-                    <div
-                        class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
-                    >
-                        Select media to display waveform.
-                    </div>
-                {/if}
-            </div>
-        {/if}
     </div>
+
+    <!-- Horizontal Waveform Panel (Conditional) -->
+    {#if currentWaveformLayout === "horizontal"}
+        <div
+            style="height: {horizontalWaveformContainerHeightPx}px;"
+            class="border-t border-gray-200 dark:border-gray-700 relative z-10 overflow-visible"
+        >
+            {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
+                <InteractiveWaveform
+                    bind:this={horizontalWaveformRef}
+                    externalAudioBuffer={$transcriptStore.audioBuffer}
+                    externalCurrentTime={$transcriptStore.player
+                        .currentTime}
+                    externalDuration={$transcriptStore.player.duration}
+                    externalSegments={$transcriptStore.segments}
+                    externalCurrentSegmentIndex={$transcriptStore.player
+                        .currentSegmentIndex}
+                    isEditingSegment={isSegmentEditingActive}
+                    editSegmentStartTime={currentEditSegmentStart}
+                    editSegmentEndTime={currentEditSegmentEnd}
+                    showTrimUI={panelEditModeActive}
+                    fixedHeightPx={horizontalWaveformContainerHeightPx}
+                    compactMode={false}
+                    on:navigate={handlePanelNavigate}
+                    on:segmentupdate={handleWaveformSegmentUpdate}
+                />
+            {:else if $transcriptStore.selectedMediaFile}
+                <div
+                    class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
+                >
+                    Waveform still loading...
+                </div>
+            {:else}
+                <div
+                    class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-700 bg-white dark:bg-gray-950 p-1"
+                >
+                    Select media to display waveform.
+                </div>
+            {/if}
+        </div>
+    {/if}
 
     {#if isManualSettingsModalOpen}
         <ManualSettingsModal

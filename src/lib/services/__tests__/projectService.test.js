@@ -31,7 +31,7 @@ const getInitialProjectState = () => ({
   documentFiles: [],
   tableFiles: [],
   imageFiles: [],
-  importedTranscriptFiles: [],
+  standaloneTranscriptFiles: [],
   documentMetadataFiles: [],
 });
 
@@ -59,7 +59,7 @@ describe('projectService - loadProjectDataAndUpdateStore', () => {
       document_files: [],
       table_files: [],
       image_files: [],
-      imported_transcript_files: [],
+      standalone_transcript_files: [],
       document_metadata_files: [],
       // No need for other_fields if they are not directly set by dataToSet in the function
     };

@@ -533,8 +533,13 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
-        const isEnglish = langCode === 'en';
-        const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        const isTranslation = langCode.includes('-') || normalizedInputPath.endsWith('.en.json');
+        
+        // --- Speaker Fallback Logic ---
+        // If it's a translation but no translated names are provided, fallback to primary names.
+        const hasTranslatedNames = updatedSpeakers.translatedNames && updatedSpeakers.translatedNames.some(n => n && n.trim() !== "");
+        const speakerNamesToUse = (isTranslation && hasTranslatedNames) ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
         // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree
@@ -603,6 +608,14 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
             } else if (key === 'speaker') {
                 if (String(currentValue ?? '') !== String(newValue ?? '')) {
                     segmentToUpdate[key] = String(newValue ?? '');
+                    segmentToUpdate.speaker_json = null; // Clear stale rich JSON
+                    valueChanged = true;
+                }
+            } else if (key === 'start_time' || key === 'end_time') {
+                const numVal = Number(newValue);
+                if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) {
+                    segmentToUpdate[key] = numVal;
+                    segmentToUpdate.timestamp_json = null; // Clear stale rich JSON
                     valueChanged = true;
                 }
             } else {
@@ -1037,12 +1050,12 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     const oldSpeakerConfig = currentTranscriptData.speakers;
     const currentMediaFile = currentTranscriptData.selectedMediaFile;
     const projectXmlPath = projectData.xmlPath;
-    const mediaIdentifier = currentMediaFile?.media_xml_identifier;
+    const mediaRelativePath = currentMediaFile?.relative_path || currentMediaFile?.relativePath;
 
-    if (!mediaIdentifier) {
-        console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media XML Identifier.");
-        updateProjectStoreState({ error: "Save Error: Missing media identifier."});
-        message("Error: Missing media identifier.", {title: "Save Error", type:"error"});
+    if (!mediaRelativePath) {
+        console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media Relative Path.");
+        updateProjectStoreState({ error: "Save Error: Missing media relative path."});
+        message("Error: Missing media relative path.", {title: "Save Error", type:"error"});
         return;
     }
     if (!projectXmlPath) {
@@ -1052,35 +1065,47 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
         return;
     }
 
-    const speakerMap = new Map();
-    oldSpeakerConfig.names.forEach((oldName, index) => {
-        if (index < newSpeakerConfig.names.length) {
-            speakerMap.set(oldName, newSpeakerConfig.names[index]);
-            speakerMap.set(`SPEAKER_${String(index).padStart(2,'0')}`, newSpeakerConfig.names[index]);
-            speakerMap.set(`speaker_${index + 1}`, newSpeakerConfig.names[index]);
-        } else {
-            speakerMap.set(oldName, "Unknown");
-            speakerMap.set(`SPEAKER_${String(index).padStart(2,'0')}`, "Unknown");
-            speakerMap.set(`speaker_${index + 1}`, "Unknown");
-        }
-    });
-    speakerMap.set("Unknown", "Unknown");
-    newSpeakerConfig.names.forEach(newName => {
-        if (!speakerMap.has(newName)) {
-            speakerMap.set(newName, newName);
-        }
-    });
+    // Helper to determine speaker names to use for a specific transcript path
+    const getSpeakerNamesForPath = (path, langCode, config) => {
+        const isTranslation = (langCode && langCode.includes('-')) || (path && path.endsWith('.en.json'));
+        const hasTranslatedNames = config.translatedNames && config.translatedNames.some(n => n && n.trim() !== "");
+        return (isTranslation && hasTranslatedNames) ? config.translatedNames : config.names;
+    };
 
-    let segmentsChanged = false;
-    const newSegments = oldSegments.map(segment => {
-        const currentSpeaker = segment.speaker || "Unknown";
-        const mappedSpeaker = speakerMap.get(currentSpeaker) || "Unknown";
-        if (mappedSpeaker !== currentSpeaker) {
+    const currentTs = get(transcriptStore);
+    const primarySpeakerNamesToUse = getSpeakerNamesForPath(
+        currentTs.currentTranscriptPath, 
+        currentTs.activeTranscript?.language_code, 
+        newSpeakerConfig
+    );
+    
+    const newSegments = remapSegmentSpeakerNames([...oldSegments], newSpeakerConfig, primarySpeakerNamesToUse);
+    let segmentsChanged = JSON.stringify(oldSegments) !== JSON.stringify(newSegments);
+
+    let newSecondarySegments = [];
+    if (currentTs.isDualModeActive && currentTs.secondaryTranscriptSegments) {
+        const secondarySpeakerNamesToUse = getSpeakerNamesForPath(
+            currentTs.secondaryTranscriptPath,
+            null, // Secondary lang code not easily available here, but path check covers most cases
+            newSpeakerConfig
+        );
+        newSecondarySegments = remapSegmentSpeakerNames([...currentTs.secondaryTranscriptSegments], newSpeakerConfig, secondarySpeakerNamesToUse);
+        if (JSON.stringify(currentTs.secondaryTranscriptSegments) !== JSON.stringify(newSecondarySegments)) {
             segmentsChanged = true;
-            return { ...segment, speaker: mappedSpeaker };
         }
-        return segment;
-    });
+    }
+
+    if (segmentsChanged) {
+        pushToUndoStack();
+    }
+
+    transcriptStore.update((ts) => ({
+        ...ts,
+        speakers: newSpeakerConfig,
+        segments: newSegments,
+        secondaryTranscriptSegments: ts.isDualModeActive ? newSecondarySegments : ts.secondaryTranscriptSegments,
+        transcriptDirty: ts.transcriptDirty || JSON.stringify(oldSpeakerConfig) !== JSON.stringify(newSpeakerConfig) || segmentsChanged,
+    }));
 
     if (segmentsChanged) {
         pushToUndoStack();
@@ -1096,15 +1121,39 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
     const innerPayload = {
         project_xml_path: projectXmlPath,
-        media_identifier: mediaIdentifier,
+        media_relative_path: mediaRelativePath,
         count: newSpeakerConfig.count,
         names: newSpeakerConfig.names,
         translated_names: newSpeakerConfig.translatedNames
     };
 
     invoke('save_speaker_config', { payload: innerPayload })
-        .then(() => {
+        .then(async () => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
+
+            // Sync with database metadata (rely on database tables for backend services like translation)
+            try {
+                const currentProj = get(project);
+                const mediaRelativePath = currentTs.selectedMediaFile?.relative_path;
+                if (mediaRelativePath && currentProj.xmlPath) {
+                    const metadataPayload = {
+                        speaker_names: newSpeakerConfig.names || [],
+                        translated_speaker_names: newSpeakerConfig.translatedNames || [],
+                        // Only send speaker related fields to avoid overwriting technical metadata
+                    };
+                    
+                    await invoke('update_asset_metadata_command', {
+                        projectXmlPathStr: currentProj.xmlPath,
+                        assetRelativePath: mediaRelativePath,
+                        metadataPayload: metadataPayload,
+                        customFieldsPayload: null,
+                        assetType: 'media' 
+                    });
+                    console.debug(`[transcriptStore] Synchronized speaker names to DB for: ${mediaRelativePath}`);
+                }
+            } catch (syncError) {
+                console.error("[transcriptStore] Failed to synchronize speaker names to database:", syncError);
+            }
 
             projectMainStore.update(p => {
                  const updatedFiles = JSON.parse(JSON.stringify(p.files));
@@ -1139,7 +1188,9 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
         })
         .catch((error) => {
-            console.error(`[TranscriptStore updateSpeakerConfig] Failed persist config for ${mediaIdentifier}:`, error);
+            const currentTs = get(transcriptStore);
+            const mediaId = currentTs.selectedMediaFile?.media_xml_identifier || currentTs.selectedMediaFile?.name;
+            console.error(`[TranscriptStore updateSpeakerConfig] Failed persist config for ${mediaId}:`, error);
             const errorMessage = error?.message || String(error);
             updateProjectStoreState({ error: `Failed save speaker config: ${errorMessage}`, statusMessage: 'Error saving speaker config.'});
             if (typeof message !== 'undefined') {
@@ -1407,10 +1458,26 @@ function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerN
 
         if (userAssignedIndex >= 0 && userAssignedIndex < userNames.length) {
             if (userNames[userAssignedIndex] && userNames[userAssignedIndex].trim() !== "") {
-                newSegment.speaker = userNames[userAssignedIndex].trim();
+                const newName = userNames[userAssignedIndex].trim();
+                if (newSegment.speaker !== newName) {
+                    newSegment.speaker = newName;
+                    newSegment.speaker_json = null; // Invalidate stale rich speaker if name changed
+                }
             }
         } else {
-            if (!userNames.includes(originalSpeaker) && originalSpeaker !== "Unknown") {
+            // --- Cross-Language Fallback ---
+            const sourceNames = (userNames === speakerConfig.translatedNames) ? speakerConfig.names : speakerConfig.translatedNames;
+            if (sourceNames && Array.isArray(sourceNames)) {
+                const sourceIndex = sourceNames.indexOf(originalSpeaker);
+                if (sourceIndex !== -1 && sourceIndex < userNames.length) {
+                    if (userNames[sourceIndex] && userNames[sourceIndex].trim() !== "") {
+                        const newName = userNames[sourceIndex].trim();
+                        if (newSegment.speaker !== newName) {
+                            newSegment.speaker = newName;
+                            newSegment.speaker_json = null;
+                        }
+                    }
+                }
             }
         }
         return newSegment;

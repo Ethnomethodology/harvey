@@ -33,6 +33,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub language_code: Option<String>,
     pub properties: Option<String>,
     pub file_type: Option<String>, // Added field
+    pub thumbnail: Option<Vec<u8>>, // NEW
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -247,6 +248,7 @@ pub fn init_db() -> Result<(), CommandError> {
             language_code TEXT,
             properties TEXT,
             file_type TEXT, -- Added field
+            thumbnail BLOB, -- NEW
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -263,6 +265,16 @@ pub fn init_db() -> Result<(), CommandError> {
     if !file_type_column_exists {
         info!("[DB] Adding file_type column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
+    }
+
+    // Check and add thumbnail column to asset_metadata if missing
+    let mut stmt_check_thumbnail = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let thumbnail_column_exists = stmt_check_thumbnail
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "thumbnail"));
+    if !thumbnail_column_exists {
+        info!("[DB] Adding thumbnail column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN thumbnail BLOB", [])?;
     }
 
     // Always check for records with missing file_type and attempt to backfill
@@ -865,14 +877,39 @@ pub fn init_db() -> Result<(), CommandError> {
             project_id TEXT NOT NULL,
             name TEXT NOT NULL,
             color TEXT,
+            description TEXT,
+            tag_group_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_group_id) REFERENCES tag_groups(id) ON DELETE SET NULL,
             UNIQUE (project_id, name)
         )",
         [],
     )?;
     info!("[DB] Initialized tags table.");
+
+    // Check and add description column to tags table if missing (migration)
+    let mut stmt_check_tag_desc = conn.prepare("PRAGMA table_info(tags)")?;
+    let tag_desc_col_exists = stmt_check_tag_desc
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "description"));
+
+    if !tag_desc_col_exists {
+        info!("[DB] Adding description column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN description TEXT", [])?;
+    }
+
+    // Check and add tag_group_id column to tags table if missing (migration)
+    let mut stmt_check_tag_group_id = conn.prepare("PRAGMA table_info(tags)")?;
+    let tag_group_id_col_exists = stmt_check_tag_group_id
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "tag_group_id"));
+
+    if !tag_group_id_col_exists {
+        info!("[DB] Adding tag_group_id column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN tag_group_id INTEGER REFERENCES tag_groups(id) ON DELETE SET NULL", [])?;
+    }
 
     // Trigger for tags updated_at
     conn.execute(
@@ -983,7 +1020,7 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         "UPDATE asset_metadata SET file_type = 'transcript' 
          WHERE (file_type IS NULL OR file_type = '') 
          AND (
-             asset_type IN ('transcript', 'imported_transcript') 
+             asset_type IN ('transcript', 'standalone_transcript')
              OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
          )",
         []
@@ -1594,8 +1631,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json, waveform_data, language_code, properties, file_type
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+            original_import_path, speaker_names_json, waveform_data, language_code, properties, file_type, thumbnail
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -1619,6 +1656,7 @@ pub fn save_asset_metadata(
             language_code = excluded.language_code,
             properties = excluded.properties,
             file_type = COALESCE(NULLIF(excluded.file_type, ''), file_type),
+            thumbnail = excluded.thumbnail,
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -1650,6 +1688,7 @@ pub fn save_asset_metadata(
             to_sql_optional_str(metadata.language_code.as_deref()),
             to_sql_optional_str(metadata.properties.as_deref()),
             metadata.file_type, // Parameter 24
+            to_sql_optional_blob(metadata.thumbnail.as_deref()), // Parameter 25
         ],
     )?;
 
@@ -1672,7 +1711,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
                creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data,
-               language_code, properties, file_type
+               language_code, properties, file_type, thumbnail
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -1701,6 +1740,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             language_code: row.get(19)?,
             properties: row.get(20)?,
             file_type: row.get(21)?,
+            thumbnail: row.get(22)?,
         })
     }).optional()?;
 
@@ -1746,6 +1786,25 @@ pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Res
     if changes > 0 {
         info!("[DB] Asset metadata and relations deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
     }
+
+    Ok(())
+}
+
+pub fn save_pdf_metadata_to_db(
+    project_id: &str,
+    asset_relative_path: &str,
+    thumbnail: &[u8],
+) -> Result<(), CommandError> {
+    debug!("[DB] Saving PDF metadata for project_id {}: {}", project_id, asset_relative_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "UPDATE asset_metadata 
+         SET thumbnail = ?1, updated_at = CURRENT_TIMESTAMP 
+         WHERE project_id = ?2 AND asset_relative_path = ?3",
+        params![thumbnail, project_id, asset_relative_path],
+    )?;
 
     Ok(())
 }
@@ -1825,6 +1884,19 @@ pub fn rename_asset_metadata_key(
     ];
 
     for (table, col) in child_tables {
+        // Safe check: Only attempt update if the table exists in the current DB schema.
+        // This avoids RusqliteError: no such table: ... for optional/legacy tables like 'attachments'.
+        let table_exists: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+            params![table],
+            |row| row.get(0),
+        ).unwrap_or(false);
+
+        if !table_exists {
+            debug!("[DB TX] Skipping rename update for child table '{}' as it does not exist in this database.", table);
+            continue;
+        }
+
         let sql = format!("UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3", table, col, col);
         match tx.execute(&sql, params![new_relative_path, project_id, old_relative_path]) {
             Ok(changes) if changes > 0 => {
@@ -2222,14 +2294,14 @@ pub fn update_tag_group(
 pub fn delete_tag_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting tag group with id {} from project_id {}", group_id, project_id);
 
-    // Instead of deleting child tags, update them to have no group (NULL).
+    // Delete child tags instead of ungrouping them.
     conn.execute(
-        "UPDATE tags SET tag_group_id = NULL WHERE tag_group_id = ?1 AND project_id = ?2",
+        "DELETE FROM tags WHERE tag_group_id = ?1 AND project_id = ?2",
         params![group_id, project_id]
     )?;
 
     conn.execute("DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2", params![group_id, project_id])?;
-    info!("[DB] Tag group with id {} deleted successfully (child tags ungrouped).", group_id);
+    info!("[DB] Tag group with id {} deleted successfully (and its child tags deleted).", group_id);
     Ok(())
 }
 

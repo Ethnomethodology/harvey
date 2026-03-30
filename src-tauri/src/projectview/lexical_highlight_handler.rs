@@ -32,7 +32,7 @@ pub fn save_highlight_changes(
         project_id, file_path, &doc_type
     );
 
-    let normalized_doc_type = if doc_type == "transcript" || doc_type == "imported_transcript" || doc_type == "video_transcript" {
+    let normalized_doc_type = if doc_type == "audio_transcript" || doc_type == "standalone_transcript" || doc_type == "video_transcript" {
         "lexical".to_string()
     } else {
         doc_type.clone()

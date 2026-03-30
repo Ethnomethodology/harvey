@@ -28,7 +28,8 @@
 	const dispatch = createEventDispatcher();
 
 	// --- State for Accordion Sections ---
-	let openSection = "files";
+	let filesOpen = true;
+	let shortcutsOpen = false;
 
 	// --- State for Rename Modal ---
 	let showRenameModal = false;
@@ -36,7 +37,15 @@
 
 	// --- Accordion Click Handlers ---
 	function toggleSection(sectionName) {
-		openSection = openSection === sectionName ? null : sectionName;
+		if (sectionName === "files") {
+			if (!filesOpen || shortcutsOpen) {
+				filesOpen = !filesOpen;
+			}
+		} else if (sectionName === "shortcuts") {
+			if (!shortcutsOpen || filesOpen) {
+				shortcutsOpen = !shortcutsOpen;
+			}
+		}
 	}
 
 	// Determine platform-specific modifier key name
@@ -85,7 +94,7 @@
 				node.file_type === "video" ||
 				node.file_type === "media" ||
 				node.file_type === "directory_media_stem" ||
-				node.file_type === "transcript";
+				node.file_type === "audio_transcript" || node.file_type === "video_transcript";
 			const isWithinAudioPath =
 				normalizedNodePath &&
 				normalizedNodePath.startsWith(audioPathPrefix);
@@ -146,7 +155,7 @@
 			console.log(
 				"[LeftPanel] Double-clicked media, calling selectMedia.",
 			);
-			selectMedia(item, item.path);
+			selectMedia(item);
 		} else if (!item.is_directory && item.file_type === "data") {
 			console.log(
 				"[LeftPanel] Double-clicked data, calling handleOpenData.",
@@ -161,10 +170,25 @@
 	let contextMenuY = 0;
 	let contextMenuItem = null;
 	let closeContextMenuListener = null;
+	function findMediaFileInStem(stemNode) {
+		if (!stemNode || !stemNode.children) return null;
+		const search = (nodes) => {
+			for (const node of nodes) {
+				if (node.file_type === "media") return node;
+				if (node.children) {
+					const found = search(node.children);
+					if (found) return found;
+				}
+			}
+			return null;
+		};
+		return search(stemNode.children);
+	}
 
 	function handleContextMenu(event) {
 		const { event: mouseEvent, item } = event.detail;
-		if (item.is_directory) return; // Only allow on files
+		if (item.is_directory && item.file_type !== "directory_media_stem")
+			return; // Only allow on files or media stem folders
 		if (contextMenuVisible) closeContextMenu();
 		mouseEvent.preventDefault();
 		mouseEvent.stopPropagation();
@@ -206,11 +230,15 @@
 		closeContextMenu();
 		switch (action) {
 			case "Load":
-				if (!item.is_directory && item.file_type === "media")
-					selectMedia(item);
+				const mediaNode =
+					item.file_type === "directory_media_stem"
+						? findMediaFileInStem(item)
+						: item;
+				if (mediaNode && mediaNode.file_type === "media")
+					selectMedia(mediaNode);
 				else
 					console.warn(
-						"[LeftPanel] 'Load' action called on non-media item:",
+						"[LeftPanel] 'Load' action failed. No media file resolved for:",
 						item,
 					);
 				break;
@@ -224,39 +252,39 @@
 					);
 				break;
 			case "Rename":
-				if (!item.is_directory) {
+				const renameTarget =
+					item.file_type === "directory_media_stem"
+						? findMediaFileInStem(item)
+						: item;
+				if (renameTarget) {
 					itemToRename = {
-						path: item.path,
-						name: item.name,
-						file_type: item.file_type,
-						media_xml_identifier: item.media_xml_identifier,
+						path: renameTarget.path,
+						name: renameTarget.name,
+						file_type: renameTarget.file_type,
+						media_xml_identifier: renameTarget.media_xml_identifier,
 					};
 					showRenameModal = true;
-				} else
+				} else {
 					console.warn(
-						"[LeftPanel] Rename requested on directory (not allowed):",
+						"[LeftPanel] Rename failed: could not resolve media file for:",
 						item,
 					);
+				}
 				break;
 			case "Delete": {
-				if (item.is_directory) {
-					console.warn(
-						"[LeftPanel] Delete requested on directory (not allowed via context menu):",
-						item,
-					);
-					break;
-				}
-
 				let confirmMsg = "";
 
-				if (item.file_type === "media") {
+				if (
+					item.file_type === "media" ||
+					item.file_type === "directory_media_stem"
+				) {
 					const stemName =
 						item.media_xml_identifier ||
 						(item.name.includes(".")
 							? item.name.substring(0, item.name.lastIndexOf("."))
 							: item.name);
-					confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
-				} else if (item.file_type === "transcript") {
+					confirmMsg = `Are you sure you want to delete "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
+				} else if (item.file_type === "audio_transcript" || item.file_type === "video_transcript") {
 					confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
 				} else if (item.file_type === "data") {
 					confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
@@ -339,7 +367,7 @@
 				itemToRename = null;
 				return;
 			}
-		} else if (item.file_type === "transcript") {
+		} else if (item.file_type === "audio_transcript" || item.file_type === "video_transcript") {
 			const mediaStem = item.media_xml_identifier;
 			const primaryTranscriptName = mediaStem
 				? `${mediaStem}.json`
@@ -388,7 +416,7 @@
 	<h2
 		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
 		on:click={() => toggleSection("files")}
-		aria-expanded={openSection === "files"}
+		aria-expanded={filesOpen}
 		aria-controls="files-content"
 		role="button"
 		tabindex="0"
@@ -402,12 +430,12 @@
 			<span class="pl-2">Media Files</span>
 		</div>
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
-			{@html openSection === "files" ? CHEVRON_DOWN : CHEVRON_RIGHT}
+			{@html filesOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
 	</h2>
 
 	<!-- Media Files Content (Tree) -->
-	{#if openSection === "files"}
+	{#if filesOpen}
 		<div
 			id="files-content"
 			class="flex-grow overflow-y-auto min-h-0 pb-1 pt-1 px-1 mb-3 text-xs"
@@ -427,7 +455,7 @@
 					Import a media file to begin.
 				</p>
 			{:else}
-				<ul class="space-y-0.5">
+				<ul class="space-y-0.5 px-1.5">
 					{#each uniqueProjectFileTree as node (node.path || node.relativePath)}
 						<TreeNode
 							{node}
@@ -445,12 +473,11 @@
 
 	<!-- Shortcuts Accordion Header -->
 	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {openSection !==
-		'files'
-			? ''
-			: 'border-t'}"
+		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {filesOpen
+			? 'border-t'
+			: ''}"
 		on:click={() => toggleSection("shortcuts")}
-		aria-expanded={openSection === "shortcuts"}
+		aria-expanded={shortcutsOpen}
 		aria-controls="shortcuts-content"
 		role="button"
 		tabindex="0"
@@ -464,12 +491,12 @@
 			<span class="pl-2">Shortcuts</span>
 		</div>
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
-			{@html openSection === "shortcuts" ? CHEVRON_DOWN : CHEVRON_RIGHT}
+			{@html shortcutsOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
 	</h2>
 
 	<!-- Shortcuts Content -->
-	{#if openSection === "shortcuts"}
+	{#if shortcutsOpen}
 		<div
 			id="shortcuts-content"
 			class="flex-grow overflow-y-auto min-h-0 p-3 text-xs"
@@ -543,8 +570,8 @@
 			style="left: {contextMenuX}px; top: {contextMenuY}px;"
 			on:click|stopPropagation
 		>
-			{#if !contextMenuItem.is_directory}
-				{#if contextMenuItem.file_type === "media"}
+			{#if !contextMenuItem.is_directory || contextMenuItem.file_type === "directory_media_stem"}
+				{#if contextMenuItem.file_type === "media" || contextMenuItem.file_type === "directory_media_stem" || contextMenuItem.file_type === "audio" || contextMenuItem.file_type === "video"}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Load")}
@@ -562,7 +589,7 @@
 					>
 					<hr class="my-1 border-gray-200 dark:border-gray-600" />
 				{/if}
-				{#if ["media", "transcript", "data", "other"].includes(contextMenuItem.file_type)}
+				{#if ["media", "audio", "video", "audio_transcript", "video_transcript", "transcript", "data", "directory_media_stem", "other"].includes(contextMenuItem.file_type)}
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Rename")}

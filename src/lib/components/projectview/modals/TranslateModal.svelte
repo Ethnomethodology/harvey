@@ -128,20 +128,23 @@
 	}
 
 	let transcriptOptions = [];
-	$: if (availableTranscripts.length > 0) {
-		transcriptOptions = availableTranscripts.map(t => ({
-			value: t.relativePath,
-			name: t.name || t.relativePath
-		}));
+	$: transcriptOptions = availableTranscripts.map(t => ({
+		value: t.relativePath,
+		name: t.name || t.relativePath
+	}));
 
+	$: if (availableTranscripts.length > 0) {
 		const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
-		if (activeTranscript) {
-			selectedTranscript = activeTranscript.relativePath;
-		} else if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
-			selectedTranscript = availableTranscripts[0].relativePath;
+		const currentSelectionIsValid = availableTranscripts.some(t => t.relativePath === selectedTranscript);
+		
+		if (!selectedTranscript || !currentSelectionIsValid) {
+			if (activeTranscript) {
+				selectedTranscript = activeTranscript.relativePath;
+			} else {
+				selectedTranscript = availableTranscripts[0].relativePath;
+			}
 		}
 	} else {
-		transcriptOptions = [];
 		selectedTranscript = '';
 	}
 
