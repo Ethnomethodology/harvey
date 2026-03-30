@@ -13,7 +13,7 @@ flowchart LR
     TranscriptionModule --> FasterWhisper[faster_whisper.rs]
     TranscriptionModule --> FasterWhisperLive[faster_whisper_live.rs]
 
-    FasterWhisper --> PythonEngine[python_engine.rs (Subprocess wrapper)]
+    FasterWhisper --> PythonEngine["python_engine.rs (Subprocess wrapper)"]
     FasterWhisperLive --> PythonEngine
 
     WhisperCpp --> CLI[Whisper.cpp Binary]
