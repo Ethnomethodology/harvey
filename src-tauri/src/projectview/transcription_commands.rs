@@ -2632,7 +2632,7 @@ pub async fn start_live_transcription(
         model_path.clone(),
         "-l".to_string(),
         language.clone(),
-        "--step".to_string(), "5000".to_string(),
+        "--step".to_string(), "1000".to_string(),
         "--length".to_string(), "5000".to_string(),
         "-c".to_string(), "0".to_string(),
         "-t".to_string(), "8".to_string(),

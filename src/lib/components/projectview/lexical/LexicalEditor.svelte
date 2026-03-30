@@ -1588,34 +1588,84 @@
         let lastParagraph = root.getLastChild();
         let livePara = null;
 
-        // Check if the last paragraph is our dedicated live paragraph
-        if (lastParagraph && _isParagraphNode(lastParagraph) && typeof lastParagraph.hasStyle === 'function' && lastParagraph.hasStyle('live-transcription')) {
-            livePara = lastParagraph;
-        } else {
-            livePara = _createParagraphNode().setStyle('live-transcription');
-            root.append(livePara);
-        }
-
-        if (isFinal) {
-            // On final result, clear the live paragraph and append the final text.
-            livePara.clear();
-            let finalText = text;
-            if (addTimestamps) {
-                const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
-                finalText = timestamp + ' ' + text;
+        if (addTimestamps) {
+            // Check if the last paragraph is our dedicated live paragraph
+            if (lastParagraph && _isParagraphNode(lastParagraph) && typeof lastParagraph.hasStyle === 'function' && lastParagraph.hasStyle('live-transcription')) {
+                livePara = lastParagraph;
+            } else {
+                livePara = _createParagraphNode().setStyle('live-transcription');
+                root.append(livePara);
             }
-            livePara.append(_createTextNode(finalText + ' '));
-            // Then, remove the style so it becomes a normal paragraph.
-            livePara.setStyle('');
-            // And create a new, empty live paragraph for the next utterance.
-            const newLivePara = _createParagraphNode().setStyle('live-transcription');
-            root.append(newLivePara);
-            newLivePara.selectEnd();
+
+            if (isFinal) {
+                // On final result, clear the live paragraph and append the final text.
+                livePara.clear();
+                const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
+                const finalText = timestamp + ' ' + text;
+                livePara.append(_createTextNode(finalText + ' '));
+                // Then, remove the style so it becomes a normal paragraph.
+                livePara.setStyle('');
+                // And create a new, empty live paragraph for the next utterance.
+                const newLivePara = _createParagraphNode().setStyle('live-transcription');
+                root.append(newLivePara);
+                newLivePara.selectEnd();
+            } else {
+                // For interim results, replace the content of the live paragraph.
+                livePara.clear();
+                livePara.append(_createTextNode(text));
+                livePara.selectEnd();
+            }
         } else {
-            // For interim results, replace the content of the live paragraph.
-            livePara.clear();
-            livePara.append(_createTextNode(text));
-            livePara.selectEnd();
+            // When not adding timestamps, append to the same paragraph unless the user created a new one.
+            if (!lastParagraph || !_isParagraphNode(lastParagraph)) {
+                lastParagraph = _createParagraphNode();
+                root.append(lastParagraph);
+            }
+
+            // Find if there is an existing live interim text node at the end of the paragraph
+            let liveTextNode = null;
+            const children = lastParagraph.getChildren();
+            if (children.length > 0) {
+                const lastChild = children[children.length - 1];
+                if (_isTextNode(lastChild) && typeof lastChild.hasStyle === 'function' && lastChild.hasStyle('live-transcription')) {
+                    liveTextNode = lastChild;
+                }
+            }
+
+            if (isFinal) {
+                // Remove interim node if it exists
+                if (liveTextNode) {
+                    liveTextNode.remove();
+                }
+
+                // Ensure there is a space before the new text if the paragraph is not empty
+                // and the text doesn't start with a space or punctuation
+                let finalText = text;
+                if (children.length > 0 && liveTextNode !== children[children.length - 1] && !finalText.startsWith(' ') && !/^[.,!?]/.test(finalText)) {
+                    finalText = ' ' + finalText;
+                }
+
+                const finalNode = _createTextNode(finalText + ' ');
+                lastParagraph.append(finalNode);
+                finalNode.selectEnd();
+            } else {
+                // Update interim node
+                if (!liveTextNode) {
+                    let interimText = text;
+                    if (children.length > 0 && !interimText.startsWith(' ') && !/^[.,!?]/.test(interimText)) {
+                        interimText = ' ' + interimText;
+                    }
+                    liveTextNode = _createTextNode(interimText).setStyle('live-transcription');
+                    lastParagraph.append(liveTextNode);
+                } else {
+                    let interimText = text;
+                    if (children.length > 1 && !interimText.startsWith(' ') && !/^[.,!?]/.test(interimText)) {
+                        interimText = ' ' + interimText;
+                    }
+                    liveTextNode.setTextContent(interimText);
+                }
+                liveTextNode.selectEnd();
+            }
         }
     });
   }
