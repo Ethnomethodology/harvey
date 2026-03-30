@@ -9,7 +9,7 @@ order: 2
 Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment:
 
 *   **Transcribe** audio and video with local AI models.
-*   **Translate** transcripts into English.
+*   **Translate** transcripts from one language to another.
 *   **Edit** and **annotate** transcripts, documents, PDFs, and images.
 *   **Manage** all your project files in one place.
 
