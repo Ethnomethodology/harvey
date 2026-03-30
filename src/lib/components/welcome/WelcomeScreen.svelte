@@ -6,6 +6,15 @@
   import { listen } from '@tauri-apps/api/event'; // Added
   import { getVersion } from '@tauri-apps/api/app';
   import {
+    getCurrentWindow,
+    LogicalSize,
+    currentMonitor,
+  } from '@tauri-apps/api/window';
+  import {
+    WELCOME_WIDTH,
+    DEFAULT_MIN_HEIGHT,
+  } from '$lib/constants/windowSize.js';
+  import {
     loadProjects,
     handleCreateProject,
     handleOpenProject,
@@ -50,6 +59,18 @@
   let unlistenHelpCenter;
 
   onMount(async () => {
+    // Resize window for welcome screen
+    try {
+      const appWindow = getCurrentWindow();
+      await appWindow.setMinSize(
+        new LogicalSize(WELCOME_WIDTH, DEFAULT_MIN_HEIGHT),
+      );
+      await appWindow.setSize(new LogicalSize(WELCOME_WIDTH, WELCOME_HEIGHT));
+      await appWindow.center();
+    } catch (err) {
+      console.warn('Failed to resize welcome window:', err);
+    }
+
     await invoke('set_menu_context', { context: 'welcome' }).catch(err => console.warn('Failed to set menu context:', err));
     
     unlistenNewProject = await listen('menu:file:new-project', () => {
