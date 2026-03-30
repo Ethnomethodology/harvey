@@ -17,27 +17,27 @@ flowchart TD
   RightBar --> HighlightsPanel
   RightBar --> AttachmentsPanel
 
-  subgraph InfoPanel Architecture
+  subgraph InfoPanelArch ["InfoPanel Architecture"]
     MetadataForm["Standard Metadata Fields"]
     CustomFields["Custom Field Manager"]
     GroupAssignment["Group MultiSelect"]
   end
 
-  subgraph HighlightsPanel Architecture
+  subgraph HighlightsPanelArch ["HighlightsPanel Architecture"]
     HighlightList["Extracted Highlight Cards"]
     TagMultiSelect["Inline Tagging"]
     CommentsModal["Comments Dialog"]
   end
 
-  subgraph AttachmentsPanel Architecture
+  subgraph AttachmentsPanelArch ["AttachmentsPanel Architecture"]
     FileTree["Grouped File Tree"]
     ContextMenu["File/Chart/View Context Menus"]
     ImagePreviewModal
   end
 
-  InfoPanel --> InfoPanel Architecture
-  HighlightsPanel --> HighlightsPanel Architecture
-  AttachmentsPanel --> AttachmentsPanel Architecture
+  InfoPanel --> InfoPanelArch
+  HighlightsPanel --> HighlightsPanelArch
+  AttachmentsPanel --> AttachmentsPanelArch
 ```
 
 ## Props / Inputs
