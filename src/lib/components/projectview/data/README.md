@@ -6,9 +6,7 @@
 ```mermaid
 block-beta
   columns 5
-  LeftPanel["DataLeftPanel\n(File/Group Browser)"]:1
-  MainContent["Main Content Area\n(DocumentView / TableView / etc.)"]:3
-  RightContext["InfoPanel / HighlightsPanel / AttachmentsPanel\n(Contextual Metadata)"]:1
+  LeftPanel["DataLeftPanel\n(File/Group Browser)"]:1 MainContent["Main Content Area\n(DocumentView / TableView / etc.)"]:3 RightContext["InfoPanel / HighlightsPanel / AttachmentsPanel\n(Contextual Metadata)"]:1
 ```
 
 ## Component Architecture
