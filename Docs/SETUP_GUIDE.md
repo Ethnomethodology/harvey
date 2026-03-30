@@ -1,6 +1,6 @@
-# Project Harvey 1.0 - Setup Guide
+# Project Harvey - Setup Guide
 
-Welcome to the Project Harvey 1.0 setup guide! This document covers the essential steps required to get the development version of the application running on your local machine, and subsequently, how to configure the internal AI models and Python dependencies via the in-app Setup Wizard.
+Welcome to the Project Harvey setup guide! This document covers the essential steps required to get the development version of the application running on your local machine, and subsequently, how to configure the internal AI models and Python dependencies via the in-app Setup Wizard.
 
 ## Part 1: Installing System Prerequisites
 
