@@ -1051,6 +1051,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     const currentMediaFile = currentTranscriptData.selectedMediaFile;
     const projectXmlPath = projectData.xmlPath;
     const mediaRelativePath = currentMediaFile?.relative_path || currentMediaFile?.relativePath;
+    const mediaIdentifier = currentMediaFile?.media_xml_identifier;
 
     if (!mediaRelativePath) {
         console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media Relative Path.");
@@ -1133,10 +1134,13 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
             // Sync with database metadata (rely on database tables for backend services like translation)
             try {
-                const currentProj = get(project);
+                const currentProj = get(projectMainStore);
                 const mediaRelativePath = currentTs.selectedMediaFile?.relative_path;
                 if (mediaRelativePath && currentProj.xmlPath) {
                     const metadataPayload = {
+                        file_name: currentTs.selectedMediaFile?.name || "",
+                        file_path: mediaRelativePath,
+                        last_modified: new Date().toISOString(),
                         speaker_names: newSpeakerConfig.names || [],
                         translated_speaker_names: newSpeakerConfig.translatedNames || [],
                         // Only send speaker related fields to avoid overwriting technical metadata
