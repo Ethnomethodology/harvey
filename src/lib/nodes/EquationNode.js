@@ -13,6 +13,29 @@ export class EquationNode extends DecoratorNode {
     return new EquationNode(node.__equation, node.__inline, node.__key);
   }
 
+  static importDOM() {
+    return {
+      span: (domNode) => {
+        if (domNode.classList.contains('math')) {
+          return {
+            conversion: convertEquationElement,
+            priority: 1,
+          };
+        }
+        return null;
+      },
+      div: (domNode) => {
+        if (domNode.classList.contains('math')) {
+          return {
+            conversion: convertEquationElement,
+            priority: 1,
+          };
+        }
+        return null;
+      },
+    };
+  }
+
   static importJSON(serializedNode) {
     const { equation, inline } = serializedNode;
     return new EquationNode(equation, inline);
@@ -92,4 +115,16 @@ export function $createEquationNode(equation, inline) {
 
 export function $isEquationNode(node) {
   return node instanceof EquationNode;
+}
+
+function convertEquationElement(domNode) {
+  let equation = domNode.textContent;
+  const inline = domNode.tagName === 'SPAN';
+
+  // Strip Pandoc/KaTeX delimiters if present: \( ... \) or \[ ... \]
+  equation = equation.replace(/^\s*\\\((.*)\\\)\s*$/s, '$1');
+  equation = equation.replace(/^\s*\\\[(.*)\\\]\s*$/s, '$1');
+
+  const node = $createEquationNode(equation, inline);
+  return { node };
 }
