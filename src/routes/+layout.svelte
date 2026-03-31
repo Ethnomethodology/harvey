@@ -21,6 +21,13 @@
         const anchor = event.target.closest('a');
         if (!anchor) return;
 
+        // Skip links that are inside a Lexical editor instance,
+        // letting the local Click Command handle it (e.g. for opening edit modals).
+        if (anchor.closest('.lexical-editor-root')) {
+            console.debug('[+layout.svelte] Ignoring click on link inside Lexical editor.');
+            return;
+        }
+
         const href = anchor.getAttribute('href');
         if (!href) return;
 
