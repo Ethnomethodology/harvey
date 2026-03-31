@@ -40,7 +40,7 @@ import {
 } from '@lexical/html';
 
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
-import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
@@ -371,11 +371,7 @@ const imageFilter = { name: 'Image Files', extensions: imageExtensions };
 const wordDocumentFilter = { name: 'Word Documents', extensions: ['docx'] };
 
 
-const ALL_EDITOR_NODES = [
-    RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
-    HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
-    TableNode, TableRowNode, TableCellNode
-];
+const ALL_EDITOR_NODES = SHARED_NODES;
 
 function createConversionEditor(instanceId) {
     return createHeadlessEditor({

@@ -144,6 +144,7 @@
     $isEquationNode as _isEquationNode,
   } from "$lib/nodes/EquationNode.js";
   import { DOCX_LAYOUT_COLUMN_CONFIGS } from "$lib/constants/exportLayouts.js";
+  import { SHARED_NODES } from "$lib/nodes/LexicalConfig.js";
 
   import LinkModal from "../modals/LinkModal.svelte";
   import InsertTableModal from "../modals/InsertTableModal.svelte";
@@ -354,29 +355,7 @@
 
   const MIN_COLUMN_WIDTH = 20;
 
-  export const editorNodes = [
-    ExtendedTextNode,
-    {
-      replace: TextNode,
-      with: (node) => _createExtendedTextNode(node.getTextContent()),
-    },
-    RootNode,
-    ParagraphNode,
-    LineBreakNode,
-    HeadingNode,
-    QuoteNode,
-    CodeNode,
-    ListNode,
-    ListItemNode,
-    LinkNode,
-    TableNode,
-    TableRowNode,
-    TableCellNode,
-    HorizontalRuleNode,
-    ImageNode,
-    DateNode,
-    EquationNode,
-  ];
+  export const editorNodes = SHARED_NODES;
 
   function handleShortcut(event) {
     if (event.key === "Escape") {
