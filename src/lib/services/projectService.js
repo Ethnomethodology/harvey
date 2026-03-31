@@ -2011,19 +2011,41 @@ async function processJsonToRemoveHighlights(jsonString, isDocument = false) {
             }
             if (node.getType() === 'table' && typeof node.setColWidths === 'function') {
                 const firstRow = node.getFirstChild();
-                const numCols = firstRow ? firstRow.getChildrenSize() : 4;
-                let newWidths;
+                const numCols = firstRow ? firstRow.getChildrenSize() : 0;
+                if (numCols > 0) {
+                    let newWidths;
 
-                // Use percentage-based widths from layout configuration if available to maintain
-                // responsiveness across both the editor and exported documents.
-                if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
-                    newWidths = layoutConfig.colgroup;
-                } else {
-                    const defaultPct = Math.floor(100 / numCols);
-                    newWidths = Array(numCols).fill(`${defaultPct}%`);
+                    // Use percentage-based widths from layout configuration if available to maintain
+                    // responsiveness across both the editor and exported documents.
+                    if (layoutConfig && layoutConfig.colgroup && Array.isArray(layoutConfig.colgroup) && layoutConfig.colgroup.length === numCols) {
+                        newWidths = [...layoutConfig.colgroup];
+                    } else {
+                        const defaultPct = Math.floor(100 / numCols);
+                        newWidths = Array(numCols).fill(`${defaultPct}%`);
+                    }
+
+                    // Final safety check to ensure no null/undefined values slip in
+                    for (let i = 0; i < newWidths.length; i++) {
+                        if (newWidths[i] == null) {
+                            newWidths[i] = `${Math.floor(100 / numCols)}%`;
+                        }
+                    }
+
+                    // For documents, convert any percentage strings to absolute pixel numbers
+                    // relative to a standard 1000px width to match the behavior of working tables.
+                    if (isDocument) {
+                        const REFERENCE_WIDTH = 1000;
+                        newWidths = newWidths.map(w => {
+                            if (typeof w === 'string' && w.endsWith('%')) {
+                                const pct = parseFloat(w);
+                                return (REFERENCE_WIDTH * pct) / 100;
+                            }
+                            return typeof w === 'string' ? parseFloat(w) : w;
+                        });
+                    }
+
+                    node.setColWidths(newWidths);
                 }
-
-                node.setColWidths(newWidths);
             }
         });
     });
