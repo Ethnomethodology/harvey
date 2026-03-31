@@ -24,6 +24,7 @@
 	import SpeakersModal from './SpeakersModal.svelte';
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
     import ManageModelsModal from './ManageModelsModal.svelte';
+	import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
@@ -415,9 +416,9 @@
                                     {:else if downloadedModelsList.length === 0}
                                         <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl text-center space-y-3">
                                             <p class="text-yellow-800 dark:text-yellow-300 font-medium">No transcription models available</p>
-                                            <Button color="yellow" size="xs" on:click={handleOpenConfig} title="Download Models">
-                                                <AlertTriangle size={14} class="mr-2" />
-                                                Download Models
+                                            <Button color="yellow" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+                                                <Settings2 size={14} class="mr-2" />
+                                                Manage Models
                                             </Button>
                                         </div>
                                     {:else}
@@ -730,7 +731,7 @@
                             disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
                                 (modalTab === 'manual' && !isManualDurationValid)}
                         >
-                            {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
+                            {modalTab === 'automatic' ? 'Start' : 'Add Segments'}
                         </Button>
                     </div>
                 {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
@@ -812,7 +813,14 @@
 	bind:showModal={showManageModelsModal}
 	on:modelsChanged={async () => {
 		downloadedModelsList = await getDownloadedModels();
-		await updateTranscribeConfig();
+        // Force re-select the first model if the previously selected one was deleted or hidden
+        if (downloadedModelsList.length > 0) {
+            if (!downloadedModelsList.some(m => m.name === modalSelectedModel)) {
+                modalSelectedModel = downloadedModelsList[0].name;
+            }
+        } else {
+            modalSelectedModel = '';
+        }
 	}}
 />
 

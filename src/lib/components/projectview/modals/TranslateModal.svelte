@@ -342,9 +342,9 @@
 							<p class="text-blue-800 dark:text-blue-300 font-medium text-sm">
 								No {selectedEngine === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available
 							</p>
-							<Button color="alternative" size="xs" on:click={handleOpenConfig} title="Go to Configuration">
-								<AlertTriangle size={14} class="mr-2 {hasCriticalConfigIssues ? 'text-red-500' : hasNonCriticalConfigIssues ? 'text-yellow-500' : 'text-gray-500'}" />
-								Configure
+							<Button color="alternative" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+								<Settings2 size={14} class="mr-2 text-blue-500" />
+								Manage Models
 							</Button>
 						</div>
 					{:else}
