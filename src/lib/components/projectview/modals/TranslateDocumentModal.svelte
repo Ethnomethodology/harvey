@@ -479,7 +479,7 @@
 	on:modelsChanged={async () => {
         // Refresh local translation configuration
         selectedEngine = await getSelectedTranslationEngine() || 'helsinki';
-        await loadAvailableModels();
+        await loadData();
 	}}
 />
 
