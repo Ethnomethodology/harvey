@@ -23,6 +23,7 @@
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
+    import ManageModelsModal from './ManageModelsModal.svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
@@ -62,6 +63,7 @@
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
 	let showNestedSpeakersModal = false;
+    let showManageModelsModal = false;
 
 	// Manual Mode State
 	let manualSegmentCount = 1;
@@ -713,18 +715,24 @@
             </div>
 
             <!-- Footer -->
-            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
                 {#if !isTranscribing && jobStatus === null}
-                    <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
-                    <Button
-                        color="blue"
-                        on:click={handleConfirm}
-                        title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
-                        disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
-                            (modalTab === 'manual' && !isManualDurationValid)}
-                    >
-                        {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
-                    </Button>
+                    <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5" title="Manage Transcription Models">
+                        <Settings2 size={14} />
+                        Manage Models
+                    </button>
+                    <div class="flex gap-3">
+                        <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
+                        <Button
+                            color="blue"
+                            on:click={handleConfirm}
+                            title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
+                            disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
+                                (modalTab === 'manual' && !isManualDurationValid)}
+                        >
+                            {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
+                        </Button>
+                    </div>
                 {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
                     <Button
                         color="alternative"
@@ -799,6 +807,14 @@
         on:close={() => (showAdditionalParamsModal = false)}
     />
 {/if}
+
+<ManageModelsModal
+	bind:showModal={showManageModelsModal}
+	on:modelsChanged={async () => {
+		downloadedModelsList = await getDownloadedModels();
+		await updateTranscribeConfig();
+	}}
+/>
 
 <style lang="postcss">
     /* Re-enable spin buttons for specific inputs */
