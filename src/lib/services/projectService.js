@@ -108,6 +108,48 @@ export function normalizePath(path) {
     return normalized;
 }
 
+/**
+ * Inlines CSS rules from <style> tags into elements' style attributes.
+ * This is necessary because Lexical's _generateNodesFromDOM only respects inline styles,
+ * while Pandoc's --standalone output uses CSS classes for colors and other formatting.
+ * @param {Document} dom - The DOM document parsed from HTML.
+ */
+function inlineCssRules(dom) {
+    const styleMap = {};
+    const styleTags = dom.querySelectorAll('style');
+    styleTags.forEach(style => {
+        const css = style.textContent;
+        // Simple regex to match .class { properties }
+        // Pandoc usually uses .c1 { color: #123456; }
+        const regex = /\.([a-zA-Z0-9_\-]+)\s*\{\s*([^}]+)\}/g;
+        let match;
+        while ((match = regex.exec(css)) !== null) {
+            const className = match[1];
+            const rules = match[2].trim();
+            styleMap[className] = rules;
+        }
+    });
+
+    if (Object.keys(styleMap).length === 0) return;
+
+    const elementsWithClass = dom.querySelectorAll('[class]');
+    elementsWithClass.forEach(el => {
+        const classes = el.getAttribute('class').split(/\s+/);
+        let inlinedStyles = '';
+        classes.forEach(cls => {
+            if (styleMap[cls]) {
+                inlinedStyles += (inlinedStyles ? ';' : '') + styleMap[cls];
+            }
+        });
+        if (inlinedStyles) {
+            const existingStyle = el.getAttribute('style') || '';
+            // Append inlined styles, ensuring we don't double-semicolon
+            const separator = (existingStyle && !existingStyle.trim().endsWith(';')) ? ';' : '';
+            el.setAttribute('style', existingStyle + separator + inlinedStyles);
+        }
+    });
+}
+
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     const currentProject = get(project);
     const projectId = currentProject.id;
@@ -802,8 +844,17 @@ export async function importDocumentFile() {
         let lexicalJsonString = '';
         const conversionEditor = createConversionEditor('import-doc');
         try {
-            const domParser = new DOMParser(); const dom = domParser.parseFromString(htmlContent, 'text/html');
-            await conversionEditor.update(() => { const nodes = _generateNodesFromDOM(conversionEditor, dom); _getRoot().clear(); _getRoot().append(...nodes); });
+            const domParser = new DOMParser(); 
+            const dom = domParser.parseFromString(htmlContent, 'text/html');
+            
+            // Inline CSS styles so Lexical can see colors and other formatting
+            inlineCssRules(dom);
+
+            await conversionEditor.update(() => { 
+                const nodes = _generateNodesFromDOM(conversionEditor, dom); 
+                _getRoot().clear(); 
+                _getRoot().append(...nodes); 
+            });
             const editorState = conversionEditor.getEditorState();
             if (editorState.isEmpty()) {
                 conversionEditor.update(() => { _getRoot().clear(); const para = _createParagraphNode(); para.append(_createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)); _getRoot().append(para); });
