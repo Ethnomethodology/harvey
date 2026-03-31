@@ -232,22 +232,22 @@
   <div class="w-3/4 p-8 flex flex-col overflow-hidden">
     {#if activeTab === 'projects'}
       {#if hasCriticalConfigIssues || hasNonCriticalConfigIssues}
-        <div class="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-5 flex items-start space-x-4 flex-shrink-0 shadow-sm">
-          <div class="p-2 bg-yellow-100 dark:bg-yellow-900/40 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600 dark:text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="mb-6 {hasCriticalConfigIssues ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'} rounded-xl p-5 flex items-start space-x-4 flex-shrink-0 shadow-sm">
+          <div class="p-2 {hasCriticalConfigIssues ? 'bg-red-100 dark:bg-red-900/40' : 'bg-yellow-100 dark:bg-yellow-900/40'} rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 {hasCriticalConfigIssues ? 'text-red-600 dark:text-red-500' : 'text-yellow-600 dark:text-yellow-500'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
           <div class="flex-grow">
-            <h3 class="text-base font-bold text-yellow-900 dark:text-yellow-100 uppercase tracking-tight">Configuration Required</h3>
-            <p class="text-sm text-yellow-800 dark:text-yellow-300 mt-1 leading-relaxed">
+            <h3 class="text-base font-bold {hasCriticalConfigIssues ? 'text-red-900 dark:text-red-100' : 'text-yellow-900 dark:text-yellow-100'} uppercase tracking-tight">Configuration Required</h3>
+            <p class="text-sm {hasCriticalConfigIssues ? 'text-red-800 dark:text-red-300' : 'text-yellow-800 dark:text-yellow-300'} mt-1 leading-relaxed">
               Your installation is almost complete! Some required libraries or AI models are missing. Please complete the setup to enable full transcription and translation features.
             </p>
             <div class="mt-4 flex items-center space-x-4">
               {#if hasCriticalConfigIssues}
                 <button
                   on:click={() => showWizardModal = true}
-                  class="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-bold shadow-md shadow-yellow-600/20 transition-all flex items-center space-x-2"
+                  class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-md shadow-red-600/20 transition-all flex items-center space-x-2"
                 >
                   <span>Launch Setup Wizard</span>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -256,7 +256,7 @@
                 </button>
                 <button
                   on:click={() => switchTab('configure')}
-                  class="text-xs font-bold text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-200 underline decoration-2 underline-offset-4 transition-colors"
+                  class="text-xs font-bold text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-200 underline decoration-2 underline-offset-4 transition-colors"
                 >
                   Manually Configure
                 </button>
