@@ -338,7 +338,7 @@
         if (!documentPath) return;
 
         const { ask } = await import('@tauri-apps/plugin-dialog');
-        const confirmed = await ask(`Are you sure you want to permanently delete this document?\n\nThis action cannot be undone.`, { title: 'Delete Document', type: 'warning' });
+        const confirmed = await ask(`Are you sure you want to permanently delete this attachment?\n\nThis action cannot be undone.`, { title: 'Delete Attachment', type: 'warning' });
         if (!confirmed) return;
 
         const projectStoreState = get(project);
