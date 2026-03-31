@@ -2014,17 +2014,13 @@ async function processJsonToRemoveHighlights(jsonString, isDocument = false) {
                 const numCols = firstRow ? firstRow.getChildrenSize() : 4;
                 let newWidths;
 
-                // Lexical tables require explicit pixel widths to support structural consistency and resizing.
-                // We use an 800px base width, but if resizing is disabled (like in transcript panels), the browser
-                // will scale these relative sizes uniformly, maintaining the intended percentages perfectly.
+                // Use percentage-based widths from layout configuration if available to maintain
+                // responsiveness across both the editor and exported documents.
                 if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
-                    newWidths = layoutConfig.colgroup.map(pctStr => {
-                        const pct = parseFloat(pctStr.replace('%', ''));
-                        return Math.max(40, Math.floor(800 * (pct / 100)));
-                    });
+                    newWidths = layoutConfig.colgroup;
                 } else {
-                    const defaultWidth = Math.max(100, Math.floor(800 / numCols));
-                    newWidths = Array(numCols).fill(defaultWidth);
+                    const defaultPct = Math.floor(100 / numCols);
+                    newWidths = Array(numCols).fill(`${defaultPct}%`);
                 }
 
                 node.setColWidths(newWidths);

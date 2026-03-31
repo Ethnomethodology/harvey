@@ -1714,6 +1714,7 @@
 
         historyState.undoStack = [];
         historyState.redoStack = [];
+        initialSyncDone = false; // Allow syncLayout() to treat this as a fresh run
         areNodesReady = true;
       } catch (e) {
         console.error('[LexicalEditor] Error parsing JSON during resetEditorState:', e, "Attempted JSON:", jsonString?.substring(0, 100));
@@ -1723,12 +1724,26 @@
             })));
             historyState.undoStack = [];
             historyState.redoStack = [];
+            initialSyncDone = false; // Also for fallback
             areNodesReady = true;
         } catch (fallbackError) {
             console.error('[LexicalEditor] CRITICAL: Failed to set even fallback state during resetEditorState:', fallbackError);
         }
       }
     });
+
+    // Explicitly trigger sync for the new content
+    // Use a small delay to allow Lexical to process the update, then sync layout.
+    // We also add a secondary check in case the first one misses the tables due to async rendering.
+    setTimeout(() => {
+        syncLayout(true); // First attempt
+        setTimeout(() => {
+            if (!initialSyncDone) {
+                console.debug(`[LexicalEditor resetEditorState] Secondary syncLayout attempt for ${documentPath}`);
+                syncLayout(true); 
+            }
+        }, 300);
+    }, 50);
   }
 
 
@@ -3354,7 +3369,7 @@ function navigateToNextResult() {
 let previousLayout = null;
 let initialSyncDone = false;
 
-function syncLayout() {
+function syncLayout(isFromReset = false) {
     if (!editor) return;
     const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
     if (!layoutConfig) return;
@@ -3363,7 +3378,7 @@ function syncLayout() {
     const layoutChanged = activeLayout !== previousLayout;
     
     // Capture initial status BEFORE updating it, for use in the closure
-    const isInitialRun = !initialSyncDone;
+    const isInitialRun = !initialSyncDone || isFromReset;
 
     // Update tracking variables
     if (isInitialRun) {
@@ -3393,15 +3408,38 @@ function syncLayout() {
             // Set column widths
             if (layoutConfig.colgroup) {
                 const currentWidths = tableNode.getColWidths();
-                const hasWidths = currentWidths && currentWidths.length > 0 && !currentWidths.every(w => w === undefined);
+                const hasWidths = currentWidths && currentWidths.length > 0 && !currentWidths.every(w => w === undefined || w === null);
 
                 // Apply defaults ONLY if:
                 // 1. Table has no widths set (new/raw table)
                 // 2. OR Layout was explicitly changed by user (runtime switch), NOT just initial load
+                // 3. OR it's initial run AND we have a layout defined AND does NOT have percentages set yet (fixed pixels, null, or undefined)
                 // We use isInitialRun (captured const) to safely check this inside the callback
-                if (!hasWidths || (layoutChanged && !isInitialRun)) {
+                const numCols = currentWidths ? currentWidths.length : 0;
+                
+                // Determine if this is a correct column count for the active layout (usually 4 for transcripts)
+                // If numCols is 0, it might be uninitialized, which we'll allow on initialRun to set defaults.
+                const isCorrectColCount = layoutConfig.colgroup && (numCols === layoutConfig.colgroup.length || (isInitialRun && numCols === 0));
+
+                if (documentPath?.includes('transcripts') || !initialSyncDone) {
+                    console.debug(`[LexicalEditor syncLayout] Checking table widths for ${documentPath}:`, {
+                        numCols,
+                        hasWidths,
+                        currentWidths,
+                        isInitialRun,
+                        isCorrectColCount,
+                        activeLayout
+                    });
+                }
+
+                if (!hasWidths || (layoutChanged && !isInitialRun && isCorrectColCount) || (isInitialRun && isCorrectColCount)) {
+                    if (documentPath?.includes('transcripts') || !initialSyncDone) {
+                        console.log(`[LexicalEditor syncLayout] APPLYING layout widths for ${documentPath}:`, layoutConfig.colgroup);
+                    }
                     const newColWidths = layoutConfig.colgroup;
                     tableNode.setColWidths(newColWidths);
+                } else {
+                    console.debug(`[LexicalEditor syncLayout] BYPASSING layout apply:`, { hasWidths, layoutChanged, isInitialRun, isCorrectColCount });
                 }
             }
 
@@ -3544,7 +3582,7 @@ function handleRemoveHighlightFromToolbar() {
 }
 </script>
 
-<div bind:this={editorRoot} class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
+<div bind:this={editorRoot} class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" class:resizing-disabled={!enableTableCellResize} style="overflow: visible;">
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       <slot name="toolbar_prepend"></slot>
@@ -4257,6 +4295,13 @@ function handleRemoveHighlightFromToolbar() {
   .editor-table {
       border-collapse: collapse;
       width: 100%;
+      table-layout: auto; /* Default to auto for standard documents */
+  }
+
+  /* Force fixed layout only when resizing is disabled (Transcripts) */
+  .lexizing-disabled .editor-table,
+  .resizing-disabled .editor-table {
+      table-layout: fixed;
   }
 
   .editor-table-cell {
@@ -4367,6 +4412,31 @@ function handleRemoveHighlightFromToolbar() {
     /* =================================================================== */
     /* LAYOUT SPECIFIC RENDERING RULES FOR TRANSCRIPT TABLES               */
     /* =================================================================== */
+
+    /* STYLES FOR LAYOUT 1 (Detailed Table) - Only apply fixed logic if resizing is disabled */
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table) {
+        table-layout: fixed !important;
+        width: 100% !important;
+    }
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table td:nth-child(1)) {
+        width: 5% !important;
+        min-width: 40px;
+    }
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table td:nth-child(2)) {
+        width: 15% !important;
+        min-width: 100px;
+    }
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table td:nth-child(3)) {
+        width: 15% !important;
+        min-width: 100px;
+    }
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table td:nth-child(4)) {
+        width: 65% !important;
+    }
 
     /* STYLES FOR LAYOUT 2 (Segment Block) */
     .lexical-editor-root.layout-Layout2 :global(.lexical-content table) {

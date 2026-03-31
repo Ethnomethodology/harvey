@@ -5,6 +5,7 @@ use super::shared_types::{
 };
 use super::shared_utils::{truncate_filename_stem, MAX_FILENAME_STEM_LENGTH, save_project_xml};
 use crate::projectview::db_handler;
+use crate::projectview::transcription_commands::create_lexical_table_from_segments;
 use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
@@ -440,7 +441,8 @@ pub async fn import_word_transcript<R: Runtime>(
     let new_transcript_filename = final_transcript_path.file_name().unwrap().to_string_lossy().to_string();
 
 
-    let json_content = serde_json::to_string_pretty(&segments)
+    let lexical_json = create_lexical_table_from_segments(&segments);
+    let json_content = serde_json::to_string_pretty(&lexical_json)
         .map_err(|e| CommandError::from(format!("Failed to serialize segments to JSON: {}", e)))?;
     fs::write(&final_transcript_path, json_content)
         .map_err(|e| CommandError::from(format!("Failed to save transcript JSON to {}: {}", final_transcript_path.display(), e)))?;
@@ -662,7 +664,8 @@ mod tests {
         let final_transcript_path = transcript_specific_dir.join(&new_transcript_filename);
 
         let segments = vec![TranscriptSegment { start_time: 0.0, end_time: 1.0, speaker: "S1".to_string(), text: "Test Content".to_string() }];
-        let json_content_segments = serde_json::to_string_pretty(&segments)?;
+        let lexical_json = create_lexical_table_from_segments(&segments);
+        let json_content_segments = serde_json::to_string_pretty(&lexical_json)?;
         fs::write(&final_transcript_path, json_content_segments)?;
         assert!(final_transcript_path.exists(), "Transcript file should be created for test setup");
 
