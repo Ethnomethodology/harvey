@@ -2717,6 +2717,11 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
+
+                    if text.contains("[Start speaking]") {
+                         let _ = app_handle_clone.emit("live_transcription_ready", ());
+                    }
+
                     let cleaned_text = text
                         .replace("[Start speaking]", "")
                         .replace("[BLANK_AUDIO]", "")
