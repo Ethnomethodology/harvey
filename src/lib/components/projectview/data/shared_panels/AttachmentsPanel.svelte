@@ -359,12 +359,12 @@
                 assetRelativePath: previousProcessedItemPath,
                 attachmentRelativePath: attachmentRelPath
             });
-            notificationStore.add('Document deleted.', 'success');
+            notificationStore.add('Attachment deleted.', 'success');
             await loadAttachments(previousProcessedItemPath);
             dispatch('attachmentdeleted', { path: documentPath });
         } catch (error) {
-            console.error('Failed to delete document:', error);
-            notificationStore.add(`Failed to delete document: ${error}`, 'error');
+            console.error('Failed to delete attachment:', error);
+            notificationStore.add(`Failed to delete attachment: ${error}`, 'error');
         }
     }
 
