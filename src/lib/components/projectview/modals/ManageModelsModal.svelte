@@ -21,6 +21,7 @@
 		}
 		// If not busy, signal the parent (TopBar) to close the modal
 		showModal = false; // Update bound prop which closes the modal visually
+		dispatch('modelsChanged');
 		dispatch('close'); // DISPATCH EVENT
 		console.log('ManageModelsModal: Closing and dispatched event.');
 	}

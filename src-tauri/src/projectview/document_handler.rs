@@ -239,6 +239,8 @@ pub async fn import_document<R: Runtime>(
                 source_path.to_string_lossy().to_string(),
                 temp_html_path.to_string_lossy().to_string(),
                 "html".to_string(),
+                "--standalone".to_string(),
+                "--katex".to_string(),
                 format!("--from={}", source_format_arg),
             ];
             

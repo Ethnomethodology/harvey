@@ -650,7 +650,7 @@ pub async fn list_venv_lib_contents() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn delete_virtual_env() -> Result<(), String> {
+pub async fn delete_virtual_env(app_handle: AppHandle) -> Result<(), String> {
     let env_path = get_env_path().map_err(|e| e.to_string())?;
     if env_path.exists() {
         log::info!("Deleting environment at: {:?}", env_path);
@@ -660,6 +660,51 @@ pub async fn delete_virtual_env() -> Result<(), String> {
 
         let mut config = read_config().map_err(|e| e.to_string())?;
         config.verification_status.python_libraries_verified = false;
+
+        // Also delete downloaded models
+        let base_model_dir_str = if !config.download_location.trim().is_empty() {
+            config.download_location.clone()
+        } else {
+            crate::welcome::config::get_default_download_location().map_err(|e| e.to_string())?
+        };
+
+        // Paths where models and engines are downloaded
+        let transcription_models_dir = PathBuf::from(&base_model_dir_str).join("transcription");
+        let translation_models_dir = PathBuf::from(&base_model_dir_str).join("translation");
+
+        if transcription_models_dir.exists() {
+            log::info!("Deleting transcription models at: {:?}", transcription_models_dir);
+            let _ = std::fs::remove_dir_all(&transcription_models_dir);
+        }
+
+        if translation_models_dir.exists() {
+            log::info!("Deleting translation models at: {:?}", translation_models_dir);
+            let _ = std::fs::remove_dir_all(&translation_models_dir);
+        }
+
+        // Also delete diarization models
+        if let Ok(diarization_models_dir) = crate::welcome::diarization::get_diarization_hub_path(&app_handle) {
+            if diarization_models_dir.exists() {
+                log::info!("Deleting diarization models at: {:?}", diarization_models_dir);
+                let _ = std::fs::remove_dir_all(&diarization_models_dir);
+            }
+        }
+
+        // Old legacy path for whisper.cpp models
+        let legacy_model_dir = PathBuf::from(&base_model_dir_str);
+        if legacy_model_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&legacy_model_dir) {
+                for entry in entries.flatten() {
+                    if let Ok(file_name) = entry.file_name().into_string() {
+                        if file_name.starts_with("ggml-") && file_name.ends_with(".bin") {
+                            log::info!("Deleting legacy model file: {:?}", entry.path());
+                            let _ = std::fs::remove_file(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+
         write_config(&config).map_err(|e| e.to_string())?;
     }
     Ok(())

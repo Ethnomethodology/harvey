@@ -62,7 +62,8 @@
     // Store sync for primary
     $: if (isPrimary && $project.selectedMediaNotePath === mediaPath) {
         if (lexicalEditorRef && localEditorJsonState !== currentTranscriptJson) {
-            lexicalEditorRef.resetEditorState(currentTranscriptJson || defaultEmptyJson);
+            console.log(`[MediaTranscriptEditorSubPanel] Triggering resetEditorState from currentTranscriptJson change for ${transcriptPath}`);
+            lexicalEditorRef.resetEditorState(currentTranscriptJson || defaultEmptyJson, 'primary_store_sync');
             localEditorJsonState = currentTranscriptJson || defaultEmptyJson;
         }
     }

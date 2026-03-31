@@ -40,7 +40,7 @@ import {
 } from '@lexical/html';
 
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
-import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
@@ -106,6 +106,48 @@ export function normalizePath(path) {
     normalized = normalized.replace(/\\/g, '/');
 
     return normalized;
+}
+
+/**
+ * Inlines CSS rules from <style> tags into elements' style attributes.
+ * This is necessary because Lexical's _generateNodesFromDOM only respects inline styles,
+ * while Pandoc's --standalone output uses CSS classes for colors and other formatting.
+ * @param {Document} dom - The DOM document parsed from HTML.
+ */
+function inlineCssRules(dom) {
+    const styleMap = {};
+    const styleTags = dom.querySelectorAll('style');
+    styleTags.forEach(style => {
+        const css = style.textContent;
+        // Simple regex to match .class { properties }
+        // Pandoc usually uses .c1 { color: #123456; }
+        const regex = /\.([a-zA-Z0-9_\-]+)\s*\{\s*([^}]+)\}/g;
+        let match;
+        while ((match = regex.exec(css)) !== null) {
+            const className = match[1];
+            const rules = match[2].trim();
+            styleMap[className] = rules;
+        }
+    });
+
+    if (Object.keys(styleMap).length === 0) return;
+
+    const elementsWithClass = dom.querySelectorAll('[class]');
+    elementsWithClass.forEach(el => {
+        const classes = el.getAttribute('class').split(/\s+/);
+        let inlinedStyles = '';
+        classes.forEach(cls => {
+            if (styleMap[cls]) {
+                inlinedStyles += (inlinedStyles ? ';' : '') + styleMap[cls];
+            }
+        });
+        if (inlinedStyles) {
+            const existingStyle = el.getAttribute('style') || '';
+            // Append inlined styles, ensuring we don't double-semicolon
+            const separator = (existingStyle && !existingStyle.trim().endsWith(';')) ? ';' : '';
+            el.setAttribute('style', existingStyle + separator + inlinedStyles);
+        }
+    });
 }
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
@@ -371,11 +413,7 @@ const imageFilter = { name: 'Image Files', extensions: imageExtensions };
 const wordDocumentFilter = { name: 'Word Documents', extensions: ['docx'] };
 
 
-const ALL_EDITOR_NODES = [
-    RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
-    HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
-    TableNode, TableRowNode, TableCellNode
-];
+const ALL_EDITOR_NODES = SHARED_NODES;
 
 function createConversionEditor(instanceId) {
     return createHeadlessEditor({
@@ -698,7 +736,7 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const newlyImportedFileEntry = await invoke('import_media', { 
+        const newlyImportedFileEntry = await invoke('import_media', {
             sourceFilePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath,
             importType: importType // Added parameter
@@ -787,9 +825,19 @@ export async function importDocumentFile() {
 
         backendResultPathAndOriginalFilename = await invoke('import_document', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath });
         let tempHtmlPath = backendResultPathAndOriginalFilename;
+        let uniqueDocFilenameWithExt = sourceFilename;
+
         if (backendResultPathAndOriginalFilename.includes("|original_filename:")) {
-            tempHtmlPath = backendResultPathAndOriginalFilename.split("|original_filename:")[0];
+            const parts = backendResultPathAndOriginalFilename.split("|original_filename:");
+            tempHtmlPath = parts[0];
+            uniqueDocFilenameWithExt = parts[1];
         }
+
+        const uniqueDocStem = uniqueDocFilenameWithExt.includes('.') 
+            ? uniqueDocFilenameWithExt.substring(0, uniqueDocFilenameWithExt.lastIndexOf('.')) 
+            : uniqueDocFilenameWithExt;
+
+        console.log(`[importDocumentFile] Backend returned tempHtmlPath: ${tempHtmlPath}, uniqueDocFilenameWithExt: ${uniqueDocFilenameWithExt}, uniqueDocStem: ${uniqueDocStem}`);
 
         if (tempHtmlPath && tempHtmlPath.toLowerCase().endsWith('.pdf')) {
             await refreshProjectFiles();
@@ -806,8 +854,17 @@ export async function importDocumentFile() {
         let lexicalJsonString = '';
         const conversionEditor = createConversionEditor('import-doc');
         try {
-            const domParser = new DOMParser(); const dom = domParser.parseFromString(htmlContent, 'text/html');
-            await conversionEditor.update(() => { const nodes = _generateNodesFromDOM(conversionEditor, dom); _getRoot().clear(); _getRoot().append(...nodes); });
+            const domParser = new DOMParser(); 
+            const dom = domParser.parseFromString(htmlContent, 'text/html');
+            
+            // Inline CSS styles so Lexical can see colors and other formatting
+            inlineCssRules(dom);
+
+            await conversionEditor.update(() => { 
+                const nodes = _generateNodesFromDOM(conversionEditor, dom); 
+                _getRoot().clear(); 
+                _getRoot().append(...nodes); 
+            });
             const editorState = conversionEditor.getEditorState();
             if (editorState.isEmpty()) {
                 conversionEditor.update(() => { _getRoot().clear(); const para = _createParagraphNode(); para.append(_createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)); _getRoot().append(para); });
@@ -820,8 +877,8 @@ export async function importDocumentFile() {
         }
         if (!lexicalJsonString) throw new Error("Failed to generate Lexical JSON from HTML.");
 
-        const docsFolderPath = `${projectBaseDir}/${HARVEY_FILES_DIR}/${DOCS_DIR_NAME}/${sourceFilenameStem}`;
-        finalJsonPath = `${docsFolderPath}/${sourceFilenameStem}.json`;
+        const docsFolderPath = `${projectBaseDir}/${HARVEY_FILES_DIR}/${DOCS_DIR_NAME}/${uniqueDocStem}`;
+        finalJsonPath = `${docsFolderPath}/${uniqueDocStem}.json`;
         finalJsonName = await basename(finalJsonPath);
         await invoke('save_document_and_update_xml', {
             projectXmlPath: projectXmlPath,
@@ -830,7 +887,7 @@ export async function importDocumentFile() {
             jsonContent: lexicalJsonString
         });
         await refreshProjectFiles();
-        setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
+        setAssetImportStatus(false, `Document "${uniqueDocFilenameWithExt}" imported successfully.`);
         prepareDocumentView(finalJsonPath, 'documents');
         return finalJsonPath;
 
@@ -1201,11 +1258,11 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
     let finalHighlights = [];
     try {
         const parsed = typeof lexicalJsonString === 'string' ? JSON.parse(lexicalJsonString) : lexicalJsonString;
-        
+
         let allTextNodes = [];
         function walk(node) {
             if (!node) return;
-            if (node.highlightId) { 
+            if (node.highlightId) {
                 allTextNodes.push(node);
             } else if (Array.isArray(node.children)) {
                 node.children.forEach(walk);
@@ -1216,12 +1273,12 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
         if (allTextNodes.length === 0) return [];
 
         const existingHighlightsMap = new Map((existingHighlights || []).map(h => [h.id, h]));
-        
+
         const blocks = {};
         for (const node of allTextNodes) {
-             const id = node.highlightId;
-             if (!blocks[id]) { blocks[id] = []; }
-             blocks[id].push(node);
+            const id = node.highlightId;
+            if (!blocks[id]) { blocks[id] = []; }
+            blocks[id].push(node);
         }
 
         let orderIndex = 0;
@@ -1230,9 +1287,9 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
             const style = typeof firstNode.style === 'string' ? firstNode.style : "";
             const colorMatch = style.match(/background-color:\s*([^;]+)/);
             const color = colorMatch ? colorMatch[1].trim() : 'transparent';
-            
+
             const metadata = existingHighlightsMap.get(highlightId);
-            
+
             let extractedText = '';
             for (const n of block) {
                 if (typeof n.text === 'string') {
@@ -1251,7 +1308,7 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
             });
         }
         return finalHighlights;
-    } catch(e) {
+    } catch (e) {
         console.error("[extractHighlightsFromLexicalJson] error:", e);
         return [];
     }
@@ -1426,7 +1483,7 @@ export async function saveTranscriptData() {
         // Auto-extract highlights from the constructed JSON and sync with the database
         const currentHighlights = get(project).currentDocumentHighlights || [];
         const extractedHighlights = extractHighlightsFromLexicalJson(parsedJson, currentHighlights);
-        
+
         try {
             await invoke('save_lexical_highlights', {
                 args: {
@@ -1755,7 +1812,8 @@ export async function deleteProjectItem(itemPath) {
         throw error;
     }
 }
-export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); }     } catch (error) {
+export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) {
+    if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) {
         const errorMessage = getErrorMessage(error);
         project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false }));
         throw new Error(`Trim failed: ${errorMessage}`);
@@ -1765,7 +1823,7 @@ export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTi
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
 export async function requestTranscription() {
     const storeState = get(transcriptStore);
-    console.log(`[JULES-DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
+    console.log(`[DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info' }); return; }
@@ -1795,7 +1853,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
     const mediaPathForJob = currentTs.selectedMediaFile?.path;
     const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
 
-    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
+    console.log(`[DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
 
     if (!mediaPathForJob || !modelNameForJob) {
         // Use notification store for error
@@ -1935,14 +1993,14 @@ export async function handleCancelTranscriptionRequest() {
 export let progressListenerInitialized = false;
 export let progressUnlistenFn = null;
 export async function initializeProgressListener() {
-    // console.log('[JULES-DEBUG] initializeProgressListener called');
+    // console.log('[DEBUG] initializeProgressListener called');
     if (progressListenerInitialized) return;
     try {
         progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => {
-            // console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
+            // console.log('[DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
             const payload = event.payload;
             if (!payload || typeof payload !== 'object') {
-                // console.log('[JULES-DEBUG] projectService: Payload empty or not an object');
+                // console.log('[DEBUG] projectService: Payload empty or not an object');
                 return;
             }
             const eventJobId = payload.jobId ?? payload.job_id; // Prefer 'jobId', fallback to 'job_id'
@@ -2010,23 +2068,41 @@ async function processJsonToRemoveHighlights(jsonString, isDocument = false) {
             }
             if (node.getType() === 'table' && typeof node.setColWidths === 'function') {
                 const firstRow = node.getFirstChild();
-                const numCols = firstRow ? firstRow.getChildrenSize() : 4;
-                let newWidths;
+                const numCols = firstRow ? firstRow.getChildrenSize() : 0;
+                if (numCols > 0) {
+                    let newWidths;
 
-                // Lexical tables require explicit pixel widths to support structural consistency and resizing.
-                // We use an 800px base width, but if resizing is disabled (like in transcript panels), the browser
-                // will scale these relative sizes uniformly, maintaining the intended percentages perfectly.
-                if (layoutConfig && layoutConfig.colgroup && layoutConfig.colgroup.length === numCols) {
-                    newWidths = layoutConfig.colgroup.map(pctStr => {
-                        const pct = parseFloat(pctStr.replace('%', ''));
-                        return Math.max(40, Math.floor(800 * (pct / 100)));
-                    });
-                } else {
-                    const defaultWidth = Math.max(100, Math.floor(800 / numCols));
-                    newWidths = Array(numCols).fill(defaultWidth);
+                    // Use percentage-based widths from layout configuration if available to maintain
+                    // responsiveness across both the editor and exported documents.
+                    if (layoutConfig && layoutConfig.colgroup && Array.isArray(layoutConfig.colgroup) && layoutConfig.colgroup.length === numCols) {
+                        newWidths = [...layoutConfig.colgroup];
+                    } else {
+                        const defaultPct = Math.floor(100 / numCols);
+                        newWidths = Array(numCols).fill(`${defaultPct}%`);
+                    }
+
+                    // Final safety check to ensure no null/undefined values slip in
+                    for (let i = 0; i < newWidths.length; i++) {
+                        if (newWidths[i] == null) {
+                            newWidths[i] = `${Math.floor(100 / numCols)}%`;
+                        }
+                    }
+
+                    // For documents, convert any percentage strings to absolute pixel numbers
+                    // relative to a standard 1000px width to match the behavior of working tables.
+                    if (isDocument) {
+                        const REFERENCE_WIDTH = 1000;
+                        newWidths = newWidths.map(w => {
+                            if (typeof w === 'string' && w.endsWith('%')) {
+                                const pct = parseFloat(w);
+                                return (REFERENCE_WIDTH * pct) / 100;
+                            }
+                            return typeof w === 'string' ? parseFloat(w) : w;
+                        });
+                    }
+
+                    node.setColWidths(newWidths);
                 }
-
-                node.setColWidths(newWidths);
             }
         });
     });

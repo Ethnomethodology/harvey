@@ -69,8 +69,8 @@ def run_live_transcription(model_path, language=None, device="auto", threads=4, 
                     
                     # Transcribe
                     segments, info = model.transcribe(
-                        audio_data, 
-                        language=language, 
+                        audio_data,
+                        language=language,
                         beam_size=5,
                         vad_filter=True,
                         vad_parameters=dict(min_silence_duration_ms=500)

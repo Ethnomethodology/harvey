@@ -39,9 +39,25 @@
     const modKeyName = isMac ? 'Cmd' : 'Ctrl';
 
     let isLiveTranscriptionActive = false;
+    let isLiveTranscriptionReady = false;
     let liveTranscriptionError = null;
     let showLiveTranscribeModal = false;
     let isAddingTimestamps = false;
+
+    let dotCount = 1;
+    let dotInterval;
+
+    function startDotAnimation() {
+        dotInterval = setInterval(() => {
+            dotCount = (dotCount % 3) + 1;
+        }, 500);
+    }
+
+    function stopDotAnimation() {
+        clearInterval(dotInterval);
+    }
+
+    $: dots = '.'.repeat(dotCount);
     let showTranslateDocumentModal = false;
     let showDocumentExportModal = false;
     let showTableExportModal = false;
@@ -245,6 +261,8 @@
                 invoke('stop_live_transcription').then(stopped => {
                     if (stopped) {
                         isLiveTranscriptionActive = false;
+                        isLiveTranscriptionReady = false;
+                        stopDotAnimation();
                     }
                 }).catch(err => {
                     console.error("Failed to stop live transcription on file switch:", err);
@@ -446,8 +464,14 @@
     }
 
     let unlisten = null;
+    let unlistenReady = null;
 
     onMount(async () => {
+        unlistenReady = await listen('live_transcription_ready', () => {
+            isLiveTranscriptionReady = true;
+            startDotAnimation();
+        });
+
         unlisten = await listen('live_transcription_result', (event) => {
             const { text, is_final, start_time, end_time } = event.payload;
             const p = get(project);
@@ -474,6 +498,10 @@
         if (unlisten) {
             unlisten();
         }
+        if (unlistenReady) {
+            unlistenReady();
+        }
+        stopDotAnimation();
     });
 
     async function toggleLiveTranscription() {
@@ -482,6 +510,8 @@
                 const stopped = await invoke('stop_live_transcription');
                 if (stopped) {
                     isLiveTranscriptionActive = false;
+                    isLiveTranscriptionReady = false;
+                    stopDotAnimation();
                 }
             } catch (error) {
                 message(`Failed to stop live transcription: ${error}`, { title: 'Error', type: 'error' });
@@ -521,6 +551,7 @@
             }
         } catch (error) {
             isLiveTranscriptionActive = false;
+            isLiveTranscriptionReady = false;
             liveTranscriptionError = error;
             message(`Failed to start live transcription: ${error}`, { title: 'Error', type: 'error' });
         }
@@ -580,7 +611,15 @@
         {#if $project.activeDocumentEditorRef}
         <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
             <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
-            <span class="whitespace-nowrap">Live Transcribe</span>
+            <span class="whitespace-nowrap w-24 text-left">
+                {#if isLiveTranscriptionActive && !isLiveTranscriptionReady}
+                    Initializing...
+                {:else if isLiveTranscriptionActive && isLiveTranscriptionReady}
+                    Listening{dots}
+                {:else}
+                    Live Transcribe
+                {/if}
+            </span>
         </Button>
         {/if}
         {#if isLexicalDocument}

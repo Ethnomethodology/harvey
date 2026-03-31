@@ -23,6 +23,8 @@
         Select, 
         Input 
     } from 'flowbite-svelte';
+    import { Settings2 } from '@lucide/svelte';
+    import ManageModelsModal from './ManageModelsModal.svelte';
 
     export let activeDocumentPath = null;
     export let showModal = false;
@@ -46,6 +48,7 @@
 		return `${m}m ${s}s`;
 	}
 
+	let showManageModelsModal = false;
 	let elapsedText = '';
 	let timerInterval;
 
@@ -306,9 +309,9 @@
 							<p class="text-blue-800 dark:text-blue-300 font-medium text-sm">
 								No {selectedEngine === "helsinki" ? "Helsinki-NLP" : "NLLB"} models available
 							</p>
-							<Button color="alternative" size="xs" on:click={handleOpenConfig} title="Go to Configuration">
-								<AlertTriangle size={14} class="mr-2 {hasCriticalConfigIssues ? 'text-red-500' : hasNonCriticalConfigIssues ? 'text-yellow-500' : 'text-gray-500'}" />
-								Configure
+							<Button color="alternative" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+								<Settings2 size={14} class="mr-2 text-blue-500" />
+								Manage Models
 							</Button>
 						</div>
 					{:else}
@@ -429,15 +432,23 @@
 
 	<svelte:fragment slot="footer">
 		{#if !isTranslating && jobStatus === null}
-			<Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
-			<Button
-				color="blue"
-				on:click={handleConfirm}
-				title="Start Translation"
-				disabled={!activeDocumentPath || !selectedModel}
-			>
-				Start Translation
-			</Button>
+            <div class="flex justify-between w-full">
+                <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5" title="Manage Translation Models">
+                    <Settings2 size={14} />
+                    Manage Models
+                </button>
+                <div class="flex gap-3">
+                    <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
+                    <Button
+                        color="blue"
+                        on:click={handleConfirm}
+                        title="Start Translation"
+                        disabled={!activeDocumentPath || !selectedModel}
+                    >
+                        Start Translation
+                    </Button>
+                </div>
+            </div>
 		{:else if isTranslating && (jobStatus === 'running' || jobStatus === 'initiating')}
 			<Button
 				color="alternative"
@@ -462,6 +473,15 @@
 		{/if}
 	</svelte:fragment>
 </Modal>
+
+<ManageModelsModal
+	bind:showModal={showManageModelsModal}
+	on:modelsChanged={async () => {
+        // Refresh local translation configuration
+        selectedEngine = await getSelectedTranslationEngine() || 'helsinki';
+        await loadData();
+	}}
+/>
 
 <style lang="postcss">
     .custom-scrollbar::-webkit-scrollbar {

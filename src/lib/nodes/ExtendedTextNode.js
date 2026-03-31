@@ -12,6 +12,7 @@ import {
   IS_SUBSCRIPT,
   IS_SUPERSCRIPT,
   IS_HIGHLIGHT, // Assuming this is also a constant you might use or is standard
+  $createTextNode as _createTextNode,
 } from 'lexical';
 
 /**
@@ -237,91 +238,147 @@ export class ExtendedTextNode extends TextNode {
     return {
       ...importers, // Keep original importers for things like text content from various tags
       span: (node) => {
-        // If the original span importer exists, try to use it and then patch
-        if (importers && typeof importers.span === 'function') {
-          const original = importers.span(node);
-          if (original && original.conversion) {
-            return {
-              conversion: patchStyleConversion(original.conversion),
-              priority: 1, // Ensure this runs
-            };
-          }
-        }
-        // Fallback if original span importer is not found or not structured as expected
+        // Standard span importer handles 'style' attribute.
+        // We wrap it in patchStyleConversion to also handle our highlight-id and other custom styles.
+        const original = importers?.span?.(node);
         return {
-          conversion: patchStyleConversion(() => ({ node: $createExtendedTextNode(node.textContent) })),
+          conversion: patchStyleConversion(original?.conversion || null),
           priority: 1,
         };
       },
-      // Standard format tags should ideally be handled by Lexical's core TextNode.importDOM(),
-      // which correctly sets the format flags. We then upgrade to ExtendedTextNode.
-      // However, if we want to directly intercept and ensure they become ExtendedTextNodes
-      // with their styles also parsed, we can override them here.
-      // For now, relying on TextNode's format parsing and then style patching.
-      // If TextNode.importDOM() returns null for these, we'd need explicit handlers.
       b: (node) => ({
-          conversion: patchStyleConversion(importers?.b || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_BOLD)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       strong: (node) => ({
-          conversion: patchStyleConversion(importers?.strong || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_BOLD)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       i: (node) => ({
-          conversion: patchStyleConversion(importers?.i || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_ITALIC)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       em: (node) => ({
-          conversion: patchStyleConversion(importers?.em || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_ITALIC)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       u: (node) => ({
-          conversion: patchStyleConversion(importers?.u || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_UNDERLINE)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_UNDERLINE);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       s: (node) => ({
-          conversion: patchStyleConversion(importers?.s || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_STRIKETHROUGH)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_STRIKETHROUGH);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       sub: (node) => ({
-          conversion: patchStyleConversion(importers?.sub || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_SUBSCRIPT)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUBSCRIPT);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       sup: (node) => ({
-          conversion: patchStyleConversion(importers?.sup || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_SUPERSCRIPT)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUPERSCRIPT);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       code: (node) => ({ // Inline code
-          conversion: patchStyleConversion(importers?.code || (() => ({node: $createExtendedTextNode(node.textContent).setFormat(IS_CODE)}))),
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_CODE);
+              }
+              return lexicalNode;
+            },
+          }),
           priority: 1,
       }),
       font: (node) => { // Handle <font color="..."> for pasted content
         const color = node.getAttribute('color');
-        const baseConversion = importers?.span || (() => ({ node: $createExtendedTextNode(node.textContent) }));
-        const conversion = patchStyleConversion(baseConversion);
-        return (htmlElementNode) => {
-          const result = conversion(htmlElementNode);
-          if (result.node && color) {
-            const existingStyle = result.node.getStyle() || '';
-            const newStyle = `${existingStyle}${existingStyle ? ';' : ''}color: ${color}`;
-            result.node.setStyle(newStyle);
-          }
-          return result;
+        return {
+          conversion: (htmlElementNode) => ({
+              node: null, // Let Lexical walk children
+              forChild: (lexicalNode) => {
+                  if (_isTextNode(lexicalNode) && color) {
+                      const existingStyle = lexicalNode.getStyle() || '';
+                      if (!existingStyle.includes(`color: ${color}`)) {
+                        lexicalNode.setStyle(`${existingStyle}${existingStyle ? ';' : ''}color: ${color}`);
+                      }
+                  }
+                  return lexicalNode;
+              }
+          }),
+          priority: 1,
         };
       },
-      mark: (node) => { // Handle <mark> for pasted content (often used for highlights)
-        const baseConversion = importers?.span || (() => ({ node: $createExtendedTextNode(node.textContent) }));
-        const conversion = patchStyleConversion(baseConversion);
-        return (htmlElementNode) => {
-            const result = conversion(htmlElementNode);
-            if (result.node) {
-                // If you have a default highlight color or want to parse a specific class:
-                const existingStyle = result.node.getStyle() || '';
-                const newStyle = `${existingStyle}${existingStyle ? ';' : ''}background-color: yellow;`; // Default to yellow for <mark>
-                result.node.setStyle(newStyle);
-                result.node.setFormat(result.node.getFormat() | IS_HIGHLIGHT); // Optionally set IS_HIGHLIGHT flag
-            }
-            return result;
+      mark: (node) => { // Handle <mark> for pasted content
+        return {
+          conversion: (htmlElementNode) => ({
+              node: null,
+              forChild: (lexicalNode) => {
+                  if (_isTextNode(lexicalNode)) {
+                      const existingStyle = lexicalNode.getStyle() || '';
+                      if (!existingStyle.includes('background-color: yellow')) {
+                        lexicalNode.setStyle(`${existingStyle}${existingStyle ? ';' : ''}background-color: yellow;`);
+                      }
+                      lexicalNode.setFormat(lexicalNode.getFormat() | IS_HIGHLIGHT);
+                  }
+                  return lexicalNode;
+              }
+          }),
+          priority: 1,
         };
       },
     };
@@ -354,75 +411,65 @@ function getEffectiveStyle(style, isBold) {
  */
 function patchStyleConversion(originalDOMConverter) {
   return (htmlElementNode) => {
-    // Get the base conversion from the original converter
     let conversionResult;
     if (typeof originalDOMConverter === 'function') {
-        // It might be a function that directly returns the node object { node: ... }
-        // or a function that returns a converter object { conversion: (el) => ({ node: ... }) }
         const tempResult = originalDOMConverter(htmlElementNode);
         if (tempResult && typeof tempResult.conversion === 'function') {
             conversionResult = tempResult.conversion(htmlElementNode);
         } else if (tempResult && tempResult.node) {
             conversionResult = tempResult;
         } else {
-            // Fallback if the original converter is unhelpful or doesn't produce a node
-            conversionResult = { node: $createExtendedTextNode(htmlElementNode.textContent ?? '') };
+            conversionResult = { node: _createTextNode(htmlElementNode.textContent ?? '') };
         }
     } else {
-        // Fallback if originalDOMConverter is not a function (e.g., null or undefined)
-        conversionResult = { node: $createExtendedTextNode(htmlElementNode.textContent ?? '') };
+        conversionResult = { node: _createTextNode(htmlElementNode.textContent ?? '') };
     }
 
     let lexicalNode = conversionResult.node;
 
-    // Ensure we're working with an ExtendedTextNode
+    // Upgrade logic: We want everything to be an ExtendedTextNode eventually.
     if (lexicalNode && _isTextNode(lexicalNode) && !(lexicalNode instanceof ExtendedTextNode)) {
       const textContent = lexicalNode.getTextContent();
       const format = lexicalNode.getFormat();
       const detail = lexicalNode.getDetail();
       const mode = lexicalNode.getMode();
+      const style = lexicalNode.getStyle();
 
       const upgradedNode = $createExtendedTextNode(textContent);
       upgradedNode.setFormat(format);
       upgradedNode.setDetail(detail);
       upgradedNode.setMode(mode);
+      upgradedNode.setStyle(style);
       lexicalNode = upgradedNode;
     } else if (!lexicalNode) {
-      // If no node was created by the original, create a fresh ExtendedTextNode
       lexicalNode = $createExtendedTextNode(htmlElementNode.textContent ?? '');
     }
 
-    // At this point, lexicalNode should be an ExtendedTextNode instance
     if (lexicalNode instanceof ExtendedTextNode) {
-      // Pull selected inline styles from the HTML element
       const styles = [];
       const s = htmlElementNode.style;
-      if (s) { // Ensure htmlElementNode.style exists
+      if (s) {
           if (s.backgroundColor) styles.push(`background-color: ${s.backgroundColor}`);
           if (s.color) styles.push(`color: ${s.color}`);
           if (s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
           if (s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
           if (s.fontSize) styles.push(`font-size: ${s.fontSize}`);
-          // text-decoration is usually handled by format flags, but can be explicit
           if (s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
       }
-
 
       const styleString = styles.filter(Boolean).join('; ');
       if (styleString) {
         const existingStyle = lexicalNode.getStyle() || '';
-        lexicalNode.setStyle(existingStyle ? `${existingStyle}; ${styleString}` : styleString);
+        const newStyle = existingStyle ? `${existingStyle}; ${styleString}` : styleString;
+        lexicalNode.setStyle(newStyle);
       }
 
-      // Copy highlight id if present
       const hId = htmlElementNode.getAttribute('data-highlight-id');
       if (hId) {
         lexicalNode.setHighlightId(hId);
       }
-    } else {
-        console.warn("patchStyleConversion: lexicalNode is not an ExtendedTextNode after potential upgrade.", lexicalNode);
     }
 
-    return { node: lexicalNode };
+    return { ...conversionResult, node: lexicalNode };
   };
 }

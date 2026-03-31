@@ -23,6 +23,8 @@
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
 	import AdditionalParametersModal from './AdditionalParametersModal.svelte';
+    import ManageModelsModal from './ManageModelsModal.svelte';
+	import { getDownloadedModels, getSelectedTranscriptionEngine } from '$lib/services/configureActions.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import { project as projectMainStore } from '$lib/stores/projectStore.js';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
@@ -62,6 +64,7 @@
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
 	let showNestedSpeakersModal = false;
+    let showManageModelsModal = false;
 
 	// Manual Mode State
 	let manualSegmentCount = 1;
@@ -413,9 +416,9 @@
                                     {:else if downloadedModelsList.length === 0}
                                         <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl text-center space-y-3">
                                             <p class="text-yellow-800 dark:text-yellow-300 font-medium">No transcription models available</p>
-                                            <Button color="yellow" size="xs" on:click={handleOpenConfig} title="Download Models">
-                                                <AlertTriangle size={14} class="mr-2" />
-                                                Download Models
+                                            <Button color="yellow" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+                                                <Settings2 size={14} class="mr-2" />
+                                                Manage Models
                                             </Button>
                                         </div>
                                     {:else}
@@ -498,8 +501,8 @@
                                                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Speaker identification disabled</p>
                                                         <p class="text-[10px] text-gray-400 italic">Download diarization model to enable.</p>
                                                     </div>
-                                                    <Button color="alternative" size="xs" on:click={handleOpenConfig} title="Configure Diarization">
-                                                        Configure
+                                                    <Button color="alternative" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+                                                        Manage Models
                                                     </Button>
                                                 </div>
                                             {/if}
@@ -713,18 +716,24 @@
             </div>
 
             <!-- Footer -->
-            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between gap-3 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
                 {#if !isTranscribing && jobStatus === null}
-                    <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
-                    <Button
-                        color="blue"
-                        on:click={handleConfirm}
-                        title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
-                        disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
-                            (modalTab === 'manual' && !isManualDurationValid)}
-                    >
-                        {modalTab === 'automatic' ? 'Start Transcription' : 'Add Segments'}
-                    </Button>
+                    <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5" title="Manage Transcription Models">
+                        <Settings2 size={14} />
+                        Manage Models
+                    </button>
+                    <div class="flex gap-3">
+                        <Button color="alternative" on:click={handleCloseAndReset} title="Cancel">Cancel</Button>
+                        <Button
+                            color="blue"
+                            on:click={handleConfirm}
+                            title={!modalSelectedModel ? 'Please select a model' : 'Start Transcription'}
+                            disabled={(modalTab === 'automatic' && (!modalSelectedModel || !modalSelectedLanguage)) ||
+                                (modalTab === 'manual' && !isManualDurationValid)}
+                        >
+                            {modalTab === 'automatic' ? 'Start' : 'Add Segments'}
+                        </Button>
+                    </div>
                 {:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
                     <Button
                         color="alternative"
@@ -799,6 +808,33 @@
         on:close={() => (showAdditionalParamsModal = false)}
     />
 {/if}
+
+<ManageModelsModal
+	bind:showModal={showManageModelsModal}
+	on:modelsChanged={async () => {
+        // Also refresh the local list here directly to avoid waiting on the parent's generic modelsChanged propagation
+        const allModels = await getDownloadedModels();
+        const selectedEngine = await getSelectedTranscriptionEngine();
+        const family = selectedEngine || 'whisper-cpp';
+
+        downloadedModelsList = allModels.filter((m) => {
+            if (family === "faster-whisper") {
+                return m.family === "faster-whisper";
+            } else {
+                return m.family === "whisper-cpp" || (!m.family && !m.name.includes('/'));
+            }
+        });
+
+        // Force re-select the first model if the previously selected one was deleted or hidden
+        if (downloadedModelsList.length > 0) {
+            if (!downloadedModelsList.some(m => m.name === modalSelectedModel)) {
+                modalSelectedModel = downloadedModelsList[0].name;
+            }
+        } else {
+            modalSelectedModel = '';
+        }
+	}}
+/>
 
 <style lang="postcss">
     /* Re-enable spin buttons for specific inputs */

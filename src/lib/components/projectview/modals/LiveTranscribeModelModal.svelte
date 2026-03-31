@@ -124,15 +124,7 @@
                 <Info slot="icon" class="w-5 h-5 shrink-0" />
                 <div class="ml-2">
                     <p class="text-sm font-medium">No transcription models available.</p>
-                    <p class="text-xs mt-1">Please download a model in the Configure screen.</p>
-                    <Button
-                        color="blue"
-                        size="xs"
-                        class="mt-3"
-                        on:click={() => showManageModelsModal = true}
-                    >
-                        Configure
-                    </Button>
+                    <p class="text-xs mt-1">Please use "Manage Models" below to download one.</p>
                 </div>
             </Alert>
         {:else}
