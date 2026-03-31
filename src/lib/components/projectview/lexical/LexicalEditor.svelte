@@ -1455,8 +1455,9 @@
         CLICK_COMMAND,
         (payload) => {
           const event = payload;
-          if (event.button !== 0 || !editor || !editor.isEditable())
+          if (event.button !== 0 || !editor)
             return false;
+          
           let linkNode = null;
           let clickedCell = null;
           let clickedImageKey = null;
@@ -1471,25 +1472,28 @@
                 if (_isImageNode(targetNode)) {
                   clickedImageKey = targetNode.getKey();
                 } else if (_isDateNode(targetNode)) {
-                  // Handle DateNode click
-                  dateNodeToEditKey = targetNode.getKey();
-                  dateInitialData = {
-                    date: targetNode.__date,
-                    format: targetNode.__format,
-                    showTime: targetNode.__showTime,
-                    timeFormat: targetNode.__timeFormat,
-                  };
-                  showDateModal = true;
-                  return true;
+                  // Only handle special nodes if editable or explicitly allowed
+                  if (editor.isEditable()) {
+                    dateNodeToEditKey = targetNode.getKey();
+                    dateInitialData = {
+                      date: targetNode.__date,
+                      format: targetNode.__format,
+                      showTime: targetNode.__showTime,
+                      timeFormat: targetNode.__timeFormat,
+                    };
+                    showDateModal = true;
+                    return true;
+                  }
                 } else if (_isEquationNode(targetNode)) {
-                  // Handle EquationNode click
-                  equationNodeToEditKey = targetNode.getKey();
-                  equationInitialData = {
-                    equation: targetNode.__equation,
-                    inline: targetNode.__inline,
-                  };
-                  showInsertEquationModal = true;
-                  return true;
+                  if (editor.isEditable()) {
+                    equationNodeToEditKey = targetNode.getKey();
+                    equationInitialData = {
+                      equation: targetNode.__equation,
+                      inline: targetNode.__inline,
+                    };
+                    showInsertEquationModal = true;
+                    return true;
+                  }
                 }
               }
             });
@@ -1500,6 +1504,20 @@
             );
             return false;
           }
+
+          if (linkNode) {
+            // ALWAYS prevent default for links to avoid external navigation
+            event.preventDefault();
+            console.log("Clicked on link node:", linkNode.getURL());
+            currentModalUrl = linkNode.getURL();
+            isEditingLink = true;
+            showLinkModal = true;
+            closeTableCellMenu(false);
+            return true;
+          }
+
+          if (!editor.isEditable()) return false;
+
           if (clickedImageKey) {
             editor.update(() => {
               const nodeSelection = _createNodeSelection();
@@ -1508,14 +1526,7 @@
             });
             return true;
           }
-          if (linkNode) {
-            console.log("Clicked on link node:", linkNode.getURL());
-            currentModalUrl = linkNode.getURL();
-            isEditingLink = true;
-            showLinkModal = true;
-            closeTableCellMenu(false);
-            return true;
-          }
+          
           if (!clickedCell && showTableCellMenu) {
             closeTableCellMenu(false);
           }
