@@ -1588,6 +1588,9 @@
         let lastParagraph = root.getLastChild();
         let livePara = null;
 
+        let trimmedText = text.trim();
+        if (!trimmedText) return;
+
         if (addTimestamps) {
             // Check if the last paragraph is our dedicated live paragraph
             if (lastParagraph && _isParagraphNode(lastParagraph) && typeof lastParagraph.hasStyle === 'function' && lastParagraph.hasStyle('live-transcription')) {
@@ -1601,8 +1604,8 @@
                 // On final result, clear the live paragraph and append the final text.
                 livePara.clear();
                 const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
-                const finalText = timestamp + ' ' + text;
-                livePara.append(_createTextNode(finalText + ' '));
+                const finalText = timestamp + ' ' + trimmedText;
+                livePara.append(_createTextNode(finalText));
                 // Then, remove the style so it becomes a normal paragraph.
                 livePara.setStyle('');
                 // And create a new, empty live paragraph for the next utterance.
@@ -1612,7 +1615,7 @@
             } else {
                 // For interim results, replace the content of the live paragraph.
                 livePara.clear();
-                livePara.append(_createTextNode(text));
+                livePara.append(_createTextNode(trimmedText));
                 livePara.selectEnd();
             }
         } else {
@@ -1638,31 +1641,31 @@
                     liveTextNode.remove();
                 }
 
-                // Ensure there is a space before the new text if the paragraph is not empty
-                // and the text doesn't start with a space or punctuation
-                let finalText = text;
-                if (children.length > 0 && liveTextNode !== children[children.length - 1] && !finalText.startsWith(' ') && !/^[.,!?]/.test(finalText)) {
-                    finalText = ' ' + finalText;
+                // Determine if we need a leading space before appending
+                let prefixSpace = "";
+                const currentTextContent = lastParagraph.getTextContent();
+                if (currentTextContent.length > 0 && !currentTextContent.endsWith(' ') && !/^[.,!?]/.test(trimmedText)) {
+                    prefixSpace = " ";
                 }
 
-                const finalNode = _createTextNode(finalText + ' ');
+                const finalNode = _createTextNode(prefixSpace + trimmedText + " ");
                 lastParagraph.append(finalNode);
                 finalNode.selectEnd();
             } else {
                 // Update interim node
+                let prefixSpace = "";
+                const currentTextContent = lastParagraph.getTextContent();
+                // When evaluating prefix space for interim, ignore the live node text itself
+                const textWithoutLive = liveTextNode ? currentTextContent.substring(0, currentTextContent.length - liveTextNode.getTextContent().length) : currentTextContent;
+                if (textWithoutLive.length > 0 && !textWithoutLive.endsWith(' ') && !/^[.,!?]/.test(trimmedText)) {
+                    prefixSpace = " ";
+                }
+
                 if (!liveTextNode) {
-                    let interimText = text;
-                    if (children.length > 0 && !interimText.startsWith(' ') && !/^[.,!?]/.test(interimText)) {
-                        interimText = ' ' + interimText;
-                    }
-                    liveTextNode = _createTextNode(interimText).setStyle('live-transcription');
+                    liveTextNode = _createTextNode(prefixSpace + trimmedText).setStyle('live-transcription');
                     lastParagraph.append(liveTextNode);
                 } else {
-                    let interimText = text;
-                    if (children.length > 1 && !interimText.startsWith(' ') && !/^[.,!?]/.test(interimText)) {
-                        interimText = ' ' + interimText;
-                    }
-                    liveTextNode.setTextContent(interimText);
+                    liveTextNode.setTextContent(prefixSpace + trimmedText);
                 }
                 liveTextNode.selectEnd();
             }

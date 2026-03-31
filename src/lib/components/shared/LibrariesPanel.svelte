@@ -24,7 +24,7 @@
     }
 
 	async function handleDelete() {
-		const confirmed = await ask("Are you sure you want to delete the local library environment? This will delete all installed libraries AND downloaded models. It will require a full re-installation to use AI features again.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
+		const confirmed = await ask("Are you sure you want to delete the local library environment? This will delete all installed libraries and downloaded models. You need to re-install the libraries and download the models again to use AI features.", { title: "Confirm Deletion", type: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
 		if (!confirmed) return;
 		isDeleting = true;
 		error = '';

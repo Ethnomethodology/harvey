@@ -650,7 +650,7 @@ pub async fn list_venv_lib_contents() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn delete_virtual_env() -> Result<(), String> {
+pub async fn delete_virtual_env(app_handle: AppHandle) -> Result<(), String> {
     let env_path = get_env_path().map_err(|e| e.to_string())?;
     if env_path.exists() {
         log::info!("Deleting environment at: {:?}", env_path);
@@ -680,6 +680,14 @@ pub async fn delete_virtual_env() -> Result<(), String> {
         if translation_models_dir.exists() {
             log::info!("Deleting translation models at: {:?}", translation_models_dir);
             let _ = std::fs::remove_dir_all(&translation_models_dir);
+        }
+
+        // Also delete diarization models
+        if let Ok(diarization_models_dir) = crate::welcome::diarization::get_diarization_hub_path(&app_handle) {
+            if diarization_models_dir.exists() {
+                log::info!("Deleting diarization models at: {:?}", diarization_models_dir);
+                let _ = std::fs::remove_dir_all(&diarization_models_dir);
+            }
         }
 
         // Old legacy path for whisper.cpp models

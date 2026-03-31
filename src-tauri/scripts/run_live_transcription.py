@@ -73,19 +73,20 @@ def run_live_transcription(model_path, language=None, device="auto", threads=4, 
                         language=language, 
                         beam_size=5,
                         vad_filter=True,
-                        vad_parameters=dict(min_silence_duration_ms=500),
-                        word_timestamps=True
+                        vad_parameters=dict(min_silence_duration_ms=500)
                     )
 
+                    full_text = ""
                     for segment in segments:
-                        for word in segment.words:
-                            text = word.word.strip()
-                            if text:
-                                # We print word by word. To mimic whisper-stream,
-                                # we print the text and flush.
-                                print(text, flush=True)
-                                # time.sleep to simulate typing if necessary, but
-                                # since it's live, we just print as fast as the model predicts
+                        full_text += segment.text
+
+                    text = full_text.strip()
+                    if text:
+                        # Harvey's Rust side expects a specific format or just text.
+                        # whisper-stream typically prints text directly.
+                        # We use '...' to signal a partial result if it's not the end of a sentence.
+                        # For now, we'll keep it simple as whisper-stream does.
+                        print(text, flush=True)
 
                 time.sleep(step_ms / 2000.0) # Sleep for half the step size
 
