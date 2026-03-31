@@ -825,9 +825,19 @@ export async function importDocumentFile() {
 
         backendResultPathAndOriginalFilename = await invoke('import_document', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath });
         let tempHtmlPath = backendResultPathAndOriginalFilename;
+        let uniqueDocFilenameWithExt = sourceFilename;
+
         if (backendResultPathAndOriginalFilename.includes("|original_filename:")) {
-            tempHtmlPath = backendResultPathAndOriginalFilename.split("|original_filename:")[0];
+            const parts = backendResultPathAndOriginalFilename.split("|original_filename:");
+            tempHtmlPath = parts[0];
+            uniqueDocFilenameWithExt = parts[1];
         }
+
+        const uniqueDocStem = uniqueDocFilenameWithExt.includes('.') 
+            ? uniqueDocFilenameWithExt.substring(0, uniqueDocFilenameWithExt.lastIndexOf('.')) 
+            : uniqueDocFilenameWithExt;
+
+        console.log(`[importDocumentFile] Backend returned tempHtmlPath: ${tempHtmlPath}, uniqueDocFilenameWithExt: ${uniqueDocFilenameWithExt}, uniqueDocStem: ${uniqueDocStem}`);
 
         if (tempHtmlPath && tempHtmlPath.toLowerCase().endsWith('.pdf')) {
             await refreshProjectFiles();
@@ -867,8 +877,8 @@ export async function importDocumentFile() {
         }
         if (!lexicalJsonString) throw new Error("Failed to generate Lexical JSON from HTML.");
 
-        const docsFolderPath = `${projectBaseDir}/${HARVEY_FILES_DIR}/${DOCS_DIR_NAME}/${sourceFilenameStem}`;
-        finalJsonPath = `${docsFolderPath}/${sourceFilenameStem}.json`;
+        const docsFolderPath = `${projectBaseDir}/${HARVEY_FILES_DIR}/${DOCS_DIR_NAME}/${uniqueDocStem}`;
+        finalJsonPath = `${docsFolderPath}/${uniqueDocStem}.json`;
         finalJsonName = await basename(finalJsonPath);
         await invoke('save_document_and_update_xml', {
             projectXmlPath: projectXmlPath,
@@ -877,7 +887,7 @@ export async function importDocumentFile() {
             jsonContent: lexicalJsonString
         });
         await refreshProjectFiles();
-        setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
+        setAssetImportStatus(false, `Document "${uniqueDocFilenameWithExt}" imported successfully.`);
         prepareDocumentView(finalJsonPath, 'documents');
         return finalJsonPath;
 
