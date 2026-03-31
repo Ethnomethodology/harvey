@@ -698,7 +698,7 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const newlyImportedFileEntry = await invoke('import_media', { 
+        const newlyImportedFileEntry = await invoke('import_media', {
             sourceFilePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath,
             importType: importType // Added parameter
@@ -1201,11 +1201,11 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
     let finalHighlights = [];
     try {
         const parsed = typeof lexicalJsonString === 'string' ? JSON.parse(lexicalJsonString) : lexicalJsonString;
-        
+
         let allTextNodes = [];
         function walk(node) {
             if (!node) return;
-            if (node.highlightId) { 
+            if (node.highlightId) {
                 allTextNodes.push(node);
             } else if (Array.isArray(node.children)) {
                 node.children.forEach(walk);
@@ -1216,12 +1216,12 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
         if (allTextNodes.length === 0) return [];
 
         const existingHighlightsMap = new Map((existingHighlights || []).map(h => [h.id, h]));
-        
+
         const blocks = {};
         for (const node of allTextNodes) {
-             const id = node.highlightId;
-             if (!blocks[id]) { blocks[id] = []; }
-             blocks[id].push(node);
+            const id = node.highlightId;
+            if (!blocks[id]) { blocks[id] = []; }
+            blocks[id].push(node);
         }
 
         let orderIndex = 0;
@@ -1230,9 +1230,9 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
             const style = typeof firstNode.style === 'string' ? firstNode.style : "";
             const colorMatch = style.match(/background-color:\s*([^;]+)/);
             const color = colorMatch ? colorMatch[1].trim() : 'transparent';
-            
+
             const metadata = existingHighlightsMap.get(highlightId);
-            
+
             let extractedText = '';
             for (const n of block) {
                 if (typeof n.text === 'string') {
@@ -1251,7 +1251,7 @@ export function extractHighlightsFromLexicalJson(lexicalJsonString, existingHigh
             });
         }
         return finalHighlights;
-    } catch(e) {
+    } catch (e) {
         console.error("[extractHighlightsFromLexicalJson] error:", e);
         return [];
     }
@@ -1426,7 +1426,7 @@ export async function saveTranscriptData() {
         // Auto-extract highlights from the constructed JSON and sync with the database
         const currentHighlights = get(project).currentDocumentHighlights || [];
         const extractedHighlights = extractHighlightsFromLexicalJson(parsedJson, currentHighlights);
-        
+
         try {
             await invoke('save_lexical_highlights', {
                 args: {
@@ -1755,7 +1755,8 @@ export async function deleteProjectItem(itemPath) {
         throw error;
     }
 }
-export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); }     } catch (error) {
+export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) {
+    if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) await selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) await selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) {
         const errorMessage = getErrorMessage(error);
         project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false }));
         throw new Error(`Trim failed: ${errorMessage}`);
@@ -1765,7 +1766,7 @@ export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTi
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
 export async function requestTranscription() {
     const storeState = get(transcriptStore);
-    console.log(`[JULES-DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
+    console.log(`[DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info' }); return; }
@@ -1795,7 +1796,7 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
     const mediaPathForJob = currentTs.selectedMediaFile?.path;
     const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
 
-    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
+    console.log(`[DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
 
     if (!mediaPathForJob || !modelNameForJob) {
         // Use notification store for error
@@ -1935,14 +1936,14 @@ export async function handleCancelTranscriptionRequest() {
 export let progressListenerInitialized = false;
 export let progressUnlistenFn = null;
 export async function initializeProgressListener() {
-    // console.log('[JULES-DEBUG] initializeProgressListener called');
+    // console.log('[DEBUG] initializeProgressListener called');
     if (progressListenerInitialized) return;
     try {
         progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => {
-            // console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
+            // console.log('[DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
             const payload = event.payload;
             if (!payload || typeof payload !== 'object') {
-                // console.log('[JULES-DEBUG] projectService: Payload empty or not an object');
+                // console.log('[DEBUG] projectService: Payload empty or not an object');
                 return;
             }
             const eventJobId = payload.jobId ?? payload.job_id; // Prefer 'jobId', fallback to 'job_id'

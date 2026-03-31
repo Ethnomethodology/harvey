@@ -42,7 +42,7 @@ function loadDualModeState() {
 export const initialTranscriptState = {
     segments: [],
     activeTranscript: null, // Holds { path, language_code, segments }
-	currentTranscriptPath: null,
+    currentTranscriptPath: null,
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
@@ -121,7 +121,7 @@ export function saveManualSettingsForTranscript(transcriptPath, settings) {
     if (typeof window === 'undefined') return;
     const projectData = get(projectMainStore);
     if (!projectData.id) return;
-    
+
     const key = getManualSettingsKey(projectData.id, transcriptPath);
     if (key) {
         try {
@@ -252,7 +252,7 @@ export function clearTranscriptState() {
                 selectedMediaFile: null,
                 segments: [],
                 activeTranscript: null,
-				currentTranscriptPath: null,
+                currentTranscriptPath: null,
                 transcriptDirty: false,
                 isTranscriptLoading: false,
                 player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -274,7 +274,7 @@ export function clearTranscriptState() {
 
 export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
     const store = get(transcriptStore);
-    
+
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -407,7 +407,7 @@ export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) 
             if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
                 await loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
             } else {
-                
+
             }
         }
     }
@@ -483,7 +483,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
                 const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))];
                 const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown');
                 if (knownSpeakers.length > 0) {
-                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
                     inferredPrimarySpeakers = { count: knownSpeakers.length, names: knownSpeakers };
                 } else {
                     inferredPrimarySpeakers = { count: 0, names: [] };
@@ -506,7 +506,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         if (projectRootPath && normalizedInputPath.startsWith(projectRootPath)) {
             relativePathToMatch = normalizedInputPath.substring(projectRootPath.length).replace(/^[\\/]/, '');
         }
-        
+
         // Ensure relativePathToMatch doesn't have a leading slash for comparison
         relativePathToMatch = relativePathToMatch.replace(/^[\\/]/, '');
 
@@ -526,7 +526,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
                 ...ts,
                 segments: [],
                 activeTranscript: null,
-				currentTranscriptPath: null,
+                currentTranscriptPath: null,
                 isTranscriptLoading: false,
                 transcriptDirty: false,
             };
@@ -534,12 +534,12 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         const langCode = transcriptInfo.language_code || (normalizedInputPath.endsWith('.en.json') ? 'en' : 'original');
         const isTranslation = langCode.includes('-') || normalizedInputPath.endsWith('.en.json');
-        
+
         // --- Speaker Fallback Logic ---
         // If it's a translation but no translated names are provided, fallback to primary names.
         const hasTranslatedNames = updatedSpeakers.translatedNames && updatedSpeakers.translatedNames.some(n => n && n.trim() !== "");
         const speakerNamesToUse = (isTranslation && hasTranslatedNames) ? updatedSpeakers.translatedNames : updatedSpeakers.names;
-        
+
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
         // Use the path from transcriptInfo as it is guaranteed to be normalized and match the project tree
@@ -557,7 +557,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
                 language_code: langCode,
                 segments: newSegments, // Store raw, unmapped segments
             },
-			currentTranscriptPath: targetPath,
+            currentTranscriptPath: targetPath,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -599,9 +599,9 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                     valueChanged = true;
                 }
             } else if (key === 'text') {
-                 const currentTextString = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
-                 const newTextString = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
-                 if (currentTextString !== newTextString) {
+                const currentTextString = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
+                const newTextString = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
+                if (currentTextString !== newTextString) {
                     segmentToUpdate[key] = newValue;
                     valueChanged = true;
                 }
@@ -619,7 +619,7 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                     valueChanged = true;
                 }
             } else {
-                 if (currentValue !== newValue) {
+                if (currentValue !== newValue) {
                     segmentToUpdate[key] = newValue;
                     valueChanged = true;
                 }
@@ -745,8 +745,8 @@ export function splitTranscriptSegment(index) {
     const originalSegment = store.segments[index];
     const duration = originalSegment.end_time - originalSegment.start_time;
     if (duration <= 0.002) {
-         console.warn('[TranscriptStore] splitTranscriptSegment: Segment too short to split.');
-         return;
+        console.warn('[TranscriptStore] splitTranscriptSegment: Segment too short to split.');
+        return;
     }
 
     pushToUndoStack();
@@ -761,9 +761,9 @@ export function splitTranscriptSegment(index) {
         if (currentSpeakerIndex !== -1) {
             newSpeaker = speakerNames[(currentSpeakerIndex + 1) % speakerNames.length];
         } else if (speakerNames.length > 1) {
-             // If current speaker not in list but we have speakers, maybe default to 2nd one or 1st?
-             // Prompt says "speaker_2 or whatever the next name is".
-             // If unknown, maybe just keep unknown or pick first. Let's keep unknown/current if not found.
+            // If current speaker not in list but we have speakers, maybe default to 2nd one or 1st?
+            // Prompt says "speaker_2 or whatever the next name is".
+            // If unknown, maybe just keep unknown or pick first. Let's keep unknown/current if not found.
         }
     }
 
@@ -787,55 +787,55 @@ export function splitTranscriptSegment(index) {
         // Actually the prompt says "create the 2nd halves of interleaved segments".
         // It implies splitting the secondary segment as well.
         // We should check if secondary segment exists.
-        
+
         let newSecondarySegments = [...store.secondaryTranscriptSegments];
-        
+
         if (originalSecondary) {
-             const secDuration = originalSecondary.end_time - originalSecondary.start_time;
-             // We use the same split time relative to the segment? Or absolute? 
-             // "divide the duration of the corresponding segment in 2"
-             // Ideally we split both at their own midpoints if they aren't perfectly aligned, 
-             // OR we enforce alignment. 
-             // "interleaved together" suggests they correspond 1:1.
-             // Let's split secondary at ITS midpoint to be safe/consistent with logic.
-             const secSplitTime = originalSecondary.start_time + (secDuration / 2);
-             
-             // For speaker of secondary, we can follow same logic or keep same.
-             // Prompt says "if the original segment got speaker_1 the new empty segment should get speaker_2".
-             // It refers to the "segment" being split.
-             // We'll apply same speaker rotation logic for secondary if possible, or just copy from primary's decision?
-             // Usually secondary transcripts (translations) have same speakers.
-             
-             const newSecondarySegment = {
+            const secDuration = originalSecondary.end_time - originalSecondary.start_time;
+            // We use the same split time relative to the segment? Or absolute? 
+            // "divide the duration of the corresponding segment in 2"
+            // Ideally we split both at their own midpoints if they aren't perfectly aligned, 
+            // OR we enforce alignment. 
+            // "interleaved together" suggests they correspond 1:1.
+            // Let's split secondary at ITS midpoint to be safe/consistent with logic.
+            const secSplitTime = originalSecondary.start_time + (secDuration / 2);
+
+            // For speaker of secondary, we can follow same logic or keep same.
+            // Prompt says "if the original segment got speaker_1 the new empty segment should get speaker_2".
+            // It refers to the "segment" being split.
+            // We'll apply same speaker rotation logic for secondary if possible, or just copy from primary's decision?
+            // Usually secondary transcripts (translations) have same speakers.
+
+            const newSecondarySegment = {
                 ...originalSecondary,
                 start_time: secSplitTime,
                 end_time: originalSecondary.end_time,
                 speaker: newSpeaker, // Match the primary's new speaker choice
                 text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
-             };
-             
-             const updatedOriginalSecondary = {
-                  ...originalSecondary,
-                  end_time: secSplitTime
-             };
-             
-             newSecondarySegments = [
-                 ...newSecondarySegments.slice(0, index),
-                 updatedOriginalSecondary,
-                 newSecondarySegment,
-                 ...newSecondarySegments.slice(index + 1)
-             ];
+            };
+
+            const updatedOriginalSecondary = {
+                ...originalSecondary,
+                end_time: secSplitTime
+            };
+
+            newSecondarySegments = [
+                ...newSecondarySegments.slice(0, index),
+                updatedOriginalSecondary,
+                newSecondarySegment,
+                ...newSecondarySegments.slice(index + 1)
+            ];
         } else {
             // Should not happen if lengths are equal, but handle gracefully
-             newSecondarySegments = [
-                 ...newSecondarySegments.slice(0, index + 1), // Just insert nothing or empty placeholder?
-                 // If unmatched, we can't really split a non-existent segment.
-                 // We insert a placeholder to keep length aligned?
-                 // Let's assume they are aligned. If not, this might de-sync further.
-                 // Ideally we insert a dummy segment to maintain 1:1.
-                 { start_time: splitTime, end_time: splitTime + 1, speaker: newSpeaker, text: "{}" },
-                 ...newSecondarySegments.slice(index + 1)
-             ];
+            newSecondarySegments = [
+                ...newSecondarySegments.slice(0, index + 1), // Just insert nothing or empty placeholder?
+                // If unmatched, we can't really split a non-existent segment.
+                // We insert a placeholder to keep length aligned?
+                // Let's assume they are aligned. If not, this might de-sync further.
+                // Ideally we insert a dummy segment to maintain 1:1.
+                { start_time: splitTime, end_time: splitTime + 1, speaker: newSpeaker, text: "{}" },
+                ...newSecondarySegments.slice(index + 1)
+            ];
         }
 
         transcriptStore.update(ts => {
@@ -845,7 +845,7 @@ export function splitTranscriptSegment(index) {
                 newSegment,
                 ...ts.segments.slice(index + 1)
             ];
-            
+
             return {
                 ...ts,
                 segments: newSegments,
@@ -863,7 +863,7 @@ export function splitTranscriptSegment(index) {
                 newSegment,
                 ...ts.segments.slice(index + 1)
             ];
-            
+
             updateProjectStoreState({ statusMessage: 'Segment split (undoable).' });
             return {
                 ...ts,
@@ -888,7 +888,7 @@ export function mergeTranscriptSegments(index) {
         try {
             const json1 = JSON.parse(text1);
             const json2 = JSON.parse(text2);
-            
+
             const mergedJson = {
                 ...json1,
                 root: {
@@ -915,7 +915,7 @@ export function mergeTranscriptSegments(index) {
     if (store.isDualModeActive) {
         const sec1 = store.secondaryTranscriptSegments[index];
         const sec2 = store.secondaryTranscriptSegments[index + 1];
-        
+
         let mergedSecondary = null;
         if (sec1 && sec2) {
             mergedSecondary = {
@@ -931,7 +931,7 @@ export function mergeTranscriptSegments(index) {
                 mergedSegment,
                 ...ts.segments.slice(index + 2)
             ];
-            
+
             const newSecondarySegments = [...ts.secondaryTranscriptSegments];
             if (mergedSecondary) {
                 newSecondarySegments.splice(index, 2, mergedSecondary);
@@ -952,7 +952,7 @@ export function mergeTranscriptSegments(index) {
                 mergedSegment,
                 ...ts.segments.slice(index + 2)
             ];
-            
+
             updateProjectStoreState({ statusMessage: 'Segments merged (undoable).' });
             return {
                 ...ts,
@@ -1029,10 +1029,10 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
         }
     }
 
-    while(validatedTranslatedNames.length < count) {
+    while (validatedTranslatedNames.length < count) {
         validatedTranslatedNames.push('');
     }
-    if(validatedTranslatedNames.length > count) {
+    if (validatedTranslatedNames.length > count) {
         validatedTranslatedNames.splice(count);
     }
 
@@ -1054,14 +1054,14 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
     if (!mediaRelativePath) {
         console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Media Relative Path.");
-        updateProjectStoreState({ error: "Save Error: Missing media relative path."});
-        message("Error: Missing media relative path.", {title: "Save Error", type:"error"});
+        updateProjectStoreState({ error: "Save Error: Missing media relative path." });
+        message("Error: Missing media relative path.", { title: "Save Error", type: "error" });
         return;
     }
     if (!projectXmlPath) {
         console.error("[TranscriptStore updateSpeakerConfig] Cannot save: Missing Project XML path.");
         updateProjectStoreState({ error: "Save Error: Missing project path." });
-        message("Error: Project path missing.", {title: "Save Error", type:"error"});
+        message("Error: Project path missing.", { title: "Save Error", type: "error" });
         return;
     }
 
@@ -1074,11 +1074,11 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
 
     const currentTs = get(transcriptStore);
     const primarySpeakerNamesToUse = getSpeakerNamesForPath(
-        currentTs.currentTranscriptPath, 
-        currentTs.activeTranscript?.language_code, 
+        currentTs.currentTranscriptPath,
+        currentTs.activeTranscript?.language_code,
         newSpeakerConfig
     );
-    
+
     const newSegments = remapSegmentSpeakerNames([...oldSegments], newSpeakerConfig, primarySpeakerNamesToUse);
     let segmentsChanged = JSON.stringify(oldSegments) !== JSON.stringify(newSegments);
 
@@ -1141,13 +1141,13 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
                         translated_speaker_names: newSpeakerConfig.translatedNames || [],
                         // Only send speaker related fields to avoid overwriting technical metadata
                     };
-                    
+
                     await invoke('update_asset_metadata_command', {
                         projectXmlPathStr: currentProj.xmlPath,
                         assetRelativePath: mediaRelativePath,
                         metadataPayload: metadataPayload,
                         customFieldsPayload: null,
-                        assetType: 'media' 
+                        assetType: 'media'
                     });
                     console.debug(`[transcriptStore] Synchronized speaker names to DB for: ${mediaRelativePath}`);
                 }
@@ -1156,34 +1156,34 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
             }
 
             projectMainStore.update(p => {
-                 const updatedFiles = JSON.parse(JSON.stringify(p.files));
-                 function findAndUpdateMediaSpeakers(nodes, targetIdentifier, newSpeakerData) {
-                     if (!Array.isArray(nodes)) return false;
-                     let found = false;
-                     for (const node of nodes) {
-                         if (node.media_xml_identifier === targetIdentifier && (node.file_type === 'media' || node.file_type === 'directory_media_stem')) {
-                             node.speakers = {
-                                 '@count': newSpeakerData.count,
-                                 name: newSpeakerData.names,
-                                 translated_names: newSpeakerData.translatedNames
-                             };
-                             found = true;
-                         }
-                         if (node.children && node.children.length > 0) {
-                             if (findAndUpdateMediaSpeakers(node.children, targetIdentifier, newSpeakerData)) {
-                                 found = true;
-                             }
-                         }
-                     }
-                     return found;
-                 }
-                 const didUpdate = findAndUpdateMediaSpeakers(updatedFiles, mediaIdentifier, newSpeakerConfig);
-                 if (didUpdate) {
-                     return { ...p, files: updatedFiles };
-                 } else {
-                     console.warn("[TranscriptStore via projectMainStore] Could not find media identifier in project.files tree to update speakers.");
-                     return p;
-                 }
+                const updatedFiles = JSON.parse(JSON.stringify(p.files));
+                function findAndUpdateMediaSpeakers(nodes, targetIdentifier, newSpeakerData) {
+                    if (!Array.isArray(nodes)) return false;
+                    let found = false;
+                    for (const node of nodes) {
+                        if (node.media_xml_identifier === targetIdentifier && (node.file_type === 'media' || node.file_type === 'directory_media_stem')) {
+                            node.speakers = {
+                                '@count': newSpeakerData.count,
+                                name: newSpeakerData.names,
+                                translated_names: newSpeakerData.translatedNames
+                            };
+                            found = true;
+                        }
+                        if (node.children && node.children.length > 0) {
+                            if (findAndUpdateMediaSpeakers(node.children, targetIdentifier, newSpeakerData)) {
+                                found = true;
+                            }
+                        }
+                    }
+                    return found;
+                }
+                const didUpdate = findAndUpdateMediaSpeakers(updatedFiles, mediaIdentifier, newSpeakerConfig);
+                if (didUpdate) {
+                    return { ...p, files: updatedFiles };
+                } else {
+                    console.warn("[TranscriptStore via projectMainStore] Could not find media identifier in project.files tree to update speakers.");
+                    return p;
+                }
             });
 
         })
@@ -1192,9 +1192,9 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
             const mediaId = currentTs.selectedMediaFile?.media_xml_identifier || currentTs.selectedMediaFile?.name;
             console.error(`[TranscriptStore updateSpeakerConfig] Failed persist config for ${mediaId}:`, error);
             const errorMessage = error?.message || String(error);
-            updateProjectStoreState({ error: `Failed save speaker config: ${errorMessage}`, statusMessage: 'Error saving speaker config.'});
+            updateProjectStoreState({ error: `Failed save speaker config: ${errorMessage}`, statusMessage: 'Error saving speaker config.' });
             if (typeof message !== 'undefined') {
-                message(`Error saving speaker settings: ${errorMessage}`, {title: "Save Error", type: "error"});
+                message(`Error saving speaker settings: ${errorMessage}`, { title: "Save Error", type: "error" });
             }
         });
 }
@@ -1210,7 +1210,7 @@ export function toggleTranscribeModal(show) {
 }
 
 export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, options = {}) {
-    console.log(`[JULES-DEBUG TS setStatus] Called with: isTranscribing=${isTranscribing}, jobIdToSet=${jobIdToSet}, options=`, options);
+    console.log(`[DEBUG TS setStatus] Called with: isTranscribing=${isTranscribing}, jobIdToSet=${jobIdToSet}, options=`, options);
     const {
         initialProgressMessage = '',
         mediaPath = null,
@@ -1224,14 +1224,14 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
         if (isTranscribing) {
             if (jobIdToSet && ts.transcriptionJobId === jobIdToSet &&
                 (ts.transcriptionJobStatus === 'done' || ts.transcriptionJobStatus === 'error' || ts.transcriptionJobStatus === 'cancelled')) {
-                console.warn(`[JULES-DEBUG TS setStatus] Attempted to set job ${jobIdToSet} to active, but it's already in terminal state: ${ts.transcriptionJobStatus}. Ignoring.`);
+                console.warn(`[DEBUG TS setStatus] Attempted to set job ${jobIdToSet} to active, but it's already in terminal state: ${ts.transcriptionJobStatus}. Ignoring.`);
                 return ts;
             }
 
             const newActiveMediaDuringStart = mediaPath || ts.selectedMediaFile?.path || ts.activeMediaDuringTranscriptionStart;
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
             const messageToSet = initialProgressMessage || (jobStatusToSet === 'initiating' ? `Initiating...` : `Processing...`);
-            
+
             // Set start time if starting fresh, otherwise keep existing
             const startTime = (!ts.isTranscribing || !ts.transcriptionStartTime) ? Date.now() : ts.transcriptionStartTime;
 
@@ -1280,7 +1280,7 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
                 updatedState.transcriptionStartTime = null;
             }
         }
-        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
+        console.log(`[DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
         return updatedState;
     });
 
@@ -1324,7 +1324,7 @@ export function updateTranscriptionProgress(progressPayload) {
 
 export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = null) {
     transcriptStore.update(ts => {
-        console.log(`[JULES-DEBUG TS clearStatus] Called. Current store before clear: isTranscribing=${ts.isTranscribing}, jobId=${ts.transcriptionJobId}, jobStatus=${ts.transcriptionJobStatus}`);
+        console.log(`[DEBUG TS clearStatus] Called. Current store before clear: isTranscribing=${ts.isTranscribing}, jobId=${ts.transcriptionJobId}, jobStatus=${ts.transcriptionJobStatus}`);
         return {
             ...ts,
             isTranscribing: false,
@@ -1337,7 +1337,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
 
 export function prepareForNewTranscription() {
     transcriptStore.update(ts => {
-        console.log('[JULES-DEBUG TS prepareNew] Called. Resetting transcription states and showing modal.');
+        console.log('[DEBUG TS prepareNew] Called. Resetting transcription states and showing modal.');
         return {
             ...ts,
             isTranscribing: false,
@@ -1429,8 +1429,8 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
 
 function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerNames = null) {
     const userNames = targetSpeakerNames && targetSpeakerNames.length > 0
-                      ? targetSpeakerNames
-                      : (speakerConfig && Array.isArray(speakerConfig.names) ? speakerConfig.names : []);
+        ? targetSpeakerNames
+        : (speakerConfig && Array.isArray(speakerConfig.names) ? speakerConfig.names : []);
 
     if (userNames.length === 0) {
         return segmentsToRemap.map(seg => ({ ...seg }));
@@ -1537,7 +1537,7 @@ listen('custom_transcription_job_completed', async (event) => {
     const jobFinishedPath = normalizePath(rawJobFinishedPath);
     const transcriptFilePath = normalizePath(rawTranscriptFilePath);
     const translatedTranscriptFilePath = normalizePath(rawTranslatedTranscriptFilePath);
-    
+
     const currentStore = get(transcriptStore);
 
 
@@ -1669,8 +1669,8 @@ listen('custom_transcription_job_completed', async (event) => {
         }
 
     } else {
-         
-         return;
+
+        return;
     }
 });
 
@@ -1680,7 +1680,7 @@ listen('translation_job_completed', async (event) => {
     const { jobId, status, originalTranscriptPath: rawOriginalTranscriptPath, newTranscriptPath: rawNewTranscriptPath, errorMessage } = event.payload;
     const originalTranscriptPath = normalizePath(rawOriginalTranscriptPath);
     const newTranscriptPath = normalizePath(rawNewTranscriptPath);
-    
+
     const currentStore = get(transcriptStore);
 
     if (currentStore.isTranslating && jobId === currentStore.translationJobId) {
@@ -1814,7 +1814,7 @@ export function setDualTranscriptModal(show) {
 
 export async function activateDualMode(primaryPath, secondaryPath) {
     console.log('[TranscriptStore] activateDualMode:', primaryPath, secondaryPath);
-    
+
     // Set loading state or just proceed if loadTranscriptFile handles it
     transcriptStore.update(ts => ({
         ...ts,
@@ -1823,7 +1823,7 @@ export async function activateDualMode(primaryPath, secondaryPath) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        
+
         // Use existing functions to load both. 
         // These expect ABSOLUTE paths when called directly like this if the backend needs them.
         await projectService.loadTranscriptFile(primaryPath);
@@ -1840,15 +1840,15 @@ export async function activateDualMode(primaryPath, secondaryPath) {
         }
     } catch (e) {
         console.error('[TranscriptStore] Error activating dual mode:', e);
-        
+
         // Extract a readable error message
         let errorMsg = 'Unknown error';
         if (typeof e === 'string') errorMsg = e;
         else if (e instanceof Error) errorMsg = e.message;
         else if (e && typeof e === 'object' && e.message) errorMsg = e.message;
-        
+
         message(`Failed to activate dual mode: ${errorMsg}`, { title: 'Error', type: 'error' });
-        
+
         // Ensure dual mode is OFF on failure
         transcriptStore.update(ts => ({
             ...ts,
@@ -1903,7 +1903,7 @@ export async function setSecondaryTranscript(path) {
 
     const store = get(transcriptStore);
     const normalizedInputPath = normalizePath(path);
-    
+
     // Find the transcript info from the project tree to get the canonical normalized path
     const transcriptInfo = store.selectedMediaFile?.associated_transcripts?.find(t => {
         return t.path === normalizedInputPath || t.relativePath === normalizedInputPath;
@@ -1985,8 +1985,8 @@ export function toggleDualMode(active) {
             let nextTranscript = associatedTranscripts[nextIndex];
 
             if (nextTranscript.path === currentPrimaryPath) {
-                 nextIndex = (nextIndex + 1) % associatedTranscripts.length;
-                 nextTranscript = associatedTranscripts[nextIndex];
+                nextIndex = (nextIndex + 1) % associatedTranscripts.length;
+                nextTranscript = associatedTranscripts[nextIndex];
             }
 
             setSecondaryTranscript(nextTranscript.path);
@@ -2016,7 +2016,7 @@ export function setTranslationStatus(isTranslating, jobIdToSet = null, options =
 
         if (isTranslating) {
             const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
-            
+
             // Set start time if starting fresh, otherwise keep existing
             const startTime = (!ts.isTranslating || !ts.translationStartTime) ? Date.now() : ts.translationStartTime;
 
@@ -2092,7 +2092,7 @@ export function updateTranslationProgress(progressPayload) {
 
 export function clearTranslationStatus(finalStatusMessage = 'Ready', error = null) {
     transcriptStore.update(ts => {
-        console.log(`[JULES-DEBUG TS clearTranslationStatus] Called. Current store before clear: isTranslating=${ts.isTranslating}, jobId=${ts.translationJobId}, jobStatus=${ts.translationJobStatus}`);
+        console.log(`[DEBUG TS clearTranslationStatus] Called. Current store before clear: isTranslating=${ts.isTranslating}, jobId=${ts.translationJobId}, jobStatus=${ts.translationJobStatus}`);
         return {
             ...ts,
             isTranslating: false,

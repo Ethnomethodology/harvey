@@ -142,6 +142,7 @@
   export let documentHighlights = [];
   export let externalHighlightedRowIndex = -1; // Prop to allow external highlighting
 
+  let editorRoot;
   let editorWrapper;
   let editorContainer;
   let editor = null;
@@ -265,6 +266,12 @@
   ];
 
   function handleShortcut(event) {
+      if (event.key === 'Escape') {
+          showCreateToolbar = false;
+          showModifyToolbar = false;
+          clickedNodeKey = null;
+          return;
+      }
       if (!editable || !editor) return;
       const mod = event.metaKey || event.ctrlKey;
 
@@ -314,16 +321,23 @@
       textFormatDropdownRef
     ];
 
-    let clickedInside = false;
+    let clickedInsideDropdown = false;
     for (const ref of refs) {
       if (ref && ref.contains(event.target)) {
-        clickedInside = true;
+        clickedInsideDropdown = true;
         break;
       }
     }
 
-    if (!clickedInside) {
+    if (!clickedInsideDropdown) {
       closeAllDropdowns();
+    }
+
+    // Dismiss floating toolbars if click is outside the entire editor root
+    if (editorRoot && !editorRoot.contains(event.target)) {
+      showCreateToolbar = false;
+      showModifyToolbar = false;
+      clickedNodeKey = null;
     }
   }
 
@@ -1084,6 +1098,7 @@
                     editor.getEditorState().read(updateToolbarState);
                     if (enableFloatingToolbar) {
                         showModifyToolbar = false;
+                        showCreateToolbar = false;
                         clickedNodeKey = null;
                     }
                 } catch(readError) {
@@ -3529,7 +3544,7 @@ function handleRemoveHighlightFromToolbar() {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
+<div bind:this={editorRoot} class="lexical-editor-root h-full flex flex-col {backgroundClass} shadow-sm layout-{activeLayout}" style="overflow: visible;">
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10">
       <slot name="toolbar_prepend"></slot>
