@@ -501,8 +501,8 @@
                                                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Speaker identification disabled</p>
                                                         <p class="text-[10px] text-gray-400 italic">Download diarization model to enable.</p>
                                                     </div>
-                                                    <Button color="alternative" size="xs" on:click={handleOpenConfig} title="Configure Diarization">
-                                                        Configure
+                                                    <Button color="alternative" size="xs" on:click={() => showManageModelsModal = true} title="Manage Models">
+                                                        Manage Models
                                                     </Button>
                                                 </div>
                                             {/if}
@@ -812,7 +812,19 @@
 <ManageModelsModal
 	bind:showModal={showManageModelsModal}
 	on:modelsChanged={async () => {
-		downloadedModelsList = await getDownloadedModels();
+        // Also refresh the local list here directly to avoid waiting on the parent's generic modelsChanged propagation
+        const allModels = await getDownloadedModels();
+        const selectedEngine = await getSelectedTranscriptionEngine();
+        const family = selectedEngine || 'whisper-cpp';
+
+        downloadedModelsList = allModels.filter((m) => {
+            if (family === "faster-whisper") {
+                return m.family === "faster-whisper";
+            } else {
+                return m.family === "whisper-cpp" || (!m.family && !m.name.includes('/'));
+            }
+        });
+
         // Force re-select the first model if the previously selected one was deleted or hidden
         if (downloadedModelsList.length > 0) {
             if (!downloadedModelsList.some(m => m.name === modalSelectedModel)) {
