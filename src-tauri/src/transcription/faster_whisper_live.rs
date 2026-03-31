@@ -30,8 +30,7 @@ pub async fn start_faster_whisper_live<R: Runtime>(
         model_path,
         "--language".to_string(),
         language,
-        "--step".to_string(), "5000".to_string(),
-        "--length".to_string(), "5000".to_string(),
+        "--step".to_string(), "1000".to_string(),
     ];
 
     let mut command = app_handle
