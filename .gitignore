@@ -21,6 +21,8 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /e2e-tests/screenshots/
+/screenshots/
+/test-results/
 /notebooks/
 /harvey-sidecars/
 /src-tauri/binaries/
