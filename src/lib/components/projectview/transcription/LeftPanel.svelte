@@ -139,10 +139,20 @@
 		console.log("[LeftPanel] handleItemClick triggered for:", item);
 
 		if (item.is_directory) {
-			console.log(
-				"[LeftPanel] Clicked item is a directory, ignoring for selection/load.",
-			);
-			return; // Ignore clicks on directories
+			// Resolve the first media file within the directory
+			const mediaNode = findMediaFileInStem(item);
+			if (mediaNode) {
+				console.log(
+					"[LeftPanel] Directory clicked, resolved media node:",
+					mediaNode,
+				);
+				dispatch("requestLoadItem", mediaNode);
+			} else {
+				console.log(
+					"[LeftPanel] Directory clicked, but no media file found inside.",
+				);
+			}
+			return;
 		}
 
 		// Dispatch a generic request to the parent (TranscriptionView) to handle the item loading
@@ -151,16 +161,18 @@
 
 	function handleItemDoubleClick(event) {
 		const item = event.detail;
-		if (!item.is_directory && item.file_type === "media") {
+		const targetItem = item.is_directory ? findMediaFileInStem(item) : item;
+
+		if (targetItem && targetItem.file_type === "media") {
 			console.log(
 				"[LeftPanel] Double-clicked media, calling selectMedia.",
 			);
-			selectMedia(item);
-		} else if (!item.is_directory && item.file_type === "data") {
+			selectMedia(targetItem);
+		} else if (targetItem && targetItem.file_type === "data") {
 			console.log(
 				"[LeftPanel] Double-clicked data, calling handleOpenData.",
 			);
-			handleOpenData(item);
+			handleOpenData(targetItem);
 		}
 	}
 

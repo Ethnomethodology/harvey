@@ -27,18 +27,14 @@
     /* ---------- event handling ---------- */
     // Combined click handler for the main div
     function handleRowClick() {
-        // Only forward click if it's a file node (not a directory)
-        if (!node.is_directory) {
-            dispatch("itemclick", node);
-        }
+        // Dispatch click for all nodes (including directories)
+        dispatch("itemclick", node);
     }
 
     // Combined double-click handler for the main div
     function handleRowDoubleClick() {
-        // Only forward double-click if it's a file node
-        if (!node.is_directory) {
-            dispatch("itemdblclick", node);
-        }
+        // Dispatch double-click for all nodes
+        dispatch("itemdblclick", node);
     }
 
     // Context menu handler for the main div
