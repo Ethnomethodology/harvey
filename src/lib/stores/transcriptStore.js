@@ -418,15 +418,24 @@ function findSegmentIndexWithBinarySearch(segments, time) {
     let low = 0;
     let high = segments.length - 1;
 
+    // Small epsilon to handle floating point jitter from video playback
+    const EPSILON = 0.0005;
+
     while (low <= high) {
         const mid = Math.floor((low + high) / 2);
         const segment = segments[mid];
         const isLastSegment = mid === segments.length - 1;
 
-        const startTimeCheck = time >= (segment.start_time - 0.001);
-        const endTimeCheck = isLastSegment ? time <= segment.end_time : time < segment.end_time;
+        const isAtOrAfterStart = time >= (segment.start_time - EPSILON);
+        // MUTUALLY EXCLUSIVE Logic:
+        // A segment 'owns' its start time. It only 'owns' its end time if it is the last segment.
+        // Otherwise, the end time boundary belongs to the next segment's start.
+        const isBeforeEnd = time < (segment.end_time - EPSILON);
+        const isExactlyAtEnd = Math.abs(time - segment.end_time) < EPSILON;
 
-        if (startTimeCheck && endTimeCheck) {
+        const matchesCurrent = isAtOrAfterStart && (isBeforeEnd || (isLastSegment && isExactlyAtEnd));
+
+        if (matchesCurrent) {
             return mid;
         } else if (time < segment.start_time) {
             high = mid - 1;
@@ -437,13 +446,14 @@ function findSegmentIndexWithBinarySearch(segments, time) {
     return -1;
 }
 
-export function updatePlayerTime(time) {
+export function updatePlayerTime(time, manualIndex = -1) {
     transcriptStore.update((ts) => {
-        let newIndex = -1;
+        let newIndex = manualIndex;
         const segments = ts.segments;
         const numSegments = segments.length;
 
-        if (numSegments > 0 && ts.player.duration > 0 && time >= 0) {
+        // Only search if no manual index is provided
+        if (newIndex === -1 && numSegments > 0 && ts.player.duration > 0 && time >= 0) {
             newIndex = findSegmentIndexWithBinarySearch(segments, time);
         }
 

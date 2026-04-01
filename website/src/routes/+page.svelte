@@ -8,10 +8,10 @@
 
     // Release and Download logic
     /* @sync-start */
-    let version = "0.1.0"; /* @sync-version */
+    let version = "0.1.1"; /* @sync-version */
     let downloadLinks = {
-        windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64-setup.zip", /* @sync-win */
-        macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_aarch64.dmg", /* @sync-macos-arm */
+        windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.1/Harvey_0.1.1_x64-setup.zip", /* @sync-win */
+        macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.1/Harvey_0.1.1_aarch64.dmg", /* @sync-macos-arm */
         macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64.dmg" /* @sync-macos-x64 */
     };
     /* @sync-end */

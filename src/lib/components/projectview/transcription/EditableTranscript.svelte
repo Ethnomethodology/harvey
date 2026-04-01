@@ -291,7 +291,17 @@
 
 
     /* --- Public methods --- */
-    export function loadSegment(i) { if (i >= 0 && i < segments.length) { targetIndexForLoad = i; if (i !== currentIndex) { dispatch('navigate', { index: i }); } renderSegmentUI(i); } else { targetIndexForLoad = -1; renderSegmentUI(i); } }
+    export function loadSegment(i) {
+        if (i >= 0 && i < segments.length) {
+            targetIndexForLoad = i;
+            renderSegmentUI(i);
+            // Always dispatch navigate because clicking an active segment should still seek to its start
+            dispatch('navigate', { index: i });
+        } else {
+            targetIndexForLoad = -1;
+            renderSegmentUI(i);
+        }
+    }
     export function loadSegmentSilent(i) { if (i >= 0 && i < segments.length) { if (i !== currentIndex) { targetIndexForLoad = i; renderSegmentUI(i); } } else { targetIndexForLoad = -1; if (i !== currentIndex) renderSegmentUI(i); } }
     export function updateTimesFromExternal(newStartTime, newEndTime) {
         if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return;

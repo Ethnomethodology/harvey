@@ -182,15 +182,6 @@
             updatePlayerCurrentSegmentIndex(index);
 
             editableTranscriptRef?.loadSegment?.(index);
-            if (mediaPlayerRef) {
-                mediaPlayerRef.seekTo(segment.start_time);
-            }
-            if (verticalWaveformRef) {
-                verticalWaveformRef.scrollToTime(segment.start_time);
-            }
-            if (horizontalWaveformRef) {
-                horizontalWaveformRef.scrollToTime(segment.start_time);
-            }
         } else {
             console.warn(
                 `[TranscriptionView] Invalid segment data for index ${index} on click.`,
@@ -241,20 +232,21 @@
             const index = detail.index;
             const segment = get(transcriptStore).segments?.[index];
             if (segment) {
+                // Eagerly update boundaries to prevent race conditions in MediaPlayer's loop logic
+                currentEditSegmentStart = segment.start_time;
+                currentEditSegmentEnd = segment.end_time;
+
                 // Ensure store index is synced on navigation (e.g., Next/Prev buttons)
                 updatePlayerCurrentSegmentIndex(index);
 
                 if (mediaPlayerRef) {
-                    const seekTime = isSegmentEditingActive
-                        ? Math.max(
-                              currentEditSegmentStart,
-                              Math.min(
-                                  segment.start_time,
-                                  currentEditSegmentEnd - 0.001,
-                              ),
-                          )
-                        : segment.start_time;
-                    mediaPlayerRef.seekTo(seekTime);
+                    // Explicit segment navigation always seeks to the segment start boundary.
+                    // We skip the 'isSegmentEditingActive' clamping here because that clamping
+                    // was intended to keep the player inside a segment during manual waveform seeks,
+                    // but it incorrectly blocks moving to the NEXT segment because the next segment's
+                    // start is exactly the previous segment's end.
+                    const seekTime = segment.start_time;
+                    mediaPlayerRef.seekTo(seekTime, index);
                     if (verticalWaveformRef) {
                         verticalWaveformRef.scrollToTime(seekTime);
                     }

@@ -197,7 +197,6 @@
 	export let enableLooping = false;
 
 	// Conditional UI for buttons
-	export let showLoopPauseButton = true; // Default to true for main player
 	export let showDataTranscribeButton = false; // Default to false
 	export let showDataTrimButton = false; // Default to false
 	export let showMainTrimButton = true; // Default to true
@@ -238,6 +237,7 @@
 	export let isMediaReadyForProcessing = false; // Default to false
 
 	let segmentPlayEndTime = null;
+	let lastProgrammaticSeekTime = -1; // To prevent loop-back during navigation
 
 	// --- Playback Speed State ---
 	const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -1043,7 +1043,12 @@
 					editSegmentEndTime > editSegmentStartTime
 				) {
 					// Only loop if we just crossed the end boundary from within the segment
+					// and it wasn't a programmatic seek to the boundary.
+					// We also only loop if the player is currently playing.
+					const isAtBoundaryFromSeek = Math.abs(currentTime - lastProgrammaticSeekTime) < 0.01;
 					if (
+						!isAtBoundaryFromSeek &&
+						!video.paused &&
 						currentTime >= editSegmentEndTime &&
 						localCurrentTime < editSegmentEndTime
 					) {
@@ -1080,6 +1085,7 @@
 				}
 			}
 			localCurrentTime = currentTime;
+			lastProgrammaticSeekTime = -1; // Reset guard after processing one update
 			if (!explicitMediaPath) updatePlayerTime(currentTime); // Update global for main player
 		}
 	}
@@ -1573,7 +1579,7 @@
 		!localAudioBuffer ||
 		(isEditingSegment && !explicitMediaPath);
 
-	export function seekTo(seconds) {
+	export function seekTo(seconds, index = -1) {
 		if (typeof seconds !== "number" || isNaN(seconds) || seconds < 0)
 			return;
 		if (!videoElement) return;
@@ -1594,7 +1600,8 @@
 		// seekRafId = requestAnimationFrame(() => { // No longer using rAF for seekTo
 		videoElement.currentTime = clamped;
 		localCurrentTime = clamped;
-		if (!explicitMediaPath) updatePlayerTime(clamped);
+		lastProgrammaticSeekTime = clamped; // Mark this as a programmatic seek
+		if (!explicitMediaPath) updatePlayerTime(clamped, index);
 		// }); // No longer using rAF for seekTo
 	}
 	// let seekRafId = null; // No longer using rAF for seekTo
