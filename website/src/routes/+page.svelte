@@ -7,12 +7,14 @@
     let isMac = false;
 
     // Release and Download logic
-    let version = "0.1.0";
+    /* @sync-start */
+    let version = "0.1.0"; /* @sync-version */
     let downloadLinks = {
-        windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64-setup.zip",
-        macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_aarch64.dmg",
-        macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64.dmg"
+        windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64-setup.zip", /* @sync-win */
+        macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_aarch64.dmg", /* @sync-macos-arm */
+        macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64.dmg" /* @sync-macos-x64 */
     };
+    /* @sync-end */
 
     // Carousel logic
     let currentSlide = 0;

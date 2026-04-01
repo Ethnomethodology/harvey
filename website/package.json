@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check",
-    "check:watch": "svelte-kit sync && svelte-check --watch"
+    "check:watch": "svelte-kit sync && svelte-check --watch",
+    "prebuild": "node ../scripts/sync-help.js",
+    "predev": "node ../scripts/sync-help.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",
