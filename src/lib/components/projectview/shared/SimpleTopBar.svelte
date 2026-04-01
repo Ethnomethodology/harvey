@@ -2,8 +2,9 @@
 <script>
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { project } from '$lib/stores/projectStore.js';
+    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
     import { createEventDispatcher } from 'svelte';
-    import { Sun, Moon, Monitor } from '@lucide/svelte';
+    import { Sun, Moon, Monitor, Pencil, PencilOff } from '@lucide/svelte';
     import { Button } from 'flowbite-svelte';
 
     const dispatch = createEventDispatcher();
@@ -48,9 +49,24 @@
       <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
   </div>
 
-  <div class="flex items-center space-x-2 flex-shrink-0">
+    <div class="flex-shrink-0 flex items-center space-x-2">
+        <button
+            id="read-edit-toggle-simple"
+            on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+            class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+            title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+        >
+            {#if $isLexicalEditMode}
+                <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+            {:else}
+                <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+            {/if}
+        </button>
 
-    <div class="flex-shrink-0">
+        <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
+
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Sun class="w-4 h-4" />
@@ -61,7 +77,6 @@
             {/if}
 		 </button>
 	</div>
-  </div>
 </div>
 
 <style lang="postcss">

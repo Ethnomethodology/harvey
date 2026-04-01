@@ -132,6 +132,16 @@
 		// TODO: implement blank transcript creation
 	}
 
+	// --- Project Name ---
+	let displayTitle = "";
+	$: {
+		if ($project && $project.name) {
+			displayTitle = $project.name;
+		} else {
+			displayTitle = "Harvey";
+		}
+	}
+
 	// --- Load Configuration ---
 	async function loadConfiguration() {
 		isLoadingModels = true;
@@ -512,6 +522,10 @@
 				</svg>
 			</button>
 		</div>
+		<span
+			class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
+			title={displayTitle}>{displayTitle}</span
+		>
 
 		<!-- Media Selection Dropdown -->
 		<div class="relative">
