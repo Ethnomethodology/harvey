@@ -62,8 +62,8 @@ When you launch Harvey for the first time, you will see the **Welcome Screen**. 
 ### Running the Setup Wizard
 1. Click the **Launch Setup Wizard** button on the Welcome Screen. This wizard automates the complex installation of Python environments and ML models.
 2. **Step 1: Python Libraries**
-   * Harvey will attempt to locate your system Python installation (Python 3.9+ is recommended).
-   * It will automatically create a dedicated virtual environment and install necessary libraries like `faster-whisper`, `torch`, `pyannote.audio`, and `transformers`.
+   * Harvey uses a bundled version of **Micromamba** to create and manage a completely isolated, self-contained Python environment (`harvey_env`) within its configuration directory.
+   * **No manual Python installation is required** on your system. Harvey will automatically install **Python 3.12** and all necessary libraries like `faster-whisper`, `torch`, `pyannote.audio`, and `transformers` within this dedicated environment.
    * You can monitor the live terminal output in the installation log modal.
 3. **Step 2: Hugging Face Token (Diarization)**
    * To identify different speakers (diarization), Harvey uses `pyannote`. This requires a free Hugging Face account and a User Access Token.
