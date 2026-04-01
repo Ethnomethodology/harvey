@@ -87,6 +87,9 @@
   },
   "overrides": {
     "fast-xml-parser": "5.5.7",
-    "basic-ftp": "5.2.0"
+    "basic-ftp": "5.2.0",
+    "cookie": "0.7.1",
+    "esbuild": "0.25.0",
+    "serialize-javascript": "7.0.5"
   }
 }
