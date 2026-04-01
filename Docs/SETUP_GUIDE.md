@@ -2,6 +2,22 @@
 
 Welcome to the Project Harvey setup guide! This document covers the essential steps required to get the development version of the application running on your local machine, and subsequently, how to configure the internal AI models and Python dependencies via the in-app Setup Wizard.
 
+## Part 0: Quick Start (Automated Setup)
+
+On **Linux** and **macOS**, you can use our automated bootstrapper to check your environment, install most system dependencies, and build the application in one step:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash
+```
+
+Alternatively, if you have already cloned the repository:
+
+```bash
+bash scripts/bootstrap.sh
+```
+
+The script will guide you through any missing requirements (like Rust or Node.js) and handle the compilation process for you.
+
 ## Part 1: Installing System Prerequisites
 
 Harvey relies on a robust dual-stack architecture: a SvelteKit (Node.js) frontend and a Rust (Tauri) backend. You must install the prerequisites for both environments.

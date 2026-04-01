@@ -61,7 +61,21 @@ Privacy is the core of Harvey's design. All core AI functionalities, like transc
 3. Ensure you have administrative privileges to complete the installation.
 
 ### Linux
-Pre-compiled binaries for Linux are coming soon. In the meantime, you can compile the application from source by following the instructions provided in our [Setup Guide](Docs/SETUP_GUIDE.md).
+
+Pre-compiled binaries for Linux are coming soon. In the meantime, you can use our automated bootstrapper to set up your environment and build Harvey from source:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash
+```
+
+Alternatively, you can clone the repository and run the script manually:
+
+```bash
+git clone https://github.com/Ethnomethodology/harvey.git
+cd harvey && bash scripts/bootstrap.sh
+```
+
+For more detailed manual setup instructions, see our [Setup Guide](Docs/SETUP_GUIDE.md).
 
 ## Contributing to Harvey
 
