@@ -576,8 +576,8 @@
         </button>
     </div>
 
-    <!-- Section 2: Left Panel equivalent (w-64 or w-12 collapsed) — Project name + file name -->
-    <div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-64' } flex-shrink-0 flex items-center overflow-hidden z-10 transition-all duration-300 ease-in-out px-2">
+    <!-- Section 2: Left Panel equivalent (w-64) — Project name + file name -->
+    <div class="w-64 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out">
         <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
     </div>
 
