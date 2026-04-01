@@ -84,5 +84,9 @@
     "typescript": "^5.4.5",
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "fast-xml-parser": "5.5.7",
+    "basic-ftp": "5.2.0"
   }
 }
