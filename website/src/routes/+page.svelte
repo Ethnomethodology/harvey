@@ -261,7 +261,16 @@
                         <Download class="w-6 h-6" />
                         Download .exe Installer
                     </a>
-                    <p class="text-xs text-slate-400 mt-4">Version {version} • 64-bit</p>
+                    <p class="text-xs text-slate-400 mt-4 mb-8">Version {version} • 64-bit</p>
+
+                    <div class="pt-8 border-t border-slate-200 w-full max-w-lg text-left">
+                        <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Windows Security Warnings</h4>
+                        <p class="text-sm text-slate-600 mb-0 leading-relaxed">
+                            As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
+                            Because the app is not currently signed, Windows SmartScreen will display a warning. 
+                            You can safely proceed by clicking <strong>"More info"</strong> and then <strong>"Run anyway"</strong>.
+                        </p>
+                    </div>
                 </div>
             {/if}
 
