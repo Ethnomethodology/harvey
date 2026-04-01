@@ -1,0 +1,98 @@
+name: Release Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.1)'
+        required: true
+        type: string
+
+jobs:
+  create-tag-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_tag: ${{ steps.prepare_tag.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare Tag
+        id: prepare_tag
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          # Remove 'v' prefix if present to avoid 'vv0.1.1'
+          VERSION=${VERSION#v}
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create and Push Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          tag=${{ steps.prepare_tag.outputs.tag }}
+          
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists, skipping creation."
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+        shell: bash
+
+      - name: Ensure GitHub Release exists
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = '${{ steps.prepare_tag.outputs.tag }}';
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              console.log('Release already exists.');
+            } catch {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `Release ${tag}`,
+                draft: false,
+                prerelease: false
+              });
+              console.log('Created new release.');
+            }
+
+  build-macos-arm64:
+    needs: create-tag-and-release
+    uses: ./.github/workflows/ci-build-macos-arm64.yml
+    with:
+      ref: ${{ needs.create-tag-and-release.outputs.release_tag }}
+    secrets: inherit
+
+  build-macos-x64:
+    needs: create-tag-and-release
+    uses: ./.github/workflows/ci-build-macos-x64.yml
+    with:
+      ref: ${{ needs.create-tag-and-release.outputs.release_tag }}
+    secrets: inherit
+
+  build-windows-arm64:
+    needs: create-tag-and-release
+    uses: ./.github/workflows/ci-build-windows-arm64.yml
+    with:
+      ref: ${{ needs.create-tag-and-release.outputs.release_tag }}
+    secrets: inherit
+
+  build-windows-x64:
+    needs: create-tag-and-release
+    uses: ./.github/workflows/ci-build-windows-x64.yml
+    with:
+      ref: ${{ needs.create-tag-and-release.outputs.release_tag }}
+    secrets: inherit

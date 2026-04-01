@@ -7,6 +7,12 @@ on:
         description: 'Branch or tag of your application to build'
         required: true
         default: 'main'
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Branch or tag of your application to build'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -14,6 +20,7 @@ jobs:
 
     env:
       APP_NAME: harvey
+      RELEASE_TAG: ${{ inputs.ref || github.event.inputs.ref || github.ref_name }}
       # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
       # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
       # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
@@ -27,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set target triple
         id: set_target
@@ -87,7 +94,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           result-encoding: string
           script: |
-            const tag = '${{ github.event.inputs.ref }}';
+            const tag = '${{ env.RELEASE_TAG }}';
             try {
               const rel = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
@@ -122,7 +129,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ steps.find_dmg.outputs.dmg_path }}
           asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
-          tag: ${{ github.ref }}
+          tag: ${{ env.RELEASE_TAG }}
           overwrite: true
 
       - name: Zip macOS App
@@ -143,5 +150,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
           asset_name: ${{ steps.zip_macos_app.outputs.zip_name }}
-          tag: ${{ github.ref }}
+          tag: ${{ env.RELEASE_TAG }}
           overwrite: true
