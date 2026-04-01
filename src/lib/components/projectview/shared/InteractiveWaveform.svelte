@@ -1070,12 +1070,16 @@
 			visibleCanvasWidth,
 			scrollOffsetPx,
 		);
+		
+		// Calculate relative click position (ratio) for centering
+		const ratio = clickX / visibleCanvasWidth;
+
 		if (!autoScrollEnabled) {
 			autoScrollEnabled = true;
 			clearTimeout(autoScrollEnableTimer);
 			autoScrollEnableTimer = null;
 		}
-		dispatch("navigate", { time: time });
+		dispatch("navigate", { time, ratio });
 	}
 
 	function handleZoom(direction) {
@@ -1144,7 +1148,7 @@
 			}, 100);
 		});
 	}
-	export function scrollToTime(time) {
+	export function scrollToTime(time, centerRatio = 0.5) {
 		if (
 			!isMounted ||
 			!waveformScrollContainerRef ||
@@ -1157,7 +1161,8 @@
 			actualMediaDuration,
 			totalLogicalWidth,
 		);
-		let newScrollOffset = logicalX - visibleCanvasWidth / 2; // Center it
+		// Use the provided centerRatio (defaults to 0.5 for middle)
+		let newScrollOffset = logicalX - (visibleCanvasWidth * centerRatio);
 
 		const newMaxScroll = Math.max(
 			0,

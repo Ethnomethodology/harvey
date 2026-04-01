@@ -528,7 +528,11 @@
 		const rect = waveformAreaContainerRef.getBoundingClientRect();
 		const clickY_in_viewport = event.clientY - rect.top;
 		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, scrollOffsetPy);
-		dispatch('navigate', { time });
+		
+		// Calculate relative click position (ratio) for centering
+		const ratio = clickY_in_viewport / visibleCanvasHeight;
+
+		dispatch('navigate', { time, ratio });
 	}
 
 	async function handleZoom(direction) {
@@ -554,11 +558,12 @@
 		requestRedraw(true);
 	}
 
-	export function scrollToTime(time) {
+	export function scrollToTime(time, centerRatio = 0.5) {
 	    if (!isMounted || !waveformAreaContainerRef || duration <= 0) return;
 
 	    const logicalY = timeToLogicalPy(time, duration, visibleCanvasHeight);
-	    let newScrollTop = logicalY - visibleCanvasHeight / 2; // Center it
+	    // Use the provided centerRatio (defaults to 0.5 for middle)
+	    let newScrollTop = logicalY - (visibleCanvasHeight * centerRatio);
 
 	    const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
 	    const maxScroll = Math.max(0, contentLogicalHeight - visibleCanvasHeight);

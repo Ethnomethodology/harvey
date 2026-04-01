@@ -68,6 +68,8 @@
     let richTextPreviewRef;
     let topBarRef;
     let leftPanelRef;
+    
+    let lastNavigateClickRatio = 0.5; // To store the click position ratio from waveform
 
     // Reactive state for left panel visibility from store
 
@@ -229,7 +231,12 @@
         }
 
         if (detail && typeof detail.time === "number") {
+            lastNavigateClickRatio = detail.ratio ?? 0.5;
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
+            // Reset ratio after a delay to ensure it doesn't affect subsequent non-click scrolls
+            setTimeout(() => {
+                lastNavigateClickRatio = 0.5;
+            }, 500);
         } else if (detail && typeof detail.index === "number") {
             const index = detail.index;
             const segment = get(transcriptStore).segments?.[index];
@@ -568,8 +575,11 @@
             if (!isPlaying || isSignificantJump) {
                 const segment = $transcriptStore.segments[curIdx];
                 if (segment) {
-                    verticalWaveformRef?.scrollToTime(segment.start_time);
-                    horizontalWaveformRef?.scrollToTime(segment.start_time);
+                    const scrollTime = lastNavigateClickRatio !== 0.5 
+                        ? ($transcriptStore.player.currentTime || segment.start_time)
+                        : segment.start_time;
+                    verticalWaveformRef?.scrollToTime(scrollTime, lastNavigateClickRatio);
+                    horizontalWaveformRef?.scrollToTime(scrollTime, lastNavigateClickRatio);
                 }
             }
             lastCenterScrollIndex = curIdx;
