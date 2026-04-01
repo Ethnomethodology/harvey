@@ -498,11 +498,9 @@
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
 		<div class="h-10 flex items-center justify-center flex-shrink-0">
-			<Button
-				size="xs"
-				color="blue"
-				pill={true}
-				class="!p-1.5 hover-scale-effect ml-1 mr-1 shadow-sm hover:shadow-md transition-all duration-200 active:scale-95"
+			<button
+				type="button"
+				class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
 				on:click={(e) => dispatch("requestImport", e)}
 				title="Import Audio or Video"
 				aria-label="Import Audio or Video"
@@ -511,9 +509,9 @@
 					xmlns="http://www.w3.org/2000/svg"
 					fill="none"
 					viewBox="0 0 24 24"
-					stroke-width="1.5"
+					stroke-width="2"
 					stroke="currentColor"
-					class="size-5"
+					class="w-5 h-5"
 				>
 					<path
 						stroke-linecap="round"
@@ -521,7 +519,7 @@
 						d="M12 4.5v15m7.5-7.5h-15"
 					/>
 				</svg>
-			</Button>
+			</button>
 		</div>
 
 		<!-- Media Selection Dropdown -->
