@@ -1,6 +1,6 @@
 <script>
     import { base } from '$app/paths';
-    import { ArrowRight, WifiOff, Code, Lock, Download, Github, ChevronLeft, ChevronRight } from '@lucide/svelte';
+    import { ArrowRight, WifiOff, Code, Lock, Download, Github, ChevronLeft, ChevronRight, Copy, Check } from '@lucide/svelte';
     import { onMount, onDestroy } from 'svelte';
 
     let activeTab = 'windows';
@@ -92,6 +92,22 @@
 
     function setActiveTab(tab) {
         activeTab = tab;
+    }
+
+    let copyFeedback = {
+        mac: false,
+        source: false
+    };
+
+    function copyToClipboard(text, key) {
+        if (typeof navigator !== 'undefined') {
+            navigator.clipboard.writeText(text).then(() => {
+                copyFeedback[key] = true;
+                setTimeout(() => {
+                    copyFeedback[key] = false;
+                }, 2000);
+            });
+        }
     }
 </script>
 
@@ -281,67 +297,91 @@
                     </div>
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for macOS</h3>
                     <p class="text-slate-600 mb-4 max-w-md"> Optimized for Apple Silicon (M1, M2, etc.) and Intel Macs.</p>
-                    <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="{downloadLinks.macosArm}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
-                            <Download class="w-5 h-5" />
-                            Apple Silicon
-                        </a>
-                        <a href="{downloadLinks.macosIntel}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
-                            <Download class="w-5 h-5" />
-                            Intel Mac
-                        </a>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-4 mb-8">Version {version} • Universal Binary available</p>
+                        <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <a href="{downloadLinks.macosArm}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
+                                <Download class="w-5 h-5" />
+                                Apple Silicon
+                            </a>
+                            <a href="{downloadLinks.macosIntel}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
+                                <Download class="w-5 h-5" />
+                                Intel Mac
+                            </a>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 mb-8">Version {version} • Universal Binary available</p>
 
-                    <div class="pt-8 border-t border-slate-200 w-full max-w-lg text-left">
-                        <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">macOS Security Warnings</h4>
-                        <p class="text-sm text-slate-600 mb-4 leading-relaxed">
-                            As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
-                            Because the app is not currently signed, macOS will prevent it from running initially. 
-                            To authorize it after installation, run the following commands in your <strong>Terminal</strong> application:
-                        </p>
-                        <div class="bg-slate-900 rounded-lg p-4 font-mono text-xs text-white overflow-x-auto shadow-inner border border-slate-800">
-                            <div class="flex select-none mb-1 text-slate-500">
+                        <div class="pt-8 border-t border-slate-200 w-full max-w-lg text-left">
+                            <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">macOS Security Warnings</h4>
+                            <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+                                As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
+                                Because the app is not currently signed, macOS will prevent it from running initially. 
+                                To authorize it after installation, run the following commands in your <strong>Terminal</strong> application:
+                            </p>
+                            <div class="relative group/term bg-slate-900 rounded-lg p-4 font-mono text-xs text-white overflow-x-auto shadow-inner border border-slate-800">
+                                <button 
+                                    on:click={() => copyToClipboard('cd /Applications\nsudo xattr -dr com.apple.quarantine harvey.app', 'mac')}
+                                    class="absolute top-2 right-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center gap-1.5"
+                                    title="Copy to clipboard"
+                                >
+                                    {#if copyFeedback.mac}
+                                        <Check class="w-3.5 h-3.5 text-green-400" />
+                                        <span class="text-[10px] font-bold text-green-400 uppercase tracking-tight">Copied!</span>
+                                    {:else}
+                                        <Copy class="w-3.5 h-3.5" />
+                                    {/if}
+                                </button>
+                                <div class="flex select-none mb-1 text-slate-500">
+                                    <span class="mr-2">$</span>
+                                    <span>cd /Applications</span>
+                                </div>
+                                <div class="flex">
+                                    <span class="mr-2 text-slate-500 select-none">$</span>
+                                    <span class="text-green-400">sudo xattr -dr com.apple.quarantine harvey.app</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
+                {#if activeTab === 'source'}
+                    <div class="flex flex-col items-center">
+                        <div class="h-16 w-16 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-6">
+                            <Github class="w-8 h-8" />
+                        </div>
+                        <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
+                        <p class="text-slate-600 mb-4 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
+                        <p class="text-sm text-slate-500 mb-8">For detailed build instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
+
+                        <div class="relative group/term w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto border border-slate-800 shadow-inner">
+                            <button 
+                                on:click={() => copyToClipboard('git clone https://github.com/Ethnomethodology/harvey.git\ncd harvey && npm install\nnpm run tauri build', 'source')}
+                                class="absolute top-2 right-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center gap-1.5"
+                                title="Copy to clipboard"
+                            >
+                                {#if copyFeedback.source}
+                                    <Check class="w-4 h-4 text-green-400" />
+                                    <span class="text-[10px] font-bold text-green-400 uppercase tracking-tight">Copied!</span>
+                                {:else}
+                                    <Copy class="w-4 h-4" />
+                                {/if}
+                            </button>
+                            <div class="flex select-none mb-2 text-slate-500">
                                 <span class="mr-2">$</span>
-                                <span>cd /Applications</span>
+                                <span># Clone and install dependencies</span>
                             </div>
-                            <div class="flex">
-                                <span class="mr-2 text-slate-500 select-none">$</span>
-                                <span class="text-green-400">sudo xattr -dr com.apple.quarantine harvey.app</span>
+                            <div class="mb-2">
+                                <span class="mr-2 text-slate-500">$</span>
+                                <span class="text-white">git clone https://github.com/Ethnomethodology/harvey.git</span>
+                            </div>
+                            <div class="mb-2">
+                                <span class="mr-2 text-slate-500">$</span>
+                                <span class="text-white">cd harvey && npm install</span>
+                            </div>
+                             <div>
+                                <span class="mr-2 text-slate-500">$</span>
+                                <span class="text-white">npm run tauri build</span>
                             </div>
                         </div>
-                    </div>
-                </div>
-            {/if}
-
-            {#if activeTab === 'source'}
-                <div class="flex flex-col items-center">
-                    <div class="h-16 w-16 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-6">
-                        <Github class="w-8 h-8" />
-                    </div>
-                    <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
-                    <p class="text-slate-600 mb-4 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
-                    <p class="text-sm text-slate-500 mb-8">For detailed build instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
-
-                    <div class="w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto">
-                        <div class="flex select-none mb-2 text-slate-500">
-                            <span class="mr-2">$</span>
-                            <span># Clone and install dependencies</span>
-                        </div>
-                        <div class="mb-2">
-                            <span class="mr-2 text-slate-500">$</span>
-                            <span class="text-white">git clone https://github.com/Ethnomethodology/harvey.git</span>
-                        </div>
-                        <div class="mb-2">
-                            <span class="mr-2 text-slate-500">$</span>
-                            <span class="text-white">cd harvey && npm install</span>
-                        </div>
-                         <div>
-                            <span class="mr-2 text-slate-500">$</span>
-                            <span class="text-white">npm run tauri build</span>
-                        </div>
-                    </div>
 
                     <a href="https://github.com/Ethnomethodology/harvey" target="_blank" class="inline-flex items-center justify-center px-8 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
                         View on GitHub
