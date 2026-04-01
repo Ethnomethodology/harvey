@@ -497,8 +497,8 @@
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
-	<div class="flex items-center space-x-1.5">
-		<div class="w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
+	<div class="flex items-center flex-grow min-w-0 z-10">
+		<div class="max-w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
 			<div class="h-10 flex items-center justify-center flex-shrink-0">
 				<button
 					type="button"
@@ -529,139 +529,141 @@
 			>
 		</div>
 
-		<!-- Media Selection Dropdown -->
-		<div class="relative">
-			<Button
-				id="media-selection-btn"
-				size="xs"
-				color="alternative"
-				class="w-72 justify-between px-3 !py-1.5 focus:ring-0"
-				disabled={$project.isLoading ||
-					mediaFilesForDropdown.length === 0}
-				title="Select Media"
-			>
-				<span class="truncate">
-					{#if $project.isLoading}
-						Loading...
-					{:else if mediaFilesForDropdown.length === 0}
-						No Media
-					{:else}
-						{mediaFilesForDropdown.find(
-							(f) => f.path === selectedMediaValue,
-						)?.name || "Select Media"}
-					{/if}
-				</span>
-				<ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
-			</Button>
-			{#if mediaFilesForDropdown.length > 0}
-				<Dropdown
-					triggeredBy="#media-selection-btn"
-					class="w-72 z-[1001] max-h-96 overflow-y-auto"
+		<div class="flex items-center space-x-1.5 ml-2">
+			<!-- Media Selection Dropdown -->
+			<div class="relative">
+				<Button
+					id="media-selection-btn"
+					size="xs"
+					color="alternative"
+					class="w-[216px] justify-between px-3 !py-1.5 focus:ring-0"
+					disabled={$project.isLoading ||
+						mediaFilesForDropdown.length === 0}
+					title="Select Media"
 				>
-					{#each mediaFilesForDropdown as f}
-						<DropdownItem
-							class="text-xs flex items-center {selectedMediaValue ===
-							f.path
-								? 'font-bold bg-blue-50 dark:bg-gray-700'
-								: ''}"
-							on:click={() => handleMediaSelectionChange(f.path)}
-						>
-							<span class="truncate">{f.name}</span>
-						</DropdownItem>
-					{/each}
-				</Dropdown>
-			{/if}
-		</div>
+					<span class="truncate">
+						{#if $project.isLoading}
+							Loading...
+						{:else if mediaFilesForDropdown.length === 0}
+							No Media
+						{:else}
+							{mediaFilesForDropdown.find(
+								(f) => f.path === selectedMediaValue,
+							)?.name || "Select Media"}
+						{/if}
+					</span>
+					<ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
+				</Button>
+				{#if mediaFilesForDropdown.length > 0}
+					<Dropdown
+						triggeredBy="#media-selection-btn"
+						class="w-[216px] z-[1001] max-h-96 overflow-y-auto"
+					>
+						{#each mediaFilesForDropdown as f}
+							<DropdownItem
+								class="text-xs flex items-center {selectedMediaValue ===
+								f.path
+									? 'font-bold bg-blue-50 dark:bg-gray-700'
+									: ''}"
+								on:click={() => handleMediaSelectionChange(f.path)}
+							>
+								<span class="truncate">{f.name}</span>
+							</DropdownItem>
+						{/each}
+					</Dropdown>
+				{/if}
+			</div>
 
-		<!-- Speakers Button -->
-		<div class="relative inline-flex items-center ml-2">
+			<!-- Speakers Button -->
+			<div class="relative inline-flex items-center ml-2">
+				<Button
+					size="xs"
+					color="alternative"
+					class="space-x-0.5 px-2 !py-1 relative"
+					on:click={openSpeakersModal}
+					disabled={mediaFilesForDropdown.length === 0}
+					title={mediaFilesForDropdown.length === 0 ? "No media available" : "Configure number of speakers and their names"}
+				>
+					<Users class="w-3.5 h-3.5" />
+					<span>Speakers</span>
+					<!-- Shorter Text -->
+					{#if $transcriptStore.speakers.count > 0}
+						<span
+							class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"
+						>
+							<!-- Adjusted badge size/pos -->
+							{$transcriptStore.speakers.count}
+						</span>
+					{/if}
+				</Button>
+			</div>
+
+			<!-- Transcribe Button -->
 			<Button
 				size="xs"
 				color="alternative"
-				class="space-x-0.5 px-2 !py-1 relative"
-				on:click={openSpeakersModal}
-				disabled={mediaFilesForDropdown.length === 0}
-				title={mediaFilesForDropdown.length === 0 ? "No media available" : "Configure number of speakers and their names"}
+				class="ml-2 space-x-0.5 px-2 !py-1"
+				on:click={handleTranscribeClick}
+				disabled={isTranscribeDisabled}
+				title={isTranscribeDisabled
+					? "Select media first"
+					: "Transcribe Media"}
 			>
-				<Users class="w-3.5 h-3.5" />
-				<span>Speakers</span>
-				<!-- Shorter Text -->
-				{#if $transcriptStore.speakers.count > 0}
-					<span
-						class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"
+				{#if $transcriptStore.isTranscribing}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-3.5 h-3.5 animate-spin"
 					>
-						<!-- Adjusted badge size/pos -->
-						{$transcriptStore.speakers.count}
-					</span>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+						/>
+					</svg>
+					<span>Transcribing...</span>
+				{:else}
+					<MessageSquareText class="w-3.5 h-3.5" />
+					<span>Transcribe</span>
+				{/if}
+			</Button>
+
+			<!-- Translate Button -->
+			<Button
+				size="xs"
+				color="alternative"
+				class="ml-2 space-x-0.5 px-2 !py-1"
+				on:click={openTranslateModal}
+				disabled={mediaFilesForDropdown.length === 0}
+				title={mediaFilesForDropdown.length === 0 ? "No media available" : ($transcriptStore.isTranslating
+					? "View Translation Status"
+					: "Translate Transcript")}
+			>
+				{#if $transcriptStore.isTranslating}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-3.5 h-3.5 animate-spin"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+						/>
+					</svg>
+					<span>Translating...</span>
+				{:else}
+					<Languages class="w-3.5 h-3.5" />
+					<span>Translate</span>
 				{/if}
 			</Button>
 		</div>
-
-		<!-- Transcribe Button -->
-		<Button
-			size="xs"
-			color="alternative"
-			class="ml-2 space-x-0.5 px-2 !py-1"
-			on:click={handleTranscribeClick}
-			disabled={isTranscribeDisabled}
-			title={isTranscribeDisabled
-				? "Select media first"
-				: "Transcribe Media"}
-		>
-			{#if $transcriptStore.isTranscribing}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-3.5 h-3.5 animate-spin"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-					/>
-				</svg>
-				<span>Transcribing...</span>
-			{:else}
-				<MessageSquareText class="w-3.5 h-3.5" />
-				<span>Transcribe</span>
-			{/if}
-		</Button>
-
-		<!-- Translate Button -->
-		<Button
-			size="xs"
-			color="alternative"
-			class="ml-2 space-x-0.5 px-2 !py-1"
-			on:click={openTranslateModal}
-			disabled={mediaFilesForDropdown.length === 0}
-			title={mediaFilesForDropdown.length === 0 ? "No media available" : ($transcriptStore.isTranslating
-				? "View Translation Status"
-				: "Translate Transcript")}
-		>
-			{#if $transcriptStore.isTranslating}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-3.5 h-3.5 animate-spin"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-					/>
-				</svg>
-				<span>Translating...</span>
-			{:else}
-				<Languages class="w-3.5 h-3.5" />
-				<span>Translate</span>
-			{/if}
-		</Button>
 	</div>
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->

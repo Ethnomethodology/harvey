@@ -31,8 +31,8 @@
   class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
   data-tauri-drag-region
 >
-  <div class="flex items-center space-x-1.5 min-w-0">
-    <div class="w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
+  <div class="flex items-center flex-grow min-w-0 z-10">
+    <div class="max-w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <button
                 type="button"

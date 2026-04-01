@@ -555,65 +555,41 @@
   </script>
   
   <div
-    class="grid grid-cols-3 items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
+    class="flex items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30 justify-between"
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <!-- Drag Handle Background -->
     <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-    <div class="flex items-center space-x-1.5 min-w-0 z-10"> <!-- Left Column -->
-        <div class="h-10 flex items-center justify-center flex-shrink-0">
-            <button
-                type="button"
-                class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={(e) => dispatch('requestImport', e)}
-                title="Import Audio or Video"
-                aria-label="Import Audio or Video"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-            </button>
+    <div class="flex items-center flex-grow min-w-0 z-10"> <!-- Left-aligned items container -->
+        <div class="max-w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
+            <div class="h-10 flex items-center justify-center flex-shrink-0">
+                <button
+                    type="button"
+                    class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    on:click={(e) => dispatch('requestImport', e)}
+                    title="Import Audio or Video"
+                    aria-label="Import Audio or Video"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                </button>
+            </div>
+
+            <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate mr-2" title={displayTitle}>{displayTitle}</span>
         </div>
 
-        <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
-        {#if $activeMediaFile}
-        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
-            <MessageSquareText class="w-3.5 h-3.5" />
-            <span>Transcribe</span>
-        </Button>
+        <div class="flex items-center space-x-1.5 ml-2">
+            {#if $activeMediaFile}
+            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
+                <MessageSquareText class="w-3.5 h-3.5" />
+                <span>Transcribe</span>
+            </Button>
 
-        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
-            on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
-            title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
-        >
-            {#if $transcriptStore.isTranslating}
-                <Languages class="w-3.5 h-3.5 animate-spin" />
-                <span>Translating...</span>
-            {:else}
-                <Languages class="w-3.5 h-3.5" />
-                <span>Translate</span>
-            {/if}
-        </Button>
-        {/if}
-        {#if $project.activeDocumentEditorRef}
-        <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
-            <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
-            <span class="whitespace-nowrap w-24 text-left">
-                {#if isLiveTranscriptionActive && !isLiveTranscriptionReady}
-                    Initializing...
-                {:else if isLiveTranscriptionActive && isLiveTranscriptionReady}
-                    Listening{dots}
-                {:else}
-                    Live Transcribe
-                {/if}
-            </span>
-        </Button>
-        {/if}
-        {#if isLexicalDocument}
             <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
-                on:click={() => toggleTranslateModal(true)} 
-                title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Document"}
+                on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
+                title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
             >
                 {#if $transcriptStore.isTranslating}
                     <Languages class="w-3.5 h-3.5 animate-spin" />
@@ -623,11 +599,39 @@
                     <span>Translate</span>
                 {/if}
             </Button>
-        {/if}
+            {/if}
+            {#if $project.activeDocumentEditorRef}
+            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
+                <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
+                <span class="whitespace-nowrap w-24 text-left">
+                    {#if isLiveTranscriptionActive && !isLiveTranscriptionReady}
+                        Initializing...
+                    {:else if isLiveTranscriptionActive && isLiveTranscriptionReady}
+                        Listening{dots}
+                    {:else}
+                        Live Transcribe
+                    {/if}
+                </span>
+            </Button>
+            {/if}
+            {#if isLexicalDocument}
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
+                    on:click={() => toggleTranslateModal(true)} 
+                    title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Document"}
+                >
+                    {#if $transcriptStore.isTranslating}
+                        <Languages class="w-3.5 h-3.5 animate-spin" />
+                        <span>Translating...</span>
+                    {:else}
+                        <Languages class="w-3.5 h-3.5" />
+                        <span>Translate</span>
+                    {/if}
+                </Button>
+            {/if}
+        </div>
     </div>
 
-    <div class="flex justify-center min-w-0 z-10"> <!-- Middle Column -->
-    </div>
+
 
     <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
         <!-- Transcript Dropdown -->
