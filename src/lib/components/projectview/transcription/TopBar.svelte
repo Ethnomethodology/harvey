@@ -528,8 +528,8 @@
 	<div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
 		<!-- Left side: Project name + Media selection + Action buttons -->
 		<div class="flex items-center space-x-1.5">
-			<!-- Project name with bounded width -->
-			<div class="{ $panelStateStore.transcriptionPanelCollapsed ? 'max-w-[3rem]' : 'max-w-[16rem]' } flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out mr-1">
+			<!-- Project name with bounded width properly accounting for previous px-2 padding -->
+			<div class="{ $panelStateStore.transcriptionPanelCollapsed ? 'max-w-[2rem]' : 'max-w-[15rem]' } flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out">
 				<span
 					class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
 					title={displayTitle}>{displayTitle}</span>
