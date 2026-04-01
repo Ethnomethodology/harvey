@@ -34,12 +34,12 @@
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <Button
                 size="xs"
-                color="alternative"
+                color="blue"
                 pill={true}
-                class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-700"
+                class="!p-1.5 hover-scale-effect ml-1 mr-1 shadow-sm hover:shadow-md transition-all duration-200 active:scale-95"
                 on:click={(e) => dispatch('requestImport', e)}
-                title="Import"
-                aria-label="Import"
+                title="Import Audio or Video"
+                aria-label="Import Audio or Video"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

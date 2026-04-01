@@ -204,6 +204,25 @@
 
 	$: console.log("[MediaPlayer] projectId prop updated:", projectId);
 
+	$: hasMediaFiles = (() => {
+		const rootNodes = $project.files || [];
+		let found = false;
+		function checkRecursive(nodes) {
+			for (const node of nodes) {
+				if (node.file_type === "media" && !node.is_directory) {
+					found = true;
+					return;
+				}
+				if (node.children && Array.isArray(node.children)) {
+					checkRecursive(node.children);
+				}
+				if (found) return;
+			}
+		}
+		checkRecursive(rootNodes);
+		return found;
+	})();
+
 	// --- Internal State ---
 	let localMediaUrl = ""; // URL for the <video> src
 	let isLoadingMedia = false;
@@ -1791,12 +1810,16 @@
 					<Expand class="w-4 h-4" />
 				{/if}
 			</button>
-		{:else}
+		{:else if hasMediaFiles}
 			<div
 				class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-600"
 			>
 				<span>No media selected or media failed to load</span>
 			</div>
+		{:else}
+			<div
+				class="absolute inset-0 flex items-center justify-center bg-black"
+			></div>
 		{/if}
 	</div>
 

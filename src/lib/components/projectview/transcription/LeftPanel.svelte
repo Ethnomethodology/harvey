@@ -413,16 +413,12 @@
 <!-- Main Container -->
 <div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200">
 	<!-- Media Files Accordion Header -->
-	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
+	<button
+		type="button"
+		class="w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 focus:outline-none focus:ring-inset focus:ring-2 focus:ring-blue-500"
 		on:click={() => toggleSection("files")}
 		aria-expanded={filesOpen}
 		aria-controls="files-content"
-		role="button"
-		tabindex="0"
-		on:keydown={(e) => {
-			if (e.key === "Enter" || e.key === " ") toggleSection("files");
-		}}
 	>
 		<div
 			class="flex items-center space-x-2 transition-opacity duration-200"
@@ -432,7 +428,7 @@
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
 			{@html filesOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
-	</h2>
+	</button>
 
 	<!-- Media Files Content (Tree) -->
 	{#if filesOpen}
@@ -452,7 +448,7 @@
 				<p
 					class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-2"
 				>
-					Import a media file to begin.
+					Import an audio or video file to begin.
 				</p>
 			{:else}
 				<ul class="space-y-0.5 px-1.5">
@@ -472,18 +468,14 @@
 	{/if}
 
 	<!-- Shortcuts Accordion Header -->
-	<h2
-		class="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 {filesOpen
+	<button
+		type="button"
+		class="w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0 focus:outline-none focus:ring-inset focus:ring-2 focus:ring-blue-500 {filesOpen
 			? 'border-t'
 			: ''}"
 		on:click={() => toggleSection("shortcuts")}
 		aria-expanded={shortcutsOpen}
 		aria-controls="shortcuts-content"
-		role="button"
-		tabindex="0"
-		on:keydown={(e) => {
-			if (e.key === "Enter" || e.key === " ") toggleSection("shortcuts");
-		}}
 	>
 		<div
 			class="flex items-center space-x-2 transition-opacity duration-200"
@@ -493,7 +485,7 @@
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
 			{@html shortcutsOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
-	</h2>
+	</button>
 
 	<!-- Shortcuts Content -->
 	{#if shortcutsOpen}
@@ -569,6 +561,11 @@
 			class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
 			style="left: {contextMenuX}px; top: {contextMenuY}px;"
 			on:click|stopPropagation
+			role="menu"
+			tabindex="-1"
+			on:keydown={(e) => {
+				if (e.key === "Escape") closeContextMenu();
+			}}
 		>
 			{#if !contextMenuItem.is_directory || contextMenuItem.file_type === "directory_media_stem"}
 				{#if contextMenuItem.file_type === "media" || contextMenuItem.file_type === "directory_media_stem" || contextMenuItem.file_type === "audio" || contextMenuItem.file_type === "video"}
@@ -576,6 +573,7 @@
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Load")}
 						class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+						aria-label="Load selected media"
 						>Load Media</button
 					>
 					<hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -585,6 +583,7 @@
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("OpenNote")}
 						class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+						aria-label="Open selected note"
 						>Open Note</button
 					>
 					<hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -594,12 +593,14 @@
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Rename")}
 						class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+						aria-label="Rename selected item"
 						>Rename…</button
 					>
 					<button
 						on:click|stopPropagation={(e) =>
 							handleMenuAction("Delete")}
 						class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500"
+						aria-label="Delete selected item"
 						>Delete…</button
 					>
 				{/if}
@@ -634,20 +635,20 @@
 		background-color: rgba(156, 163, 175, 0.5);
 		border-radius: 3px;
 	}
-	.dark .flex-grow.overflow-y-auto::-webkit-scrollbar-thumb {
+	:global(.dark) .flex-grow.overflow-y-auto::-webkit-scrollbar-thumb {
 		background-color: rgba(107, 114, 128, 0.5);
 	}
 	.flex-grow.overflow-y-auto::-webkit-scrollbar-thumb:hover {
 		background-color: rgba(107, 114, 128, 0.7);
 	}
-	.dark .flex-grow.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+	:global(.dark) .flex-grow.overflow-y-auto::-webkit-scrollbar-thumb:hover {
 		background-color: rgba(75, 85, 99, 0.7);
 	}
 	.flex-grow.overflow-y-auto {
 		scrollbar-width: thin;
 		scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
 	}
-	.dark .flex-grow.overflow-y-auto {
+	:global(.dark) .flex-grow.overflow-y-auto {
 		scrollbar-color: rgba(107, 114, 128, 0.5) transparent;
 	}
 	.min-h-0 {

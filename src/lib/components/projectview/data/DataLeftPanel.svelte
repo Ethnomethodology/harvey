@@ -1239,7 +1239,7 @@
 
                 <!-- Bottom 1/3 for Groups -->
                 <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: {100 - categoriesHeightPercent}%;">
-                    <h3 class="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5 group hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                    <h3 class="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-600 px-1 mb-1.5 group">
                         <div class="flex items-center">
                             <span class="mr-1.5 flex-shrink-0">
                                 <GalleryVerticalEnd class="w-3.5 h-3.5" />

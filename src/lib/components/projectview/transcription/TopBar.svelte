@@ -500,12 +500,12 @@
 		<div class="h-10 flex items-center justify-center flex-shrink-0">
 			<Button
 				size="xs"
-				color="alternative"
+				color="blue"
 				pill={true}
-				class="!p-1.5 hover-scale-effect ml-1 mr-1 border-gray-300 dark:border-gray-600"
+				class="!p-1.5 hover-scale-effect ml-1 mr-1 shadow-sm hover:shadow-md transition-all duration-200 active:scale-95"
 				on:click={(e) => dispatch("requestImport", e)}
-				title="Import"
-				aria-label="Import"
+				title="Import Audio or Video"
+				aria-label="Import Audio or Video"
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -575,7 +575,8 @@
 				color="alternative"
 				class="space-x-0.5 px-2 !py-1 relative"
 				on:click={openSpeakersModal}
-				title="Configure number of speakers and their names"
+				disabled={mediaFilesForDropdown.length === 0}
+				title={mediaFilesForDropdown.length === 0 ? "No media available" : "Configure number of speakers and their names"}
 			>
 				<Users class="w-3.5 h-3.5" />
 				<span>Speakers</span>
@@ -630,9 +631,10 @@
 			color="alternative"
 			class="ml-2 space-x-0.5 px-2 !py-1"
 			on:click={openTranslateModal}
-			title={$transcriptStore.isTranslating
+			disabled={mediaFilesForDropdown.length === 0}
+			title={mediaFilesForDropdown.length === 0 ? "No media available" : ($transcriptStore.isTranslating
 				? "View Translation Status"
-				: "Translate Transcript"}
+				: "Translate Transcript")}
 		>
 			{#if $transcriptStore.isTranslating}
 				<svg

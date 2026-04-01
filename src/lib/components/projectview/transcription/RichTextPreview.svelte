@@ -402,6 +402,25 @@
         typeof window !== "undefined" &&
         navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     const modKeyName = isMac ? "Cmd" : "Ctrl";
+    
+    $: hasMediaFiles = (() => {
+        const rootNodes = $project.files || [];
+        let found = false;
+        function checkRecursive(nodes) {
+            for (const node of nodes) {
+                if (node.file_type === "media" && !node.is_directory) {
+                    found = true;
+                    return;
+                }
+                if (node.children && Array.isArray(node.children)) {
+                    checkRecursive(node.children);
+                }
+                if (found) return;
+            }
+        }
+        checkRecursive(rootNodes);
+        return found;
+    })();
 
     const defaultEmptyJson = JSON.stringify({
         root: {
@@ -1680,8 +1699,11 @@
 
     {#if allSegmentsData.length === 0}
         <div class="flex-grow flex items-center justify-center text-gray-400">
-            {#if previewEditMode}
-                Transcript empty. Click Insert button to add a segment.
+            {#if !hasMediaFiles}
+                No transcript available.
+            {:else if previewEditMode}
+                No transcript available.
+                <!-- 
                 <div
                     class="flex justify-center insert-button-wrapper absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4"
                 >
@@ -1694,6 +1716,7 @@
                         <PlusSquare class="w-5 h-5" />
                     </button>
                 </div>
+                -->
             {:else}
                 No transcript data to preview.
             {/if}

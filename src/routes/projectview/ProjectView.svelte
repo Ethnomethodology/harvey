@@ -1965,24 +1965,22 @@
     <!-- Main Content Area -->
     <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white bg-gray-200 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-1 border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-2 px-1 border-r border-gray-300 dark:border-gray-700"
         >
             <div class="flex-grow flex flex-col space-y-2">
                 <button
                     title="Data"
                     aria-label="Data"
-                    class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
-                    class:border-l-4={selectedTab === "data"}
-                    class:border-blue-500={selectedTab === "data"}
-                    class:dark:border-blue-400={selectedTab === "data"}
-                    class:bg-white={selectedTab === "data"}
-                    class:dark:bg-gray-950={selectedTab === "data"}
-                    class:text-blue-500={selectedTab === "data"}
-                    class:dark:text-accent={selectedTab === "data"}
+                    class="w-10 h-10 mx-auto flex items-center justify-center transition-all duration-200 rounded-md focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class:bg-blue-100={selectedTab === "data"}
+                    class:dark:bg-blue-800={selectedTab === "data"}
+                    class:text-blue-700={selectedTab === "data"}
+                    class:dark:text-blue-200={selectedTab === "data"}
+                    class:shadow-sm={selectedTab === "data"}
                     class:hover:bg-gray-300={selectedTab !== "data"}
                     class:dark:hover:bg-gray-800={selectedTab !== "data"}
                     class:text-gray-700={selectedTab !== "data"}
-                    class:dark:text-gray-300={selectedTab !== "data"}
+                    class:dark:text-gray-400={selectedTab !== "data"}
                     class:dark:hover:text-gray-100={selectedTab !== "data"}
                     class:hover:text-gray-900={selectedTab !== "data"}
                     on:click={() => handleTabClick("data")}
@@ -2004,19 +2002,17 @@
                 <button
                     title="Transcription"
                     aria-label="Transcription"
-                    class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
-                    class:border-l-4={selectedTab === "transcription"}
-                    class:border-blue-500={selectedTab === "transcription"}
-                    class:dark:border-blue-400={selectedTab === "transcription"}
-                    class:bg-white={selectedTab === "transcription"}
-                    class:dark:bg-gray-950={selectedTab === "transcription"}
-                    class:text-blue-500={selectedTab === "transcription"}
-                    class:dark:text-accent={selectedTab === "transcription"}
+                    class="w-10 h-10 mx-auto flex items-center justify-center transition-all duration-200 rounded-md focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class:bg-blue-100={selectedTab === "transcription"}
+                    class:dark:bg-blue-800={selectedTab === "transcription"}
+                    class:text-blue-700={selectedTab === "transcription"}
+                    class:dark:text-blue-200={selectedTab === "transcription"}
+                    class:shadow-sm={selectedTab === "transcription"}
                     class:hover:bg-gray-300={selectedTab !== "transcription"}
                     class:dark:hover:bg-gray-800={selectedTab !==
                         "transcription"}
                     class:text-gray-700={selectedTab !== "transcription"}
-                    class:dark:text-gray-300={selectedTab !== "transcription"}
+                    class:dark:text-gray-400={selectedTab !== "transcription"}
                     class:dark:hover:text-gray-100={selectedTab !==
                         "transcription"}
                     class:hover:text-gray-900={selectedTab !== "transcription"}
@@ -2039,18 +2035,16 @@
                 <button
                     title="Tags"
                     aria-label="Tags"
-                    class="w-full h-10 flex items-center justify-center transition-colors focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
-                    class:border-l-4={selectedTab === "tags"}
-                    class:border-blue-500={selectedTab === "tags"}
-                    class:dark:border-blue-400={selectedTab === "tags"}
-                    class:bg-white={selectedTab === "tags"}
-                    class:dark:bg-gray-950={selectedTab === "tags"}
-                    class:text-blue-500={selectedTab === "tags"}
-                    class:dark:text-accent={selectedTab === "tags"}
+                    class="w-10 h-10 mx-auto flex items-center justify-center transition-all duration-200 rounded-md focus:outline-none relative focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class:bg-blue-100={selectedTab === "tags"}
+                    class:dark:bg-blue-800={selectedTab === "tags"}
+                    class:text-blue-700={selectedTab === "tags"}
+                    class:dark:text-blue-200={selectedTab === "tags"}
+                    class:shadow-sm={selectedTab === "tags"}
                     class:hover:bg-gray-300={selectedTab !== "tags"}
                     class:dark:hover:bg-gray-800={selectedTab !== "tags"}
                     class:text-gray-700={selectedTab !== "tags"}
-                    class:dark:text-gray-300={selectedTab !== "tags"}
+                    class:dark:text-gray-400={selectedTab !== "tags"}
                     class:dark:hover:text-gray-100={selectedTab !== "tags"}
                     class:hover:text-gray-900={selectedTab !== "tags"}
                     on:click={() => handleTabClick("tags")}
@@ -2075,7 +2069,7 @@
                     title="Help"
                     aria-label="Help"
                     on:click={() => (showHelpModal = true)}
-                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+                    class="w-10 h-10 mx-auto rounded-md flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-all duration-200 focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -2095,8 +2089,8 @@
                     title="Configure"
                     aria-label="Configure"
                     on:click={() => (showConfigurationModal = true)}
-                    class="w-full h-10 rounded-tl-md rounded-bl-md flex items-center justify-center transition-colors hover:bg-gray-300 dark:hover:bg-gray-800 focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400 
-                    {!hasConfigIssues ? 'text-gray-700 dark:text-gray-300' : ''}
+                    class="w-10 h-10 mx-auto rounded-md flex items-center justify-center transition-all duration-200 hover:bg-gray-300 dark:hover:bg-gray-800 focus:outline-none focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400 
+                    {!hasConfigIssues ? 'text-gray-500 dark:text-gray-400' : ''}
                     {hasCriticalConfigIssues ? 'text-red-500' : ''}
                     {!hasCriticalConfigIssues && hasNonCriticalConfigIssues ? 'text-yellow-500' : ''}"
                 >
@@ -2347,21 +2341,17 @@
         scrollbar-width: thin;
         scrollbar-color: #d1d5db #f3f4f6;
     }
-    .dark ::-webkit-scrollbar-track {
+    :global(.dark) ::-webkit-scrollbar-track {
         @apply bg-gray-800;
     }
-    .dark ::-webkit-scrollbar-thumb {
+    :global(.dark) ::-webkit-scrollbar-thumb {
         @apply bg-gray-500 border-gray-800;
     }
-    .dark ::-webkit-scrollbar-thumb:hover {
+    :global(.dark) ::-webkit-scrollbar-thumb:hover {
         @apply bg-gray-400;
     }
-    .dark * {
+    :global(.dark) * {
         scrollbar-color: #6b7280 #1f2937;
-    }
-    .size-6 {
-        width: 1.5rem;
-        height: 1.5rem;
     }
     .min-h-0 {
         min-height: 0;
