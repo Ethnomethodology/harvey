@@ -80,15 +80,24 @@ fi
 # 5. Build Preparation
 echo -e "\n${BLUE}Environment ready!${NC}"
 echo -e "This script will clone the 'main' branch and build it from source."
-read -p "Enter destination directory for the source code [default: ~/harvey-source]: " DEST < /dev/tty
-DEST=${DEST:-$HOME/harvey-source}
+# Defaults
+DEST="$HOME/harvey-source"
+
+# Only prompt for interactivity if attached to a terminal
+if [ -t 0 ]; then
+    read -p "Enter destination directory for the source code [default: $DEST]: " USER_DEST
+    DEST=${USER_DEST:-$DEST}
+fi
 
 if [ -d "$DEST" ]; then
     echo -e "${YELLOW}Warning:${NC} Directory $DEST already exists."
-    read -p "Do you want to overwrite it? (y/N): " CONFIRM < /dev/tty
+    CONFIRM="n"
+    if [ -t 0 ]; then
+        read -p "Do you want to overwrite it? (y/N): " CONFIRM
+    fi
     if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
-        echo "Aborting."
-        exit 0
+        echo "Aborting build. Destination already exists."
+        exit 1
     fi
     rm -rf "$DEST"
 fi
@@ -102,7 +111,7 @@ echo -e "\n${BLUE}Installing dependencies...${NC}"
 npm install
 
 echo -e "\n${BLUE}Compiling Application (this may take several minutes)...${NC}"
-npx tauri build
+npx -y @tauri-apps/cli build
 
 echo -e "\n${GREEN}Success!${NC} The build is complete."
 echo -e "You can find your executable in: ${BLUE}$DEST/src-tauri/target/release/bundle/...${NC}"
