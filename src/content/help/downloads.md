@@ -17,7 +17,7 @@ Download the file ending in `x64-setup.zip`. Extract the content and run the set
     - For **Apple Silicon (M1, M2, etc.)**: Download the file with `aarch64` in the name.
     - For **Intel Macs**: Download the file with `x64` in the name.
 2.  **Install**: Open the downloaded `.dmg` file and drag `harvey.app` to your `/Applications` folder.
-3.  **Security Warnings**: As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority. Because the app is not currently signed, macOS will prevent it from running. To authorize it, open the **Terminal** application and run the following commands:
+3.  **Security Warnings**: As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority. Because the app is not currently signed, macOS will prevent it from running. To authorize it after installation, open the **Terminal** application and run the following commands:
     ```bash
     cd /Applications
     sudo xattr -dr com.apple.quarantine harvey.app

@@ -299,7 +299,7 @@
                         <p class="text-sm text-slate-600 mb-4 leading-relaxed">
                             As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
                             Because the app is not currently signed, macOS will prevent it from running initially. 
-                            To authorize it, run the following commands in your <strong>Terminal</strong> application:
+                            To authorize it after installation, run the following commands in your <strong>Terminal</strong> application:
                         </p>
                         <div class="bg-slate-900 rounded-lg p-4 font-mono text-xs text-white overflow-x-auto shadow-inner border border-slate-800">
                             <div class="flex select-none mb-1 text-slate-500">
