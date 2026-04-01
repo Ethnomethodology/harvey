@@ -435,14 +435,14 @@
 		<div
 			class="flex items-center space-x-2 transition-opacity duration-200"
 		>
-			<span class="pl-2">Media Files</span>
+			<span class="pl-2">Files</span>
 		</div>
 		<span class="pr-1 text-gray-500 dark:text-gray-400">
 			{@html filesOpen ? CHEVRON_DOWN : CHEVRON_RIGHT}
 		</span>
 	</button>
 
-	<!-- Media Files Content (Tree) -->
+	<!-- Files Content (Tree) -->
 	{#if filesOpen}
 		<div
 			id="files-content"
