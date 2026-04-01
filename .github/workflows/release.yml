@@ -3,10 +3,10 @@ name: Release Orchestrator
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., 0.1.1)'
+      ref:
+        description: 'Branch or tag of your application to build'
         required: true
-        type: string
+        default: 'main'
 
 jobs:
   create-tag-and-release:
@@ -24,7 +24,7 @@ jobs:
       - name: Prepare Tag
         id: prepare_tag
         run: |
-          VERSION=${{ github.event.inputs.version }}
+          VERSION=${{ github.event.inputs.ref }}
           # Remove 'v' prefix if present to avoid 'vv0.1.1'
           VERSION=${VERSION#v}
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
