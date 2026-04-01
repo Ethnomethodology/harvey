@@ -349,12 +349,12 @@
                             <Github class="w-8 h-8" />
                         </div>
                         <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
-                        <p class="text-slate-600 mb-4 max-w-md">Clone the repository and build Harvey for your Linux distribution or custom environment.</p>
+                        <p class="text-slate-600 mb-4 max-w-md">Use the automated build script to check dependencies and compile Harvey on your platform.</p>
                         <p class="text-sm text-slate-500 mb-8">For detailed build instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
 
                         <div class="relative group/term w-full max-w-lg bg-slate-900 rounded-lg p-4 text-left font-mono text-sm text-green-400 mb-6 overflow-x-auto border border-slate-800 shadow-inner">
                             <button 
-                                on:click={() => copyToClipboard('git clone https://github.com/Ethnomethodology/harvey.git\ncd harvey && npm install\nnpm run tauri build', 'source')}
+                                on:click={() => copyToClipboard('curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash', 'source')}
                                 class="absolute top-2 right-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center gap-1.5"
                                 title="Copy to clipboard"
                             >
@@ -367,21 +367,26 @@
                             </button>
                             <div class="flex select-none mb-2 text-slate-500">
                                 <span class="mr-2">$</span>
-                                <span># Clone and install dependencies</span>
+                                <span># Run automated bootstrapper</span>
                             </div>
                             <div class="mb-2">
-                                <span class="mr-2 text-slate-500">$</span>
-                                <span class="text-white">git clone https://github.com/Ethnomethodology/harvey.git</span>
-                            </div>
-                            <div class="mb-2">
-                                <span class="mr-2 text-slate-500">$</span>
-                                <span class="text-white">cd harvey && npm install</span>
-                            </div>
-                             <div>
-                                <span class="mr-2 text-slate-500">$</span>
-                                <span class="text-white">npm run tauri build</span>
+                                <span class="mr-2 text-slate-500 select-none">$</span>
+                                <span class="text-white">curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash</span>
                             </div>
                         </div>
+
+                        <p class="text-sm text-slate-500 mb-4 text-center">Or manually clone and run locally:</p>
+                        <div class="w-full max-w-lg bg-slate-50 border border-slate-200 rounded-lg p-4 text-left font-mono text-xs text-slate-600 mb-8 overflow-x-auto">
+                            <div class="mb-2 flex items-center gap-2">
+                                <span class="h-1 w-1 bg-slate-400 rounded-full"></span>
+                                <span>git clone https://github.com/Ethnomethodology/harvey.git</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="h-1 w-1 bg-slate-400 rounded-full"></span>
+                                <span>cd harvey && bash scripts/bootstrap.sh</span>
+                            </div>
+                        </div>
+
 
                     <a href="https://github.com/Ethnomethodology/harvey" target="_blank" class="inline-flex items-center justify-center px-8 py-3 text-base font-bold text-slate-700 transition-all bg-white border border-slate-200 rounded-xl hover:bg-slate-50 gap-2">
                         View on GitHub

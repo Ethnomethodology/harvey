@@ -24,6 +24,21 @@ Download the file ending in `x64-setup.zip`. Extract the content and run the set
     ```
 
 ## Build from Source
-If you are using Linux or prefer to build the application yourself, you can clone the source code from the [main GitHub repository](https://github.com/Ethnomethodology/harvey).
+If you are using Linux or prefer to build the application yourself, we provide a bootstrap script that automates the environment setup and compilation.
 
-Refer to the `README.md` or the setup guides in the repository for detailed build instructions.
+### Quick Build (macOS & Linux)
+Run the following command in your terminal to check for dependencies and build Harvey automatically:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash
+```
+
+> [!NOTE]
+> This script will verify your system has Git, Node.js, and Rust installed. On Linux, it also checks for required development libraries. If anything is missing, it will provide installation instructions.
+
+### Manual Build
+Alternatively, you can clone the repository and run the script locally:
+1.  **Clone**: `git clone https://github.com/Ethnomethodology/harvey.git`
+2.  **Run Bootstrapper**: `cd harvey && bash scripts/bootstrap.sh`
+
+Refer to the `README.md` for manual build instructions if you prefer a custom setup.
