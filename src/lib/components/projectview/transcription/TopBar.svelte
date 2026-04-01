@@ -524,17 +524,17 @@
 		</button>
 	</div>
 
-	<!-- Section 2: Left Panel (w-64 or w-12 collapsed) — Project name -->
-	<div class="{ $panelStateStore.transcriptionPanelCollapsed ? 'w-12' : 'w-64' } flex-shrink-0 flex items-center overflow-hidden z-10 transition-all duration-300 ease-in-out px-2">
-		<span
-			class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
-			title={displayTitle}>{displayTitle}</span>
-	</div>
-
-	<!-- Section 3: Middle Panel (flex-grow) -->
+	<!-- Sections 2 & 3 Combined: Middle Panel (flex-grow) -->
 	<div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
-		<!-- Left side: Media selection + Action buttons -->
+		<!-- Left side: Project name + Media selection + Action buttons -->
 		<div class="flex items-center space-x-1.5">
+			<!-- Project name with bounded width -->
+			<div class="{ $panelStateStore.transcriptionPanelCollapsed ? 'max-w-[3rem]' : 'max-w-[16rem]' } flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out mr-1">
+				<span
+					class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
+					title={displayTitle}>{displayTitle}</span>
+			</div>
+
 			<!-- Media Selection Dropdown -->
 			<div class="relative">
 				<Button
