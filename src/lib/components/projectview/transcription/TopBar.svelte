@@ -681,7 +681,7 @@
 			title="Export Transcript"
 		>
 			<Share class="w-3.5 h-3.5" />
-			<span class="hidden min-[1920px]:inline">Export</span>
+			<span class="hidden xl:inline">Export</span>
 		</Button>
 
 
@@ -793,7 +793,7 @@
 			{#if $isLexicalEditMode}
 				<Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
 				<span
-					class="hidden min-[1920px]:inline text-xs font-medium text-blue-600 dark:text-blue-400"
+					class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
 					>Edit Mode</span
 				>
 			{:else}
@@ -801,7 +801,7 @@
 					class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400"
 				/>
 				<span
-					class="hidden min-[1920px]:inline text-xs font-medium text-gray-500 dark:text-gray-400"
+					class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400"
 					>Read Mode</span
 				>
 			{/if}

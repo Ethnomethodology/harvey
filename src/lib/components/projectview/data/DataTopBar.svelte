@@ -685,7 +685,7 @@
             {#if $activeMediaFile}
                 <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
                     <Share class="w-3.5 h-3.5" />
-                    <span class="hidden min-[1920px]:inline">Export</span>
+                    <span class="hidden xl:inline">Export</span>
                 </Button>
             {/if}
             {#if isLexicalDocument}
@@ -698,19 +698,19 @@
                         }
                     }} title={isStandaloneTranscript ? "Export Transcript" : "Export Document"}>
                     <Share class="w-3.5 h-3.5" />
-                    <span class="hidden min-[1920px]:inline">Export</span>
+                    <span class="hidden xl:inline">Export</span>
                 </Button>
             {/if}
             {#if isTable}
                 <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
                     <Share class="w-3.5 h-3.5" />
-                    <span class="hidden min-[1920px]:inline">Export</span>
+                    <span class="hidden xl:inline">Export</span>
                 </Button>
             {/if}
             {#if isImage}
                 <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
                     <Share class="w-3.5 h-3.5" />
-                    <span class="hidden min-[1920px]:inline">Export</span>
+                    <span class="hidden xl:inline">Export</span>
                 </Button>
             {/if}
             {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
@@ -786,10 +786,10 @@
             >
                 {#if $isLexicalEditMode}
                     <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span class="hidden min-[1920px]:inline text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+                    <span class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
                 {:else}
                     <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                    <span class="hidden min-[1920px]:inline text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+                    <span class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
                 {/if}
             </button>
         </div>
