@@ -283,7 +283,26 @@
                             Intel Mac
                         </a>
                     </div>
-                    <p class="text-xs text-slate-400 mt-4">Version {version} • Universal Binary available</p>
+                    <p class="text-xs text-slate-400 mt-4 mb-8">Version {version} • Universal Binary available</p>
+
+                    <div class="pt-8 border-t border-slate-200 w-full max-w-lg text-left">
+                        <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">macOS Security Bypass</h4>
+                        <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+                            As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
+                            Because the app is not currently signed, macOS will prevent it from running initially. 
+                            To authorize it, run the following commands in your <strong>Terminal</strong> application:
+                        </p>
+                        <div class="bg-slate-900 rounded-lg p-4 font-mono text-xs text-white overflow-x-auto shadow-inner border border-slate-800">
+                            <div class="flex select-none mb-1 text-slate-500">
+                                <span class="mr-2">$</span>
+                                <span>cd /Applications</span>
+                            </div>
+                            <div class="flex">
+                                <span class="mr-2 text-slate-500 select-none">$</span>
+                                <span class="text-green-400">sudo xattr -dr com.apple.quarantine harvey.app</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             {/if}
 
