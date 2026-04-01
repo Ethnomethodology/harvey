@@ -295,7 +295,7 @@
                     <p class="text-xs text-slate-400 mt-4 mb-8">Version {version} • Universal Binary available</p>
 
                     <div class="pt-8 border-t border-slate-200 w-full max-w-lg text-left">
-                        <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">macOS Security Bypass</h4>
+                        <h4 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">macOS Security Warnings</h4>
                         <p class="text-sm text-slate-600 mb-4 leading-relaxed">
                             As an open-source project, Harvey is not yet digitally signed by a commercial certificate authority.
                             Because the app is not currently signed, macOS will prevent it from running initially. 
