@@ -9,7 +9,7 @@
     </p>
     <ul>
         <li><strong>Transcribe</strong> audio and video with local AI models.</li>
-        <li><strong>Translate</strong> transcripts into English.</li>
+        <li><strong>Translate</strong> transcripts from one language to another.</li>
         <li><strong>Edit</strong> and <strong>annotate</strong> transcripts, documents, PDFs, and images.</li>
         <li><strong>Manage</strong> all your project files in one place.</li>
     </ul>
