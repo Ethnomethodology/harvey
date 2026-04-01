@@ -498,34 +498,36 @@
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
-		<div class="h-10 flex items-center justify-center flex-shrink-0">
-			<button
-				type="button"
-				class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-				on:click={(e) => dispatch("requestImport", e)}
-				title="Import Audio or Video"
-				aria-label="Import Audio or Video"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="2"
-					stroke="currentColor"
-					class="w-5 h-5"
+		<div class="w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
+			<div class="h-10 flex items-center justify-center flex-shrink-0">
+				<button
+					type="button"
+					class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					on:click={(e) => dispatch("requestImport", e)}
+					title="Import Audio or Video"
+					aria-label="Import Audio or Video"
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 4.5v15m7.5-7.5h-15"
-					/>
-				</svg>
-			</button>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="2"
+						stroke="currentColor"
+						class="w-5 h-5"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M12 4.5v15m7.5-7.5h-15"
+						/>
+					</svg>
+				</button>
+			</div>
+			<span
+				class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate mr-2"
+				title={displayTitle}>{displayTitle}</span
+			>
 		</div>
-		<span
-			class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
-			title={displayTitle}>{displayTitle}</span
-		>
 
 		<!-- Media Selection Dropdown -->
 		<div class="relative">

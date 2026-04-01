@@ -14,24 +14,27 @@
   export let initialUrl = ''; // URL if editing, empty if adding
   export let isEditing = false; // Determines button labels and remove option
 
-  let inputElement;
+  let modalElement;
   let url = '';
 
   $: if (showModal) {
     url = initialUrl || 'https://';
     setTimeout(() => {
       tick().then(() => {
-        if (inputElement) {
-          inputElement.focus();
-          try {
-            if (!isEditing) {
-              inputElement.setSelectionRange(8, 8);
-            } else {
-              inputElement.select();
+        if (modalElement) {
+          const el = modalElement.querySelector('input');
+          if (el) {
+            el.focus();
+            try {
+              if (!isEditing) {
+                el.setSelectionRange(8, 8);
+              } else {
+                el.select();
+              }
+            } catch (e) {
+              console.warn("Error setting input selection:", e);
+              el.focus();
             }
-          } catch (e) {
-            console.warn("Error setting input selection:", e);
-            inputElement.focus();
           }
         }
       });
@@ -46,7 +49,7 @@
       closeModal();
     } else {
       console.warn("Link URL is invalid or empty.");
-      inputElement?.focus();
+      modalElement?.querySelector('input')?.focus();
     }
   }
 
@@ -103,7 +106,7 @@
     </div>
   </div>
 
-  <div class="space-y-4">
+  <div bind:this={modalElement} class="space-y-4">
     <div class="space-y-2">
       <Label for="link-url-input" class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
         <LinkIcon size={14} class="text-gray-400" />
@@ -111,7 +114,6 @@
       </Label>
       <div class="flex items-center gap-2">
         <Input
-          bind:this={inputElement}
           id="link-url-input"
           type="text"
           bind:value={url}

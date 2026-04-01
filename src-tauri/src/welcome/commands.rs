@@ -906,7 +906,7 @@ pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Resul
     Ok(())
 }
 #[command]
-pub async fn rename_project(project_xml_path: String, new_name: String) -> Result<(), CommandError> {
+pub async fn rename_project(project_xml_path: String, new_name: String) -> Result<String, CommandError> {
     log::info!("---- rename_project: Start. Path='{}', NewName='{}' ----", project_xml_path, new_name);
     let trimmed_new_name = new_name.trim();
     if trimmed_new_name.is_empty() {
@@ -1015,57 +1015,40 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
         CommandError::from(format!("Failed read XML after rename: {}", e))
     })?;
     log::info!("rename_project: Read {} bytes from XML.", original_xml_content.len());
-    log::info!("rename_project: === Parsing and updating XML content ===");
-    let mut reader = Reader::from_reader(BufReader::new(Cursor::new(original_xml_content)));
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
-    let mut in_name_tag = false;
-    let mut name_updated = false;
-    let mut depth = 0;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
-                let tag_name = e.name();
-                writer.write_event(Event::Start(e.clone()))?;
-                if depth == 1 && tag_name.as_ref() == b"name" {
-                    in_name_tag = true;
-                    writer.write_event(Event::Text(BytesText::new(trimmed_new_name)))?;
-                    name_updated = true;
-                }
-                depth += 1;
-            }
-            Ok(Event::End(ref e)) => {
-                depth -= 1;
-                if depth == 1 && e.name().as_ref() == b"name" {
-                    in_name_tag = false;
-                }
-                writer.write_event(Event::End(e.clone()))?;
-            }
-            Ok(Event::Text(_)) if in_name_tag => {}
-            Ok(Event::Eof) => {
-                log::info!("XML Parse - Reached EOF.");
-                break;
-            }
-            Ok(event) => {
-                writer.write_event(event)?;
-            }
-            Err(e) => {
-                log::error!("rename_project: *** Error parsing XML: {} at pos {} ***", e, reader.buffer_position());
-                return Err(format!("Error parsing XML: {}", e).into());
-            }
-        }
-        buf.clear();
-    }
-    if !name_updated {
-        log::error!("rename_project: Error - Did not find top-level <name> tag in XML."); /* Consider if this should be a hard error */
-    }
-    let updated_xml_bytes = writer.into_inner().into_inner();
-    log::info!("rename_project: === XML content updated ({} bytes). Writing back to {:?} ===", updated_xml_bytes.len(), new_xml_path);
-    fs::write(&new_xml_path, updated_xml_bytes).map_err(|e| {
-        log::error!("rename_project: *** FAILED WRITE updated XML to {:?}: {} ***", new_xml_path, e);
-        CommandError::from(format!("Failed write updated XML: {}", e))
+    log::info!("rename_project: === Parsing and updating manifest (JSON) content ===");
+    let project_json_content = String::from_utf8(original_xml_content).map_err(|e| {
+        log::error!("rename_project: *** Project manifest is not valid UTF-8: {} ***", e);
+        CommandError::from(format!("Project manifest is not valid UTF-8: {}", e))
+    })?;
+
+    let mut project_data: ProjectXml = serde_json::from_str(&project_json_content).map_err(|e| {
+        log::error!("rename_project: *** FAILED PARSE project JSON: {} ***", e);
+        CommandError::from(format!("Failed to parse project manifest JSON: {}", e))
+    })?;
+
+    log::info!("rename_project: Manifest parsed. Original Name='{}', UUID='{}'", project_data.name, project_data.project_uuid);
+    project_data.name = trimmed_new_name.to_string();
+
+    let updated_json_bytes = serde_json::to_vec_pretty(&project_data).map_err(|e| {
+        log::error!("rename_project: *** FAILED SERIALIZE project JSON: {} ***", e);
+        CommandError::from(format!("Failed to serialize project manifest: {}", e))
+    })?;
+
+    log::info!("rename_project: === Manifest content updated ({} bytes). Writing back to {:?} ===", updated_json_bytes.len(), new_xml_path);
+    fs::write(&new_xml_path, updated_json_bytes).map_err(|e| {
+        log::error!("rename_project: *** FAILED WRITE updated manifest to {:?}: {} ***", new_xml_path, e);
+        CommandError::from(format!("Failed write updated manifest: {}", e))
     })?;
     log::info!("rename_project: Successfully wrote updated XML content.");
+    
+    // --- DATABASE SYNC: Update SQLite record with NEW path and NEW name ---
+    // This must happen BEFORE we update the memory config and call write_config,
+    // as write_config will use the new path and fail to find the old record if we don't handle it here.
+    if let Err(e) = crate::welcome::config::rename_project_in_db(&project_xml_path, &new_xml_path_str, trimmed_new_name) {
+        log::error!("rename_project: *** DATABASE SYNC FAILED: {} ***", e);
+        // We log and continue, as the files ARE renamed, but this is a serious data integrity concern.
+    }
+
     log::info!("rename_project: === Updating config.xml entry ===");
     let mut config = read_config().map_err(|e| {
         log::error!("rename_project: *** FAILED READ config.xml: {} ***", e);
@@ -1093,8 +1076,7 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
     } else {
         log::warn!("rename_project: No project entry updated in config. Skipping config write.");
     }
-    log::info!("---- rename_project: End Successfully ----");
-    Ok(())
+    Ok(new_xml_path_str)
 }
 #[command] pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_list: Start Command. Path='{}' ----", project_xml_path); let result = remove_project_from_config_internal(&project_xml_path); log::info!("---- remove_project_from_list: End Command ----"); result }
 fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> {

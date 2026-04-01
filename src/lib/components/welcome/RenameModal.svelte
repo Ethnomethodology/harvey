@@ -73,12 +73,13 @@
   // --- FOCUS & SELECT LOGIC using afterUpdate + Flag ---
   afterUpdate(() => {
       // Only run if the modal is visible AND we explicitly need to set focus
-      if (showModal && needsFocus) {
+      if (showModal && needsFocus && modalElement) {
           tick().then(() => {
-            if (inputElement) {
+            const el = modalElement.querySelector('input');
+            if (el) {
                 console.log("RenameModal: afterUpdate - Focusing and selecting input.");
-                inputElement.focus();
-                inputElement.select();
+                el.focus();
+                el.select();
                 needsFocus = false; // Reset the flag so it doesn't run again until next open
             }
           })
@@ -90,13 +91,12 @@
 <Modal bind:open={showModal} size="md" autoclose={false} outsideclose={true} class="w-full z-50" on:close={cancel}>
     <h2 id="rename-modal-title" class="text-lg font-semibold text-gray-800" slot="header">Rename Project</h2>
 
-    <div class="space-y-4" on:keydown={handleKeydown}>
+    <div bind:this={modalElement} class="space-y-4" on:keydown={handleKeydown}>
         <div>
             <Label for="projectNameInput" class="mb-1 text-sm font-medium text-gray-700">New project name:</Label>
             <Input
                 id="projectNameInput"
                 type="text"
-                bind:this={inputElement}
                 bind:value={newName}
                 placeholder="Enter new project name"
                 autocomplete="off"

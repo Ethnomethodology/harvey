@@ -32,6 +32,7 @@
   data-tauri-drag-region
 >
   <div class="flex items-center space-x-1.5 min-w-0">
+    <div class="w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <button
                 type="button"
@@ -46,7 +47,8 @@
             </button>
         </div>
 
-      <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
+      <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate mr-2" title={displayTitle}>{displayTitle}</span>
+    </div>
   </div>
 
     <div class="flex-shrink-0 flex items-center space-x-2">

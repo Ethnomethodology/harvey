@@ -404,5 +404,33 @@ pub fn add_or_update_project_in_config(project_info: ProjectInfo) -> Result<(), 
     }
     write_config(&config)
 }
+
+pub fn rename_project_in_db(old_path: &str, new_path: &str, new_name: &str) -> Result<(), CommandError> {
+    use rusqlite::{Connection, params};
+    use crate::projectview::db_handler::get_db_path;
+
+    println!("Attempting database update for rename: {} -> {}", old_path, new_path);
+
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    let now = Utc::now();
+    let ts_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let mut stmt = conn.prepare("UPDATE projects SET xml_path = ?1, name = ?2, last_opened_ts = ?3, updated_at = ?4 WHERE xml_path = ?5")
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    
+    let rows_affected = stmt.execute(params![new_path, new_name, ts_str, ts_str, old_path])
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    if rows_affected == 0 {
+        println!("Warning: No project found in database with path '{}' to rename.", old_path);
+    } else {
+        println!("Successfully updated database record for renamed project ({} rows affected).", rows_affected);
+    }
+
+    Ok(())
+}
+
 pub fn get_default_download_location() -> Result<String, CommandError> { let user_dirs = UserDirs::new().ok_or_else(|| CommandError::from("Cannot determine user directories."))?; let default_location: PathBuf = user_dirs.home_dir().join(CONFIG_DIR_NAME).join("models"); default_location.to_str().ok_or_else(|| CommandError::from("Failed to convert default download location path to string.")).map(|s| s.to_string()) }
 // --- End Config Functions ---

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog, save as saveDialog, ask } from '@tauri-apps/plugin-dialog';
 import { homeDir, basename, dirname } from '@tauri-apps/api/path';
 import { project as projectStore } from '$lib/stores/projectStore.js';
+import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 
 export async function showWelcomeScreen() {
@@ -206,8 +207,21 @@ export async function handleRenameConfirm(event, { setRecentProjects, setIsLoadi
   try {
     console.log(`Renaming project to "${trimmedNewName}"...`);
     setIsLoading(true);
-    await invoke('rename_project', { projectXmlPath, newName: trimmedNewName });
-    console.log(`Project renamed successfully to "${trimmedNewName}"!`);
+    const newXmlPath = await invoke('rename_project', { projectXmlPath, newName: trimmedNewName });
+    console.log(`Project renamed successfully to "${trimmedNewName}"! New path: ${newXmlPath}`);
+    
+    // Update project store if it matches the current project
+    const currentProject = get(projectStore);
+    if (currentProject?.xmlPath === projectXmlPath) {
+      console.log(`Updating active project store for "${trimmedNewName}"...`);
+      projectStore.update(p => ({ 
+        ...p, 
+        name: trimmedNewName, 
+        xmlPath: newXmlPath,
+        statusMessage: `Project renamed to ${trimmedNewName}`
+      }));
+    }
+
     await loadProjects({ setRecentProjects, setIsLoading });
   } catch (error) { console.error("Failed to rename project:", error); await loadProjects({ setRecentProjects, setIsLoading }); }
 }
