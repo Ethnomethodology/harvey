@@ -71,8 +71,14 @@
       console.warn('Failed to resize welcome window:', err);
     }
 
+    // Load projects first so the UI isn't blocked by other initialization
+    console.log('[WelcomeScreen] onMount: Loading projects...');
+    await loadProjects({ setRecentProjects, setIsLoading });
+    console.log('[WelcomeScreen] onMount: Projects loaded.');
+
     await invoke('set_menu_context', { context: 'welcome' }).catch(err => console.warn('Failed to set menu context:', err));
     
+    console.log('[WelcomeScreen] onMount: Setting up event listeners...');
     unlistenNewProject = await listen('menu:file:new-project', () => {
         onCreateProject();
     });
@@ -84,12 +90,13 @@
     });
     
     try {
+        console.log('[WelcomeScreen] onMount: Getting app version...');
         appVersion = await getVersion();
+        console.log('[WelcomeScreen] onMount: App version obtained:', appVersion);
     } catch (err) {
         console.warn('Failed to get app version:', err);
     }
 
-    await loadProjects({ setRecentProjects, setIsLoading });
     document.addEventListener('click', handleClickOutside);
   });
 
