@@ -10,7 +10,7 @@
     "check": "svelte-kit sync && svelte-check",
     "check:watch": "svelte-kit sync && svelty-check --watch",
     "test:unit": "vitest",
-    "tauri": "tauri",
+    "tauri": "npx tauri",
     "sync:help": "node scripts/sync-help.js",
     "prebuild": "npm run sync:help",
     "predev": "npm run sync:help"
