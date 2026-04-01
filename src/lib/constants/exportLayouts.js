@@ -35,10 +35,11 @@ export const DOCX_LAYOUT_OPTIONS = [
 		description: '| Timestamp Speaker |\n| Text |',
 		columns: 1, // Visually one, but data-wise could be seen as 1x2
 		rustLayoutKey: 'Layout3',
-		previewClasses: 'grid grid-cols-1 gap-1 text-xs p-1 border rounded',
+		previewClasses: 'grid grid-cols-2 gap-1 text-[8px] p-1 border rounded',
 		columnStyles: [
-			{ content: 'Time Spk', class: 'col-span-1 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
-			{ content: 'Text', class: 'col-span-1 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
+			{ content: 'Time', class: 'col-span-1 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
+			{ content: 'Spk', class: 'col-span-1 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
+			{ content: 'Text', class: 'col-span-2 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
 		],
 	},
 	{

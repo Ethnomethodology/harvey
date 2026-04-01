@@ -36,7 +36,6 @@ flowchart TD
     DataEntryModals --> EditEntryModal["EditEntryModal.svelte"]
     DataEntryModals --> DatePromptModal["DatePromptModal.svelte"]
 
-    ConfigModals --> LayoutSettingsModal["LayoutSettingsModal.svelte"]
     ConfigModals --> ManageModelsModal["ManageModelsModal.svelte"]
 
     ConfirmModals --> ConfirmConversionModal["ConfirmConversionModal.svelte"]

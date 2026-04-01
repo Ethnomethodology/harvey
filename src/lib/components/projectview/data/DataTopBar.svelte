@@ -8,7 +8,6 @@
     import { invoke } from '@tauri-apps/api/core';
     import { project, switchTranscriptInDataTab, clearStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen, isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
-    import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
     import ExportModal from '../modals/ExportModal.svelte';
     import { transcriptStore, toggleTranslateModal } from "$lib/stores/transcriptStore.js";
     import { configStatus } from '$lib/stores/configStatusStore.js';
@@ -17,6 +16,7 @@
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+    import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
@@ -197,8 +197,8 @@
     let activeMediaNoteEditorRef = null; // New ref
     let isAnythingDirty = false;
     let showDirtyIndicator = false;
-    let isLayoutSettingsModalOpen = false;
     let isExportModalOpen = false;
+    let isLayoutDropdownOpen = false;
     let currentActivePath;
 
     let displayTitle = '';
@@ -272,16 +272,6 @@
         }
     }
   
-    function openLayoutSettingsModal() {
-		isLayoutSettingsModalOpen = true;
-	}
-
-	function handleLayoutSelected(event) {
-		const newLayoutKey = event.detail;
-		activeLayout.setLayout(newLayoutKey);
-		// Modal closes itself on selection
-	}
-
     const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
 
     async function handleManualSave() {
@@ -746,14 +736,54 @@
                 </button>
             </div>
         {/if}
-        {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile || isLexicalDocument}
+        {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
             <button
-                on:click="{() => openLayoutSettingsModal()}"
-                class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                id="layout-settings-btn-data"
+                class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
                 title="Change Transcript View Layout"
             >
                 <LayoutDashboard class="w-4 h-4" />
             </button>
+            <Dropdown
+                bind:open={isLayoutDropdownOpen}
+                triggeredBy="#layout-settings-btn-data"
+                class="w-72 z-[1001] p-3 shadow-xl border border-gray-200 dark:border-gray-700"
+            >
+                <div class="mb-3 px-1">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                        Transcript Layout
+                    </h3>
+                    <p class="text-xxs text-gray-500 dark:text-gray-400">
+                        Select how the transcript appears on screen.
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 gap-2">
+                    {#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+                        <button
+                            type="button"
+                            class="text-left p-3 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {$activeLayout === layout.rustLayoutKey ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
+                            on:click={() => activeLayout.setLayout(layout.rustLayoutKey)}
+                            title="Select {layout.name} layout"
+                        >
+                            <div class="font-bold mb-1.5 text-xs {$activeLayout === layout.rustLayoutKey ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}">
+                                {layout.name}
+                            </div>
+                            <div class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800">
+                                {#each layout.columnStyles as style}
+                                    <div class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center">
+                                        {style.content}
+                                    </div>
+                                {/each}
+                            </div>
+                            {#if $activeLayout === layout.rustLayoutKey}
+                                <div class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                            {/if}
+                        </button>
+                    {/each}
+                </div>
+            </Dropdown>
         {/if}
 
         {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
@@ -797,14 +827,6 @@
 </style>
 
 
-			<LayoutSettingsModal
-				bind:showModal="{isLayoutSettingsModalOpen}"
-				currentLayoutKey="{$activeLayout}"
-				on:selectLayout="{handleLayoutSelected}"
-				on:close={() => isLayoutSettingsModalOpen = false}
-				hideWaveformOptions={true}
-                hideDualModeOptions={true}
-			/>
 <ExportModal
     bind:showModal={isExportModalOpen}
     transcriptPath={pathForExportModal}
