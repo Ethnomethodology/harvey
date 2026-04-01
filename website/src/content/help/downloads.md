@@ -33,7 +33,7 @@ Run the following command in your terminal to check for dependencies and build H
 curl -sSL https://raw.githubusercontent.com/Ethnomethodology/harvey/main/scripts/bootstrap.sh | bash
 ```
 
-> [!NOTE]
+> **Note:**
 > This script will verify your system has Git, Node.js, and Rust installed. On Linux, it also checks for required development libraries. If anything is missing, it will provide installation instructions.
 
 ### Manual Build
