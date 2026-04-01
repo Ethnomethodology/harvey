@@ -68,10 +68,10 @@
             >
                 {#if $isLexicalEditMode}
                     <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+                    <span class="hidden min-[1920px]:inline text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
                 {:else}
                     <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+                    <span class="hidden min-[1920px]:inline text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
                 {/if}
             </button>
         </div>
