@@ -6,6 +6,14 @@
     let activeTab = 'windows';
     let isMac = false;
 
+    // Release and Download logic
+    let version = "0.1.0";
+    let downloadLinks = {
+        windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64-setup.zip",
+        macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_aarch64.dmg",
+        macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64.dmg"
+    };
+
     // Carousel logic
     let currentSlide = 0;
     const slides = [
@@ -20,7 +28,7 @@
     ];
 
     let interval;
-    onMount(() => {
+    onMount(async () => {
         if (typeof navigator !== 'undefined') {
             const platform = navigator.platform.toLowerCase();
             if (platform.includes('mac')) {
@@ -31,6 +39,29 @@
             } else {
                 activeTab = 'windows';
             }
+        }
+
+        // Fetch latest release info from GitHub
+        try {
+            const response = await fetch('https://api.github.com/repos/Ethnomethodology/harvey/releases/latest');
+            if (response.ok) {
+                const data = await response.json();
+                version = data.tag_name.replace('v', '');
+                
+                const assets = data.assets || [];
+                // Look for Windows zip/exe
+                const winAsset = assets.find(a => a.name.endsWith('.zip') || a.name.endsWith('.exe'));
+                // Look for macOS ARM64 (Apple Silicon)
+                const macArmAsset = assets.find(a => a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg'));
+                // Look for macOS x64 (Intel)
+                const macIntelAsset = assets.find(a => a.name.includes('x64.dmg'));
+
+                if (winAsset) downloadLinks.windows = winAsset.browser_download_url;
+                if (macArmAsset) downloadLinks.macosArm = macArmAsset.browser_download_url;
+                if (macIntelAsset) downloadLinks.macosIntel = macIntelAsset.browser_download_url;
+            }
+        } catch (error) {
+            console.error('Failed to fetch latest release from GitHub:', error);
         }
 
         interval = setInterval(() => {
@@ -223,11 +254,11 @@
                     <h3 class="text-2xl font-bold text-slate-900 mb-2">Harvey for Windows</h3>
                     <p class="text-slate-600 mb-4 max-w-md">Compatible with Windows 10 and 11.</p>
                     <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
-                    <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64-setup.zip" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
+                    <a href="{downloadLinks.windows}" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
                         <Download class="w-6 h-6" />
                         Download .exe Installer
                     </a>
-                    <p class="text-xs text-slate-400 mt-4">Version 0.1.0 • 64-bit</p>
+                    <p class="text-xs text-slate-400 mt-4">Version {version} • 64-bit</p>
                 </div>
             {/if}
 
@@ -240,16 +271,16 @@
                     <p class="text-slate-600 mb-4 max-w-md"> Optimized for Apple Silicon (M1, M2, etc.) and Intel Macs.</p>
                     <p class="text-sm text-slate-500 mb-8">For detailed installation instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
                     <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_aarch64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
+                        <a href="{downloadLinks.macosArm}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
                             Apple Silicon
                         </a>
-                        <a href="https://github.com/Ethnomethodology/harvey/releases/download/main/Harvey_0.1.0_x64.dmg" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
+                        <a href="{downloadLinks.macosIntel}" class="inline-flex items-center justify-center px-6 py-3 text-base font-bold text-white transition-all bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-200 gap-2">
                             <Download class="w-5 h-5" />
                             Intel Mac
                         </a>
                     </div>
-                    <p class="text-xs text-slate-400 mt-4">Version 0.1.0 • Universal Binary available</p>
+                    <p class="text-xs text-slate-400 mt-4">Version {version} • Universal Binary available</p>
                 </div>
             {/if}
 
