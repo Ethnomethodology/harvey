@@ -28,6 +28,19 @@ if (!fs.existsSync(DEST_DIR)) {
     fs.mkdirSync(DEST_DIR, { recursive: true });
 }
 
+// --- Version Extraction ---
+let currentVersion = '0.0.0';
+const TAURI_CONF_PATH = path.join(ROOT_DIR, 'src-tauri', 'tauri.conf.json');
+try {
+    if (fs.existsSync(TAURI_CONF_PATH)) {
+        const tauriConf = JSON.parse(fs.readFileSync(TAURI_CONF_PATH, 'utf8'));
+        currentVersion = tauriConf.version;
+        console.log(`Current version for sync: ${currentVersion}`);
+    }
+} catch (e) {
+    console.warn("Could not read tauri.conf.json for version syncing.");
+}
+
 // Read and copy files
 try {
     const files = fs.readdirSync(SOURCE_DIR);
@@ -37,48 +50,56 @@ try {
         if (path.extname(file) === '.md') {
             const srcPath = path.join(SOURCE_DIR, file);
             const destPath = path.join(DEST_DIR, file);
-            fs.copyFileSync(srcPath, destPath);
-            console.log(`Copied: ${file}`);
+            
+            let content = fs.readFileSync(srcPath, 'utf8');
+            
+            // Hardcode GitHub release links to the current version
+            // This replaces /releases/latest or /releases/tag/vX.Y.Z with the current version from tauri.conf.json
+            content = content.replace(
+                /https:\/\/github\.com\/Ethnomethodology\/harvey\/releases\/(latest|tag\/v[0-9.]+)/g,
+                `https://github.com/Ethnomethodology/harvey/releases/tag/v${currentVersion}`
+            );
+
+            fs.writeFileSync(destPath, content);
+            fs.writeFileSync(srcPath, content); // Also update the website's source content
+            console.log(`Synced & Hardcoded (Source & Dest): ${file}`);
             copiedCount++;
         }
     });
 
-    console.log(`Sync complete. Copied ${copiedCount} files.`);
+    console.log(`Sync complete. Copied and processed ${copiedCount} files.`);
 } catch (error) {
     console.error(`Error syncing files:`, error);
     process.exit(1);
 }
 
-// --- Version Syncing Logic ---
-console.log(`Syncing Application Version...`);
-const TAURI_CONF_PATH = path.join(ROOT_DIR, 'src-tauri', 'tauri.conf.json');
+// --- Website Version Syncing Logic ---
+console.log(`Syncing Application Version in Website...`);
 const SVELTE_PAGE_PATH = path.join(ROOT_DIR, 'website', 'src', 'routes', '+page.svelte');
 
 try {
     if (fs.existsSync(TAURI_CONF_PATH) && fs.existsSync(SVELTE_PAGE_PATH)) {
-        const tauriConf = JSON.parse(fs.readFileSync(TAURI_CONF_PATH, 'utf8'));
-        const version = tauriConf.version;
-        console.log(`Current version in tauri.conf.json: ${version}`);
+        const version = currentVersion;
 
         let svelteContent = fs.readFileSync(SVELTE_PAGE_PATH, 'utf8');
 
         // Update version
         svelteContent = svelteContent.replace(
-            /let version = ".*"; \/\* @sync-version \*\//,
+            /let version = ".*"; \/\* @sync-version \*\//g,
             `let version = "${version}"; /* @sync-version */`
         );
 
-        // Update links
+        // Update links - making comma optional and using global flag
         svelteContent = svelteContent.replace(
-            /windows: ".*", \/\* @sync-win \*\//,
+            /windows: ".*"(,|) \/\* @sync-win \*\//g,
             `windows: "https://github.com/Ethnomethodology/harvey/releases/download/v${version}/Harvey_${version}_x64-setup.zip", /* @sync-win */`
         );
         svelteContent = svelteContent.replace(
-            /macosArm: ".*", \/\* @sync-macos-arm \*\//,
+            /macosArm: ".*"(,|) \/\* @sync-macos-arm \*\//g,
             `macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v${version}/Harvey_${version}_aarch64.dmg", /* @sync-macos-arm */`
         );
         svelteContent = svelteContent.replace(
-            /macosIntel: ".*", \/\* @sync-macos-x64 \*\//,
+            /macosIntel: ".*"(,|) \/\* @sync-macos-x64 \*\//g,
             `macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v${version}/Harvey_${version}_x64.dmg", /* @sync-macos-x64 */`
         );
 

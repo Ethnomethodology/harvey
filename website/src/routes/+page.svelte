@@ -12,7 +12,7 @@
     let downloadLinks = {
         windows: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.1/Harvey_0.1.1_x64-setup.zip", /* @sync-win */
         macosArm: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.1/Harvey_0.1.1_aarch64.dmg", /* @sync-macos-arm */
-        macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.0/Harvey_0.1.0_x64.dmg" /* @sync-macos-x64 */
+        macosIntel: "https://github.com/Ethnomethodology/harvey/releases/download/v0.1.1/Harvey_0.1.1_x64.dmg", /* @sync-macos-x64 */
     };
     /* @sync-end */
 
@@ -43,24 +43,25 @@
             }
         }
 
-        // Fetch latest release info from GitHub
+        // Fetch latest release info from GitHub - skip on localhost to respect hardcoded version
         try {
-            const response = await fetch('https://api.github.com/repos/Ethnomethodology/harvey/releases/latest');
-            if (response.ok) {
-                const data = await response.json();
-                version = data.tag_name.replace('v', '');
-                
-                const assets = data.assets || [];
-                // Look for Windows zip/exe
-                const winAsset = assets.find(a => a.name.endsWith('.zip') || a.name.endsWith('.exe'));
-                // Look for macOS ARM64 (Apple Silicon)
-                const macArmAsset = assets.find(a => a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg'));
-                // Look for macOS x64 (Intel)
-                const macIntelAsset = assets.find(a => a.name.includes('x64.dmg'));
+            if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                console.log('[Harvey] Localhost detected, using hardcoded version:', version);
+            } else {
+                const response = await fetch('https://api.github.com/repos/Ethnomethodology/harvey/releases/latest');
+                if (response.ok) {
+                    const data = await response.json();
+                    version = data.tag_name.replace('v', '');
+                    
+                    const assets = data.assets || [];
+                    const winAsset = assets.find(a => a.name.endsWith('.zip') || a.name.endsWith('.exe'));
+                    const macArmAsset = assets.find(a => a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg'));
+                    const macIntelAsset = assets.find(a => a.name.includes('x64.dmg'));
 
-                if (winAsset) downloadLinks.windows = winAsset.browser_download_url;
-                if (macArmAsset) downloadLinks.macosArm = macArmAsset.browser_download_url;
-                if (macIntelAsset) downloadLinks.macosIntel = macIntelAsset.browser_download_url;
+                    if (winAsset) downloadLinks.windows = winAsset.browser_download_url;
+                    if (macArmAsset) downloadLinks.macosArm = macArmAsset.browser_download_url;
+                    if (macIntelAsset) downloadLinks.macosIntel = macIntelAsset.browser_download_url;
+                }
             }
         } catch (error) {
             console.error('Failed to fetch latest release from GitHub:', error);
