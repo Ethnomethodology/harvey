@@ -89,12 +89,7 @@
         title={node.name}
     >
         <div class="flex items-center space-x-1.5 flex-grow overflow-hidden truncate">
-            <!-- Indentation based on depth -->
-            <!-- Base depth is 3 (stem folder). Subtract 3 to get nesting level (0 for stem, 1 for subdirs, 2 for files) -->
-            <span
-                class="flex-shrink-0"
-                style:width="{(node.depth > 4 ? node.depth - 4 : 0) * 0.8}rem;"
-            ></span>
+            <!-- Indentation based on depth is now handled by the parent <ul>'s margin-left -->
 
             <!-- Folder Toggle Icon OR File Icon -->
             {#if node.is_directory}
@@ -154,7 +149,7 @@
 
     <!-- Recursive Rendering for Children -->
     {#if node.is_directory && expanded && node.children && node.children.length}
-        <ul class="mt-0.5 space-y-0.5 border-l border-transparent" style:margin-left="{(node.depth > 4 ? node.depth - 4 : 0) * 0.8 + 0.75}rem;">
+        <ul class="mt-0.5 space-y-0.5 border-l border-transparent" style:margin-left="1.375rem">
             {#each node.children as child (child.path || child.name)}
                 <svelte:self
                     node={child}
