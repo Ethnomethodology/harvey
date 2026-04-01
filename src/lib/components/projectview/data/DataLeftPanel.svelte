@@ -1248,7 +1248,7 @@
                         </div>
                         <button
                             type="button"
-                            class="ml-2 flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                            class="ml-2 flex-shrink-0 text-black dark:text-white hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                             title="Create New Group"
                             on:click|stopPropagation={() => handleNewGroupClick()}
                         >
@@ -1387,7 +1387,7 @@
         <Dropdown triggeredBy="#collapsed-category-groups" trigger="hover" placement="right-start" class="w-64 z-[1001] shadow-xl border border-gray-200 dark:border-gray-700">
             <div class="px-4 py-2 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 flex justify-between items-center">
                 <span>Groups</span>
-                <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Create New Group" on:click={(e) => { e.stopPropagation(); handleNewGroupClick(); }}><Plus class="w-4 h-4 text-blue-600 dark:text-blue-400" /></button>
+                <button class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Create New Group" on:click={(e) => { e.stopPropagation(); handleNewGroupClick(); }}><Plus class="w-4 h-4 text-black dark:text-white" /></button>
             </div>
             <div class="max-h-96 overflow-y-auto">
                 {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
