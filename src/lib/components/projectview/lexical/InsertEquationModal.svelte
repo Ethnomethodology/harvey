@@ -52,21 +52,30 @@
     }, 50);
   }
 
-  $: if (previewContainer && (equation !== undefined || inline !== undefined)) {
-    try {
-      previewContainer.innerHTML = '';
-      if (equation.trim()) {
-        katex.render(equation, previewContainer, {
-          displayMode: !inline,
-          throwOnError: false,
-          errorColor: '#cc0000'
-        });
+  function katexAction(node, { expression, isInline }) {
+    function update(expr, inl) {
+      if (expr.trim()) {
+        try {
+          katex.render(expr, node, {
+            displayMode: !inl,
+            throwOnError: false,
+            errorColor: '#cc0000'
+          });
+        } catch (e) {
+          node.innerHTML = `<span class="text-red-500 text-sm">${e.message}</span>`;
+        }
       } else {
-        previewContainer.innerHTML = '<span class="text-gray-400 italic">Preview...</span>';
+        node.innerHTML = '<span class="text-gray-400 italic">Preview...</span>';
       }
-    } catch (e) {
-      previewContainer.innerHTML = `<span class="text-red-500 text-sm">${e.message}</span>`;
     }
+
+    update(expression, isInline);
+
+    return {
+      update({ expression: newExpr, isInline: newInl }) {
+        update(newExpr, newInl);
+      }
+    };
   }
 </script>
 
@@ -140,10 +149,9 @@
         >
       </div>
       <div
-        bind:this={previewContainer}
+        use:katexAction={{ expression: equation, isInline: inline }}
         class="text-sm font-semibold text-blue-800 dark:text-blue-300 flex items-center justify-center min-h-[3rem] overflow-x-auto"
       >
-        <span class="text-gray-400 italic">Preview...</span>
       </div>
     </div>
   </div>

@@ -133,9 +133,7 @@
     if (itemPath) loadAttachments(itemPath);
   });
 
-  $: {
-    // console.log(`[DocumentView] Path is now ${itemPath}, isPdf is ${isPdf}, isJsonDoc is ${isJsonDoc}`);
-  }
+
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->

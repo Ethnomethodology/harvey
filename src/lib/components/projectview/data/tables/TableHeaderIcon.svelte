@@ -23,9 +23,9 @@
   export let colSchema = {};
   export let header = '';
 
-  function getIcon() {
-    const type = colSchema.type || 'Text';
-    const subType = colSchema.subType || 'Small Text';
+  function getIcon(schema) {
+    const type = schema.type || 'Text';
+    const subType = schema.subType || 'Small Text';
 
     if (type === 'Misc') {
       if (subType === 'Checkbox') return CheckSquare;
@@ -62,7 +62,7 @@
     return Type;
   }
 
-  $: Icon = getIcon();
+  $: Icon = getIcon(colSchema);
 </script>
 
 <div class="flex items-center justify-center">

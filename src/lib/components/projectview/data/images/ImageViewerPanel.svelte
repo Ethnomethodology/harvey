@@ -1009,7 +1009,10 @@
       }
       osdViewer = null;
     }
-    if (osdViewerElement) osdViewerElement.innerHTML = '';
+    if (osdViewerElement) {
+      // Direct DOM manipulation like innerHTML = '' is discouraged.
+      // osdViewer.destroy() should handle cleanup.
+    }
 
     try {
       const assetUrl = convertFileSrc(pathForImage);
@@ -2091,7 +2094,7 @@
               width="1000"
               height={1000 * imgAspectRatio}
               preserveAspectRatio="none"
-              style="image-rendering: pixelated; image-rendering: crisp-edges;"
+              style="image-rendering: pixelated;"
             />
           {/if}
         </pattern>

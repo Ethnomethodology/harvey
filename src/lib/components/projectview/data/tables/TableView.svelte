@@ -73,9 +73,7 @@
     console.debug('[TableView] Component container mounted. Table path:', itemPath);
   });
 
-  $: {
-    // console.debug(`[TableView] Path is now ${itemPath}`);
-  }
+
 </script>
 
 <!-- Main container for the Table View - this will now be the main content panel -->
@@ -101,8 +99,6 @@
 </div>
 
 <style>
-  .min-h-0 {
-    min-height: 0;
-  }
+
   /* Removed specific width classes as this component now fills the space given by DataView */
 </style>

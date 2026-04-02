@@ -1061,7 +1061,8 @@
                 new LogicalSize(PROJECT_MIN_WIDTH, WELCOME_HEIGHT),
             );
             await appWindow.center();
-            await goto("/");
+            handlingCloseRequest = false;
+            return goto("/");
         }
         handlingCloseRequest = false;
     }

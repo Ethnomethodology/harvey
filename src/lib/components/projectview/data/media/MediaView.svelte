@@ -18,9 +18,7 @@
     console.log('[MediaView] Component container mounted. Media path:', itemPath);
   });
 
-  $: {
-    // console.log(`[MediaView] Path is now ${itemPath}`);
-  }
+
 </script>
 
 <!-- Main container for the Media View - this will now be the main content panel -->
@@ -43,8 +41,6 @@
 </div>
 
 <style>
-  .min-h-0 {
-    min-height: 0;
-  }
+
   /* Removed specific width classes as this component now fills the space given by DataView */
 </style>
