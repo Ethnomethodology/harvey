@@ -62,6 +62,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init()) // Added this line
+        .plugin(tauri_plugin_webdriver_automation::init())
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             if id == "about_harvey" {

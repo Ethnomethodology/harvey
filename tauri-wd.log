@@ -1,0 +1,317 @@
+[2m2026-04-02T08:50:11.777063Z[0m [32m INFO[0m [2mtauri_wd[0m[2m:[0m tauri-wd listening on 127.0.0.1:4444
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run pdf_annotations correction for Audios: no such table: asset_metadata
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run pdf_annotations correction for Videos: no such table: asset_metadata
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_styles correction for Audios: no such table: table_styles
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_styles correction for Videos: no such table: table_styles
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_schemas correction for Audios: no such table: table_schemas
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_schemas correction for Videos: no such table: table_schemas
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_layout_preferences correction for Audios: no such table: table_layout_preferences
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run table_layout_preferences correction for Videos: no such table: table_layout_preferences
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run file_groups correction for Audios: no such table: file_groups
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run file_groups correction for Videos: no such table: file_groups
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run media_transcript_data correction for Audios: no such table: media_transcript_data
+[2026-04-02T08:50:48Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run media_transcript_data correction for Videos: no such table: media_transcript_data
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:50:48Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (179927) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (179946) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:49Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:50:49Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (179965) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:50:50Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:50Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:50Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:50:50Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:50:50Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (179984) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (193682) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (193701) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:01Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:55:01Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (193720) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2026-04-02T08:55:02Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_charts table definition.
+[2026-04-02T08:55:02Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_views table definition.
+[2026-04-02T08:55:02Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized pdf_annotations table definition.
+[2026-04-02T08:55:02Z INFO  harvey_1_lib::projectview::db_handler] [DB] Running correction for multiple tables' paths...
+[2026-04-02T08:55:02Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:02Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:02Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Audios: no such table: attachments
+[2026-04-02T08:55:02Z ERROR harvey_1_lib::projectview::db_handler] [DB] Failed to run attachments correction for Videos: no such table: attachments
+[2026-04-02T08:55:02Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized asset_metadata table definition with composite PK.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_asset_metadata_updated_at trigger for new PK.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized custom_field_definitions table and trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_layout_preferences table with composite PK and FK.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_styles table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized table_schemas table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_schemas_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_table_styles_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized projects table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized global_settings table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized downloaded_models table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_projects_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized groups table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_groups_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tag_groups table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tag_groups_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized file_groups table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized media_transcript_data table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_media_transcript_data_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized tags table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized update_tags_updated_at trigger.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlights table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Initialized highlight_tags table.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib::projectview::db_handler] [DB] Database initialized successfully with all tables and triggers.
+[2026-04-02T08:55:03Z INFO  harvey_1_lib] Starting Harvey application...
+
+thread 'main' (193739) panicked at /home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.34.5/src/platform_impl/linux/event_loop.rs:218:53:
+Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jules/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

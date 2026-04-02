@@ -55,25 +55,30 @@ export async function handleCreateProject({ setRecentProjects, setIsLoading }) {
   let desiredProjectPath = null; // Store the initially selected path
 
   try {
-    // Modified defaultPath to open at the user's home directory
-    const defaultPath = await homeDir();
-    desiredProjectPath = await saveDialog({
-      title: 'Create New Project Folder',
-      defaultPath: defaultPath,
-      // It's good practice to ensure the dialog suggests a folder, not a file.
-      // However, the saveDialog in Tauri is typically for saving a file,
-      // but we are using its path to create a folder.
-      // If the underlying native dialog has an option to pick a folder or ensure
-      // the path is treated as a directory, that would be ideal.
-      // For now, basename and dirname will be used on the result.
-      // If `defaultPath` itself needs to be a file for the dialog to work as expected
-      // (e.g., it tries to put "Untitled Harvey Project" *in* the dialog's filename box),
-      // we might need to adjust this. Let's test with just homeDir() first.
-      // If needed, we could append a generic filename like 'project_location'
-      // to `defaultPath` if the dialog requires a file-like path, and then use `dirname`
-      // on `desiredProjectPath` before `basename` for the project name.
-      // For now, keeping it simple:
-    });
+    if (window && window.__E2E_TEST_PROJECT_PATH__) {
+      desiredProjectPath = window.__E2E_TEST_PROJECT_PATH__;
+      console.log(`[E2E] Bypassing saveDialog, using path: ${desiredProjectPath}`);
+    } else {
+      // Modified defaultPath to open at the user's home directory
+      const defaultPath = await homeDir();
+      desiredProjectPath = await saveDialog({
+        title: 'Create New Project Folder',
+        defaultPath: defaultPath,
+        // It's good practice to ensure the dialog suggests a folder, not a file.
+        // However, the saveDialog in Tauri is typically for saving a file,
+        // but we are using its path to create a folder.
+        // If the underlying native dialog has an option to pick a folder or ensure
+        // the path is treated as a directory, that would be ideal.
+        // For now, basename and dirname will be used on the result.
+        // If `defaultPath` itself needs to be a file for the dialog to work as expected
+        // (e.g., it tries to put "Untitled Harvey Project" *in* the dialog's filename box),
+        // we might need to adjust this. Let's test with just homeDir() first.
+        // If needed, we could append a generic filename like 'project_location'
+        // to `defaultPath` if the dialog requires a file-like path, and then use `dirname`
+        // on `desiredProjectPath` before `basename` for the project name.
+        // For now, keeping it simple:
+      });
+    }
 
     if (!desiredProjectPath) {
       console.log('Project creation cancelled.');
