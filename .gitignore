@@ -20,7 +20,7 @@ vite.config.ts.timestamp-*
 /temp/
 /playwright-report/
 /test-results/
-/e2e-tests/screenshots/
+/e2e-tests/dummy-project-folder/
 /screenshots/
 /test-results/
 /notebooks/
