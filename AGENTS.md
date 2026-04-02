@@ -4,6 +4,12 @@ This document outlines the necessary steps to set up the build environment for t
 
 **Important Note:** These commands must be executed inside the specific build environment (e.g., within the Docker container, VM, or CI/CD runner) where the application build will take place.
 
+> [!TIP]
+> You can also use the automated bootstrapper to check your environment and install missing dependencies:
+> ```bash
+> bash scripts/bootstrap.sh
+> ```
+
 ## 1. System Dependencies
 
 First, ensure the package list is up to date within your build environment:

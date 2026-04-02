@@ -190,7 +190,7 @@
         return { models, totalGB, count: models.length };
     });
 
-    let isMac = $derived(platform.startsWith('macos'));
+    let isMac = $derived((platform || '').startsWith('macos'));
     let recommendWhisperCpp = $derived(isMac);
     let recommendFasterWhisper = $derived(!isMac);
     let recommendHelsinki = $derived(!isCudaAvailable);
@@ -434,7 +434,7 @@
             return baseName;
 		}
 
-        if (parts.length === 2 && baseName.startsWith('opus-mt-')) {
+        if (parts.length === 2 && baseName && baseName.startsWith('opus-mt-')) {
             const langParts = baseName.split('-');
             if (langParts.length >= 4) {
                 const fromCode = langParts[langParts.length - 2];

@@ -6,8 +6,20 @@
 ```mermaid
 block-beta
   columns 5
-  LeftPanel["DataLeftPanel\n(File/Group Browser)"]:1 MainContent["Main Content Area\n(DocumentView / TableView / etc.)"]:3 RightContext["InfoPanel / HighlightsPanel / AttachmentsPanel\n(Contextual Metadata)"]:1
+  LeftBar["Left Bar\n(w-12)\nTab strip"]:1 LeftPanel["Left Panel\n(w-64 / w-12)\nDataLeftPanel"]:1 MainContent["Middle Panel\n(flex-grow)\nContent Views"]:1 RightPanel["Right Panel\n(w-[20.588%])\nInfoPanel etc."]:1 RightBar["Right Bar\n(w-8)\nRightBar"]:1
 ```
+
+## DataTopBar 5-Section Layout
+
+The `DataTopBar` mirrors the main content panel column widths exactly (5 sections, no separators):
+
+| Section | Width | Content |
+|---------|-------|---------|
+| **1 – Left Bar** | `w-12` (flex-shrink-0) | Import button (+) |
+| **2 – Left Panel** | `w-64` / `w-12` collapsed (matches DataLeftPanel) | Project name + file name |
+| **3 – Middle** | `flex-grow` | Left: Live Transcribe, Translate buttons · Right: Transcript dropdown, Views dropdown |
+| **4 – Right Panel** | `w-[20.588%]` (flex-shrink-0) | Left: Export button · Right: Split buttons, Layout button, Read/Edit toggle |
+| **5 – Right Bar** | `w-8` (flex-shrink-0) | Theme cycle button |
 
 ## Component Architecture
 ```mermaid

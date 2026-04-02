@@ -19,6 +19,7 @@
 	// --- Svelte/Store Imports ---
 	import { createEventDispatcher, onMount } from "svelte";
 	import { get } from "svelte/store";
+	import panelStateStore from "$lib/stores/panelStateStore.js";
 	import { project } from "$lib/stores/projectStore.js"; // For project-level state like isLoading, files, isTranscribing
 	import {
 		transcriptStore,
@@ -491,45 +492,49 @@
 	}
 </script>
 
-<!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
-	data-tauri-drag-region
+	class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
 >
-	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
-	<div class="flex items-center flex-grow min-w-0 z-10">
-		<div class="max-w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
-			<div class="h-10 flex items-center justify-center flex-shrink-0">
-				<button
-					type="button"
-					class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-					on:click={(e) => dispatch("requestImport", e)}
-					title="Import Audio or Video"
-					aria-label="Import Audio or Video"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="2"
-						stroke="currentColor"
-						class="w-5 h-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M12 4.5v15m7.5-7.5h-15"
-						/>
-					</svg>
-				</button>
-			</div>
-			<span
-				class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate mr-2"
-				title={displayTitle}>{displayTitle}</span
-			>
-		</div>
+	<!-- Drag Handle Background -->
+	<div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-		<div class="flex items-center space-x-1.5 ml-2">
+	<!-- Section 1: Left Bar (w-12) — Import button -->
+	<div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
+		<button
+			type="button"
+			class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+			on:click={(e) => dispatch("requestImport", e)}
+			title="Import Audio or Video"
+			aria-label="Import Audio or Video"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke-width="2"
+				stroke="currentColor"
+				class="w-5 h-5"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M12 4.5v15m7.5-7.5h-15"
+				/>
+			</svg>
+		</button>
+	</div>
+
+	<!-- Sections 2 & 3 Combined: Middle Panel (flex-grow) -->
+	<div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
+		<!-- Left side: Project name + Media selection + Action buttons -->
+		<div class="flex items-center space-x-1.5">
+			<!-- Project name with bounded width properly accounting for previous px-2 padding -->
+			<div class="max-w-[15rem] flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out">
+				<span
+					class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
+					title={displayTitle}>{displayTitle}</span>
+			</div>
+
 			<!-- Media Selection Dropdown -->
 			<div class="relative">
 				<Button
@@ -575,7 +580,7 @@
 			</div>
 
 			<!-- Speakers Button -->
-			<div class="relative inline-flex items-center ml-2">
+			<div class="relative inline-flex items-center">
 				<Button
 					size="xs"
 					color="alternative"
@@ -591,7 +596,6 @@
 						<span
 							class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"
 						>
-							<!-- Adjusted badge size/pos -->
 							{$transcriptStore.speakers.count}
 						</span>
 					{/if}
@@ -602,7 +606,7 @@
 			<Button
 				size="xs"
 				color="alternative"
-				class="ml-2 space-x-0.5 px-2 !py-1"
+				class="space-x-0.5 px-2 !py-1"
 				on:click={handleTranscribeClick}
 				disabled={isTranscribeDisabled}
 				title={isTranscribeDisabled
@@ -635,7 +639,7 @@
 			<Button
 				size="xs"
 				color="alternative"
-				class="ml-2 space-x-0.5 px-2 !py-1"
+				class="space-x-0.5 px-2 !py-1"
 				on:click={openTranslateModal}
 				disabled={mediaFilesForDropdown.length === 0}
 				title={mediaFilesForDropdown.length === 0 ? "No media available" : ($transcriptStore.isTranslating
@@ -664,10 +668,9 @@
 				{/if}
 			</Button>
 		</div>
-	</div>
 
-	<!-- Right Controls: Layout Settings, Theme Toggle -->
-	<div class="flex items-center space-x-1.5 flex-shrink-0">
+		<!-- Right side: Controls -->
+		<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
 		<Button
 			size="xs"
@@ -678,12 +681,9 @@
 			title="Export Transcript"
 		>
 			<Share class="w-3.5 h-3.5" />
-			<span>Export</span>
+			<span class="hidden xl:inline">Export</span>
 		</Button>
 
-		<div
-			class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"
-		></div>
 
 		<!-- Dual Mode Toggle Button -->
 		<button
@@ -778,9 +778,6 @@
 			</div>
 		</button>
 
-		<div
-			class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"
-		></div>
 
 		<!-- Read/Edit Mode Toggle -->
 		<button
@@ -796,7 +793,7 @@
 			{#if $isLexicalEditMode}
 				<Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
 				<span
-					class="text-xs font-medium text-blue-600 dark:text-blue-400"
+					class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
 					>Edit Mode</span
 				>
 			{:else}
@@ -804,20 +801,21 @@
 					class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400"
 				/>
 				<span
-					class="text-xs font-medium text-gray-500 dark:text-gray-400"
+					class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400"
 					>Read Mode</span
 				>
 			{/if}
 		</button>
 
-		<div
-			class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"
-		></div>
 
-		<!-- Theme Toggle Button -->
+		</div>
+	</div>
+
+	<!-- Section 4: Right Bar (w-8) — Theme Toggle -->
+	<div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
 		<button
 			on:click={cycleThemePreference}
-			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+			class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
 			title={themeTitle}
 			aria-label={themeTitle}
 		>

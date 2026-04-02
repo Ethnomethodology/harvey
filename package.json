@@ -49,8 +49,7 @@
     "pdfjs-dist": "^5.2.133",
     "svelte-dnd-action": "^0.9.69",
     "tabulator-tables": "^6.3.1",
-    "uuid": "^11.1.0",
-    "webdriverio": "^9.19.2"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@lexical/history": "^0.30.0",
@@ -58,19 +57,13 @@
     "@lexical/list": "^0.30.0",
     "@lexical/rich-text": "^0.30.0",
     "@lexical/table": "^0.30.0",
-    "@playwright/test": "^1.55.0",
     "@sveltejs/adapter-auto": "^3.2.0",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.23.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6",
     "@tailwindcss/typography": "^0.5.19",
     "@tauri-apps/cli": "2.9.1",
-    "@wdio/cli": "^9.19.0",
-    "@wdio/local-runner": "^9.19.0",
-    "@wdio/mocha-framework": "^9.19.0",
-    "@wdio/spec-reporter": "^9.19.0",
     "autoprefixer": "^10.4.21",
-    "electron": "^38.0.0",
     "flowbite": "^2.5.2",
     "flowbite-svelte": "^0.46.23",
     "mdsvex": "^0.12.6",
@@ -87,6 +80,9 @@
   },
   "overrides": {
     "fast-xml-parser": "5.5.7",
-    "basic-ftp": "5.2.0"
+    "basic-ftp": "5.2.0",
+    "cookie": "0.7.1",
+    "esbuild": "0.25.0",
+    "serialize-javascript": "7.0.5"
   }
 }

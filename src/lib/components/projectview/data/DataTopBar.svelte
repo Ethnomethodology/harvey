@@ -555,68 +555,71 @@
   </script>
   
   <div
-    class="flex items-center px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30 justify-between"
+    class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <!-- Drag Handle Background -->
     <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-    <div class="flex items-center flex-grow min-w-0 z-10"> <!-- Left-aligned items container -->
-        <div class="max-w-[20%] flex-shrink-0 flex items-center space-x-1.5 overflow-hidden">
-            <div class="h-10 flex items-center justify-center flex-shrink-0">
-                <button
-                    type="button"
-                    class="p-1.5 ml-1 mr-1 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    on:click={(e) => dispatch('requestImport', e)}
-                    title="Import Audio or Video"
-                    aria-label="Import Audio or Video"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                </button>
-            </div>
+    <!-- Section 1: Left Bar equivalent (w-12) — Import button -->
+    <div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
+        <button
+            type="button"
+            class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            on:click={(e) => dispatch('requestImport', e)}
+            title="Import Audio or Video"
+            aria-label="Import Audio or Video"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+        </button>
+    </div>
 
-            <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate mr-2" title={displayTitle}>{displayTitle}</span>
-        </div>
+    <!-- Section 2: Left Panel equivalent (w-64) — Project name + file name -->
+    <div class="w-64 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out">
+        <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
+    </div>
 
-        <div class="flex items-center space-x-1.5 ml-2">
+    <!-- Combined Section 3 & 4: Middle + Right Panel -->
+    <div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
+        <!-- Left side: Actions -->
+        <div class="flex items-center space-x-1.5">
             {#if $activeMediaFile}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
-                <MessageSquareText class="w-3.5 h-3.5" />
-                <span>Transcribe</span>
-            </Button>
-
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
-                on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })} 
-                title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
-            >
-                {#if $transcriptStore.isTranslating}
-                    <Languages class="w-3.5 h-3.5 animate-spin" />
-                    <span>Translating...</span>
-                {:else}
-                    <Languages class="w-3.5 h-3.5" />
-                    <span>Translate</span>
-                {/if}
-            </Button>
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })} title="Transcribe">
+                    <MessageSquareText class="w-3.5 h-3.5" />
+                    <span>Transcribe</span>
+                </Button>
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1"
+                    on:click={() => dispatch('requestTranslationTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path, transcriptPath: $project.activeTranscriptPathInDataTab })}
+                    title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Transcript"}
+                >
+                    {#if $transcriptStore.isTranslating}
+                        <Languages class="w-3.5 h-3.5 animate-spin" />
+                        <span>Translating...</span>
+                    {:else}
+                        <Languages class="w-3.5 h-3.5" />
+                        <span>Translate</span>
+                    {/if}
+                </Button>
             {/if}
             {#if $project.activeDocumentEditorRef}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
-                <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
-                <span class="whitespace-nowrap w-24 text-left">
-                    {#if isLiveTranscriptionActive && !isLiveTranscriptionReady}
-                        Initializing...
-                    {:else if isLiveTranscriptionActive && isLiveTranscriptionReady}
-                        Listening{dots}
-                    {:else}
-                        Live Transcribe
-                    {/if}
-                </span>
-            </Button>
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={toggleLiveTranscription} title="Live Transcribe">
+                    <Mic class="w-3.5 h-3.5 {isLiveTranscriptionActive ? 'text-red-500 animate-pulse' : ''}" />
+                    <span class="whitespace-nowrap w-24 text-left">
+                        {#if isLiveTranscriptionActive && !isLiveTranscriptionReady}
+                            Initializing...
+                        {:else if isLiveTranscriptionActive && isLiveTranscriptionReady}
+                            Listening{dots}
+                        {:else}
+                            Live Transcribe
+                        {/if}
+                    </span>
+                </Button>
             {/if}
             {#if isLexicalDocument}
-                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" 
-                    on:click={() => toggleTranslateModal(true)} 
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1"
+                    on:click={() => toggleTranslateModal(true)}
                     title={$transcriptStore.isTranslating ? "View Translation Status" : "Translate Document"}
                 >
                     {#if $transcriptStore.isTranslating}
@@ -629,187 +632,177 @@
                 </Button>
             {/if}
         </div>
+
+        <!-- Right side: Controls -->
+        <div class="flex items-center space-x-1.5">
+            {#if $activeMediaFile}
+                <div class="relative">
+                    <Button id="transcript-selection-btn" size="xs" color="alternative" class="w-60 justify-between px-3 !py-1.5 focus:ring-0" title="Select Transcript">
+                        <span class="truncate">{ $displayedTranscripts.find(t => t.path === $project.activeTranscriptPathInDataTab)?.displayLabel || 'Select Transcript' }</span>
+                        <ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
+                    </Button>
+                    <Dropdown triggeredBy="#transcript-selection-btn" class="w-60 z-[1001] max-h-96 overflow-y-auto">
+                        {#each $displayedTranscripts as t}
+                            <DropdownItem
+                                class="text-xs flex items-center { $project.activeTranscriptPathInDataTab === t.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : '' }"
+                                on:click={() => switchTranscriptInDataTab(t.path)}
+                            >
+                                <span class="truncate">{t.displayLabel}</span>
+                            </DropdownItem>
+                        {/each}
+                    </Dropdown>
+                </div>
+            {/if}
+            {#if isTable}
+                <TopBarTableViewsDropdown
+                    tablePath={$project.selectedDocumentPath}
+                    {activeSubItemPath}
+                    {activeSubItemType}
+                    on:requestOpenView
+                    on:requestOpenLexicalDocument
+                    on:requestClearSubItem
+                />
+            {/if}
+            {#if isGroup}
+                <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+                    <button
+                        on:click="{() => panelStateStore.setGroupDetailViewMode('list')}"
+                        class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+                        title="List View"
+                    >
+                        <List class="w-4 h-4" />
+                    </button>
+                    <button
+                        on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
+                        class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+                        title="Grid View"
+                    >
+                        <LayoutGrid class="w-4 h-4" />
+                    </button>
+                </div>
+            {/if}
+            <!-- Export buttons: right-aligned, after dropdowns -->
+            {#if $activeMediaFile}
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
+                    <Share class="w-3.5 h-3.5" />
+                    <span class="hidden xl:inline">Export</span>
+                </Button>
+            {/if}
+            {#if isLexicalDocument}
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => {
+                        if (isStandaloneTranscript) {
+                            pathForExportModal = $project.currentStandaloneTranscriptPath;
+                            isExportModalOpen = true;
+                        } else {
+                            showDocumentExportModal = true;
+                        }
+                    }} title={isStandaloneTranscript ? "Export Transcript" : "Export Document"}>
+                    <Share class="w-3.5 h-3.5" />
+                    <span class="hidden xl:inline">Export</span>
+                </Button>
+            {/if}
+            {#if isTable}
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
+                    <Share class="w-3.5 h-3.5" />
+                    <span class="hidden xl:inline">Export</span>
+                </Button>
+            {/if}
+            {#if isImage}
+                <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
+                    <Share class="w-3.5 h-3.5" />
+                    <span class="hidden xl:inline">Export</span>
+                </Button>
+            {/if}
+            {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
+                <button
+                    on:click={() => handleSplitToggle('horizontal')}
+                    class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                    title="Split Transcript (Horizontal)"
+                >
+                    <SquareSplitHorizontal class="w-4 h-4" />
+                </button>
+                <button
+                    on:click={() => handleSplitToggle('vertical')}
+                    class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                    title="Split Transcript (Vertical)"
+                >
+                    <SquareSplitVertical class="w-4 h-4" />
+                </button>
+            {/if}
+            {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
+                <button
+                    id="layout-settings-btn-data"
+                    class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
+                        ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
+                        : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
+                    title="Change Transcript View Layout"
+                >
+                    <LayoutDashboard class="w-4 h-4" />
+                </button>
+                <Dropdown
+                    bind:open={isLayoutDropdownOpen}
+                    triggeredBy="#layout-settings-btn-data"
+                    class="w-72 z-[1001] p-3 shadow-xl border border-gray-200 dark:border-gray-700"
+                >
+                    <div class="mb-3 px-1">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                            Transcript Layout
+                        </h3>
+                        <p class="text-xxs text-gray-500 dark:text-gray-400">
+                            Select how the transcript appears on screen.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2">
+                        {#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+                            <button
+                                type="button"
+                                class="text-left p-3 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {$activeLayout === layout.rustLayoutKey ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
+                                on:click={() => activeLayout.setLayout(layout.rustLayoutKey)}
+                                title="Select {layout.name} layout"
+                            >
+                                <div class="font-bold mb-1.5 text-xs {$activeLayout === layout.rustLayoutKey ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}">
+                                    {layout.name}
+                                </div>
+                                <div class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800">
+                                    {#each layout.columnStyles as style}
+                                        <div class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center">
+                                            {style.content}
+                                        </div>
+                                    {/each}
+                                </div>
+                                {#if $activeLayout === layout.rustLayoutKey}
+                                    <div class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                {/if}
+                            </button>
+                        {/each}
+                    </div>
+                </Dropdown>
+            {/if}
+            <button
+                id="read-edit-toggle-data"
+                on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+                class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+                title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+            >
+                {#if $isLexicalEditMode}
+                    <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
+                {:else}
+                    <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                    <span class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
+                {/if}
+            </button>
+        </div>
     </div>
 
-
-
-    <div class="flex items-center justify-end space-x-2 flex-shrink-0 z-10"> <!-- Right Column -->
-        <!-- Transcript Dropdown -->
-        {#if $activeMediaFile}
-            <div class="relative">
-                <Button id="transcript-selection-btn" size="xs" color="alternative" class="w-72 justify-between px-3 !py-1.5 focus:ring-0" title="Select Transcript">
-                    <span class="truncate">{ $displayedTranscripts.find(t => t.path === $project.activeTranscriptPathInDataTab)?.displayLabel || 'Select Transcript' }</span>
-                    <ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
-                </Button>
-                <Dropdown triggeredBy="#transcript-selection-btn" class="w-72 z-[1001] max-h-96 overflow-y-auto">
-                    {#each $displayedTranscripts as t}
-                        <DropdownItem
-                            class="text-xs flex items-center { $project.activeTranscriptPathInDataTab === t.path ? 'font-bold bg-blue-50 dark:bg-gray-700' : '' }"
-                            on:click={() => switchTranscriptInDataTab(t.path)}
-                        >
-                            <span class="truncate">{t.displayLabel}</span>
-                        </DropdownItem>
-                    {/each}
-                </Dropdown>
-            </div>
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => { pathForExportModal = $project.activeTranscriptPathInDataTab; isExportModalOpen = true; }} title="Export Transcript">
-                <Share class="w-3.5 h-3.5" />
-                <span>Export</span>
-            </Button>
-        {/if}
-        {#if isLexicalDocument}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => {
-                    if (isStandaloneTranscript) {
-                        pathForExportModal = $project.currentStandaloneTranscriptPath;
-                        isExportModalOpen = true;
-                    } else {
-                        showDocumentExportModal = true;
-                    }
-                }} title={isStandaloneTranscript ? "Export Transcript" : "Export Document"}>
-                <Share class="w-3.5 h-3.5" />
-                <span>Export</span>
-            </Button>
-        {/if}
-        {#if isTable}
-            <TopBarTableViewsDropdown
-                tablePath={$project.selectedDocumentPath}
-                {activeSubItemPath}
-                {activeSubItemType}
-                on:requestOpenView
-                on:requestOpenLexicalDocument
-                on:requestClearSubItem
-            />
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => showTableExportModal = true} title="Export Table">
-                <Share class="w-3.5 h-3.5" />
-                <span>Export</span>
-            </Button>
-        {/if}
-        {#if isImage}
-            <Button size="xs" color="alternative" class="space-x-1 px-2 !py-1" on:click={() => dispatch('requestImageExport')} title="Export Image">
-                <Share class="w-3.5 h-3.5" />
-                <span>Export</span>
-            </Button>
-        {/if}
-
-        {#if $activeMediaFile || isLexicalDocument || isTable || isImage}
-            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
-        {/if}
-        {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
-            <button
-                on:click={() => handleSplitToggle('horizontal')}
-                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-                title="Split Transcript (Horizontal)"
-            >
-                <SquareSplitHorizontal class="w-4 h-4" />
-            </button>
-
-            <button
-                on:click={() => handleSplitToggle('vertical')}
-                class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-                title="Split Transcript (Vertical)"
-            >
-                <SquareSplitVertical class="w-4 h-4" />
-            </button>
-        {/if}
-
-  
-         <!-- <button
-            id="theme-toggle-button"
-            on:click={cycleThemePreference}
-            class="ui-button-icon h-8 w-8 flex items-center justify-center p-1"
-            title={themeTitle}
-        >
-            {@html themeIconHtml}
-         </button> -->
-    <div class="flex-shrink-0 flex items-center space-x-2">
-        {#if isGroup}
-            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
-                <button
-                    on:click="{() => panelStateStore.setGroupDetailViewMode('list')}"
-                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
-                    title="List View"
-                >
-                    <List class="w-4 h-4" />
-                </button>
-                <button
-                    on:click="{() => panelStateStore.setGroupDetailViewMode('grid')}"
-                    class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
-                    title="Grid View"
-                >
-                    <LayoutGrid class="w-4 h-4" />
-                </button>
-            </div>
-        {/if}
-        {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
-            <button
-                id="layout-settings-btn-data"
-                class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
-                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
-                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
-                title="Change Transcript View Layout"
-            >
-                <LayoutDashboard class="w-4 h-4" />
-            </button>
-            <Dropdown
-                bind:open={isLayoutDropdownOpen}
-                triggeredBy="#layout-settings-btn-data"
-                class="w-72 z-[1001] p-3 shadow-xl border border-gray-200 dark:border-gray-700"
-            >
-                <div class="mb-3 px-1">
-                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                        Transcript Layout
-                    </h3>
-                    <p class="text-xxs text-gray-500 dark:text-gray-400">
-                        Select how the transcript appears on screen.
-                    </p>
-                </div>
-                <div class="grid grid-cols-1 gap-2">
-                    {#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
-                        <button
-                            type="button"
-                            class="text-left p-3 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {$activeLayout === layout.rustLayoutKey ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
-                            on:click={() => activeLayout.setLayout(layout.rustLayoutKey)}
-                            title="Select {layout.name} layout"
-                        >
-                            <div class="font-bold mb-1.5 text-xs {$activeLayout === layout.rustLayoutKey ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}">
-                                {layout.name}
-                            </div>
-                            <div class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800">
-                                {#each layout.columnStyles as style}
-                                    <div class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center">
-                                        {style.content}
-                                    </div>
-                                {/each}
-                            </div>
-                            {#if $activeLayout === layout.rustLayoutKey}
-                                <div class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                            {/if}
-                        </button>
-                    {/each}
-                </div>
-            </Dropdown>
-        {/if}
-
-        {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1) || isGroup || $isMediaEditorOpen || isLexicalDocument}
-            <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
-        {/if}
+    <!-- Section 5: Right Bar equivalent (w-8) — Theme button -->
+    <div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
         <button
-            id="read-edit-toggle-data"
-            on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
-            class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-            title={$isLexicalEditMode ? "Switch to Read Mode" : "Switch to Edit Mode"}
+            on:click="{() => cycleThemePreference()}"
+            class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            title="{themeTitle}"
+            aria-label="{themeTitle}"
         >
-            {#if $isLexicalEditMode}
-                <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Edit Mode</span>
-            {:else}
-                <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Read Mode</span>
-            {/if}
-        </button>
-
-        <div class="h-6 border-l border-gray-300 dark:border-gray-800 mx-1"></div>
-		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}" aria-label="{themeTitle}">
             {#if $themePreference === 'light'}
                 <Sun class="w-4 h-4" />
             {:else if $themePreference === 'dark'}
@@ -817,8 +810,7 @@
             {:else}
                 <Monitor class="w-4 h-4" />
             {/if}
-		 </button>
-	</div>
+        </button>
     </div>
   </div>
   
