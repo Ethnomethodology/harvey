@@ -19,7 +19,7 @@ export class EquationNode extends DecoratorNode {
         if (domNode.classList.contains('math')) {
           return {
             conversion: convertEquationElement,
-            priority: 1,
+            priority: 1
           };
         }
         return null;
@@ -28,11 +28,11 @@ export class EquationNode extends DecoratorNode {
         if (domNode.classList.contains('math')) {
           return {
             conversion: convertEquationElement,
-            priority: 1,
+            priority: 1
           };
         }
         return null;
-      },
+      }
     };
   }
 
@@ -46,7 +46,7 @@ export class EquationNode extends DecoratorNode {
       equation: this.__equation,
       inline: this.__inline,
       type: 'equation',
-      version: 1,
+      version: 1
     };
   }
 
@@ -66,7 +66,7 @@ export class EquationNode extends DecoratorNode {
       katex.render(this.__equation, element, {
         displayMode: !this.__inline,
         throwOnError: false,
-        errorColor: '#cc0000',
+        errorColor: '#cc0000'
       });
     } catch (e) {
       element.innerText = `Error parsing equation: ${e.message}`;
@@ -84,13 +84,13 @@ export class EquationNode extends DecoratorNode {
         katex.render(this.__equation, dom, {
           displayMode: !this.__inline,
           throwOnError: false,
-          errorColor: '#cc0000',
+          errorColor: '#cc0000'
         });
         dom.className = `lexical-equation-node ${this.__inline ? 'inline-block' : 'block text-center my-4'} cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 transition-colors`;
         dom.dataset.lexicalEquation = this.__equation;
         // Adjust the DOM node tag if inline changes
         if ((prevNode.__inline ? 'span' : 'div') !== (this.__inline ? 'span' : 'div')) {
-           return true; // Force recreate if tag changes
+          return true; // Force recreate if tag changes
         }
       } catch (e) {
         dom.innerText = `Error parsing equation: ${e.message}`;
