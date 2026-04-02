@@ -4,9 +4,9 @@
 
 ## Exported Utilities / Constants
 
-*   **`annotorious-global.css`**: Global overrides or base styles required for the Annotorious image annotation library.
-*   **`datepicker.css`**: Overrides and base styles for the Flowbite Datepicker component to match the application's aesthetic.
-*   **`tabulator-tailwind-theme.scss`**: A deeply customized SCSS file that adapts the core `tabulator-tables` grid library to utilize Tailwind CSS utility classes and match Harvey's specific dark/light mode UI requirements.
+- **`annotorious-global.css`**: Global overrides or base styles required for the Annotorious image annotation library.
+- **`datepicker.css`**: Overrides and base styles for the Flowbite Datepicker component to match the application's aesthetic.
+- **`tabulator-tailwind-theme.scss`**: A deeply customized SCSS file that adapts the core `tabulator-tables` grid library to utilize Tailwind CSS utility classes and match Harvey's specific dark/light mode UI requirements.
 
 ## Usage Example
 

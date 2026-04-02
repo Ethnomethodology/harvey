@@ -12,30 +12,30 @@ $paddingMedium: 0.75rem; // Equivalent to Tailwind's p-3
 $paddingLarge: 1rem; // Equivalent to Tailwind's p-4
 
 // Static Fallbacks for Sass compile time for Tabulator's internal calculations
-$backgroundColor: #ffffff;             // Static light theme plain background
-$textColor: #1f2937;                 // Static light theme primary text (e.g., gray-800)
-$borderColor: #d1d5db;               // Static light theme border (e.g., gray-300)
+$backgroundColor: #ffffff; // Static light theme plain background
+$textColor: #1f2937; // Static light theme primary text (e.g., gray-800)
+$borderColor: #d1d5db; // Static light theme border (e.g., gray-300)
 
-$headerBackgroundColor: #f3f4f6;       // Static light theme header bg (e.g., gray-100)
-$headerTextColor: #374151;             // Static light theme header text (e.g., gray-700)
-$headerBorderColor: #d1d5db;           // Static light theme border for header context
-$headerFilterBackgroundColor: #ffffff;  // Static for filter input background
-$headerFilterBorderColor: #d1d5db;     // Static for filter input border
-$headerFilterTextColor: #1f2937;       // Static for filter input text
+$headerBackgroundColor: #f3f4f6; // Static light theme header bg (e.g., gray-100)
+$headerTextColor: #374151; // Static light theme header text (e.g., gray-700)
+$headerBorderColor: #d1d5db; // Static light theme border for header context
+$headerFilterBackgroundColor: #ffffff; // Static for filter input background
+$headerFilterBorderColor: #d1d5db; // Static for filter input border
+$headerFilterTextColor: #1f2937; // Static for filter input text
 
-$rowBackgroundColor: #ffffff;           // Static for row background
-$rowAltBackgroundColor: #f9fafb;       // Static for alternate row background (e.g., gray-50)
-$rowSelectedTextColor: #111827;        // Static for selected row text (e.g., gray-900)
+$rowBackgroundColor: #ffffff; // Static for row background
+$rowAltBackgroundColor: #f9fafb; // Static for alternate row background (e.g., gray-50)
+$rowSelectedTextColor: #111827; // Static for selected row text (e.g., gray-900)
 
-$footerBackgroundColor: #f3f4f6;       // Static for footer background
-$footerTextColor: #374151;             // Static for footer text
-$footerBorderColor: #d1d5db;           // Static for footer border
+$footerBackgroundColor: #f3f4f6; // Static for footer background
+$footerTextColor: #374151; // Static for footer text
+$footerBorderColor: #d1d5db; // Static for footer border
 
 $rowHoverBackgroundColor: var(--ui-icon-hover-bg);
 $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
 
 // 2. Import Core Tabulator SCSS
-@import "../../../node_modules/tabulator-tables/src/scss/tabulator";
+@import '../../../node_modules/tabulator-tables/src/scss/tabulator';
 
 // 3. CSS Overrides & Tailwind Styling (Re-apply CSS variables for dynamic theming)
 .tabulator {
@@ -61,7 +61,9 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       .tabulator-col-content {
         padding: $paddingSmall $paddingMedium;
       }
-      .tabulator-col-title { white-space: normal; }
+      .tabulator-col-title {
+        white-space: normal;
+      }
 
       .tabulator-header-filter input {
         background-color: var(--ui-select-bg); // Actual theme value
@@ -77,23 +79,29 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
           box-shadow: none;
         }
       }
-      &:last-child { border-right: none; }
+      &:last-child {
+        border-right: none;
+      }
       &:first-child {
         border-left: 1px solid var(--ui-select-border);
       }
 
       // Overrides for sortable columns using actual theme values
       &.tabulator-sortable {
-        &:hover { background-color: var(--ui-icon-hover-bg); }
+        &:hover {
+          background-color: var(--ui-icon-hover-bg);
+        }
         &[aria-sort] {
           background-color: #262626;
           color: var(--ui-optgroup-text); // Use actual theme text color for sorted header
           .tabulator-col-content .tabulator-arrow {
-             border-top-color: var(--ui-optgroup-text);
-             border-bottom-color: var(--ui-optgroup-text);
+            border-top-color: var(--ui-optgroup-text);
+            border-bottom-color: var(--ui-optgroup-text);
           }
         }
-        &[aria-sort]:hover { background-color: var(--ui-icon-hover-bg); }
+        &[aria-sort]:hover {
+          background-color: var(--ui-icon-hover-bg);
+        }
       }
     }
   }
@@ -119,7 +127,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
     // Default click selection (now subtle or same as normal row)
     &.tabulator-selected {
       background-color: var(--ui-select-bg) !important; // Match normal row background
-      color: var(--ui-text-color) !important;          // Match normal row text
+      color: var(--ui-text-color) !important; // Match normal row text
     }
 
     // Prominent selection for search matches
@@ -182,7 +190,6 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
     }
   }
 
-  
   .tabulator-placeholder {
     display: flex;
     align-items: center;
